@@ -1,5 +1,4 @@
 {
-  "Administration": "Administration",
   "Users": "Users",
   "Platform settings": "Platform settings",
   "Roles": "Roles",
@@ -31,5 +30,6 @@
   "Could not accept the server": "Could not accept the server",
   "Accept {{name}}": "Accept {{name}}",
   "Enter the pairing code printed by the agent on that machine. Only accept servers you installed yourself.": "Enter the pairing code printed by the agent on that machine. Only accept servers you installed yourself.",
-  "Pairing code": "Pairing code"
+  "Pairing code": "Pairing code",
+  "Admin": "Administration"
 }

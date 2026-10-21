@@ -9,5 +9,5 @@ import type { TIconsOverride } from "@/core/types"
 export const icons: TIconsOverride = {
   servers: IconServer2,
   Infrastructure: IconServerCog,
-  Administration: IconShieldLock,
+  Admin: IconShieldLock,
 }

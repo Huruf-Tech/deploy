@@ -1,5 +1,4 @@
 {
-  "Administration": "الإدارة",
   "Users": "المستخدمون",
   "Platform settings": "إعدادات المنصة",
   "Roles": "الأدوار",
@@ -31,5 +30,6 @@
   "Could not accept the server": "تعذّر قبول الخادم",
   "Accept {{name}}": "قبول {{name}}",
   "Enter the pairing code printed by the agent on that machine. Only accept servers you installed yourself.": "أدخل رمز الاقتران الذي يطبعه الوكيل على ذلك الجهاز. لا تقبل إلا الخوادم التي ثبّتها بنفسك.",
-  "Pairing code": "رمز الاقتران"
+  "Pairing code": "رمز الاقتران",
+  "Admin": "الإدارة"
 }
