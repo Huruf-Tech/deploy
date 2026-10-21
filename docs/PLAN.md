@@ -660,10 +660,12 @@ Both require the user's domain to be on Cloudflare. Other providers can be added
 | **Infrastructure** | `servers`, `registries` |
 | **Applications** | `projects`, `projectGroups` (deployments, releases and streams are deep links, not nav items) |
 | **Build** | `templates`, `gitIntegrations` |
-| **Configuration** | `variables`, thunder-core `apiKeys` |
+| **Configuration** | `variables` |
 | **Monitoring** | `alertRules`, `alertEvents` |
 | **Account** | Plan & usage (custom page), `subscriptionPeriods` (history) |
-| **Administration** (admin only, permission-gated) | `systemTemplates`, `plans`, `subscriptions`, thunder-core users and tenants |
+| **Administration** (admin only, permission-gated) | `systemTemplates`, `plans`, `subscriptions`, thunder-core `users`, `envs` (platform settings), `accessControl`, `accessControlPolicies` |
+
+API keys, OAuth apps, tenants, members and invitations are served by the thunder-core auth app (`/auth`), so they are hidden from this dashboard.
 
 ### 15.3 Component priority (D32)
 

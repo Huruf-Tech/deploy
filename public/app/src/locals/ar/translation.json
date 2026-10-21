@@ -1,1 +1,9 @@
-{}
+{
+  "Administration": "الإدارة",
+  "Users": "المستخدمون",
+  "Platform settings": "إعدادات المنصة",
+  "Roles": "الأدوار",
+  "Policies": "السياسات",
+  "Your server pool is empty": "مجموعة الخوادم فارغة",
+  "Add a server to start deploying. Capacity, deployments and alerts will appear here.": "أضف خادمًا لبدء النشر. ستظهر هنا السعة وعمليات النشر والتنبيهات."
+}

@@ -1,1 +1,9 @@
-{}
+{
+  "Administration": "Administration",
+  "Users": "Users",
+  "Platform settings": "Platform settings",
+  "Roles": "Roles",
+  "Policies": "Policies",
+  "Your server pool is empty": "Your server pool is empty",
+  "Add a server to start deploying. Capacity, deployments and alerts will appear here.": "Add a server to start deploying. Capacity, deployments and alerts will appear here."
+}
