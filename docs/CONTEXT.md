@@ -62,7 +62,8 @@ Background from the planning conversation that is **not** in [PLAN.md](PLAN.md).
 
 1. The initial commit exists on `master` (the intended main branch is `main`). Commit and push before switching machines.
    - Project rules live in `.claude/CLAUDE.md`, because `deno task update:core` overwrites the root `CLAUDE.md`.
-2. **`.env` files are git-ignored**, including those inside `public/app/`. The root `.gitignore` patterns match at any depth, even though thunder-ui intends its `.env` files to be committed. Copy them manually, or decide whether to un-ignore `public/app/.env*`.
+2. **`.env` files are git-ignored**, including those inside `public/app/`. This is decided: keep them ignored, because the frontend is built locally. Copy them manually to a new machine.
+   - The build output `public/app/www` **is committed** (mandatory for now), even though thunder-ui expects it to be ignored. Rebuild and commit it with every UI change.
 3. On the new machine:
    - Clone the repo.
    - Run **`deno task setup`**. **Never `deno task init`**, which resets git history.
