@@ -743,6 +743,10 @@ Every new dependency is justified in its PR (the same rule as the backend's CLAU
 Each phase ends with a **review checkpoint** (demo + code review + approval). Phases 0–10 are the MVP. Phase 11 (domains) starts when you decide.
 
 ### Phase 0 — Foundations
+- Built in reviewable sub-phases:
+  - **0a:** backend foundations (building blocks, encryption, plans and entitlements, setup via `deno task setup:dev` / `setup:prod`).
+  - **0b:** dashboard scaffold.
+  - **0c:** repository, CI, docs/ADRs, agent simulator, load-test harness and first deploy.
 - **Repository:** monorepo layout (§21), `deno.json` excludes for `agent/` and `public/app/`, CI pipeline, PR/issue templates, CODEOWNERS.
 - **Docs:** ARCHITECTURE.md, PROTOCOL.md (skeleton), first ADRs (no gateway, no Swarm, polling with leases, shadcn-first), contributor guide updates.
 - Install and set up thunder-core.
@@ -760,7 +764,8 @@ Each phase ends with a **review checkpoint** (demo + code review + approval). Ph
   - Every later phase enforces its own quotas from day one.
 - **Architecture skeleton (§23):**
   - Layer folders and the composition root (`lib/services.ts`).
-  - The first building blocks: `TenantResource`, `PiggybackScheduler`, `BoundedCache`, `Sealer`/`Keyring`, `QuotaGuard`, `AuditLog`.
+  - The first building blocks: `BoundedCache`, `Keyring`, `Settings`, `QuotaGuard`, `RateLimiter`, `Entitlements`.
+  - `TenantResource` and `PiggybackScheduler` are built with their first consumers in Phase 1 (servers, offline sweep), so their shape comes from real use.
   - Duplication, complexity and dependency-direction checks in CI.
 - **Tooling:** agent simulator skeleton (`tools/agent-sim`) and the load-test harness.
 - First deployment of the control plane to Deno Deploy, in the region closest to the database.
@@ -886,7 +891,7 @@ Each phase ends with a **review checkpoint** (demo + code review + approval). Ph
 - Every route is protected by thunder-core RBAC, with tenant isolation on all resources.
 - GitHub webhook HMAC is verified per integration.
 - Envelope encryption with a rotation script. `DEPLOY_MASTER_KEY` is separate from `SECRET_KEY`.
-- Audit log for: accept/reject agent, terminal, run command, deploy, rollback, variable reveal, API reads.
+- **Audit log (deferred by the owner):** later, for accept/reject agent, terminal, run command, deploy, rollback, variable reveal and API reads.
 - Agent binaries are signed, and the installer verifies checksums.
 - **Abuse protection** (§20.3):
   - plan quotas enforced server-side with atomic counters
@@ -1008,7 +1013,7 @@ There are three kinds of limit. All are enforced **server-side in the domain ser
 | Setting | Default | Protects |
 |---|---|---|
 | `SAFETY_TENANTS_OWNED_PER_USER` | 3 | Multiplying free quotas by creating many tenants |
-| `SAFETY_REQUIRE_VERIFIED_EMAIL` | true | Throwaway accounts adding servers |
+| `SAFETY_ALLOW_UNVERIFIED_EMAIL` | false (verification required) | Throwaway accounts adding servers. Flags default to off, so they are named so that off is safe. |
 | `SAFETY_PENDING_SERVERS_PER_TENANT` | 5 | Pairing abuse (§4.2) |
 | `SAFETY_HELLO_PER_IP_PER_MIN` / `SAFETY_SSH_BOOTSTRAPS_PER_TENANT_PER_HOUR` | 10 / 10 | Registration and SSH abuse |
 | `SAFETY_MIN_POLL_INTERVAL_MS` | 250 | Agents polling faster than allowed get `429` + `nextPollMs` |
@@ -1043,7 +1048,7 @@ There are three kinds of limit. All are enforced **server-side in the domain ser
 Instances on Deno Deploy are long-lived, so any unbounded module-level `Map`, `Set` or array keyed by agent, tenant, user or IP is a memory leak.
 
 **Rules:**
-1. Every in-memory structure keyed by an unbounded identity goes through **one `BoundedCache`** utility (`lib/cache/bounded.ts`): **max entries + TTL + LRU eviction**, with size and hit-rate counters.
+1. Every in-memory structure keyed by an unbounded identity goes through **one `BoundedCache`** utility (`lib/core/boundedCache.ts`): **max entries + TTL + LRU eviction**, with size and hit-rate counters.
    - It is built on `Map` insertion order, with no dependency.
    - The core `cache()`/`memoize` are TTL-based but **not size-capped**, so they're used only for small, fixed-cardinality keys (platform settings, plan list).
 2. **Correctness never depends on a cache.** A miss or eviction just means a DB read. Revocations (server removed, plan downgraded) are enforced by DB filters, so a stale cache entry can't grant access.
@@ -1054,6 +1059,7 @@ Instances on Deno Deploy are long-lived, so any unbounded module-level `Map`, `S
 | Cache | Key | Max entries | TTL | ≈ Max memory |
 |---|---|---|---|---|
 | Agent public keys (signature verification, §3.4) | fingerprint | 20,000 | 10 min | ~4 MB |
+| Keyring data keys (unwrapped) | owner | 5,000 | 10 min | ~1 MB |
 | Sweep shard `nextRunAt` | shard | 64 (fixed array) | — | < 1 KB |
 | Entitlements (effective plan and limits) | tenant | 5,000 | 60 s | ~5 MB |
 | Poll / IP rate-limit buckets | server / IP | 50,000 | 2 min idle | ~5 MB |
@@ -1226,7 +1232,7 @@ schemas/<domain>/        zod schemas + models (single source of truth for types,
 | `QuotaGuard` / `RateLimiter` | Plan quotas (atomic counters) and rate windows (§20.3). |
 | `Entitlements` | Effective plan resolution (§22.2), cached through `BoundedCache`. |
 | `BoundedCache` | Every in-memory cache (§20.4). |
-| `AuditLog` | Every audited action. |
+| `AuditLog` (deferred) | Every audited action, once audit logging is added. |
 | `AgentAuth` | Signature verification, key cache, protocol version check. |
 
 ### 23.3 Variation through interfaces (strategy pattern), not branching
