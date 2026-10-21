@@ -54,8 +54,26 @@ HURUF_DEPLOY_URL=$URL
 HURUF_DEPLOY_TENANT=$TENANT
 EOF
 
-curl -fsSL "https://raw.githubusercontent.com/$REPO/master/agent/packaging/huruf-deploy-agent.service" \
-  -o /etc/systemd/system/huruf-deploy-agent.service
+# The unit ships inside this script, so the installer never depends on a repository branch.
+cat > /etc/systemd/system/huruf-deploy-agent.service <<'EOF'
+[Unit]
+Description=Huruf Deploy agent
+Documentation=https://github.com/Huruf-Tech/huruf-deploy
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+EnvironmentFile=/etc/huruf-deploy-agent/agent.env
+ExecStart=/usr/local/bin/huruf-deploy-agent -state-dir /var/lib/huruf-deploy-agent
+Restart=always
+RestartSec=5
+StateDirectory=huruf-deploy-agent
+StateDirectoryMode=0700
+
+[Install]
+WantedBy=multi-user.target
+EOF
+chmod 0644 /etc/systemd/system/huruf-deploy-agent.service
 systemctl daemon-reload
 systemctl enable --now huruf-deploy-agent
 
