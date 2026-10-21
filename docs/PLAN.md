@@ -1105,7 +1105,7 @@ Instances on Deno Deploy are long-lived, so any unbounded module-level `Map`, `S
 | Entitlements (effective plan and limits) | tenant | 5,000 | 60 s | ~5 MB |
 | Poll / IP rate-limit buckets | server / IP | 50,000 | 2 min idle | ~5 MB |
 | Agent config (resolved + version) | — | 1 (fixed) | 5 s | tiny (core `cache`) |
-| Platform settings, plan list | key | ~100 (fixed) | 60 s | tiny (core `cache`) |
+| Env settings (`envs`), plan list | key | ~100 (fixed) | 60 s | tiny (core `cache`) |
 
 The total cache budget is **≤ 32 MB per instance**. Adding a new cache requires adding a row to this table in the same PR.
 

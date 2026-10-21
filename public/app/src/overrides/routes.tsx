@@ -1,9 +1,4 @@
-import {
-  IconLock,
-  IconShieldCheck,
-  IconUserShield,
-  IconVariable,
-} from "@tabler/icons-react"
+import { IconLock, IconShieldCheck, IconUserShield } from "@tabler/icons-react"
 import { ThunderSDK } from "thunder-sdk"
 
 import type { TRoutesOverride } from "@/core/types"
@@ -27,11 +22,6 @@ export const routes: TRoutesOverride = {
   users: regroup("users", "Admin", {
     name: "Users",
     icon: IconUserShield,
-    display: isAdmin,
-  }),
-  envs: regroup("envs", "Admin", {
-    name: "Platform settings",
-    icon: IconVariable,
     display: isAdmin,
   }),
   accessControl: regroup("accessControl", "Admin", {
