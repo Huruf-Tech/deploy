@@ -47,7 +47,7 @@ export type del$params = {
     id: string;
 };
 export type create$body = {
-    invite: string;
+    invite?: string;
 };
 export type create$return = {
     _id: string;
@@ -219,7 +219,7 @@ export const tenantMembersModule = (sdk: typeof BaseSDK) => {
 
     sdk["_moduleGroup"].set(methods, "IAM");
 
-    sdk["_moduleMetadata"].set(methods, {"crud":{"schema":{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","properties":{"tenant":{"tsType":"string"},"user":{"tsType":"string"},"email":{"type":"string"},"role":{"type":"string"},"isOwner":{"type":"boolean"},"expiresAt":{"type":"string","format":"date-time"},"createdBy":{"tsType":"string"},"createdAt":{"default":"2026-10-21T12:06:09.452Z","type":"string","format":"date-time"}},"required":["tenant","user","isOwner","createdBy","createdAt"],"additionalProperties":false},"insertSchema":{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","properties":{"invite":{"tsType":"string"}},"required":["invite"]},"updateSchema":{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","properties":{"role":{"type":"string"},"expiresAt":{"type":"string","format":"date-time"}}}}});
+    sdk["_moduleMetadata"].set(methods, {"crud":{"schema":{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","properties":{"tenant":{"tsType":"string"},"user":{"tsType":"string"},"email":{"type":"string"},"role":{"type":"string"},"isOwner":{"type":"boolean"},"expiresAt":{"type":"string","format":"date-time"},"createdBy":{"tsType":"string"},"createdAt":{"default":"2026-10-21T13:26:34.595Z","type":"string","format":"date-time"}},"required":["tenant","user","isOwner","createdBy","createdAt"],"additionalProperties":false},"insertSchema":{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","properties":{"invite":{"tsType":"string"}},"required":["invite"]},"updateSchema":{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","properties":{"role":{"type":"string"},"expiresAt":{"type":"string","format":"date-time"}}}}});
 
     return methods;
 };

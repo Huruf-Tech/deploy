@@ -10,6 +10,8 @@ exports.ThunderSDK = void 0;
 const base_js_1 = require("./base.js");
 const home_js_1 = require("./modules/home.js");
 const index_js_1 = require("./modules/index.js");
+const agents_js_1 = require("./modules/agents.js");
+const servers_js_1 = require("./modules/servers.js");
 const _well_known_js_1 = require("./modules/.well-known.js");
 const accessControl_js_1 = require("./modules/accessControl.js");
 const accessControlPolicies_js_1 = require("./modules/accessControlPolicies.js");
@@ -105,6 +107,8 @@ Object.defineProperty(ThunderSDK, "_moduleNames", {
     value: [
         "home",
         "index",
+        "agents",
+        "servers",
         "wellKnown",
         "accessControl",
         "accessControlPolicies",
@@ -135,6 +139,18 @@ Object.defineProperty(ThunderSDK, "index", {
     configurable: true,
     writable: true,
     value: (0, index_js_1.indexModule)(_a)
+});
+Object.defineProperty(ThunderSDK, "agents", {
+    enumerable: true,
+    configurable: true,
+    writable: true,
+    value: (0, agents_js_1.agentsModule)(_a)
+});
+Object.defineProperty(ThunderSDK, "servers", {
+    enumerable: true,
+    configurable: true,
+    writable: true,
+    value: (0, servers_js_1.serversModule)(_a)
 });
 Object.defineProperty(ThunderSDK, "wellKnown", {
     enumerable: true,

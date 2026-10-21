@@ -21,7 +21,7 @@ export type create$return = {
     _id: string;
 };
 export type update$params = {
-    id: string;
+    id?: string;
 };
 export type update$body = {
     email: string;
@@ -30,7 +30,7 @@ export type update$body = {
     metadata?: Record<string, any> | undefined;
 };
 export type ban$params = {
-    id: string;
+    id?: string;
 };
 export type ban$body = {
     reason: string;
@@ -43,7 +43,7 @@ export type addFcmToken$return = {
     id: string;
 };
 export type getUserTenants$params = {
-    id: string;
+    id?: string;
 };
 export type getUserTenants$return = {
     _id: string;
@@ -309,7 +309,7 @@ export const usersModule = (sdk: typeof BaseSDK) => {
 
     sdk["_moduleGroup"].set(methods, "Admin");
 
-    sdk["_moduleMetadata"].set(methods, {"crud":{"schema":{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","properties":{"name":{"type":"string","canFilter":true,"label":"Name"},"image":{"type":"string","format":"uri"},"email":{"type":"string","format":"email","pattern":"^(?!\\.)(?!.*\\.\\.)([A-Za-z0-9_'+\\-\\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$","canFilter":true,"label":"Email"},"fcmTokens":{"type":"array","items":{"type":"string"}},"emailVerified":{"type":"boolean","canFilter":true,"label":"Email Verified"},"phoneNumber":{"canFilter":true,"label":"Phone Number","type":"string","format":"e164","pattern":"^\\+[1-9]\\d{6,14}$"},"phoneNumberVerified":{"type":"boolean"},"phoneNumberVerificationCode":{"type":"string"},"phoneNumberVerificationRequestAt":{"type":"string","format":"date-time"},"role":{"type":"string","canFilter":true,"label":"Role"},"createdAt":{"canFilter":true,"label":"Created At","type":"string","format":"date-time"},"updatedAt":{"type":"string","format":"date-time"}},"required":["name","email","emailVerified","role","createdAt","updatedAt"],"additionalProperties":false},"insertSchema":{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","properties":{"email":{"type":"string","format":"email","pattern":"^(?!\\.)(?!.*\\.\\.)([A-Za-z0-9_'+\\-\\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"},"password":{"type":"string"},"name":{"type":"string"},"role":{"type":"string"},"metadata":{"type":"object","propertyNames":{"type":"string"},"additionalProperties":{}}},"required":["email","name"]}}});
+    sdk["_moduleMetadata"].set(methods, {"crud":{"schema":{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","properties":{"name":{"type":"string","canFilter":true,"label":"Name"},"image":{"type":"string","format":"uri"},"email":{"type":"string","format":"email","pattern":"^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$","canFilter":true,"label":"Email"},"fcmTokens":{"type":"array","items":{"type":"string"}},"emailVerified":{"type":"boolean","canFilter":true,"label":"Email Verified"},"phoneNumber":{"canFilter":true,"label":"Phone Number","type":"string","format":"e164","pattern":"^\\+[1-9]\\d{6,14}$"},"phoneNumberVerified":{"type":"boolean"},"phoneNumberVerificationCode":{"type":"string"},"phoneNumberVerificationRequestAt":{"type":"string","format":"date-time"},"role":{"type":"string","canFilter":true,"label":"Role"},"createdAt":{"canFilter":true,"label":"Created At","type":"string","format":"date-time"},"updatedAt":{"type":"string","format":"date-time"}},"required":["name","email","emailVerified","role","createdAt","updatedAt"],"additionalProperties":false},"insertSchema":{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","properties":{"email":{"type":"string","format":"email","pattern":"^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"},"password":{"type":"string"},"name":{"type":"string"},"role":{"type":"string"},"metadata":{"type":"object","propertyNames":{"type":"string"},"additionalProperties":{}}},"required":["email","name"]}}});
 
     return methods;
 };

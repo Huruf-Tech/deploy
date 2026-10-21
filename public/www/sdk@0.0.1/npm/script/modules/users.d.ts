@@ -11,7 +11,7 @@ export type create$return = {
     _id: string;
 };
 export type update$params = {
-    id: string;
+    id?: string;
 };
 export type update$body = {
     email: string;
@@ -20,7 +20,7 @@ export type update$body = {
     metadata?: Record<string, any> | undefined;
 };
 export type ban$params = {
-    id: string;
+    id?: string;
 };
 export type ban$body = {
     reason: string;
@@ -33,7 +33,7 @@ export type addFcmToken$return = {
     id: string;
 };
 export type getUserTenants$params = {
-    id: string;
+    id?: string;
 };
 export type getUserTenants$return = {
     _id: string;

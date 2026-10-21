@@ -1,0 +1,178 @@
+import { compile } from "path-to-regexp";
+export const serversModule = (sdk) => {
+    const type = {};
+    const methods = {
+        type,
+        count(data) {
+            return sdk.resolveAxiosResponse(async () => {
+                sdk.checkPermission("servers", "count");
+                const method = "get";
+                const toPath = compile("servers/api/count");
+                const requestPayload = {
+                    method,
+                    url: toPath(data?.params),
+                    params: data?.query,
+                    data: data?.body,
+                    signal: data?.signal,
+                    ...(data?.axiosConfig
+                        ? sdk.resolveAxiosConfig(data.axiosConfig)
+                        : undefined),
+                };
+                sdk.log("Sending Request:", requestPayload);
+                const res = await sdk._axios.request(requestPayload);
+                return res;
+            }, data);
+        },
+        get(data) {
+            return sdk.resolveAxiosResponse(async () => {
+                sdk.checkPermission("servers", "get");
+                const method = "get";
+                const toPath = compile("servers/api{/:id}");
+                const requestPayload = {
+                    method,
+                    url: toPath(data?.params),
+                    params: data?.query,
+                    data: data?.body,
+                    signal: data?.signal,
+                    ...(data?.axiosConfig
+                        ? sdk.resolveAxiosConfig(data.axiosConfig)
+                        : undefined),
+                };
+                sdk.log("Sending Request:", requestPayload);
+                const res = await sdk._axios.request(requestPayload);
+                return res;
+            }, data);
+        },
+        update(data) {
+            return sdk.resolveAxiosResponse(async () => {
+                sdk.checkPermission("servers", "update");
+                const method = "patch";
+                const toPath = compile("servers/api/:id");
+                const requestPayload = {
+                    method,
+                    url: toPath(data?.params),
+                    params: data?.query,
+                    data: data?.body,
+                    signal: data?.signal,
+                    ...(data?.axiosConfig
+                        ? sdk.resolveAxiosConfig(data.axiosConfig)
+                        : undefined),
+                };
+                sdk.log("Sending Request:", requestPayload);
+                const res = await sdk._axios.request(requestPayload);
+                return res;
+            }, data);
+        },
+        del(data) {
+            return sdk.resolveAxiosResponse(async () => {
+                sdk.checkPermission("servers", "del");
+                const method = "delete";
+                const toPath = compile("servers/api/:id");
+                const requestPayload = {
+                    method,
+                    url: toPath(data?.params),
+                    params: data?.query,
+                    data: data?.body,
+                    signal: data?.signal,
+                    ...(data?.axiosConfig
+                        ? sdk.resolveAxiosConfig(data.axiosConfig)
+                        : undefined),
+                };
+                sdk.log("Sending Request:", requestPayload);
+                const res = await sdk._axios.request(requestPayload);
+                return res;
+            }, data);
+        },
+        accept(data) {
+            return sdk.resolveAxiosResponse(async () => {
+                sdk.checkPermission("servers", "accept");
+                const method = "post";
+                const toPath = compile("servers/api/:id/accept");
+                const requestPayload = {
+                    method,
+                    url: toPath(data?.params),
+                    params: data?.query,
+                    data: data?.body,
+                    signal: data?.signal,
+                    ...(data?.axiosConfig
+                        ? sdk.resolveAxiosConfig(data.axiosConfig)
+                        : undefined),
+                };
+                sdk.log("Sending Request:", requestPayload);
+                const res = await sdk._axios.request(requestPayload);
+                return res;
+            }, data);
+        },
+        reject(data) {
+            return sdk.resolveAxiosResponse(async () => {
+                sdk.checkPermission("servers", "reject");
+                const method = "post";
+                const toPath = compile("servers/api/:id/reject");
+                const requestPayload = {
+                    method,
+                    url: toPath(data?.params),
+                    params: data?.query,
+                    data: data?.body,
+                    signal: data?.signal,
+                    ...(data?.axiosConfig
+                        ? sdk.resolveAxiosConfig(data.axiosConfig)
+                        : undefined),
+                };
+                sdk.log("Sending Request:", requestPayload);
+                const res = await sdk._axios.request(requestPayload);
+                return res;
+            }, data);
+        },
+        ping(data) {
+            return sdk.resolveAxiosResponse(async () => {
+                sdk.checkPermission("servers", "ping");
+                const method = "post";
+                const toPath = compile("servers/api/:id/ping");
+                const requestPayload = {
+                    method,
+                    url: toPath(data?.params),
+                    params: data?.query,
+                    data: data?.body,
+                    signal: data?.signal,
+                    ...(data?.axiosConfig
+                        ? sdk.resolveAxiosConfig(data.axiosConfig)
+                        : undefined),
+                };
+                sdk.log("Sending Request:", requestPayload);
+                const res = await sdk._axios.request(requestPayload);
+                return res;
+            }, data);
+        },
+        liveness(data) {
+            return sdk.resolveAxiosResponse(async () => {
+                sdk.checkPermission("servers", "liveness");
+                const method = "get";
+                const toPath = compile("servers/api/live/status");
+                const requestPayload = {
+                    method,
+                    url: toPath(data?.params),
+                    params: data?.query,
+                    data: data?.body,
+                    signal: data?.signal,
+                    ...(data?.axiosConfig
+                        ? sdk.resolveAxiosConfig(data.axiosConfig)
+                        : undefined),
+                };
+                sdk.log("Sending Request:", requestPayload);
+                const res = await sdk._axios.request(requestPayload);
+                return res;
+            }, data);
+        },
+    };
+    methods.count.__scope = "servers";
+    methods.get.__scope = "servers";
+    methods.update.__scope = "servers";
+    methods.del.__scope = "servers";
+    methods.accept.__scope = "servers";
+    methods.reject.__scope = "servers";
+    methods.ping.__scope = "servers";
+    methods.liveness.__scope = "servers";
+    sdk["_moduleGroup"].set(methods, "Infrastructure");
+    sdk["_moduleMetadata"].set(methods, { "crud": { "schema": { "$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object", "properties": { "name": { "type": "string", "minLength": 1, "maxLength": 60, "canFilter": true }, "labels": { "default": {}, "description": "Free-form key/value tags, e.g. region=eu, builder=true", "type": "object", "propertyNames": { "type": "string", "maxLength": 40 }, "additionalProperties": { "type": "string", "maxLength": 80 } }, "tenant": { "tsType": "string", "ref": "tenants" }, "status": { "type": "string", "enum": ["pending", "active", "rejected"], "canFilter": true }, "identity": { "type": "object", "properties": { "signPublicKey": { "type": "string" }, "boxPublicKey": { "type": "string" }, "fingerprint": { "type": "string" } }, "required": ["signPublicKey", "boxPublicKey", "fingerprint"], "additionalProperties": false }, "pairingCode": { "type": "string" }, "pairingExpiresAt": { "type": "string", "format": "date-time" }, "installMethod": { "default": "manual", "type": "string", "enum": ["manual", "ssh"] }, "provider": { "default": { "kind": "byo" }, "type": "object", "properties": { "kind": { "type": "string", "enum": ["byo", "managed"] } }, "required": ["kind"], "additionalProperties": false }, "inventory": { "type": "object", "properties": { "hostname": { "type": "string", "maxLength": 255 }, "os": { "type": "string", "maxLength": 100 }, "arch": { "type": "string", "enum": ["amd64", "arm64"] }, "cpuCores": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 }, "memory": { "type": "integer", "minimum": 0, "maximum": 9007199254740991, "description": "Bytes" }, "disk": { "type": "integer", "minimum": 0, "maximum": 9007199254740991, "description": "Bytes" }, "publicIp": { "type": "string", "maxLength": 64 }, "privateIp": { "type": "string", "maxLength": 64 }, "dockerVersion": { "type": "string", "maxLength": 50 }, "agentVersion": { "type": "string", "maxLength": 50 } }, "required": ["hostname", "os", "arch", "cpuCores", "memory", "disk", "agentVersion"], "additionalProperties": false }, "resources": { "type": "object", "properties": { "cpu": { "type": "number", "minimum": 0, "maximum": 1, "description": "Used fraction" }, "memFree": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 }, "diskFree": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 }, "reportedAt": { "type": "string", "format": "date-time" } }, "required": ["cpu", "memFree", "diskFree", "reportedAt"], "additionalProperties": false }, "acceptedBy": { "tsType": "string", "ref": "users" }, "acceptedAt": { "type": "string", "format": "date-time" }, "createdAt": { "type": "string", "format": "date-time" } }, "required": ["name", "labels", "tenant", "status", "identity", "installMethod", "provider", "inventory", "createdAt"], "additionalProperties": false }, "updateSchema": { "$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object", "properties": { "name": { "type": "string", "minLength": 1, "maxLength": 60, "canFilter": true }, "labels": { "default": {}, "description": "Free-form key/value tags, e.g. region=eu, builder=true", "type": "object", "propertyNames": { "type": "string", "maxLength": 40 }, "additionalProperties": { "type": "string", "maxLength": 80 } } }, "required": ["name"] } } });
+    return methods;
+};

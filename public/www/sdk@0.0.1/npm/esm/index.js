@@ -7,6 +7,8 @@ var _a;
 import { BaseSDK } from "./base.js";
 import { homeModule } from "./modules/home.js";
 import { indexModule } from "./modules/index.js";
+import { agentsModule } from "./modules/agents.js";
+import { serversModule } from "./modules/servers.js";
 import { wellKnownModule } from "./modules/.well-known.js";
 import { accessControlModule } from "./modules/accessControl.js";
 import { accessControlPoliciesModule } from "./modules/accessControlPolicies.js";
@@ -101,6 +103,8 @@ Object.defineProperty(ThunderSDK, "_moduleNames", {
     value: [
         "home",
         "index",
+        "agents",
+        "servers",
         "wellKnown",
         "accessControl",
         "accessControlPolicies",
@@ -131,6 +135,18 @@ Object.defineProperty(ThunderSDK, "index", {
     configurable: true,
     writable: true,
     value: indexModule(_a)
+});
+Object.defineProperty(ThunderSDK, "agents", {
+    enumerable: true,
+    configurable: true,
+    writable: true,
+    value: agentsModule(_a)
+});
+Object.defineProperty(ThunderSDK, "servers", {
+    enumerable: true,
+    configurable: true,
+    writable: true,
+    value: serversModule(_a)
 });
 Object.defineProperty(ThunderSDK, "wellKnown", {
     enumerable: true,

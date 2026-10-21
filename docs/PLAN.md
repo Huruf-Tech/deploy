@@ -158,6 +158,11 @@ flowchart LR
 | **Terminal** | ≈ 300 ms | A terminal session is open on the server |
 
 - Every poll response includes `nextPollMs`, so the control plane decides the mode.
+- **Agents hardcode no pacing (owner requirement).**
+  - Poll intervals, jitter, the summary interval and the error backoff cap are control-plane settings (`AGENT_POLL_*`, `AGENT_SUMMARY_INTERVAL_MS`, `AGENT_MAX_BACKOFF_MS`, in `envs`). They are served by `POST /agents/api/config` and included in the `hello` response.
+  - Every poll response carries a `configVersion`; the agent refetches the config when it changes.
+  - The only value built into an agent is the retry delay for when the control plane is unreachable.
+  - The lease is derived as 2 × the idle interval, so raising the idle interval can never make servers flap offline.
 - Modes are driven by fields on the `servers` document (`fastPollUntil`, `terminalUntil`), which UI activity keeps extending.
 - When the activity stops, the server drops back to idle automatically.
 - **Request volume and cost per poll:** see the performance budget in §20.2. An idle poll where nothing changed costs exactly one `findOneAndUpdate` on a tiny document (lease renew + read of the hot fields). Fast modes cost more only while someone is actively using them.
@@ -781,6 +786,12 @@ Each phase ends with a **review checkpoint** (demo + code review + approval). Ph
   - CI is green on every check in §21.
 
 ### Phase 1 — Agent core and polling protocol
+- Built in two sub-phases:
+  - **1a:** the control plane and the agent simulator.
+    - Protocol schemas, signed `hello`/`poll`/`events`/`config`, pairing with a typed code, accept/reject, leases, the piggybacked sweep and exactly-once commands (a `ping` command).
+    - Servers UI, plus `deno task dev:agents` running simulated agents.
+  - **1b:** the Go agent (built in Docker), the install script, signed releases and self-update, plus the 10k-agent load test.
+- The `ServerProvisioner` interface (§24) waits for a second provisioner. Server removal already happens in one place (`releaseServer`), which is where `deprovision()` will be called.
 - Go agent: identity keys, signed requests, `hello` / `poll` / `events`, cursors, poll modes, local completed-seq store, inventory and resource summary, systemd unit, install script, signed releases, self-update.
 - Control plane: agent routes, pairing (code, expiry, limits), accept/reject, computed online status, piggybacked offline sweep.
 - `servers.provider` field and the `ServerProvisioner` interface (`ManualProvisioner`; server removal goes through `deprovision()`), so managed servers (§24) can be added later without a migration.
@@ -1069,6 +1080,7 @@ Instances on Deno Deploy are long-lived, so any unbounded module-level `Map`, `S
 | Sweep shard `nextRunAt` | shard | 64 (fixed array) | — | < 1 KB |
 | Entitlements (effective plan and limits) | tenant | 5,000 | 60 s | ~5 MB |
 | Poll / IP rate-limit buckets | server / IP | 50,000 | 2 min idle | ~5 MB |
+| Agent config (resolved + version) | — | 1 (fixed) | 5 s | tiny (core `cache`) |
 | Platform settings, plan list | key | ~100 (fixed) | 60 s | tiny (core `cache`) |
 
 The total cache budget is **≤ 32 MB per instance**. Adding a new cache requires adding a row to this table in the same PR.

@@ -60,13 +60,13 @@ export type transfer$return = {
     };
 };
 export type updateOverdraftLimit$body = {
-    userId: string;
-    tenantId: string;
+    userId?: string;
+    tenantId?: string;
     limit: number;
 };
 export type getOverdraftLimit$query = {
-    userId: string;
-    tenantId: string;
+    userId?: string;
+    tenantId?: string;
 };
 export type getOverdraftLimit$return = {
     overdraftLimit: number;

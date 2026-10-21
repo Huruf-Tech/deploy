@@ -50,6 +50,167 @@ export declare class ThunderSDK extends BaseSDK {
             finally: (onfinally?: (() => void) | null | undefined) => Promise<unknown>;
         };
     };
+    static agents: {
+        readonly type: {
+            hello$body: import("./modules/agents.js").hello$body;
+            hello$return: import("./modules/agents.js").hello$return;
+            poll$body: import("./modules/agents.js").poll$body;
+            poll$return: import("./modules/agents.js").poll$return;
+            config$return: import("./modules/agents.js").config$return;
+            events$body: import("./modules/agents.js").events$body;
+            events$return: import("./modules/agents.js").events$return;
+        };
+        readonly hello: (data: {
+            params?: undefined;
+            query?: undefined;
+            body: import("./modules/agents.js").hello$body;
+        } & import("./types.js").TRequestOptions<import("./modules/agents.js").hello$return>) => {
+            readonly raw: Promise<import("axios").AxiosResponse<import("./modules/agents.js").hello$return, any, {}, any>>;
+            readonly data: Promise<import("./modules/agents.js").hello$return>;
+            then: <TResult1 = import("./modules/agents.js").hello$return, TResult2 = never>(onfulfilled?: ((value: import("./modules/agents.js").hello$return) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+            catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<import("./modules/agents.js").hello$return | TResult>;
+            finally: (onfinally?: (() => void) | null | undefined) => Promise<import("./modules/agents.js").hello$return>;
+        };
+        readonly poll: (data: {
+            params?: undefined;
+            query?: undefined;
+            body: import("./modules/agents.js").poll$body;
+        } & import("./types.js").TRequestOptions<import("./modules/agents.js").poll$return>) => {
+            readonly raw: Promise<import("axios").AxiosResponse<import("./modules/agents.js").poll$return, any, {}, any>>;
+            readonly data: Promise<import("./modules/agents.js").poll$return>;
+            then: <TResult1 = import("./modules/agents.js").poll$return, TResult2 = never>(onfulfilled?: ((value: import("./modules/agents.js").poll$return) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+            catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<import("./modules/agents.js").poll$return | TResult>;
+            finally: (onfinally?: (() => void) | null | undefined) => Promise<import("./modules/agents.js").poll$return>;
+        };
+        readonly config: (data?: {
+            params?: undefined;
+            query?: undefined;
+            body?: undefined;
+        } & import("./types.js").TRequestOptions<import("./modules/agents.js").config$return>) => {
+            readonly raw: Promise<import("axios").AxiosResponse<import("./modules/agents.js").config$return, any, {}, any>>;
+            readonly data: Promise<import("./modules/agents.js").config$return>;
+            then: <TResult1 = import("./modules/agents.js").config$return, TResult2 = never>(onfulfilled?: ((value: import("./modules/agents.js").config$return) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+            catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<import("./modules/agents.js").config$return | TResult>;
+            finally: (onfinally?: (() => void) | null | undefined) => Promise<import("./modules/agents.js").config$return>;
+        };
+        readonly events: (data: {
+            params?: undefined;
+            query?: undefined;
+            body: import("./modules/agents.js").events$body;
+        } & import("./types.js").TRequestOptions<import("./modules/agents.js").events$return>) => {
+            readonly raw: Promise<import("axios").AxiosResponse<import("./modules/agents.js").events$return, any, {}, any>>;
+            readonly data: Promise<import("./modules/agents.js").events$return>;
+            then: <TResult1 = import("./modules/agents.js").events$return, TResult2 = never>(onfulfilled?: ((value: import("./modules/agents.js").events$return) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+            catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<import("./modules/agents.js").events$return | TResult>;
+            finally: (onfinally?: (() => void) | null | undefined) => Promise<import("./modules/agents.js").events$return>;
+        };
+    };
+    static servers: {
+        readonly type: {
+            count$query: import("./modules/servers.js").count$query;
+            count$return: import("./modules/servers.js").count$return;
+            get$params: import("./modules/servers.js").get$params;
+            get$query: import("./modules/servers.js").get$query;
+            get$return: import("./modules/servers.js").get$return;
+            update$params: import("./modules/servers.js").update$params;
+            update$body: import("./modules/servers.js").update$body;
+            del$params: import("./modules/servers.js").del$params;
+            accept$params: import("./modules/servers.js").accept$params;
+            accept$body: import("./modules/servers.js").accept$body;
+            reject$params: import("./modules/servers.js").reject$params;
+            ping$params: import("./modules/servers.js").ping$params;
+            ping$return: import("./modules/servers.js").ping$return;
+            liveness$return: import("./modules/servers.js").liveness$return;
+        };
+        readonly count: (data: {
+            params?: undefined;
+            query: import("./modules/servers.js").count$query;
+            body?: undefined;
+        } & import("./types.js").TRequestOptions<import("./modules/servers.js").count$return>) => {
+            readonly raw: Promise<import("axios").AxiosResponse<import("./modules/servers.js").count$return, any, {}, any>>;
+            readonly data: Promise<import("./modules/servers.js").count$return>;
+            then: <TResult1 = import("./modules/servers.js").count$return, TResult2 = never>(onfulfilled?: ((value: import("./modules/servers.js").count$return) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+            catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<import("./modules/servers.js").count$return | TResult>;
+            finally: (onfinally?: (() => void) | null | undefined) => Promise<import("./modules/servers.js").count$return>;
+        };
+        readonly get: (data: {
+            params: import("./modules/servers.js").get$params;
+            query: import("./modules/servers.js").get$query;
+            body?: undefined;
+        } & import("./types.js").TRequestOptions<import("./modules/servers.js").get$return>) => {
+            readonly raw: Promise<import("axios").AxiosResponse<import("./modules/servers.js").get$return, any, {}, any>>;
+            readonly data: Promise<import("./modules/servers.js").get$return>;
+            then: <TResult1 = import("./modules/servers.js").get$return, TResult2 = never>(onfulfilled?: ((value: import("./modules/servers.js").get$return) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+            catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<import("./modules/servers.js").get$return | TResult>;
+            finally: (onfinally?: (() => void) | null | undefined) => Promise<import("./modules/servers.js").get$return>;
+        };
+        readonly update: (data: {
+            params: import("./modules/servers.js").update$params;
+            query?: undefined;
+            body: import("./modules/servers.js").update$body;
+        } & import("./types.js").TRequestOptions<unknown>) => {
+            readonly raw: Promise<import("axios").AxiosResponse<unknown, any, {}, any>>;
+            readonly data: Promise<unknown>;
+            then: <TResult1 = unknown, TResult2 = never>(onfulfilled?: ((value: unknown) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+            catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<unknown>;
+            finally: (onfinally?: (() => void) | null | undefined) => Promise<unknown>;
+        };
+        readonly del: (data: {
+            params: import("./modules/servers.js").del$params;
+            query?: undefined;
+            body?: undefined;
+        } & import("./types.js").TRequestOptions<unknown>) => {
+            readonly raw: Promise<import("axios").AxiosResponse<unknown, any, {}, any>>;
+            readonly data: Promise<unknown>;
+            then: <TResult1 = unknown, TResult2 = never>(onfulfilled?: ((value: unknown) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+            catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<unknown>;
+            finally: (onfinally?: (() => void) | null | undefined) => Promise<unknown>;
+        };
+        readonly accept: (data: {
+            params: import("./modules/servers.js").accept$params;
+            query?: undefined;
+            body: import("./modules/servers.js").accept$body;
+        } & import("./types.js").TRequestOptions<unknown>) => {
+            readonly raw: Promise<import("axios").AxiosResponse<unknown, any, {}, any>>;
+            readonly data: Promise<unknown>;
+            then: <TResult1 = unknown, TResult2 = never>(onfulfilled?: ((value: unknown) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+            catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<unknown>;
+            finally: (onfinally?: (() => void) | null | undefined) => Promise<unknown>;
+        };
+        readonly reject: (data: {
+            params: import("./modules/servers.js").reject$params;
+            query?: undefined;
+            body?: undefined;
+        } & import("./types.js").TRequestOptions<unknown>) => {
+            readonly raw: Promise<import("axios").AxiosResponse<unknown, any, {}, any>>;
+            readonly data: Promise<unknown>;
+            then: <TResult1 = unknown, TResult2 = never>(onfulfilled?: ((value: unknown) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+            catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<unknown>;
+            finally: (onfinally?: (() => void) | null | undefined) => Promise<unknown>;
+        };
+        readonly ping: (data: {
+            params: import("./modules/servers.js").ping$params;
+            query?: undefined;
+            body?: undefined;
+        } & import("./types.js").TRequestOptions<import("./modules/servers.js").ping$return>) => {
+            readonly raw: Promise<import("axios").AxiosResponse<import("./modules/servers.js").ping$return, any, {}, any>>;
+            readonly data: Promise<import("./modules/servers.js").ping$return>;
+            then: <TResult1 = import("./modules/servers.js").ping$return, TResult2 = never>(onfulfilled?: ((value: import("./modules/servers.js").ping$return) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+            catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<import("./modules/servers.js").ping$return | TResult>;
+            finally: (onfinally?: (() => void) | null | undefined) => Promise<import("./modules/servers.js").ping$return>;
+        };
+        readonly liveness: (data?: {
+            params?: undefined;
+            query?: undefined;
+            body?: undefined;
+        } & import("./types.js").TRequestOptions<import("./modules/servers.js").liveness$return>) => {
+            readonly raw: Promise<import("axios").AxiosResponse<import("./modules/servers.js").liveness$return, any, {}, any>>;
+            readonly data: Promise<import("./modules/servers.js").liveness$return>;
+            then: <TResult1 = import("./modules/servers.js").liveness$return, TResult2 = never>(onfulfilled?: ((value: import("./modules/servers.js").liveness$return) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+            catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<import("./modules/servers.js").liveness$return | TResult>;
+            finally: (onfinally?: (() => void) | null | undefined) => Promise<import("./modules/servers.js").liveness$return>;
+        };
+    };
     static wellKnown: {
         readonly type: {
             oauthServerMeta$params: import("./modules/.well-known.js").oauthServerMeta$params;

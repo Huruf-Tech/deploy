@@ -37,7 +37,7 @@ export type del$params = {
     id: string;
 };
 export type create$body = {
-    invite: string;
+    invite?: string;
 };
 export type create$return = {
     _id: string;

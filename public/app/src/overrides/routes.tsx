@@ -50,5 +50,8 @@ export const routes: TRoutesOverride = {
   walletLedgers: { merge: true, display: false },
   tenantMemberships: { merge: true, display: false },
 
+  servers: { merge: true, name: "Servers" },
+
+  Infrastructure: { merge: true, priority: 10 },
   Administration: { merge: true, priority: 90 },
 }

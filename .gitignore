@@ -141,3 +141,6 @@ dist
 # Development Source
 _temp/
 !public/www/sdk@*/package.tgz
+
+# Agent simulator identities
+.agent-sim/
