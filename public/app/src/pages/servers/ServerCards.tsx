@@ -313,7 +313,12 @@ export default function ServerCards({ data, isLoading, fetcher }: TCardProps) {
   React.useEffect(() => onServersChanged(refetch), [refetch])
 
   const servers = React.useMemo(
-    () => (Array.isArray(data) ? serverSchema.array().parse(data) : []),
+    () =>
+      // One malformed document must not take the whole list down.
+      (Array.isArray(data) ? data : []).flatMap((item) => {
+        const parsed = serverSchema.safeParse(item)
+        return parsed.success ? [parsed.data] : []
+      }),
     [data]
   )
   // Refetch while something is in flight: pending approval or host setup.

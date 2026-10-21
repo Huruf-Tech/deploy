@@ -109,13 +109,15 @@ export const recordHostSetup = async (
     | z.output<typeof $hostCheck>[]
     | undefined;
 
+  // Only fields with values: the driver stores `undefined` as `null`,
+  // which the schemas (and the dashboard) treat as invalid.
   await serverModel.updateOne({ _id: server }, {
     $set: {
       setup: {
         status: outcome.ok ? "ready" : "failed",
-        dockerVersion,
-        checks,
-        error: outcome.error,
+        ...(dockerVersion ? { dockerVersion } : {}),
+        ...(checks ? { checks } : {}),
+        ...(outcome.error ? { error: outcome.error } : {}),
         updatedAt: new Date(),
       },
       ...(dockerVersion ? { "inventory.dockerVersion": dockerVersion } : {}),

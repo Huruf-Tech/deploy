@@ -212,8 +212,8 @@ const ingestCommandResults = async (
         update: {
           $set: {
             status: event.data.ok ? "done" : "failed",
-            result: event.data.result,
-            error: event.data.error,
+            ...(event.data.result ? { result: event.data.result } : {}),
+            ...(event.data.error ? { error: event.data.error } : {}),
             finishedAt: now,
           },
         },
