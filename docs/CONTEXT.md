@@ -60,7 +60,8 @@ Background from the planning conversation that is **not** in [PLAN.md](PLAN.md).
 
 ## 5. Moving to the new machine
 
-1. **Nothing is committed yet.** Every file is untracked on branch `master`, and the intended main branch is `main`. Commit everything and push it to the remote before switching machines.
+1. The initial commit exists on `master` (the intended main branch is `main`). Commit and push before switching machines.
+   - Project rules live in `.claude/CLAUDE.md`, because `deno task update:core` overwrites the root `CLAUDE.md`.
 2. **`.env` files are git-ignored**, including those inside `public/app/`. The root `.gitignore` patterns match at any depth, even though thunder-ui intends its `.env` files to be committed. Copy them manually, or decide whether to un-ignore `public/app/.env*`.
 3. On the new machine:
    - Clone the repo.

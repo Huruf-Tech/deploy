@@ -20,10 +20,7 @@ Ignore `_temp/` entirely — never read from it, never write into it, exclude it
 - **Named functions only** for routers and handlers (`new Router("/api/", function users(router) {...})`); arrow functions throw. Handler names unique per router.
 - **`@/` alias** for all project imports — no relative `../core/` or `../database.ts` (lint plugins enforce this).
 - **Reuse built-ins before writing or installing anything**: `Env`, `Logger`, `cache`/`memoize`, `createHash`, `queryAsJson`, `paginated`, `createCRUD`, `normalizeFilters`, `bodyAsJson`, `Response` helpers, `zod`. Prefer `@std/*` over npm. Justify every new dependency.
-- Sub-folders in `routes/` are **organizational only**: `routes/hr/payroll.ts` routes exactly like `routes/payroll.ts`. Route filenames must be unique across all sub-folders.
-- Dashboard UI lives in `public/app` (thunder-ui, `navbar` layout), served at `/app` from its build output `public/app/www`. **Never edit `public/app/src/core/`**; extend via `src/overrides/`, `src/pages/`, `src/components/`. shadcn/ui first for components.
-- Product spec and phases: [docs/PLAN.md](docs/PLAN.md). Backend performance budgets (§20) are mandatory.
-- Working agreements, rejected alternatives and handoff notes: [docs/CONTEXT.md](docs/CONTEXT.md). No code until the owner says go; one phase at a time with review.
+- Sub-folders in `routes/` don't affect routing — discovery is recursive and matches on **filename only**, so `routes/hr/payroll.ts` === `routes/payroll.ts` → `/payroll/*`. Folders organize code; keep filenames unique across `routes/`.
 - No background jobs in-process (serverless); use `workers/` on a separate server or an external queue.
 - Zod schemas go in the prepare phase, outside the request handler. Throw `Response.forbidden(...)` etc. for error responses.
 
@@ -36,7 +33,5 @@ deno task setup          # cloned/forked project (git hooks only)
 deno task init           # BRAND-NEW project from template — RESETS git history
 deno task add:plugin -n {org}/{name}
 deno task update:core
-deno task generate:openapi | generate:app
-deno task generate:sdk -v 0.0.1 --overwrite   # after any backend schema/route change,
-                                              # then `npm run build` in public/app
+deno task generate:openapi | generate:sdk | generate:app
 ```

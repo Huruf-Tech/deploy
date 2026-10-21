@@ -4,6 +4,11 @@
 > Product: **Huruf Deploy**. Reference product: Dokploy (inspiration, not a clone).
 > Every phase in §16 ends with a review checkpoint before the next one starts.
 
+**v4.5:**
+- **Managed servers** (D42, §24): optional future option, implemented only with the owner's explicit consent. The structural seams are prepared now.
+- §20.3: safety limits are read through a cached `Settings` wrapper (the DB-backed env fallback is uncached).
+- §20.2: the thunder-core `guard` hook must cost zero DB operations on agent polls (verified in Phase 1).
+
 **v4.4:**
 - Code quality and architecture (§23): layers, shared building blocks, strategy interfaces, no-duplication rules enforced in CI.
 - Open questions in §18 accepted as proposed.
@@ -107,6 +112,7 @@ A free-to-use SaaS that deploys and operates apps on **the user's own machines**
 | D39 | **Usage plans** (admin CRUD, public or **private**). Every tenant is on **Free** by default. Paid plans are charged from the tenant's thunder-core wallet, and each paid period is logged in `subscriptionPeriods`. **No current paid period → automatic fallback to Free** (§22). |
 | D40 | **Every in-memory cache is size-capped** (max entries + TTL + LRU), with a per-instance memory budget. Correctness never depends on a cache (§20.4). |
 | D41 | **Code quality:** no duplication. Composable modules and classes in layers (routes → services → building blocks), strategy interfaces for variants, schemas as the single source of truth. Enforced in CI (§23). |
+| D42 | **Managed servers (optional, needs owner consent):** provision EC2 instances on the platform's AWS account and bill plan + metered usage from the wallet. The MVP only prepares the seams (§24). |
 
 ---
 
@@ -348,7 +354,7 @@ Thunder naming rules apply: reference fields are named after the entity, never `
 | Collection | Key fields |
 |---|---|
 | `networks` | tenant, cidr (e.g. `10.210.0.0/16`), nextSubnetIndex, primaryServer(server)?, registry {mode: `none`/`builtin`/`external`, meshAddress?, external(registry)?, usernameEnc?, passwordEnc?} (the built-in registry's credentials, or a reference to an external `registries` entry) |
-| `servers` | tenant, name, status (`pending`/`active`/`rejected`/`removed`), identity {signPublicKey, boxPublicKey, fingerprint}, pairingCode, pairingExpiresAt, installMethod (`ssh`/`manual`), labels{}, inventory {hostname, os, arch, cpuCores, memory, disk, publicIp, privateIp, dockerVersion, agentVersion}, resources {cpuUsed, memFree, diskFree, reportedAt}, mesh {enabled, reachable, publicKey, meshIp, endpoint, containerSubnet}, appliedVersion, acceptedBy(user). **Cold document:** polls never write it. |
+| `servers` | tenant, name, status (`pending`/`active`/`rejected`/`removed`), identity {signPublicKey, boxPublicKey, fingerprint}, pairingCode, pairingExpiresAt, installMethod (`ssh`/`manual`, later `managed`), provider {kind: `byo`/`managed`, cloud?, region?, instanceId?, instanceType?} (§24), labels{}, inventory {hostname, os, arch, cpuCores, memory, disk, publicIp, privateIp, dockerVersion, agentVersion}, resources {cpuUsed, memFree, diskFree, reportedAt}, mesh {enabled, reachable, publicKey, meshIp, endpoint, containerSubnet}, appliedVersion, acceptedBy(user). **Cold document:** polls never write it. |
 | `serverLeases` | _id = server, tenant, shard, status (mirrors `servers.status`), aliveUntil, offlineSince?, desiredVersion, commandSeq, fastPollUntil, terminalUntil. **Hot document:** one `findOneAndUpdate` per poll; partial index `{shard, aliveUntil}` where `status: "active", offlineSince: null`. |
 | `sweepShards` | _id (shard 0–63), nextRunAt |
 | `serverSpecs` | server, version, specSealed, createdAt. Only the latest version per server is kept. |
@@ -766,6 +772,7 @@ Each phase ends with a **review checkpoint** (demo + code review + approval). Ph
 ### Phase 1 — Agent core and polling protocol
 - Go agent: identity keys, signed requests, `hello` / `poll` / `events`, cursors, poll modes, local completed-seq store, inventory and resource summary, systemd unit, install script, signed releases, self-update.
 - Control plane: agent routes, pairing (code, expiry, limits), accept/reject, computed online status, piggybacked offline sweep.
+- `servers.provider` field and the `ServerProvisioner` interface (`ManualProvisioner`; server removal goes through `deprovision()`), so managed servers (§24) can be added later without a migration.
 - UI: server pool list, pending → accept/reject.
 - **Done when:**
   - A manual install appears as pending with a matching code, and accepting it marks it online.
@@ -836,6 +843,7 @@ Each phase ends with a **review checkpoint** (demo + code review + approval). Ph
 
 ### Phase 10 — Plans, subscriptions and billing
 - Plans CRUD (public/private) and admin screens.
+- Every charge goes through one `BillingService` (plan periods now; a slot for usage meters, §24).
 - Subscribe, upgrade and cancel with wallet charge plus a period log in one transaction.
 - Lazy renewal, `pastDue` and Free fallback, complimentary periods.
 - Over-limit grace and slow-poll enforcement.
@@ -863,6 +871,7 @@ Each phase ends with a **review checkpoint** (demo + code review + approval). Ph
 - PR preview deployments
 - macOS agent
 - More roles
+- Managed servers on our AWS account (D42, §24), only with the owner's explicit consent
 
 ---
 
@@ -950,6 +959,7 @@ Server-side time, excluding network. Enforced by the load-test harness. A releas
 
 **Rules:**
 - **Nothing expensive on the poll path:** specs are precomputed and sealed when they change (§4.4); decryption, rendering and joins never happen per poll.
+  - thunder-core's `guard` hook runs on **every** request, agent polls included (`withAuthGuard` → guest role, policies cached 30 s). Phase 1 asserts it costs zero DB operations for credential-less agent requests; otherwise the agent routes need a cheaper path before the budget can be met.
 - **Every query is index-covered and bounded** (`limit` everywhere). Query plans are asserted in tests for the hot paths. Partial indexes are used for sparse states (`offlineSince: null`, pending outbox).
 - **Hot/cold split:** poll-hot fields live in the tiny `serverLeases` document. Identity, inventory and capacity history live in cold documents that polls never write. Sweep coordination is sharded (§3.4).
 - **Coalesced writes:**
@@ -991,7 +1001,9 @@ There are three kinds of limit. All are enforced **server-side in the domain ser
 | `templates`, `alertRules`, `gitIntegrations`, `registries` | 10 each | DB size |
 | `features.*` | e.g. `blueGreen`, `autoscale`, `privateNetwork`, `backups` | Gating paid features (all **on** for Free in MVP unless we decide otherwise) |
 
-**B. Safety limits** — platform-wide, **not raised by plans** (admin only). Stored in thunder-core's database-backed env (`envs`, read with `Env.number(...)`), so the admin can change them without a redeploy.
+**B. Safety limits** — platform-wide, **not raised by plans** (admin only). Stored in thunder-core's database-backed env (`envs`), so the admin can change them without a redeploy.
+- `Env.get` falls back to an **uncached** `envs.findOne` on every call for keys missing from the process env. So these settings are read only through one cached `Settings` building block (core `cache`, 60 s), never with a raw `Env.*` call on a request path.
+- They must **not** be set in `.env`: process env wins over the DB, which would silently block admin changes.
 
 | Setting | Default | Protects |
 |---|---|---|
@@ -1228,6 +1240,7 @@ Each axis of variation is an interface with one class per variant. Adding a vari
 | `RegistryProvider` | `DockerHubRegistry`, `GenericRegistry` (later `EcrRegistry`) |
 | `SourceProvider` | `GitHubSource`, `GitSource`, `DockerfileSource`, `ComposeSource` |
 | `AlertChannel` | `EmailChannel`, `WebhookChannel`, `SlackChannel` |
+| `ServerProvisioner` | `ManualProvisioner`, `SshProvisioner` (later `AwsManagedProvisioner`, §24) |
 | `IngressProvider` (Phase 11) | `PortIngress`, `CloudflareTunnelIngress`, `CloudflareLbIngress` |
 | `AgentCommand` | One definition per command type: zod payload/result schema (→ protocol generation) + control-plane issuer + agent handler |
 
@@ -1267,3 +1280,31 @@ Each axis of variation is an interface with one class per variant. Adding a vari
   - A dependency-direction check (routes → lib → lib/core, never upward).
   - Coverage targets for `lib/` and agent `internal/`.
 - **Review checklist** (PR template): reuses existing building blocks, no new duplication, new variants added as strategy classes, types derived from schemas.
+
+---
+
+## 24. Managed servers (optional, D42)
+
+> **Not scheduled.** Implemented only with the owner's explicit consent. Until then, only the seams below exist.
+
+**Idea:** the user provisions an EC2 instance from the dashboard on the platform's AWS account. The tenant pays the plan subscription plus metered machine usage per hour.
+
+### 24.1 Seams prepared in the MVP
+- `servers.provider` {kind: `byo`/`managed`, cloud, region, instanceId, instanceType} (Phase 1).
+- `ServerProvisioner` strategy (§23.3): `provision()`, `deprovision()`, `describe()`. Server removal always calls `deprovision()`, so a managed instance can never outlive its record.
+- Managed instances install through cloud-init user-data carrying the one-time join token. This is the same join path as the SSH wizard (§4.2/§4.3), so no SSH is needed.
+- `BillingService` (Phase 10) owns every charge: plan periods now, usage meters later.
+- Plan entries `limits.managedServers` and `features.managedServers` (0 / off on Free).
+
+### 24.2 Proposed design (to confirm before implementing)
+- **Prepaid blocks:** charge the wallet for a block of hours ahead, refund unused time on stop. An empty wallet stops the instance, which is terminated after a grace period. No post-paid debt.
+- **Metering covers the full cost:** instance-hours, EBS (billed even while stopped), public IPv4 and egress.
+- **Metering without cron:** driven by the managed instance's own polls through `PiggybackScheduler` (in-memory due check). Tag-based reconciliation against AWS catches orphans.
+- **AWS access:** a dedicated AWS account (Organizations + SCP limiting regions and instance types), with a narrowly scoped IAM principal restricted to tagged resources.
+
+### 24.3 Open questions and risks
+- **What stops a running instance whose agent is silent** (it keeps costing money)? The options are an AWS-side scheduler (conflicts with "no cron") or accepting the exposure. Owner decision.
+- **Abuse lands on our AWS account** (mining, spam, attacks): payment verification/KYC before the first instance, port 25 blocked, per-tenant caps.
+- **Requires real payments** (wallet top-up) first.
+- **Data processor role:** customer workloads would run on our infrastructure, which affects the ToS and GDPR. This is a change to the data-minimization principle.
+- **Dependency:** `npm:@aws-sdk/client-ec2`, or a small SigV4 signer on WebCrypto. To be justified at the time.
