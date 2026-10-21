@@ -60,7 +60,7 @@ representative at an online or offline event.
 
 Instances of abusive, harassing, or otherwise unacceptable behavior may be
 reported to the community leaders responsible for enforcement privately via the
-project maintainers. For Thunder, please contact the maintainers through the
+project maintainers. For Huruf Deploy, please contact the maintainers through the
 [GitHub repository](https://github.com/Huruf-Tech/thunder) (for example, by
 opening a confidential security advisory or reaching out to the repository
 owner). All complaints will be reviewed and investigated promptly and fairly.

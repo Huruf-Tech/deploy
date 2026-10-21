@@ -748,7 +748,11 @@ Each phase ends with a **review checkpoint** (demo + code review + approval). Ph
 - Built in reviewable sub-phases:
   - **0a:** backend foundations (building blocks, encryption, plans and entitlements, setup via `deno task setup:dev` / `setup:prod`).
   - **0b:** dashboard scaffold.
-  - **0c:** repository, CI, docs/ADRs, agent simulator, load-test harness and first deploy.
+  - **0c:** repository, CI, docs/ADRs.
+  - Moved out of Phase 0:
+    - The agent simulator, load-test harness and PROTOCOL.md move to Phase 1, since they need the protocol.
+    - The first deploy waits on the owner's Deno Deploy project.
+    - CODEOWNERS waits on the maintainers' GitHub handles.
 - **Repository:** monorepo layout (§21), `deno.json` excludes for `agent/` and `public/app/`, CI pipeline, PR/issue templates, CODEOWNERS.
 - **Docs:** ARCHITECTURE.md, PROTOCOL.md (skeleton), first ADRs (no gateway, no Swarm, polling with leases, shadcn-first), contributor guide updates.
 - Install and set up thunder-core.
@@ -1119,7 +1123,9 @@ The total cache budget is **≤ 32 MB per instance**. Adding a new cache require
 
 ### 21.4 Quality gates (CI)
 
-- **Backend:** `deno task check` (fmt + lint), `deno test`, SDK freshness (`generate:sdk` diff), protocol freshness.
+- **Backend:** fmt + lint (excluding `core/`, `plugins/`, `public/`), `deno check`, `deno task check:layers`, `deno task test` against a MongoDB service, and protocol freshness (from Phase 1).
+  - There is **no SDK freshness gate.** `generate:sdk` embeds its run time into every `.default(() => new Date())` field, so its output is never byte-identical. The committed `public/app/www` isn't diff-checked either, because builds aren't reproducible across operating systems; CI builds the app instead.
+  - The same generator behaviour makes generated forms pre-fill such fields with the SDK's build time. Keep server-set dates (`createdAt`) out of every `insertSchema`/`updateSchema`.
 - **Agent:** `go vet`, `staticcheck`, `go test`, cross-compile (linux amd64/arm64).
 - **UI:** `npm run lint`, `typecheck`, `i18n:check`, `build`, bundle budget.
 - **Code quality (§23.6):** duplication detection (`jscpd`, `dupl`), complexity limits, dependency direction, coverage targets.
@@ -1286,7 +1292,7 @@ Each axis of variation is an interface with one class per variant. Adding a vari
   - Duplication detection: `jscpd` for TS/TSX, `dupl` via `golangci-lint` for Go, with a threshold that fails the build.
   - Lint complexity limits.
   - A dependency-direction check (routes → lib → lib/core, never upward).
-  - Coverage targets for `lib/` and agent `internal/`.
+  - Coverage targets for `lib/` and agent `internal/` (added once there is enough code for a meaningful baseline).
 - **Review checklist** (PR template): reuses existing building blocks, no new duplication, new variants added as strategy classes, types derived from schemas.
 
 ---

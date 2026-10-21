@@ -5,7 +5,11 @@
       "./index.d.ts"
     ]
   },
+  "fmt": {
+    "exclude": ["core/", "plugins/", "public/", "_temp/", ".claude/", "**/*.md"]
+  },
   "lint": {
+    "exclude": ["core/", "plugins/", "public/", "_temp/"],
     "rules": {
       "include": [
         "no-eval"
@@ -24,6 +28,7 @@
     "setup:dev": "ENV_TYPE=development deno run -A scripts/setupDeploy.ts",
     "setup:prod": "ENV_TYPE=production deno run -A scripts/setupDeploy.ts",
     "test": "ENV_TYPE=test deno test -A tests/",
+    "check:layers": "deno run --allow-read scripts/checkLayers.ts",
     "init": "rm -rf .git && git init && deno task setup && deno run -A ./core/scripts/setupEnv.ts",
     "update:core": "deno run -A ./core/scripts/updateCore.ts",
     "add:plugin": "deno run -A ./core/scripts/addPlugin.ts",
