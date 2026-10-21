@@ -174,7 +174,8 @@ export default function TerminalSheet({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="flex w-full flex-col sm:max-w-4xl">
+      {/* Same data-[side] variant as the base classes, so these override its max-w-sm. */}
+      <SheetContent className="flex flex-col data-[side=right]:w-full data-[side=right]:sm:max-w-5xl">
         <SheetHeader>
           <SheetTitle className="font-mono">
             {container ?? t("Host shell")}

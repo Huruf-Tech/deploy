@@ -118,7 +118,8 @@ export function LogsSheet({
 
   return (
     <Sheet open={!!container} onOpenChange={onOpenChange}>
-      <SheetContent className="flex w-full flex-col sm:max-w-3xl">
+      {/* Same data-[side] variant as the base classes, so these override its max-w-sm. */}
+      <SheetContent className="flex flex-col data-[side=right]:w-full data-[side=right]:sm:max-w-4xl">
         <SheetHeader>
           <SheetTitle className="font-mono">{container}</SheetTitle>
           <SheetDescription>
