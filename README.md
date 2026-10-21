@@ -67,6 +67,11 @@ Dashboard work happens in `public/app` (`npm install`, `npm run dev`). See [CONT
 | `deno task test` | tests (some need MongoDB) |
 | `deno task check:layers` | dependency-direction check |
 | `deno task setup:dev` / `setup:prod` | database setup for an environment |
+| `deno task dev:agents --tenant <id>` | simulated agents for UI work |
+| `deno task dev:vm` | an Ubuntu "VM" (systemd + sshd, user `deploy`/`deploy`) on `localhost:2223` for the SSH wizard |
+| `deno task agent:build` / `agent:serve` | build the Go agent (in Docker) and serve it on `:8090`, standing in for releases |
+| `deno task agent:test` | gofmt, vet and tests for the agent (in Docker) |
+| `deno task load:agents --count N` | load test with N simulated agents |
 | `deno task generate:sdk -v 0.0.1 --overwrite` | regenerate the SDK after a schema or route change, then `npm run build` in `public/app` |
 
 The framework's own README is kept as `thunder.README.md` (refreshed by `deno task update:core`).

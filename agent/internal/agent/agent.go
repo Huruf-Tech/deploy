@@ -27,13 +27,15 @@ const (
 )
 
 type Agent struct {
-	Tenant   string
-	Version  string
-	Identity *identity.Identity
-	Client   *transport.Client
-	Store    *state.Store
-	Commands commands.Registry
-	Log      *slog.Logger
+	Tenant string
+	// One-time token from the SSH wizard; ignored by the control plane once used.
+	JoinToken string
+	Version   string
+	Identity  *identity.Identity
+	Client    *transport.Client
+	Store     *state.Store
+	Commands  commands.Registry
+	Log       *slog.Logger
 
 	config        *protocol.AgentConfig
 	configVersion string
@@ -127,6 +129,7 @@ func (a *Agent) hello(ctx context.Context) error {
 	var response protocol.HelloResponse
 	_, err := a.Client.Post(ctx, "/agents/api/hello", protocol.HelloRequest{
 		Tenant:        a.Tenant,
+		JoinToken:     a.JoinToken,
 		SignPublicKey: a.Identity.SignPublicKey(),
 		BoxPublicKey:  a.Identity.BoxPublicKey(),
 		Inventory:     host.Inventory(a.Version),

@@ -7,6 +7,7 @@ import {
 import { registerAgent } from "@/lib/agents/servers.ts";
 import { ingestEvents, pollAgent } from "@/lib/agents/poll.ts";
 import { getAgentConfig } from "@/lib/agents/config.ts";
+import { installerScript } from "@/lib/agents/bootstrap.ts";
 import {
   $agentConfigResponse,
   $eventsRequest,
@@ -54,6 +55,17 @@ export default new Router("/api", function agents(router) {
         return Response.json(result.body, { status: result.status });
       },
     };
+  });
+
+  // The one-line installer (`curl ... | sudo sh`), public like the rest of this router.
+  router.get("/install.sh", function installScript() {
+    return async () =>
+      new Response(await installerScript(), {
+        headers: {
+          "content-type": "text/x-shellscript; charset=utf-8",
+          "cache-control": "public, max-age=300",
+        },
+      });
   });
 
   router.post("/config", function config() {

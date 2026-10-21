@@ -20,6 +20,8 @@ export type hello$body = {
         dockerVersion?: string | undefined;
         agentVersion: string;
     };
+    /** One-time token from the SSH wizard: activates the server without pairing */
+    joinToken?: string | undefined;
 };
 export type hello$return = {
     version: string;
@@ -118,6 +120,17 @@ export declare const agentsModule: (sdk: typeof BaseSDK) => {
         then: <TResult1 = poll$return, TResult2 = never>(onfulfilled?: ((value: poll$return) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
         catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<poll$return | TResult>;
         finally: (onfinally?: (() => void) | null | undefined) => Promise<poll$return>;
+    };
+    readonly installScript: (data?: {
+        params?: undefined;
+        query?: undefined;
+        body?: undefined;
+    } & TRequestOptions<unknown>) => {
+        readonly raw: Promise<import("axios").AxiosResponse<unknown, any, {}, any>>;
+        readonly data: Promise<unknown>;
+        then: <TResult1 = unknown, TResult2 = never>(onfulfilled?: ((value: unknown) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+        catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<unknown>;
+        finally: (onfinally?: (() => void) | null | undefined) => Promise<unknown>;
     };
     readonly config: (data?: {
         params?: undefined;

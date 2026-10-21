@@ -29,6 +29,7 @@ var version = "dev"
 func main() {
 	url := flag.String("url", os.Getenv("HURUF_DEPLOY_URL"), "control plane base URL")
 	tenant := flag.String("tenant", os.Getenv("HURUF_DEPLOY_TENANT"), "tenant id")
+	joinToken := flag.String("join-token", os.Getenv("HURUF_DEPLOY_JOIN_TOKEN"), "one-time token from the SSH install wizard")
 	stateDir := flag.String("state-dir", "/var/lib/huruf-deploy-agent", "identity and state directory")
 	showVersion := flag.Bool("version", false, "print the version and exit")
 	flag.Parse()
@@ -61,13 +62,14 @@ func main() {
 	log.Info("huruf-deploy-agent starting", "version", version, "url", *url, "fingerprint", id.Fingerprint())
 
 	a := &agent.Agent{
-		Tenant:   *tenant,
-		Version:  version,
-		Identity: id,
-		Client:   transport.New(*url, id),
-		Store:    store,
-		Commands: commands.Default(),
-		Log:      log,
+		Tenant:    *tenant,
+		JoinToken: *joinToken,
+		Version:   version,
+		Identity:  id,
+		Client:    transport.New(*url, id),
+		Store:     store,
+		Commands:  commands.Default(),
+		Log:       log,
 	}
 	if err := a.Run(ctx); err != nil {
 		log.Error("agent stopped", "error", err)

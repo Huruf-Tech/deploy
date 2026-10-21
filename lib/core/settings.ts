@@ -15,6 +15,12 @@ export const readNumberSetting = cache(
   60_000,
 );
 
+export const readTextSetting = cache(
+  async (key: string, fallback: string) =>
+    (await Env.get(key, true))?.trim() || fallback,
+  60_000,
+);
+
 /** Flags are off unless set, so name them so that off is the safe default. */
 export const readFlagSetting = cache(
   (key: string) => Env.enabled(key),

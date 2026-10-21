@@ -38,6 +38,9 @@ export const $helloRequest = z.object({
   signPublicKey: z.string().max(100).describe("Ed25519, raw, base64url"),
   boxPublicKey: z.string().max(100).describe("X25519, raw, base64url"),
   inventory: $inventory,
+  joinToken: z.string().max(100).optional().describe(
+    "One-time token from the SSH wizard: activates the server without pairing",
+  ),
 });
 
 export const $serverStatus = z.enum(["pending", "active", "rejected"]);

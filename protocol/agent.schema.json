@@ -86,6 +86,11 @@
             "disk",
             "agentVersion"
           ]
+        },
+        "joinToken": {
+          "description": "One-time token from the SSH wizard: activates the server without pairing",
+          "type": "string",
+          "maxLength": 100
         }
       },
       "required": [

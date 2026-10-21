@@ -820,6 +820,18 @@ Each phase ends with a **review checkpoint** (demo + code review + approval). Ph
 - SSH bootstrap (detached installer, join token, progress via events, credentials discarded).
 - `docker.ensure` (idempotent), daemon config, preflight checks, Caddy edge container, labels.
 - **Done when:** an SSH wizard install on a fresh VM ends with an online server and Docker installed, and running bootstrap again changes nothing.
+- **2a (done):**
+  - **Spike:** `npm:ssh2` works on Deno: connect, exec, upload over stdin, detached launch in 76 ms locally. Outbound TCP to port 22 from Deno Deploy itself is confirmed at first deploy; the manual install is the fallback.
+  - **Wizard:**
+    - Root, or sudo with a password or key.
+    - Preflight checks: Linux, curl, systemd.
+    - A one-time join token (hashed, single use) activates the server without pairing.
+    - Progress comes from the session state rather than agent events.
+  - **SSRF guard:** private, loopback, link-local, CGNAT and metadata ranges are blocked. The target is resolved once and that IP is used, which prevents DNS rebinding. `SAFETY_SSH_ALLOW_PRIVATE_TARGETS` exists for development only.
+  - **Installer:** the control plane serves it at `/agents/api/install.sh`. It is the same file the wizard uploads.
+  - **Dev tooling:** a systemd test VM (`deno task dev:vm`), and `agent:build` / `agent:serve` standing in for releases.
+  - **Verified on the VM:** online 2.2 s after the wizard returned; a re-run kept the same server and quota; credentials were never written to disk.
+- **2b (next):** `docker.ensure`, daemon config, preflight checks on the agent, the Caddy edge container and labels.
 
 ### Phase 3 — Streams and terminal
 - Stream sessions and chunk buffer (TTL), log tailing, metrics store and charts, `exec.run`.

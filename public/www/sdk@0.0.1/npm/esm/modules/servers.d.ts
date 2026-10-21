@@ -84,6 +84,32 @@ export type ping$return = {
     command: string;
     seq: number;
 };
+export type bootstrap$body = {
+    host: string;
+    port?: number;
+    username: string;
+    password?: string | undefined;
+    privateKey?: string | undefined;
+    passphrase?: string | undefined;
+};
+export type bootstrap$return = {
+    session: string;
+};
+export type bootstrapProgress$params = {
+    id?: string;
+};
+export type bootstrapProgress$return = {
+    status: "installing" | "registered" | "online" | "failed";
+    steps: {
+        at: string;
+        message: string;
+    }[];
+    error?: string | undefined;
+    server?: string | undefined;
+};
+export type installCommand$return = {
+    command: string;
+};
 export type liveness$return = {
     server: string;
     online: boolean;
@@ -105,6 +131,11 @@ export declare const serversModule: (sdk: typeof BaseSDK) => {
         reject$params: reject$params;
         ping$params: ping$params;
         ping$return: ping$return;
+        bootstrap$body: bootstrap$body;
+        bootstrap$return: bootstrap$return;
+        bootstrapProgress$params: bootstrapProgress$params;
+        bootstrapProgress$return: bootstrapProgress$return;
+        installCommand$return: installCommand$return;
         liveness$return: liveness$return;
     };
     readonly count: (data: {
@@ -183,6 +214,39 @@ export declare const serversModule: (sdk: typeof BaseSDK) => {
         then: <TResult1 = ping$return, TResult2 = never>(onfulfilled?: ((value: ping$return) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
         catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<ping$return | TResult>;
         finally: (onfinally?: (() => void) | null | undefined) => Promise<ping$return>;
+    };
+    readonly bootstrap: (data: {
+        params?: undefined;
+        query?: undefined;
+        body: bootstrap$body;
+    } & TRequestOptions<bootstrap$return>) => {
+        readonly raw: Promise<import("axios").AxiosResponse<bootstrap$return, any, {}, any>>;
+        readonly data: Promise<bootstrap$return>;
+        then: <TResult1 = bootstrap$return, TResult2 = never>(onfulfilled?: ((value: bootstrap$return) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+        catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<bootstrap$return | TResult>;
+        finally: (onfinally?: (() => void) | null | undefined) => Promise<bootstrap$return>;
+    };
+    readonly bootstrapProgress: (data: {
+        params: bootstrapProgress$params;
+        query?: undefined;
+        body?: undefined;
+    } & TRequestOptions<bootstrapProgress$return>) => {
+        readonly raw: Promise<import("axios").AxiosResponse<bootstrapProgress$return, any, {}, any>>;
+        readonly data: Promise<bootstrapProgress$return>;
+        then: <TResult1 = bootstrapProgress$return, TResult2 = never>(onfulfilled?: ((value: bootstrapProgress$return) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+        catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<bootstrapProgress$return | TResult>;
+        finally: (onfinally?: (() => void) | null | undefined) => Promise<bootstrapProgress$return>;
+    };
+    readonly installCommand: (data?: {
+        params?: undefined;
+        query?: undefined;
+        body?: undefined;
+    } & TRequestOptions<installCommand$return>) => {
+        readonly raw: Promise<import("axios").AxiosResponse<installCommand$return, any, {}, any>>;
+        readonly data: Promise<installCommand$return>;
+        then: <TResult1 = installCommand$return, TResult2 = never>(onfulfilled?: ((value: installCommand$return) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+        catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<installCommand$return | TResult>;
+        finally: (onfinally?: (() => void) | null | undefined) => Promise<installCommand$return>;
     };
     readonly liveness: (data?: {
         params?: undefined;

@@ -144,3 +144,6 @@ _temp/
 
 # Agent simulator identities
 .agent-sim/
+
+# Locally built agent binaries
+agent/dist/

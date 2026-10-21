@@ -82,6 +82,17 @@ export declare class ThunderSDK extends BaseSDK {
             catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<import("./modules/agents.js").poll$return | TResult>;
             finally: (onfinally?: (() => void) | null | undefined) => Promise<import("./modules/agents.js").poll$return>;
         };
+        readonly installScript: (data?: {
+            params?: undefined;
+            query?: undefined;
+            body?: undefined;
+        } & import("./types.js").TRequestOptions<unknown>) => {
+            readonly raw: Promise<import("axios").AxiosResponse<unknown, any, {}, any>>;
+            readonly data: Promise<unknown>;
+            then: <TResult1 = unknown, TResult2 = never>(onfulfilled?: ((value: unknown) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+            catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<unknown>;
+            finally: (onfinally?: (() => void) | null | undefined) => Promise<unknown>;
+        };
         readonly config: (data?: {
             params?: undefined;
             query?: undefined;
@@ -120,6 +131,11 @@ export declare class ThunderSDK extends BaseSDK {
             reject$params: import("./modules/servers.js").reject$params;
             ping$params: import("./modules/servers.js").ping$params;
             ping$return: import("./modules/servers.js").ping$return;
+            bootstrap$body: import("./modules/servers.js").bootstrap$body;
+            bootstrap$return: import("./modules/servers.js").bootstrap$return;
+            bootstrapProgress$params: import("./modules/servers.js").bootstrapProgress$params;
+            bootstrapProgress$return: import("./modules/servers.js").bootstrapProgress$return;
+            installCommand$return: import("./modules/servers.js").installCommand$return;
             liveness$return: import("./modules/servers.js").liveness$return;
         };
         readonly count: (data: {
@@ -198,6 +214,39 @@ export declare class ThunderSDK extends BaseSDK {
             then: <TResult1 = import("./modules/servers.js").ping$return, TResult2 = never>(onfulfilled?: ((value: import("./modules/servers.js").ping$return) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
             catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<import("./modules/servers.js").ping$return | TResult>;
             finally: (onfinally?: (() => void) | null | undefined) => Promise<import("./modules/servers.js").ping$return>;
+        };
+        readonly bootstrap: (data: {
+            params?: undefined;
+            query?: undefined;
+            body: import("./modules/servers.js").bootstrap$body;
+        } & import("./types.js").TRequestOptions<import("./modules/servers.js").bootstrap$return>) => {
+            readonly raw: Promise<import("axios").AxiosResponse<import("./modules/servers.js").bootstrap$return, any, {}, any>>;
+            readonly data: Promise<import("./modules/servers.js").bootstrap$return>;
+            then: <TResult1 = import("./modules/servers.js").bootstrap$return, TResult2 = never>(onfulfilled?: ((value: import("./modules/servers.js").bootstrap$return) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+            catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<import("./modules/servers.js").bootstrap$return | TResult>;
+            finally: (onfinally?: (() => void) | null | undefined) => Promise<import("./modules/servers.js").bootstrap$return>;
+        };
+        readonly bootstrapProgress: (data: {
+            params: import("./modules/servers.js").bootstrapProgress$params;
+            query?: undefined;
+            body?: undefined;
+        } & import("./types.js").TRequestOptions<import("./modules/servers.js").bootstrapProgress$return>) => {
+            readonly raw: Promise<import("axios").AxiosResponse<import("./modules/servers.js").bootstrapProgress$return, any, {}, any>>;
+            readonly data: Promise<import("./modules/servers.js").bootstrapProgress$return>;
+            then: <TResult1 = import("./modules/servers.js").bootstrapProgress$return, TResult2 = never>(onfulfilled?: ((value: import("./modules/servers.js").bootstrapProgress$return) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+            catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<import("./modules/servers.js").bootstrapProgress$return | TResult>;
+            finally: (onfinally?: (() => void) | null | undefined) => Promise<import("./modules/servers.js").bootstrapProgress$return>;
+        };
+        readonly installCommand: (data?: {
+            params?: undefined;
+            query?: undefined;
+            body?: undefined;
+        } & import("./types.js").TRequestOptions<import("./modules/servers.js").installCommand$return>) => {
+            readonly raw: Promise<import("axios").AxiosResponse<import("./modules/servers.js").installCommand$return, any, {}, any>>;
+            readonly data: Promise<import("./modules/servers.js").installCommand$return>;
+            then: <TResult1 = import("./modules/servers.js").installCommand$return, TResult2 = never>(onfulfilled?: ((value: import("./modules/servers.js").installCommand$return) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+            catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<import("./modules/servers.js").installCommand$return | TResult>;
+            finally: (onfinally?: (() => void) | null | undefined) => Promise<import("./modules/servers.js").installCommand$return>;
         };
         readonly liveness: (data?: {
             params?: undefined;

@@ -11,6 +11,7 @@ import {
   sweepShardModel,
 } from "@/schemas/infrastructure/agentCommand.ts";
 import { SHARD_COUNT } from "@/lib/agents/sweep.ts";
+import { bootstrapSessionModel } from "@/schemas/infrastructure/bootstrapSession.ts";
 
 /** Every Huruf Deploy index lives here (PLAN §6). Run by setup, never at startup. */
 export const syncDeployIndexes = async () => {
@@ -85,6 +86,14 @@ export const syncDeployIndexes = async () => {
       { name: "uniqueEvent", unique: true },
     ),
     agentEventModel.createIndex(
+      { expiresAt: 1 },
+      { name: "ttl", expireAfterSeconds: 0 },
+    ),
+    bootstrapSessionModel.createIndex(
+      { tokenHash: 1 },
+      { name: "uniqueToken", unique: true },
+    ),
+    bootstrapSessionModel.createIndex(
       { expiresAt: 1 },
       { name: "ttl", expireAfterSeconds: 0 },
     ),

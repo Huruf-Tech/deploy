@@ -62,6 +62,7 @@ export class SimAgent {
     private readonly opts: {
       baseUrl: string;
       tenant: string;
+      joinToken?: string;
       send?: TSend;
       onStateChange?: (state: TState) => void | Promise<void>;
     },
@@ -107,6 +108,7 @@ export class SimAgent {
   async hello() {
     const response = await this.request("/agents/api/hello", {
       tenant: this.opts.tenant,
+      joinToken: this.opts.joinToken,
       signPublicKey: this.state.signPublicKey,
       boxPublicKey: this.state.boxPublicKey,
       inventory: {

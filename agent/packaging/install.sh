@@ -1,28 +1,33 @@
 #!/bin/sh
 # Installs the Huruf Deploy agent (Ubuntu 22.04/24.04, amd64/arm64).
 #
-#   curl -fsSL <install-url> | sudo sh -s -- --url <control-plane-url> --tenant <tenant-id>
+#   curl -fsSL <control-plane>/agents/api/install.sh | sudo sh -s -- --url <control-plane-url> --tenant <tenant-id>
 #
-# Downloads the release binary, verifies its SHA-256 against the release
+# Downloads the agent binary, verifies its SHA-256 against the published
 # checksums, installs a systemd unit, and prints the pairing code to enter in
-# the dashboard.
+# the dashboard. The SSH wizard runs this same script with a one-time
+# --join-token, which activates the server without pairing. Safe to re-run.
 set -eu
 
 REPO="Huruf-Tech/huruf-deploy"
 VERSION="latest"
 URL=""
 TENANT=""
+JOIN_TOKEN=""
+DOWNLOAD_BASE=""
 
 while [ $# -gt 0 ]; do
   case "$1" in
     --url) URL="$2"; shift 2 ;;
     --tenant) TENANT="$2"; shift 2 ;;
     --version) VERSION="$2"; shift 2 ;;
+    --join-token) JOIN_TOKEN="$2"; shift 2 ;;
+    --download-base) DOWNLOAD_BASE="$2"; shift 2 ;;
     *) echo "unknown option: $1" >&2; exit 2 ;;
   esac
 done
 
-[ -n "$URL" ] && [ -n "$TENANT" ] || { echo "usage: install.sh --url URL --tenant TENANT [--version X.Y.Z]" >&2; exit 2; }
+[ -n "$URL" ] && [ -n "$TENANT" ] || { echo "usage: install.sh --url URL --tenant TENANT [--version X.Y.Z] [--download-base URL] [--join-token TOKEN]" >&2; exit 2; }
 [ "$(id -u)" -eq 0 ] || { echo "run as root (sudo)" >&2; exit 1; }
 
 case "$(uname -m)" in
@@ -31,7 +36,9 @@ case "$(uname -m)" in
   *) echo "unsupported architecture: $(uname -m)" >&2; exit 1 ;;
 esac
 
-if [ "$VERSION" = "latest" ]; then
+if [ -n "$DOWNLOAD_BASE" ]; then
+  BASE="$DOWNLOAD_BASE"
+elif [ "$VERSION" = "latest" ]; then
   BASE="https://github.com/$REPO/releases/latest/download"
 else
   BASE="https://github.com/$REPO/releases/download/agent-v$VERSION"
@@ -40,6 +47,7 @@ fi
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
+echo "Downloading the agent ($ARCH) from $BASE"
 BINARY="huruf-deploy-agent-linux-$ARCH"
 curl -fsSL "$BASE/$BINARY" -o "$TMP/$BINARY"
 curl -fsSL "$BASE/SHA256SUMS" -o "$TMP/SHA256SUMS"
@@ -52,6 +60,7 @@ umask 077
 cat > /etc/huruf-deploy-agent/agent.env <<EOF
 HURUF_DEPLOY_URL=$URL
 HURUF_DEPLOY_TENANT=$TENANT
+HURUF_DEPLOY_JOIN_TOKEN=$JOIN_TOKEN
 EOF
 
 # The unit ships inside this script, so the installer never depends on a repository branch.
@@ -75,7 +84,14 @@ WantedBy=multi-user.target
 EOF
 chmod 0644 /etc/systemd/system/huruf-deploy-agent.service
 systemctl daemon-reload
-systemctl enable --now huruf-deploy-agent
+systemctl enable huruf-deploy-agent
+# Restart rather than start, so a re-run picks up a new binary or settings.
+systemctl restart huruf-deploy-agent
+
+if [ -n "$JOIN_TOKEN" ]; then
+  echo "Agent installed; it activates itself with the join token."
+  exit 0
+fi
 
 echo "Agent installed. Waiting for the pairing code..."
 for _ in 1 2 3 4 5 6 7 8 9 10; do

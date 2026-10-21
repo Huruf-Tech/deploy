@@ -46,6 +46,26 @@ const agentsModule = (sdk) => {
                 return res;
             }, data);
         },
+        installScript(data) {
+            return sdk.resolveAxiosResponse(async () => {
+                sdk.checkPermission("agents", "installScript");
+                const method = "get";
+                const toPath = (0, path_to_regexp_1.compile)("agents/api/install.sh");
+                const requestPayload = {
+                    method,
+                    url: toPath(data?.params),
+                    params: data?.query,
+                    data: data?.body,
+                    signal: data?.signal,
+                    ...(data?.axiosConfig
+                        ? sdk.resolveAxiosConfig(data.axiosConfig)
+                        : undefined),
+                };
+                sdk.log("Sending Request:", requestPayload);
+                const res = await sdk._axios.request(requestPayload);
+                return res;
+            }, data);
+        },
         config(data) {
             return sdk.resolveAxiosResponse(async () => {
                 sdk.checkPermission("agents", "config");
@@ -89,6 +109,7 @@ const agentsModule = (sdk) => {
     };
     methods.hello.__scope = "agents";
     methods.poll.__scope = "agents";
+    methods.installScript.__scope = "agents";
     methods.config.__scope = "agents";
     methods.events.__scope = "agents";
     sdk["_moduleGroup"].set(methods, "Agents");

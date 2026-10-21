@@ -94,6 +94,32 @@ export type ping$return = {
     command: string;
     seq: number;
 };
+export type bootstrap$body = {
+    host: string;
+    port?: number;
+    username: string;
+    password?: string | undefined;
+    privateKey?: string | undefined;
+    passphrase?: string | undefined;
+};
+export type bootstrap$return = {
+    session: string;
+};
+export type bootstrapProgress$params = {
+    id?: string;
+};
+export type bootstrapProgress$return = {
+    status: "installing" | "registered" | "online" | "failed";
+    steps: {
+        at: string;
+        message: string;
+    }[];
+    error?: string | undefined;
+    server?: string | undefined;
+};
+export type installCommand$return = {
+    command: string;
+};
 export type liveness$return = {
     server: string;
     online: boolean;
@@ -116,6 +142,11 @@ export const serversModule = (sdk: typeof BaseSDK) => {
         reject$params: reject$params,
         ping$params: ping$params,
         ping$return: ping$return,
+        bootstrap$body: bootstrap$body,
+        bootstrap$return: bootstrap$return,
+        bootstrapProgress$params: bootstrapProgress$params,
+        bootstrapProgress$return: bootstrapProgress$return,
+        installCommand$return: installCommand$return,
         liveness$return: liveness$return,
     };
 
@@ -317,6 +348,90 @@ export const serversModule = (sdk: typeof BaseSDK) => {
             return res;
         }, data);
     },
+        bootstrap(data: {
+        params?: undefined,
+        query?: undefined,
+        body: bootstrap$body,
+    } & TRequestOptions<bootstrap$return>) {
+        return sdk.resolveAxiosResponse(async () => {
+            sdk.checkPermission("servers", "bootstrap");
+
+            const method = "post";
+            const toPath = compile("servers/api/bootstrap");
+            const requestPayload = {
+                method,
+                url: toPath(data?.params),
+                params: data?.query,
+                data: data?.body,
+                signal: data?.signal,
+                ...(data?.axiosConfig
+                ? sdk.resolveAxiosConfig(data.axiosConfig)
+                : undefined),
+            };
+
+            sdk.log("Sending Request:", requestPayload);
+
+            const res = await sdk._axios!.request(requestPayload);
+
+            return res;
+        }, data);
+    },
+        bootstrapProgress(data: {
+        params: bootstrapProgress$params,
+        query?: undefined,
+        body?: undefined,
+    } & TRequestOptions<bootstrapProgress$return>) {
+        return sdk.resolveAxiosResponse(async () => {
+            sdk.checkPermission("servers", "bootstrapProgress");
+
+            const method = "get";
+            const toPath = compile("servers/api/bootstrap/:id");
+            const requestPayload = {
+                method,
+                url: toPath(data?.params),
+                params: data?.query,
+                data: data?.body,
+                signal: data?.signal,
+                ...(data?.axiosConfig
+                ? sdk.resolveAxiosConfig(data.axiosConfig)
+                : undefined),
+            };
+
+            sdk.log("Sending Request:", requestPayload);
+
+            const res = await sdk._axios!.request(requestPayload);
+
+            return res;
+        }, data);
+    },
+        installCommand(data?: {
+        params?: undefined,
+        query?: undefined,
+        body?: undefined,
+    } & TRequestOptions<installCommand$return>) {
+        return sdk.resolveAxiosResponse(async () => {
+            sdk.checkPermission("servers", "installCommand");
+
+            const method = "get";
+            const toPath = compile("servers/api/install/command");
+            const requestPayload = {
+                method,
+                url: toPath(data?.params),
+                params: data?.query,
+                data: data?.body,
+                signal: data?.signal,
+                ...(data?.axiosConfig
+                ? sdk.resolveAxiosConfig(data.axiosConfig)
+                : undefined),
+            };
+
+            sdk.log("Sending Request:", requestPayload);
+
+            const res = await sdk._axios!.request(requestPayload);
+
+            return res;
+        }, data);
+    },
         liveness(data?: {
         params?: undefined,
         query?: undefined,
@@ -354,6 +469,9 @@ export const serversModule = (sdk: typeof BaseSDK) => {
     (methods.accept as any).__scope = "servers";
     (methods.reject as any).__scope = "servers";
     (methods.ping as any).__scope = "servers";
+    (methods.bootstrap as any).__scope = "servers";
+    (methods.bootstrapProgress as any).__scope = "servers";
+    (methods.installCommand as any).__scope = "servers";
     (methods.liveness as any).__scope = "servers";
 
     sdk["_moduleGroup"].set(methods, "Infrastructure");

@@ -11,6 +11,11 @@ import {
   serverLiveness,
 } from "@/lib/agents/servers.ts";
 import {
+  agentEndpoints,
+  bootstrapStatus,
+  startBootstrap,
+} from "@/lib/agents/bootstrap.ts";
+import {
   $server,
   $serverUpdate,
   serverModel,
@@ -90,6 +95,80 @@ export default new Router("/api", function servers(router) {
           createdBy: user._id,
         });
         return Response.json({ command: command.toString(), seq });
+      },
+    };
+  });
+
+  router.post("/bootstrap", function bootstrap() {
+    const $body = z.object({
+      host: z.string().min(1).max(253),
+      port: z.number().int().min(1).max(65_535).default(22),
+      username: z.string().min(1).max(64),
+      password: z.string().max(1_000).optional(),
+      privateKey: z.string().max(20_000).optional(),
+      passphrase: z.string().max(1_000).optional(),
+    }).refine((b) => !!b.password !== !!b.privateKey, {
+      message: "Provide either a password or a private key",
+    });
+    const $return = z.object({ session: z.string() });
+
+    return {
+      shape: () => ({ body: $body, return: $return }),
+      handler: async (req) => {
+        const body = $body.parse(await bodyAsJson(req));
+        const { tenant, user } = await withTenant(req);
+
+        const session = await startBootstrap({
+          tenant: tenant._id,
+          user,
+          host: body.host.trim(),
+          port: body.port,
+          username: body.username,
+          credentials: body.password
+            ? { password: body.password }
+            : { privateKey: body.privateKey!, passphrase: body.passphrase },
+        });
+        return Response.json({ session: session.toString() });
+      },
+    };
+  });
+
+  router.get("/bootstrap/:id", function bootstrapProgress() {
+    const $return = z.object({
+      status: z.enum(["installing", "registered", "online", "failed"]),
+      steps: z.array(z.object({ at: z.string(), message: z.string() })),
+      error: z.string().optional(),
+      server: z.string().optional(),
+    });
+
+    return {
+      shape: () => ({ params: $params, return: $return }),
+      handler: async (req) => {
+        const { id } = $params.parse(paramsAsJson(req));
+        return Response.json(
+          await bootstrapStatus(id, (await withTenant(req)).tenant._id),
+        );
+      },
+    };
+  });
+
+  router.get("/install/command", function installCommand() {
+    const $return = z.object({ command: z.string() });
+
+    return {
+      shape: () => ({ return: $return }),
+      handler: async (req) => {
+        const { tenant } = await withTenant(req);
+        const { controlPlaneUrl, downloadBase } = await agentEndpoints();
+        const args = [
+          `--url ${controlPlaneUrl}`,
+          `--tenant ${tenant._id.toHexString()}`,
+          `--download-base ${downloadBase}`,
+        ].join(" ");
+        return Response.json({
+          command:
+            `curl -fsSL ${controlPlaneUrl}/agents/api/install.sh | sudo sh -s -- ${args}`,
+        });
       },
     };
   });

@@ -9,6 +9,8 @@ import { getAgentConfig } from "@/lib/agents/config.ts";
 import { serverModel } from "@/schemas/infrastructure/server.ts";
 import { serverLeaseModel } from "@/schemas/infrastructure/serverLease.ts";
 import { agentCommandModel } from "@/schemas/infrastructure/agentCommand.ts";
+import { bootstrapSessionModel } from "@/schemas/infrastructure/bootstrapSession.ts";
+import { createHash, SupportedHashAlg } from "@/core/utils/hash.ts";
 import { tenantModel } from "@/plugins/Huruf-Tech/thunder-core/schemas/tenant.ts";
 import type { THelloResponse, TInventory } from "@/schemas/protocol/agent.ts";
 
@@ -34,6 +36,7 @@ export const registerAgent = async (
     signPublicKey: string;
     boxPublicKey: string;
     inventory: TInventory;
+    joinToken?: string;
   },
   fingerprint: string,
   clientIp: string | null,
@@ -49,6 +52,15 @@ export const registerAgent = async (
   if (existing) {
     if (existing.tenant.toString() !== hello.tenant) {
       throw Response.forbidden("This agent is registered to another tenant");
+    }
+    // Re-running the SSH wizard on an installed server: report it, change nothing.
+    if (hello.joinToken && existing.status === "active") {
+      const session = await claimJoinToken(hello.joinToken, existing.tenant);
+      if (session) {
+        await bootstrapSessionModel.updateOne({ _id: session._id }, {
+          $set: { server: existing._id },
+        });
+      }
     }
     return {
       server: existing._id.toString(),
@@ -74,6 +86,13 @@ export const registerAgent = async (
     { projection: { _id: 1 } },
   );
   if (!tenant) throw Response.notFound("Unknown tenant");
+
+  // An SSH wizard install carries a one-time token: activate without pairing.
+  const joined = hello.joinToken &&
+    await claimJoinToken(hello.joinToken, tenant._id);
+  if (joined) {
+    return await registerJoinedAgent(hello, fingerprint, tenant._id, joined);
+  }
 
   const now = new Date();
   const pending = await serverModel.countDocuments({
@@ -124,16 +143,110 @@ export const registerAgent = async (
   }
 };
 
+/** Atomically consumes a bootstrap session's join token; null when invalid, used or expired. */
+const claimJoinToken = async (token: string, tenant: ObjectId) =>
+  await bootstrapSessionModel.findOneAndUpdate(
+    {
+      tokenHash: await createHash(SupportedHashAlg.SHA_256, token),
+      tenant,
+      status: "installing",
+      expiresAt: { $gt: new Date() },
+    },
+    {
+      $set: { status: "registered" },
+      $push: { steps: { at: new Date(), message: "Agent registered" } },
+    },
+    { projection: { createdBy: 1 } },
+  );
+
+const registerJoinedAgent = async (
+  hello: Parameters<typeof registerAgent>[0],
+  fingerprint: string,
+  tenant: ObjectId,
+  session: { _id: ObjectId; createdBy: ObjectId },
+): Promise<THelloResponse> => {
+  const failSession = (error: string) =>
+    bootstrapSessionModel.updateOne({ _id: session._id }, {
+      $set: { status: "failed", error },
+    });
+
+  if (!await acquireServerSlot(tenant)) {
+    await failSession("Your plan's server limit is reached");
+    throw Response.forbidden("Your plan's server limit is reached");
+  }
+
+  const now = new Date();
+  const { insertedId } = await serverModel.insertOne({
+    tenant,
+    name: hello.inventory.hostname,
+    labels: {},
+    status: "active",
+    identity: {
+      signPublicKey: hello.signPublicKey,
+      boxPublicKey: hello.boxPublicKey,
+      fingerprint,
+    },
+    installMethod: "ssh",
+    provider: { kind: "byo" },
+    inventory: hello.inventory,
+    acceptedBy: session.createdBy,
+    acceptedAt: now,
+    createdAt: now,
+  });
+  forgetAgent(fingerprint);
+  await openLease(insertedId, tenant);
+  await bootstrapSessionModel.updateOne({ _id: session._id }, {
+    $set: { server: insertedId },
+  });
+
+  return {
+    server: insertedId.toString(),
+    status: "active",
+    ...await helloConfig(),
+  };
+};
+
+/** Gate for every way of adding a server (PLAN §20.3 safety limits). */
+export const assertCanAddServers = async (
+  user: { emailVerified?: boolean },
+) => {
+  if (
+    !user.emailVerified && !await safetyFlag("SAFETY_ALLOW_UNVERIFIED_EMAIL")
+  ) throw Response.forbidden("Verify your email before adding servers");
+};
+
+const acquireServerSlot = async (tenant: ObjectId) => {
+  const { limits } = await entitlements.resolve(tenant);
+  return await quotaGuard.acquire(tenant, "servers", limits.servers);
+};
+
+/** A fresh lease gives the agent one lease period to show up before it reads as offline. */
+const openLease = async (server: ObjectId, tenant: ObjectId) => {
+  await serverLeaseModel.updateOne(
+    { _id: server },
+    {
+      $setOnInsert: {
+        tenant,
+        shard: shardOf(server),
+        status: "active",
+        aliveUntil: new Date(Date.now() + (await getAgentConfig()).leaseMs),
+        offline: false,
+        desiredVersion: 0,
+        commandSeq: 0,
+        deliveredSeq: 0,
+      },
+    },
+    { upsert: true },
+  );
+};
+
 export const acceptServer = async (opts: {
   server: ObjectId;
   tenant: ObjectId;
   user: { _id: ObjectId; emailVerified?: boolean };
   pairingCode: string;
 }) => {
-  if (
-    !opts.user.emailVerified &&
-    !await safetyFlag("SAFETY_ALLOW_UNVERIFIED_EMAIL")
-  ) throw Response.forbidden("Verify your email before adding servers");
+  await assertCanAddServers(opts.user);
 
   const server = await serverModel.findOne(
     { _id: opts.server, tenant: opts.tenant, status: "pending" },
@@ -151,8 +264,7 @@ export const acceptServer = async (opts: {
     throw Response.badRequest("The pairing code does not match");
   }
 
-  const { limits } = await entitlements.resolve(opts.tenant);
-  if (!await quotaGuard.acquire(opts.tenant, "servers", limits.servers)) {
+  if (!await acquireServerSlot(opts.tenant)) {
     throw Response.forbidden("Your plan's server limit is reached");
   }
 
@@ -170,25 +282,7 @@ export const acceptServer = async (opts: {
     throw Response.badRequest("The server was accepted or removed meanwhile");
   }
 
-  // The agent is polling as pending, so give it one lease period to show up.
-  await serverLeaseModel.updateOne(
-    { _id: opts.server },
-    {
-      $setOnInsert: {
-        tenant: opts.tenant,
-        shard: shardOf(opts.server),
-        status: "active",
-        aliveUntil: new Date(
-          now.getTime() + (await getAgentConfig()).leaseMs,
-        ),
-        offline: false,
-        desiredVersion: 0,
-        commandSeq: 0,
-        deliveredSeq: 0,
-      },
-    },
-    { upsert: true },
-  );
+  await openLease(opts.server, opts.tenant);
 };
 
 export const rejectServer = async (server: ObjectId, tenant: ObjectId) => {

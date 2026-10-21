@@ -1,6 +1,5 @@
 import * as React from "react"
 import z from "zod"
-import { useParams } from "react-router"
 import { useTranslation } from "react-i18next"
 import { ThunderSDK } from "thunder-sdk"
 import { formatDistanceToNow } from "date-fns"
@@ -10,6 +9,7 @@ import {
   IconBrandUbuntu,
   IconCpu,
   IconKey,
+  IconPlus,
   IconServer2,
 } from "@tabler/icons-react"
 
@@ -26,7 +26,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
-import { CopyButton } from "@/components/ui/copy-button"
 import {
   Empty,
   EmptyContent,
@@ -40,6 +39,7 @@ import { ResourceBar } from "@/components/resource-bar"
 import { usePolling } from "@/hooks/use-polling"
 import { cn } from "@/lib/utils"
 import { AcceptServerDialog } from "./AcceptServerDialog"
+import { AddServerDialog } from "./AddServerDialog"
 
 const serverSchema = z.object({
   _id: z.string(),
@@ -282,10 +282,8 @@ function ServerCard({
   )
 }
 
-function AddServerHint() {
+function AddServerHint({ onAdd }: { onAdd: () => void }) {
   const { t } = useTranslation()
-  const { tenant } = useParams<{ tenant: string }>()
-  const command = `deno task dev:agents --tenant ${tenant}`
 
   return (
     <Empty>
@@ -296,18 +294,14 @@ function AddServerHint() {
         <EmptyTitle>{t("Add your first server")}</EmptyTitle>
         <EmptyDescription>
           {t(
-            "Install the agent on a machine with your tenant ID. It will appear here waiting for approval."
+            "Connect a machine over SSH, or run a one-line install on it. Your projects will run there."
           )}
         </EmptyDescription>
       </EmptyHeader>
       <EmptyContent>
-        <div className="flex w-full items-center gap-2 rounded-xl bg-muted px-3 py-2 font-mono text-xs">
-          <span className="truncate">{command}</span>
-          <CopyButton value={command} />
-        </div>
-        <p className="text-xs text-muted-foreground">
-          {t("Development: runs a simulated agent until the installer ships.")}
-        </p>
+        <Button onClick={onAdd}>
+          <IconPlus aria-hidden /> {t("Add server")}
+        </Button>
       </EmptyContent>
     </Empty>
   )
@@ -319,6 +313,7 @@ export default function ServerCards({ data, isLoading, fetcher }: TCardProps) {
     Map<string, TLiveness[number]>
   >(new Map())
   const [accepting, setAccepting] = React.useState<TServer | null>(null)
+  const [adding, setAdding] = React.useState(false)
 
   const refetch = React.useCallback(() => {
     fetcher(zodToMongoProjection(serverSchema))
@@ -366,24 +361,37 @@ export default function ServerCards({ data, isLoading, fetcher }: TCardProps) {
           ))}
         </div>
       ) : !servers.length ? (
-        <AddServerHint />
+        <AddServerHint onAdd={() => setAdding(true)} />
       ) : (
-        <div
-          className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3"
-          aria-live="polite"
-        >
-          {servers.map((server) => (
-            <ServerCard
-              key={server._id}
-              server={server}
-              live={liveness.get(server._id)}
-              onAccept={() => setAccepting(server)}
-              onReject={() => reject(server)}
-              onPing={() => ping(server)}
-            />
-          ))}
+        <div className="flex flex-col gap-4">
+          <div className="flex justify-end">
+            <Button size="sm" onClick={() => setAdding(true)}>
+              <IconPlus aria-hidden /> {t("Add server")}
+            </Button>
+          </div>
+          <div
+            className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3"
+            aria-live="polite"
+          >
+            {servers.map((server) => (
+              <ServerCard
+                key={server._id}
+                server={server}
+                live={liveness.get(server._id)}
+                onAccept={() => setAccepting(server)}
+                onReject={() => reject(server)}
+                onPing={() => ping(server)}
+              />
+            ))}
+          </div>
         </div>
       )}
+
+      <AddServerDialog
+        open={adding}
+        onOpenChange={setAdding}
+        onAdded={refetch}
+      />
 
       {accepting && (
         <AcceptServerDialog

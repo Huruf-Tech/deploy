@@ -22,6 +22,9 @@ type HelloRequest struct {
 	BoxPublicKey string `json:"boxPublicKey"`
 
 	Inventory Inventory `json:"inventory"`
+
+	// One-time token from the SSH wizard: activates the server without pairing
+	JoinToken string `json:"joinToken,omitempty"`
 }
 
 type Inventory struct {

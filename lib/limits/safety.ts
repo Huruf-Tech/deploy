@@ -23,5 +23,6 @@ export const safetyLimit = (key: keyof typeof SAFETY_LIMITS) =>
   readNumberSetting(key, SAFETY_LIMITS[key]);
 
 /** Safety flags; all off by default. */
-export const safetyFlag = (key: "SAFETY_ALLOW_UNVERIFIED_EMAIL") =>
-  readFlagSetting(key);
+export const safetyFlag = (
+  key: "SAFETY_ALLOW_UNVERIFIED_EMAIL" | "SAFETY_SSH_ALLOW_PRIVATE_TARGETS",
+) => readFlagSetting(key);

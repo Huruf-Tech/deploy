@@ -10,6 +10,8 @@ import { serverLeaseModel } from "@/schemas/infrastructure/serverLease.ts";
 import { agentCommandModel } from "@/schemas/infrastructure/agentCommand.ts";
 import { tenantUsageModel } from "@/schemas/limits/tenantUsage.ts";
 import { tenantModel } from "@/plugins/Huruf-Tech/thunder-core/schemas/tenant.ts";
+import { bootstrapSessionModel } from "@/schemas/infrastructure/bootstrapSession.ts";
+import { createHash, SupportedHashAlg } from "@/core/utils/hash.ts";
 
 // End-to-end over the real handler, in process (needs MongoDB + `deno task setup:dev`).
 
@@ -168,8 +170,50 @@ Deno.test({
           assertEquals(recovered?.offlineSince, undefined);
         },
       );
+
+      await t.step(
+        "an SSH wizard join token activates a server without pairing, once",
+        async () => {
+          const token = "test-join-token";
+          await bootstrapSessionModel.insertOne({
+            tenant,
+            createdBy: user._id,
+            host: "203.0.113.10",
+            port: 22,
+            username: "root",
+            status: "installing",
+            tokenHash: await createHash(SupportedHashAlg.SHA_256, token),
+            steps: [],
+            createdAt: new Date(),
+            expiresAt: new Date(Date.now() + 60_000),
+          });
+
+          const joiner = (name: string) =>
+            createState(name).then((state) =>
+              new SimAgent(state, {
+                baseUrl: "http://localhost",
+                tenant: tenant.toHexString(),
+                joinToken: token,
+                send: (req) => Promise.resolve(handler(req)),
+              })
+            );
+
+          const first = await (await joiner("ssh-host")).hello();
+          assertEquals(first.json.status, "active");
+          assertEquals(first.json.pairingCode, undefined);
+
+          const session = await bootstrapSessionModel.findOne({ tenant });
+          assertEquals(session?.status, "registered");
+          assertEquals(session?.server?.toString(), first.json.server);
+
+          // The token is spent: another machine presenting it must pair normally.
+          const second = await (await joiner("intruder")).hello();
+          assertEquals(second.json.status, "pending");
+        },
+      );
     } finally {
       await Promise.all([
+        bootstrapSessionModel.deleteMany({ tenant }),
         tenantModel.deleteOne({ _id: tenant }),
         serverModel.deleteMany({ tenant }),
         serverLeaseModel.deleteMany({ tenant }),

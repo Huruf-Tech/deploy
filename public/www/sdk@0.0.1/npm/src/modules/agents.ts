@@ -30,6 +30,8 @@ export type hello$body = {
         dockerVersion?: string | undefined;
         agentVersion: string;
     };
+    /** One-time token from the SSH wizard: activates the server without pairing */
+    joinToken?: string | undefined;
 };
 export type hello$return = {
     version: string;
@@ -167,6 +169,34 @@ export const agentsModule = (sdk: typeof BaseSDK) => {
             return res;
         }, data);
     },
+        installScript(data?: {
+        params?: undefined,
+        query?: undefined,
+        body?: undefined,
+    } & TRequestOptions<unknown>) {
+        return sdk.resolveAxiosResponse(async () => {
+            sdk.checkPermission("agents", "installScript");
+
+            const method = "get";
+            const toPath = compile("agents/api/install.sh");
+            const requestPayload = {
+                method,
+                url: toPath(data?.params),
+                params: data?.query,
+                data: data?.body,
+                signal: data?.signal,
+                ...(data?.axiosConfig
+                ? sdk.resolveAxiosConfig(data.axiosConfig)
+                : undefined),
+            };
+
+            sdk.log("Sending Request:", requestPayload);
+
+            const res = await sdk._axios!.request(requestPayload);
+
+            return res;
+        }, data);
+    },
         config(data?: {
         params?: undefined,
         query?: undefined,
@@ -227,6 +257,7 @@ export const agentsModule = (sdk: typeof BaseSDK) => {
 
     (methods.hello as any).__scope = "agents";
     (methods.poll as any).__scope = "agents";
+    (methods.installScript as any).__scope = "agents";
     (methods.config as any).__scope = "agents";
     (methods.events as any).__scope = "agents";
 
