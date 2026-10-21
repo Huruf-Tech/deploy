@@ -791,6 +791,18 @@ Each phase ends with a **review checkpoint** (demo + code review + approval). Ph
     - Protocol schemas, signed `hello`/`poll`/`events`/`config`, pairing with a typed code, accept/reject, leases, the piggybacked sweep and exactly-once commands (a `ping` command).
     - Servers UI, plus `deno task dev:agents` running simulated agents.
   - **1b:** the Go agent (built in Docker), the install script, signed releases and self-update, plus the 10k-agent load test.
+    - **Done:**
+      - Go agent: standard library only, with types generated from the protocol schemas and checked for freshness in CI. Cross-language signing test vectors.
+      - systemd unit, and an installer that verifies the binary's SHA-256.
+      - Release workflow (tag `agent-v*`) and `deno task agent:test`.
+      - `deno task load:agents`.
+      - Verified end to end: a real Linux agent paired, ran a command and went offline.
+    - **Load test:**
+      - 1k agents met the budgets (p95 8.6 ms client-side, offline flagged in 14.2 s).
+      - 10k on a single dev machine saturated the machine itself (load clients, server and MongoDB on 12 threads). It must be re-run with load clients on separate machines against Deno Deploy and Atlas.
+    - **Open (owner):**
+      - A signing key for release signatures (minisign or cosign). Until then only the checksum is verified, and self-update waits on this.
+      - The `get.<domain>` installer URL.
 - The `ServerProvisioner` interface (§24) waits for a second provisioner. Server removal already happens in one place (`releaseServer`), which is where `deprovision()` will be called.
 - Go agent: identity keys, signed requests, `hello` / `poll` / `events`, cursors, poll modes, local completed-seq store, inventory and resource summary, systemd unit, install script, signed releases, self-update.
 - Control plane: agent routes, pairing (code, expiry, limits), accept/reject, computed online status, piggybacked offline sweep.

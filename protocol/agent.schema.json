@@ -1,0 +1,499 @@
+{
+  "version": 1,
+  "headers": {
+    "key": "X-Agent-Key",
+    "timestamp": "X-Agent-Timestamp",
+    "signature": "X-Agent-Signature",
+    "protocol": "X-Agent-Protocol"
+  },
+  "schemas": {
+    "HelloRequest": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "tenant": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{24}$"
+        },
+        "signPublicKey": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "Ed25519, raw, base64url"
+        },
+        "boxPublicKey": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "X25519, raw, base64url"
+        },
+        "inventory": {
+          "type": "object",
+          "properties": {
+            "hostname": {
+              "type": "string",
+              "maxLength": 255
+            },
+            "os": {
+              "type": "string",
+              "maxLength": 100
+            },
+            "arch": {
+              "type": "string",
+              "enum": [
+                "amd64",
+                "arm64"
+              ]
+            },
+            "cpuCores": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            },
+            "memory": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991,
+              "description": "Bytes"
+            },
+            "disk": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991,
+              "description": "Bytes"
+            },
+            "publicIp": {
+              "type": "string",
+              "maxLength": 64
+            },
+            "privateIp": {
+              "type": "string",
+              "maxLength": 64
+            },
+            "dockerVersion": {
+              "type": "string",
+              "maxLength": 50
+            },
+            "agentVersion": {
+              "type": "string",
+              "maxLength": 50
+            }
+          },
+          "required": [
+            "hostname",
+            "os",
+            "arch",
+            "cpuCores",
+            "memory",
+            "disk",
+            "agentVersion"
+          ]
+        }
+      },
+      "required": [
+        "tenant",
+        "signPublicKey",
+        "boxPublicKey",
+        "inventory"
+      ]
+    },
+    "HelloResponse": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "version": {
+          "type": "string"
+        },
+        "config": {
+          "type": "object",
+          "properties": {
+            "poll": {
+              "type": "object",
+              "properties": {
+                "idleMs": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "activeMs": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "terminalMs": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                }
+              },
+              "required": [
+                "idleMs",
+                "activeMs",
+                "terminalMs"
+              ],
+              "additionalProperties": false
+            },
+            "jitterPercent": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 50
+            },
+            "summaryIntervalMs": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            "maxBackoffMs": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "poll",
+            "jitterPercent",
+            "summaryIntervalMs",
+            "maxBackoffMs"
+          ],
+          "additionalProperties": false
+        },
+        "server": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "pending",
+            "active",
+            "rejected"
+          ]
+        },
+        "pairingCode": {
+          "type": "string"
+        },
+        "pairingExpiresAt": {
+          "type": "string"
+        },
+        "nextPollMs": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "version",
+        "config",
+        "server",
+        "status",
+        "nextPollMs"
+      ],
+      "additionalProperties": false
+    },
+    "AgentConfigResponse": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "version": {
+          "type": "string"
+        },
+        "config": {
+          "type": "object",
+          "properties": {
+            "poll": {
+              "type": "object",
+              "properties": {
+                "idleMs": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "activeMs": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "terminalMs": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                }
+              },
+              "required": [
+                "idleMs",
+                "activeMs",
+                "terminalMs"
+              ],
+              "additionalProperties": false
+            },
+            "jitterPercent": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 50
+            },
+            "summaryIntervalMs": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            "maxBackoffMs": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "poll",
+            "jitterPercent",
+            "summaryIntervalMs",
+            "maxBackoffMs"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "version",
+        "config"
+      ],
+      "additionalProperties": false
+    },
+    "PollRequest": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "commandCursor": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "appliedVersion": {
+          "default": 0,
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "summary": {
+          "description": "Sent at most every 60 s, or on a >10% change",
+          "type": "object",
+          "properties": {
+            "cpu": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1,
+              "description": "Used fraction"
+            },
+            "memFree": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "diskFree": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "cpu",
+            "memFree",
+            "diskFree"
+          ]
+        }
+      },
+      "required": [
+        "commandCursor"
+      ]
+    },
+    "PollResponse": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "nextPollMs": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "configVersion": {
+          "type": "string"
+        },
+        "commands": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "seq": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 9007199254740991
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "ping"
+                ]
+              },
+              "payload": {
+                "default": {},
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                },
+                "additionalProperties": {}
+              }
+            },
+            "required": [
+              "seq",
+              "type",
+              "payload"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "nextPollMs",
+        "configVersion",
+        "commands"
+      ],
+      "additionalProperties": false
+    },
+    "PollRefusal": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": [
+            "pending",
+            "rejected",
+            "unknown"
+          ]
+        },
+        "nextPollMs": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "configVersion": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "status",
+        "nextPollMs",
+        "configVersion"
+      ],
+      "additionalProperties": false
+    },
+    "CommandResultEvent": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "type": {
+          "type": "string",
+          "const": "command.result"
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "seq": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            },
+            "ok": {
+              "type": "boolean"
+            },
+            "result": {
+              "type": "object",
+              "propertyNames": {
+                "type": "string"
+              },
+              "additionalProperties": {}
+            },
+            "error": {
+              "type": "string",
+              "maxLength": 500
+            }
+          },
+          "required": [
+            "seq",
+            "ok"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "type",
+        "data"
+      ]
+    },
+    "EventsRequest": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "events": {
+          "minItems": 1,
+          "maxItems": 64,
+          "type": "array",
+          "items": {
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64
+                  },
+                  "type": {
+                    "type": "string",
+                    "const": "command.result"
+                  },
+                  "data": {
+                    "type": "object",
+                    "properties": {
+                      "seq": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 9007199254740991
+                      },
+                      "ok": {
+                        "type": "boolean"
+                      },
+                      "result": {
+                        "type": "object",
+                        "propertyNames": {
+                          "type": "string"
+                        },
+                        "additionalProperties": {}
+                      },
+                      "error": {
+                        "type": "string",
+                        "maxLength": 500
+                      }
+                    },
+                    "required": [
+                      "seq",
+                      "ok"
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "type",
+                  "data"
+                ]
+              }
+            ]
+          }
+        }
+      },
+      "required": [
+        "events"
+      ]
+    }
+  }
+}

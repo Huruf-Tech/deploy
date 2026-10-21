@@ -30,8 +30,31 @@ jobs:
       - run: deno lint
       - run: deno check lib schemas scripts tests routes
       - run: deno task check:layers
+      - name: Protocol artifacts are up to date
+        run: |
+          deno task generate:protocol
+          git diff --exit-code -- protocol agent/internal/protocol
       - run: deno task setup:dev
       - run: deno task test
+
+  agent:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: agent
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: agent/go.mod
+      - name: gofmt
+        run: test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
+      - run: go vet ./...
+      - run: go test ./...
+      - name: Cross-compile
+        run: |
+          GOOS=linux GOARCH=amd64 go build -o /dev/null ./cmd/huruf-deploy-agent
+          GOOS=linux GOARCH=arm64 go build -o /dev/null ./cmd/huruf-deploy-agent
 
   app:
     runs-on: ubuntu-latest

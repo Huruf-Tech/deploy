@@ -1,0 +1,35 @@
+name: Agent release
+
+# Push a tag like `agent-v0.1.0` to publish binaries for the installer.
+on:
+  push:
+    tags: ["agent-v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: agent
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: agent/go.mod
+      - run: go test ./...
+      - name: Build
+        run: |
+          VERSION="${GITHUB_REF_NAME#agent-v}"
+          for ARCH in amd64 arm64; do
+            CGO_ENABLED=0 GOOS=linux GOARCH=$ARCH go build -trimpath \
+              -ldflags "-s -w -X main.version=$VERSION" \
+              -o "dist/huruf-deploy-agent-linux-$ARCH" ./cmd/huruf-deploy-agent
+          done
+          cd dist && sha256sum huruf-deploy-agent-linux-* > SHA256SUMS
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" dist/* --title "$GITHUB_REF_NAME" --generate-notes

@@ -1,0 +1,16 @@
+[Unit]
+Description=Huruf Deploy agent
+Documentation=https://github.com/Huruf-Tech/huruf-deploy
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+EnvironmentFile=/etc/huruf-deploy-agent/agent.env
+ExecStart=/usr/local/bin/huruf-deploy-agent -state-dir /var/lib/huruf-deploy-agent
+Restart=always
+RestartSec=5
+StateDirectory=huruf-deploy-agent
+StateDirectoryMode=0700
+
+[Install]
+WantedBy=multi-user.target
