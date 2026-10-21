@@ -60,24 +60,27 @@ const simulatedStream = (payload: Record<string, unknown>): TAgentEvent[] => {
 
   switch (payload.kind) {
     case "metrics":
-      return [chunk(1, JSON.stringify([{
-        t: Date.now(),
-        cpu: 0.12,
-        memUsed: 2 * 2 ** 30,
-        memTotal: 8 * 2 ** 30,
-        diskUsed: 20 * 2 ** 30,
-        diskTotal: 80 * 2 ** 30,
-        netRx: 1_000,
-        netTx: 500,
-        containers: [{
-          id: "sim1",
-          name: "huruf-edge",
-          image: "caddy:2-alpine",
-          state: "running",
-          cpu: 0.01,
-          mem: 30 * 2 ** 20,
-        }],
-      }]))];
+      return [chunk(
+        1,
+        JSON.stringify([{
+          t: Date.now(),
+          cpu: 0.12,
+          memUsed: 2 * 2 ** 30,
+          memTotal: 8 * 2 ** 30,
+          diskUsed: 20 * 2 ** 30,
+          diskTotal: 80 * 2 ** 30,
+          netRx: 1_000,
+          netTx: 500,
+          containers: [{
+            id: "sim1",
+            name: "huruf-edge",
+            image: "caddy:2-alpine",
+            state: "running",
+            cpu: 0.01,
+            mem: 30 * 2 ** 20,
+          }],
+        }]),
+      )];
     case "exec":
       return [chunk(1, "simulated exec output\n", true)];
     default:
