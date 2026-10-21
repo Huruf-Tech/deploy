@@ -116,6 +116,14 @@ func (m *Manager) metrics(ctx context.Context, out *chunker) error {
 	}
 	var sampler metrics.Sampler
 	sampler.Sample()
+	// A first host sample right away (CPU needs two readings, so ~300 ms apart);
+	// per-container stats take ~2 s (`docker stats`) and follow on the tick.
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-time.After(300 * time.Millisecond):
+		out.json([]protocol.MetricsSample{sampler.Sample()})
+	}
 	ticker := time.NewTicker(liveInterval)
 	defer ticker.Stop()
 	for {

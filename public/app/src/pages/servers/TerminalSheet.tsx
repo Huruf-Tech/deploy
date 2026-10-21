@@ -18,9 +18,16 @@ import { Switch } from "@/components/ui/switch"
 import { useStream, type TStreamChunk } from "@/hooks/use-stream"
 
 const SEND_EVERY_MS = 50
-const READ_EVERY_MS = 300
+// Echo latency is dominated by this read and the agent's terminal poll (150 ms).
+const READ_EVERY_MS = 120
 
 type TInput = { seq: number; data?: string; cols?: number; rows?: number }
+
+/** The API accepts 10-1000 columns and 5-500 rows. */
+const usableSize = (terminal: Terminal) => ({
+  cols: Math.min(1_000, Math.max(10, terminal.cols)),
+  rows: Math.min(500, Math.max(5, terminal.rows)),
+})
 
 /**
  * An interactive shell over polling (PLAN §3.6): keystrokes are batched every
@@ -61,13 +68,18 @@ function TerminalView({
     terminal.loadAddon(fit)
     terminal.open(host.current!)
     fit.fit()
-    size.current = { cols: terminal.cols, rows: terminal.rows }
+    size.current = usableSize(terminal)
     term.current = terminal
 
     const typing = terminal.onData((data) => queue({ data }))
     const observer = new ResizeObserver(() => {
       fit.fit()
-      queue({ cols: terminal.cols, rows: terminal.rows })
+      // While the sheet animates in, the measured size can be tiny: skip those.
+      const next = usableSize(terminal)
+      if (next.cols !== size.current.cols || next.rows !== size.current.rows) {
+        size.current = next
+        queue(next)
+      }
     })
     observer.observe(host.current!)
     terminal.focus()
@@ -104,7 +116,13 @@ function TerminalView({
       sending = true
       ThunderSDK.streams
         .input({ params: { id }, body: { items } })
-        .catch(() => pending.current.unshift(...items)) // retried; seq dedupes
+        .catch((e: unknown) => {
+          // Retry network and server errors (seq dedupes); a rejected batch
+          // would otherwise block every later keystroke forever.
+          const status = (e as { response?: { status?: number } }).response
+            ?.status
+          if (!status || status >= 500) pending.current.unshift(...items)
+        })
         .finally(() => {
           sending = false
         })

@@ -208,8 +208,10 @@ function LiveMetrics({
   const { status, error } = useStream(open, onChunk)
 
   const latest = samples.at(-1)
-  const containers =
-    [...samples].reverse().find((s) => s.containers)?.containers ?? []
+  // undefined until a sample with container stats arrives (they follow ~2 s later).
+  const containers = [...samples]
+    .reverse()
+    .find((s) => s.containers)?.containers
   const series = React.useMemo(
     () =>
       samples.map((s) => ({
@@ -271,7 +273,9 @@ function LiveMetrics({
           <CardTitle className="text-sm">{t("Containers")}</CardTitle>
         </CardHeader>
         <CardContent>
-          {containers.length === 0 ? (
+          {!containers ? (
+            <Skeleton className="h-16 rounded-2xl" />
+          ) : containers.length === 0 ? (
             <p className="text-sm text-muted-foreground">
               {t(
                 "No containers yet. They appear here once the host is prepared and projects are deployed."

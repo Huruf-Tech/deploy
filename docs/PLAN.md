@@ -155,7 +155,7 @@ flowchart LR
 |---|---|---|
 | **Idle** | 5 s | Nothing active on the server (must stay below half the 10 s lease) |
 | **Active** | 1 s | A build or deploy targets the server, or someone is viewing its logs/metrics |
-| **Terminal** | ≈ 300 ms | A terminal session is open on the server |
+| **Terminal** | ≈ 150 ms | A terminal session is open on the server (ends as soon as the last terminal closes) |
 
 - Every poll response includes `nextPollMs`, so the control plane decides the mode.
 - **Agents hardcode no pacing (owner requirement).**
@@ -1106,7 +1106,7 @@ There are three kinds of limit. All are enforced **server-side in the domain ser
 | `SAFETY_ALLOW_UNVERIFIED_EMAIL` | false (verification required) | Throwaway accounts adding servers. Flags default to off, so they are named so that off is safe. |
 | `SAFETY_PENDING_SERVERS_PER_TENANT` | 5 | Pairing abuse (§4.2) |
 | `SAFETY_HELLO_PER_IP_PER_MIN` / `SAFETY_SSH_BOOTSTRAPS_PER_TENANT_PER_HOUR` | 10 / 10 | Registration and SSH abuse |
-| `SAFETY_MIN_POLL_INTERVAL_MS` | 250 | Agents polling faster than allowed get `429` + `nextPollMs` |
+| `SAFETY_MIN_POLL_INTERVAL_MS` | 100 | Agents polling faster than allowed get `429` + `nextPollMs` |
 | `SAFETY_EVENT_BATCH_MAX_KB` / `SAFETY_STREAM_BYTES_PER_SEC` | 256 / 64 KB | Event and stream flooding |
 | `SAFETY_PENDING_COMMANDS_PER_SERVER` | 100 | Command flooding |
 | `SAFETY_API_REQUESTS_PER_USER_PER_MIN` | 600 | General API abuse |

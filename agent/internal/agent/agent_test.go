@@ -121,3 +121,38 @@ func TestAgentLoop(t *testing.T) {
 		t.Fatalf("cursor = %d, want 1", store.Cursor())
 	}
 }
+
+// Regression: events must be sent on the regular tick while the agent keeps
+// running, not only when a terminal wakes the sender or the agent stops.
+func TestEventsAreSentWithoutAWakeUp(t *testing.T) {
+	id := identity.FromSeed(make([]byte, 32))
+	received := make(chan string, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/agents/api/events" {
+			body, _ := io.ReadAll(r.Body)
+			received <- string(body)
+		}
+		_, _ = w.Write([]byte(`{"applied":1,"close":[]}`))
+	}))
+	defer server.Close()
+
+	a := &Agent{
+		Identity: id,
+		Client:   transport.New(server.URL, id),
+		Log:      slog.New(slog.NewTextHandler(io.Discard, nil)),
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go a.sendLoop(ctx)
+
+	a.Enqueue(protocol.StreamChunkEvent{Id: "s-1", Type: "stream.chunk", Data: protocol.StreamChunkEventData{Session: "m1", Seq: 1, Data: "metrics"}})
+
+	select {
+	case body := <-received:
+		if !strings.Contains(body, "metrics") {
+			t.Fatalf("unexpected body %s", body)
+		}
+	case <-time.After(3 * sendEvery):
+		t.Fatal("event was not sent on the regular tick")
+	}
+}

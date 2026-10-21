@@ -246,7 +246,7 @@ export const closeStream = async (session: ObjectId, tenant: ObjectId) => {
         expiresAt: closedExpiry(),
       },
     },
-    { projection: { server: 1 } },
+    { projection: { server: 1, kind: 1 } },
   );
   if (!doc) return;
 
@@ -256,6 +256,21 @@ export const closeStream = async (session: ObjectId, tenant: ObjectId) => {
     type: "stream.close",
     payload: { session: session.toHexString() },
   }).catch(() => {}); // An offline server stops the stream on its own when it reconnects.
+
+  // The last terminal on a server closed: back to the normal pace right away,
+  // instead of polling every ~300 ms until terminalUntil runs out.
+  if (doc.kind === "terminal") {
+    const others = await streamSessionModel.countDocuments({
+      server: doc.server,
+      kind: "terminal",
+      status: "open",
+    });
+    if (!others) {
+      await serverLeaseModel.updateOne({ _id: doc.server }, {
+        $unset: { terminalUntil: "" },
+      });
+    }
+  }
 };
 
 /**

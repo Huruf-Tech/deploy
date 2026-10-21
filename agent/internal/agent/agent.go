@@ -229,14 +229,16 @@ func (a *Agent) sendLoop(ctx context.Context) {
 	ticker := time.NewTicker(sendEvery)
 	defer ticker.Stop()
 	for {
+		// Every tick, or right away when woken (terminal output). Go's select
+		// cases don't fall through, so the flush must sit after the select.
 		select {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
 		case <-a.wakeup():
-			if err := a.flushEvents(ctx); err != nil && ctx.Err() == nil {
-				a.Log.Warn("sending events failed; will retry", "error", err)
-			}
+		}
+		if err := a.flushEvents(ctx); err != nil && ctx.Err() == nil {
+			a.Log.Warn("sending events failed; will retry", "error", err)
 		}
 	}
 }
