@@ -13,7 +13,12 @@ import { tenantUsageModel } from "@/schemas/limits/tenantUsage.ts";
 import { tenantModel } from "@/plugins/Huruf-Tech/thunder-core/schemas/tenant.ts";
 import { bootstrapSessionModel } from "@/schemas/infrastructure/bootstrapSession.ts";
 import { createHash, SupportedHashAlg } from "@/core/utils/hash.ts";
-import { openStream, readStream } from "@/lib/agents/streams.ts";
+import {
+  openStream,
+  pendingTerminalInput,
+  readStream,
+  writeTerminalInput,
+} from "@/lib/agents/streams.ts";
 import {
   streamChunkModel,
   streamSessionModel,
@@ -145,6 +150,60 @@ Deno.test({
           const command = await agentCommandModel.findOne({ server, seq });
           assertEquals(command?.status, "done");
           assert(command?.result?.pong);
+        },
+      );
+
+      await t.step(
+        "terminal: keystrokes reach only this server's agent, once each",
+        async () => {
+          const session = await openStream({
+            tenant,
+            server,
+            user: user._id,
+            kind: "terminal",
+            params: { cols: 80, rows: 24 },
+          });
+
+          // The agent picks up stream.open; the server is now at terminal pace.
+          const opened = await poll();
+          assertEquals(opened.json.nextPollMs, agent.config?.poll.terminalMs);
+          assert(agent.terminals.has(session.toHexString()));
+
+          await writeTerminalInput(session, tenant, [
+            { seq: 1, data: "ls -la\r" },
+            { seq: 2, cols: 120, rows: 40 },
+          ]);
+          // A retried browser batch is stored once.
+          await writeTerminalInput(session, tenant, [{
+            seq: 1,
+            data: "ls -la\r",
+          }]);
+
+          const delivered = await poll();
+          const input = (delivered.json.streamInput as Record<
+            string,
+            { seq: number }[]
+          >)[session.toHexString()];
+          assertEquals(input.map((i) => i.seq), [1, 2]);
+
+          // Acked: the next poll delivers nothing new.
+          const acked = await poll();
+          assertEquals(acked.json.streamInput, undefined);
+
+          const { chunks } = await readStream(session, tenant, 0);
+          assertEquals(chunks.map((c) => c.data), ["ls -la\r"]);
+
+          // Another server's agent asking for this session gets nothing.
+          const other = await pendingTerminalInput(new ObjectId(), {
+            [session.toHexString()]: 0,
+          });
+          assertEquals(other, undefined);
+
+          // Input is refused for a session of another tenant.
+          const foreign = await writeTerminalInput(session, new ObjectId(), [
+            { seq: 3, data: "x" },
+          ]).catch((r: Response) => r.status);
+          assertEquals(foreign, 404);
         },
       );
 

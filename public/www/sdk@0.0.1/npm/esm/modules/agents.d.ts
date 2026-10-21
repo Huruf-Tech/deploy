@@ -51,6 +51,8 @@ export type poll$body = {
         memFree: number;
         diskFree: number;
     } | undefined;
+    /** Open terminals: session -> highest input seq applied. Only sent while one is open */
+    streams?: Record<string, number> | undefined;
 };
 export type poll$return = {
     nextPollMs: number;
@@ -60,6 +62,13 @@ export type poll$return = {
         type: "ping" | "docker.ensure" | "stream.open" | "stream.close";
         payload: Record<string, unknown>;
     }[];
+    /** New terminal input per session, after the cursors in `streams` */
+    streamInput?: Record<string, {
+        seq: number;
+        data?: string | undefined;
+        cols?: number | undefined;
+        rows?: number | undefined;
+    }[]> | undefined;
 };
 export type config$return = {
     version: string;

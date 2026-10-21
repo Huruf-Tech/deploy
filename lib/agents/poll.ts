@@ -18,7 +18,7 @@ import type {
   TCommand,
   TPollRequest,
 } from "@/schemas/protocol/agent.ts";
-import { ingestChunks } from "@/lib/agents/streams.ts";
+import { ingestChunks, pendingTerminalInput } from "@/lib/agents/streams.ts";
 
 const COMMAND_BATCH = 50;
 const EVENT_TTL_MS = 60 * 60_000;
@@ -102,7 +102,7 @@ export const pollAgent = async (
     });
   }
 
-  const [commands] = await Promise.all([
+  const [commands, , , , , streamInput] = await Promise.all([
     lease.commandSeq > cursor
       ? agentCommandModel
         .find({ server: identity.server, seq: { $gt: cursor } }, {
@@ -127,6 +127,8 @@ export const pollAgent = async (
     }),
     offlineSweep.tick(lease.shard ?? shardOf(identity.server)),
     offlineSweep.tickRandom(),
+    // Only an agent with an open terminal sends cursors: idle polls skip this.
+    request.streams && pendingTerminalInput(identity.server, request.streams),
   ]);
 
   return {
@@ -139,6 +141,7 @@ export const pollAgent = async (
         : config.poll.idleMs,
       configVersion,
       commands,
+      ...(streamInput ? { streamInput } : {}),
     },
   };
 };

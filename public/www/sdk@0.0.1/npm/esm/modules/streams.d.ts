@@ -24,6 +24,34 @@ export type openExec$body = {
 export type openExec$return = {
     session: string;
 };
+export type openTerminal$body = {
+    server?: string;
+    container: string;
+    cols?: number;
+    rows?: number;
+};
+export type openTerminal$return = {
+    session: string;
+};
+export type openHostTerminal$body = {
+    server?: string;
+    cols?: number;
+    rows?: number;
+};
+export type openHostTerminal$return = {
+    session: string;
+};
+export type input$params = {
+    id?: string;
+};
+export type input$body = {
+    items: {
+        seq: number;
+        data?: string | undefined;
+        cols?: number | undefined;
+        rows?: number | undefined;
+    }[];
+};
 export type read$params = {
     id?: string;
 };
@@ -49,6 +77,12 @@ export declare const streamsModule: (sdk: typeof BaseSDK) => {
         openMetrics$return: openMetrics$return;
         openExec$body: openExec$body;
         openExec$return: openExec$return;
+        openTerminal$body: openTerminal$body;
+        openTerminal$return: openTerminal$return;
+        openHostTerminal$body: openHostTerminal$body;
+        openHostTerminal$return: openHostTerminal$return;
+        input$params: input$params;
+        input$body: input$body;
         read$params: read$params;
         read$query: read$query;
         read$return: read$return;
@@ -86,6 +120,39 @@ export declare const streamsModule: (sdk: typeof BaseSDK) => {
         then: <TResult1 = openExec$return, TResult2 = never>(onfulfilled?: ((value: openExec$return) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
         catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<openExec$return | TResult>;
         finally: (onfinally?: (() => void) | null | undefined) => Promise<openExec$return>;
+    };
+    readonly openTerminal: (data: {
+        params?: undefined;
+        query?: undefined;
+        body: openTerminal$body;
+    } & TRequestOptions<openTerminal$return>) => {
+        readonly raw: Promise<import("axios").AxiosResponse<openTerminal$return, any, {}, any>>;
+        readonly data: Promise<openTerminal$return>;
+        then: <TResult1 = openTerminal$return, TResult2 = never>(onfulfilled?: ((value: openTerminal$return) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+        catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<openTerminal$return | TResult>;
+        finally: (onfinally?: (() => void) | null | undefined) => Promise<openTerminal$return>;
+    };
+    readonly openHostTerminal: (data: {
+        params?: undefined;
+        query?: undefined;
+        body: openHostTerminal$body;
+    } & TRequestOptions<openHostTerminal$return>) => {
+        readonly raw: Promise<import("axios").AxiosResponse<openHostTerminal$return, any, {}, any>>;
+        readonly data: Promise<openHostTerminal$return>;
+        then: <TResult1 = openHostTerminal$return, TResult2 = never>(onfulfilled?: ((value: openHostTerminal$return) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+        catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<openHostTerminal$return | TResult>;
+        finally: (onfinally?: (() => void) | null | undefined) => Promise<openHostTerminal$return>;
+    };
+    readonly input: (data: {
+        params: input$params;
+        query?: undefined;
+        body: input$body;
+    } & TRequestOptions<unknown>) => {
+        readonly raw: Promise<import("axios").AxiosResponse<unknown, any, {}, any>>;
+        readonly data: Promise<unknown>;
+        then: <TResult1 = unknown, TResult2 = never>(onfulfilled?: ((value: unknown) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+        catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<unknown>;
+        finally: (onfinally?: (() => void) | null | undefined) => Promise<unknown>;
     };
     readonly read: (data: {
         params: read$params;

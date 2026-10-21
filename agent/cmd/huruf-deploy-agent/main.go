@@ -79,7 +79,12 @@ func main() {
 		Streams:   streamManager,
 		Log:       log,
 	}
-	streamManager.Emit = func(event protocol.StreamChunkEvent) { a.Enqueue(event) }
+	streamManager.Emit = func(event protocol.StreamChunkEvent, urgent bool) {
+		a.Enqueue(event)
+		if urgent {
+			a.Wake()
+		}
+	}
 	if err := a.Run(ctx); err != nil {
 		log.Error("agent stopped", "error", err)
 		os.Exit(1)

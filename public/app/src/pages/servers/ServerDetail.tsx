@@ -7,6 +7,7 @@ import { format } from "date-fns"
 import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from "recharts"
 import {
   IconFileText,
+  IconTerminal2,
   IconPlugConnectedX,
   IconServer2,
 } from "@tabler/icons-react"
@@ -43,6 +44,9 @@ import { usePolling } from "@/hooks/use-polling"
 import { useStream, type TStreamChunk } from "@/hooks/use-stream"
 import { cn } from "@/lib/utils"
 import { LogsSheet } from "./LogsSheet"
+
+// xterm.js is loaded only when a terminal opens (PLAN §15.5 per-route bundles).
+const TerminalSheet = React.lazy(() => import("./TerminalSheet"))
 import { StatusPill } from "./StatusPill"
 import {
   gib,
@@ -176,7 +180,14 @@ function UsageChart({
   )
 }
 
-function LiveMetrics({ server }: { server: string }) {
+function LiveMetrics({
+  server,
+  onShell,
+}: {
+  server: string
+  onShell: (container: string) => void
+}) {
+  const canShell = ThunderSDK.isPermitted("streams", "openTerminal")
   const { t } = useTranslation()
   const [samples, setSamples] = React.useState<TSample[]>([])
   const [logs, setLogs] = React.useState<string | null>(null)
@@ -310,6 +321,15 @@ function LiveMetrics({ server }: { server: string }) {
                       >
                         <IconFileText aria-hidden /> {t("Logs")}
                       </Button>
+                      {canShell && c.state === "running" && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => onShell(c.name)}
+                        >
+                          <IconTerminal2 aria-hidden /> {t("Shell")}
+                        </Button>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -333,6 +353,9 @@ export default function ServerDetail() {
   const { t } = useTranslation()
   const { id = "" } = useParams<{ id: string }>()
   const [live, setLive] = React.useState<TLiveness>()
+  const [terminal, setTerminal] = React.useState<{
+    container: string | null
+  } | null>(null)
 
   // Same pattern as core's ListPage: cached request at the top level, read with use().
   const request = ThunderSDK.useCaching(
@@ -387,10 +410,22 @@ export default function ServerDetail() {
           </p>
         </div>
         <StatusPill state={state} />
+        {state === "online" &&
+          ThunderSDK.isPermitted("streams", "openHostTerminal") && (
+            <Button
+              variant="outline"
+              onClick={() => setTerminal({ container: null })}
+            >
+              <IconTerminal2 aria-hidden /> {t("Terminal")}
+            </Button>
+          )}
       </div>
 
       {state === "online" ? (
-        <LiveMetrics server={server._id} />
+        <LiveMetrics
+          server={server._id}
+          onShell={(container) => setTerminal({ container })}
+        />
       ) : (
         <Empty>
           <EmptyHeader>
@@ -405,6 +440,17 @@ export default function ServerDetail() {
             </EmptyDescription>
           </EmptyHeader>
         </Empty>
+      )}
+
+      {terminal && (
+        <React.Suspense fallback={null}>
+          <TerminalSheet
+            server={server._id}
+            container={terminal.container}
+            open
+            onOpenChange={(open) => !open && setTerminal(null)}
+          />
+        </React.Suspense>
       )}
     </Container>
   )

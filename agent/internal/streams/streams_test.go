@@ -13,7 +13,7 @@ type collector struct {
 	events []protocol.StreamChunkEvent
 }
 
-func (c *collector) emit(e protocol.StreamChunkEvent) {
+func (c *collector) emit(e protocol.StreamChunkEvent, _ bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.events = append(c.events, e)
@@ -31,7 +31,7 @@ func (c *collector) text() string {
 
 func TestChunkerSplitsLargeOutputAndMarksDone(t *testing.T) {
 	var out collector
-	c := newChunker("s1", 1<<20, out.emit)
+	c := newChunker("s1", 1<<20, flushEvery, false, out.emit)
 	c.write([]byte(strings.Repeat("x", maxChunk*2+10)))
 	c.finish(nil)
 
@@ -54,7 +54,7 @@ func TestChunkerSplitsLargeOutputAndMarksDone(t *testing.T) {
 
 func TestChunkerEnforcesTheRateCap(t *testing.T) {
 	var out collector
-	c := newChunker("s1", 1024, out.emit)
+	c := newChunker("s1", 1024, flushEvery, false, out.emit)
 	c.write([]byte(strings.Repeat("a", 5000)))
 	c.write([]byte(strings.Repeat("b", 5000)))
 	c.finish(nil)
@@ -71,7 +71,7 @@ func TestChunkerEnforcesTheRateCap(t *testing.T) {
 
 func TestChunkerReportsErrors(t *testing.T) {
 	var out collector
-	c := newChunker("s1", 1<<20, out.emit)
+	c := newChunker("s1", 1<<20, flushEvery, false, out.emit)
 	c.finish(errExit)
 	if out.events[0].Data.Error != errExit.Error() {
 		t.Fatalf("error = %q", out.events[0].Data.Error)

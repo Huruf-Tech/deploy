@@ -63,6 +63,66 @@ export const streamsModule = (sdk) => {
                 return res;
             }, data);
         },
+        openTerminal(data) {
+            return sdk.resolveAxiosResponse(async () => {
+                sdk.checkPermission("streams", "openTerminal");
+                const method = "post";
+                const toPath = compile("streams/api/terminal");
+                const requestPayload = {
+                    method,
+                    url: toPath(data?.params),
+                    params: data?.query,
+                    data: data?.body,
+                    signal: data?.signal,
+                    ...(data?.axiosConfig
+                        ? sdk.resolveAxiosConfig(data.axiosConfig)
+                        : undefined),
+                };
+                sdk.log("Sending Request:", requestPayload);
+                const res = await sdk._axios.request(requestPayload);
+                return res;
+            }, data);
+        },
+        openHostTerminal(data) {
+            return sdk.resolveAxiosResponse(async () => {
+                sdk.checkPermission("streams", "openHostTerminal");
+                const method = "post";
+                const toPath = compile("streams/api/terminal/host");
+                const requestPayload = {
+                    method,
+                    url: toPath(data?.params),
+                    params: data?.query,
+                    data: data?.body,
+                    signal: data?.signal,
+                    ...(data?.axiosConfig
+                        ? sdk.resolveAxiosConfig(data.axiosConfig)
+                        : undefined),
+                };
+                sdk.log("Sending Request:", requestPayload);
+                const res = await sdk._axios.request(requestPayload);
+                return res;
+            }, data);
+        },
+        input(data) {
+            return sdk.resolveAxiosResponse(async () => {
+                sdk.checkPermission("streams", "input");
+                const method = "post";
+                const toPath = compile("streams/api/:id/input");
+                const requestPayload = {
+                    method,
+                    url: toPath(data?.params),
+                    params: data?.query,
+                    data: data?.body,
+                    signal: data?.signal,
+                    ...(data?.axiosConfig
+                        ? sdk.resolveAxiosConfig(data.axiosConfig)
+                        : undefined),
+                };
+                sdk.log("Sending Request:", requestPayload);
+                const res = await sdk._axios.request(requestPayload);
+                return res;
+            }, data);
+        },
         read(data) {
             return sdk.resolveAxiosResponse(async () => {
                 sdk.checkPermission("streams", "read");
@@ -107,6 +167,9 @@ export const streamsModule = (sdk) => {
     methods.openLogs.__scope = "streams";
     methods.openMetrics.__scope = "streams";
     methods.openExec.__scope = "streams";
+    methods.openTerminal.__scope = "streams";
+    methods.openHostTerminal.__scope = "streams";
+    methods.input.__scope = "streams";
     methods.read.__scope = "streams";
     methods.close.__scope = "streams";
     sdk["_moduleGroup"].set(methods, "Streams");

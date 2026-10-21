@@ -70,5 +70,14 @@
   "State": "الحالة",
   "Logs": "السجلات",
   "Live data needs the server online": "تتطلب البيانات المباشرة أن يكون الخادم متصلًا",
-  "Metrics and logs stay on the server and are streamed only while it is connected.": "تبقى المقاييس والسجلات على الخادم ولا تُبث إلا أثناء اتصاله."
+  "Metrics and logs stay on the server and are streamed only while it is connected.": "تبقى المقاييس والسجلات على الخادم ولا تُبث إلا أثناء اتصاله.",
+  "Terminal": "الطرفية",
+  "Shell": "سطر الأوامر",
+  "Host shell": "سطر أوامر الخادم",
+  "A shell inside the container.": "سطر أوامر داخل الحاوية.",
+  "A root shell on the server. Use with care.": "سطر أوامر بصلاحيات الجذر على الخادم. استخدمه بحذر.",
+  "Nothing you type or see is stored.": "لا يُخزَّن شيء مما تكتبه أو تراه.",
+  "Session ended.": "انتهت الجلسة.",
+  "Line mode: type here, send with Enter (instant, screen-reader friendly)": "وضع السطر: اكتب هنا وأرسل بـ Enter (فوري ومناسب لقارئ الشاشة)",
+  "Command": "الأمر"
 }

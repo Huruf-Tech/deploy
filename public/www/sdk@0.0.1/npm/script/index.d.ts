@@ -281,6 +281,12 @@ export declare class ThunderSDK extends BaseSDK {
             openMetrics$return: import("./modules/streams.js").openMetrics$return;
             openExec$body: import("./modules/streams.js").openExec$body;
             openExec$return: import("./modules/streams.js").openExec$return;
+            openTerminal$body: import("./modules/streams.js").openTerminal$body;
+            openTerminal$return: import("./modules/streams.js").openTerminal$return;
+            openHostTerminal$body: import("./modules/streams.js").openHostTerminal$body;
+            openHostTerminal$return: import("./modules/streams.js").openHostTerminal$return;
+            input$params: import("./modules/streams.js").input$params;
+            input$body: import("./modules/streams.js").input$body;
             read$params: import("./modules/streams.js").read$params;
             read$query: import("./modules/streams.js").read$query;
             read$return: import("./modules/streams.js").read$return;
@@ -318,6 +324,39 @@ export declare class ThunderSDK extends BaseSDK {
             then: <TResult1 = import("./modules/streams.js").openExec$return, TResult2 = never>(onfulfilled?: ((value: import("./modules/streams.js").openExec$return) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
             catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<import("./modules/streams.js").openExec$return | TResult>;
             finally: (onfinally?: (() => void) | null | undefined) => Promise<import("./modules/streams.js").openExec$return>;
+        };
+        readonly openTerminal: (data: {
+            params?: undefined;
+            query?: undefined;
+            body: import("./modules/streams.js").openTerminal$body;
+        } & import("./types.js").TRequestOptions<import("./modules/streams.js").openTerminal$return>) => {
+            readonly raw: Promise<import("axios").AxiosResponse<import("./modules/streams.js").openTerminal$return, any, {}, any>>;
+            readonly data: Promise<import("./modules/streams.js").openTerminal$return>;
+            then: <TResult1 = import("./modules/streams.js").openTerminal$return, TResult2 = never>(onfulfilled?: ((value: import("./modules/streams.js").openTerminal$return) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+            catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<import("./modules/streams.js").openTerminal$return | TResult>;
+            finally: (onfinally?: (() => void) | null | undefined) => Promise<import("./modules/streams.js").openTerminal$return>;
+        };
+        readonly openHostTerminal: (data: {
+            params?: undefined;
+            query?: undefined;
+            body: import("./modules/streams.js").openHostTerminal$body;
+        } & import("./types.js").TRequestOptions<import("./modules/streams.js").openHostTerminal$return>) => {
+            readonly raw: Promise<import("axios").AxiosResponse<import("./modules/streams.js").openHostTerminal$return, any, {}, any>>;
+            readonly data: Promise<import("./modules/streams.js").openHostTerminal$return>;
+            then: <TResult1 = import("./modules/streams.js").openHostTerminal$return, TResult2 = never>(onfulfilled?: ((value: import("./modules/streams.js").openHostTerminal$return) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+            catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<import("./modules/streams.js").openHostTerminal$return | TResult>;
+            finally: (onfinally?: (() => void) | null | undefined) => Promise<import("./modules/streams.js").openHostTerminal$return>;
+        };
+        readonly input: (data: {
+            params: import("./modules/streams.js").input$params;
+            query?: undefined;
+            body: import("./modules/streams.js").input$body;
+        } & import("./types.js").TRequestOptions<unknown>) => {
+            readonly raw: Promise<import("axios").AxiosResponse<unknown, any, {}, any>>;
+            readonly data: Promise<unknown>;
+            then: <TResult1 = unknown, TResult2 = never>(onfulfilled?: ((value: unknown) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+            catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<unknown>;
+            finally: (onfinally?: (() => void) | null | undefined) => Promise<unknown>;
         };
         readonly read: (data: {
             params: import("./modules/streams.js").read$params;

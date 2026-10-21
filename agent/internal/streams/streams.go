@@ -9,29 +9,34 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
 	"sync"
 	"time"
 
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/metrics"
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/protocol"
+	"github.com/Huruf-Tech/huruf-deploy/agent/internal/pty"
 )
 
 const (
-	flushEvery   = 500 * time.Millisecond
-	maxChunk     = 32 << 10
-	maxSessions  = 16
-	liveInterval = 2 * time.Second
-	keepalive    = 15 * time.Second
+	flushEvery         = 500 * time.Millisecond
+	terminalFlushEvery = 30 * time.Millisecond
+	maxChunk           = 32 << 10
+	maxSessions        = 16
+	liveInterval       = 2 * time.Second
+	keepalive          = 15 * time.Second
 )
 
 // Manager owns the running sessions; Emit queues chunk events for sending.
 type Manager struct {
-	Emit    func(protocol.StreamChunkEvent)
+	// Emit queues a chunk event; urgent ones (terminal output) are sent right away.
+	Emit    func(event protocol.StreamChunkEvent, urgent bool)
 	History *metrics.Recorder
 
-	mu       sync.Mutex
-	sessions map[string]context.CancelFunc
+	mu        sync.Mutex
+	sessions  map[string]context.CancelFunc
+	terminals map[string]*terminal
 }
 
 func (m *Manager) Open(ctx context.Context, p protocol.StreamOpenPayload) error {
@@ -51,7 +56,11 @@ func (m *Manager) Open(ctx context.Context, p protocol.StreamOpenPayload) error 
 	m.sessions[p.Session] = cancel
 	m.mu.Unlock()
 
-	out := newChunker(p.Session, int(p.MaxBytesPerSec), m.Emit)
+	every, urgent := flushEvery, false
+	if p.Kind == "terminal" {
+		every, urgent = terminalFlushEvery, true // keystroke echo must feel live
+	}
+	out := newChunker(p.Session, int(p.MaxBytesPerSec), every, urgent, m.Emit)
 	go func() {
 		defer m.Close(p.Session)
 		err := m.run(ctx, p, out)
@@ -89,6 +98,8 @@ func (m *Manager) run(ctx context.Context, p protocol.StreamOpenPayload, out *ch
 			args = append(args, fmt.Sprint(part))
 		}
 		return pipe(ctx, out, "docker", args...)
+	case "terminal":
+		return m.terminal(ctx, p, out)
 	case "metrics":
 		return m.metrics(ctx, out)
 	default:
@@ -157,7 +168,9 @@ func number(value any, fallback float64) float64 {
 type chunker struct {
 	session string
 	limit   int
-	emit    func(protocol.StreamChunkEvent)
+	emit    func(protocol.StreamChunkEvent, bool)
+	every   time.Duration
+	urgent  bool
 
 	mu        sync.Mutex
 	buf       []byte
@@ -168,14 +181,14 @@ type chunker struct {
 	flushedAt time.Time
 }
 
-func newChunker(session string, limit int, emit func(protocol.StreamChunkEvent)) *chunker {
-	c := &chunker{session: session, limit: limit, emit: emit, flushedAt: time.Now()}
+func newChunker(session string, limit int, every time.Duration, urgent bool, emit func(protocol.StreamChunkEvent, bool)) *chunker {
+	c := &chunker{session: session, limit: limit, every: every, urgent: urgent, emit: emit, flushedAt: time.Now()}
 	go c.tick()
 	return c
 }
 
 func (c *chunker) tick() {
-	for range time.Tick(flushEvery) {
+	for range time.Tick(c.every) {
 		c.mu.Lock()
 		done := c.seq < 0
 		// A silent stream still checks in, so the control plane can stop an unwatched one.
@@ -255,8 +268,129 @@ func (c *chunker) flushLocked(done bool, message string) {
 	}
 	c.buf = c.buf[size:]
 	c.flushedAt = time.Now()
-	c.emit(event)
+	c.emit(event, c.urgent)
 	if done && len(c.buf) > 0 {
 		c.flushLocked(true, message)
 	}
+}
+
+// terminal is one interactive shell: its pty and the last input applied.
+type terminal struct {
+	master  *os.File
+	lastSeq int64
+}
+
+// terminal runs a shell on a pty: a container shell through `docker exec -it`,
+// or a root shell on the host. Output is streamed; input arrives with polls.
+func (m *Manager) terminal(ctx context.Context, p protocol.StreamOpenPayload, out *chunker) error {
+	container, _ := p.Params["container"].(string)
+	cols, rows := int(number(p.Params["cols"], 80)), int(number(p.Params["rows"], 24))
+
+	var cmd *exec.Cmd
+	if container != "" {
+		cmd = exec.CommandContext(ctx, "docker", "exec", "-it",
+			"-e", "TERM=xterm-256color", "-e", terminalTag+"="+p.Session, container,
+			"sh", "-c", "command -v bash >/dev/null && exec bash || exec sh")
+		// Killing the docker exec client leaves the shell running in the container.
+		defer func() {
+			if ctx.Err() != nil {
+				hangUpContainerShell(container, p.Session)
+			}
+		}()
+	} else {
+		shell := "/bin/sh"
+		if _, err := os.Stat("/bin/bash"); err == nil {
+			shell = "/bin/bash"
+		}
+		cmd = exec.CommandContext(ctx, shell, "-l")
+		cmd.Dir = "/root"
+		cmd.Env = append(os.Environ(), "TERM=xterm-256color", "HOME=/root")
+	}
+
+	master, err := pty.Start(cmd, cols, rows)
+	if err != nil {
+		return err
+	}
+	defer master.Close()
+
+	m.mu.Lock()
+	if m.terminals == nil {
+		m.terminals = map[string]*terminal{}
+	}
+	m.terminals[p.Session] = &terminal{master: master}
+	m.mu.Unlock()
+	defer func() {
+		m.mu.Lock()
+		delete(m.terminals, p.Session)
+		m.mu.Unlock()
+	}()
+
+	buf := make([]byte, 8<<10)
+	for {
+		n, err := master.Read(buf)
+		out.write(buf[:n])
+		if err != nil {
+			break // EIO when the shell exits and the pty closes
+		}
+	}
+	if err := cmd.Wait(); err != nil && ctx.Err() == nil {
+		var exit *exec.ExitError
+		if errors.As(err, &exit) {
+			return fmt.Errorf("shell exited with code %d", exit.ExitCode())
+		}
+		return err
+	}
+	return nil
+}
+
+// InputCursors reports, per open terminal, the last input applied; the agent
+// sends it with each poll. Empty when no terminal is open.
+func (m *Manager) InputCursors() map[string]int64 {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if len(m.terminals) == 0 {
+		return nil
+	}
+	cursors := make(map[string]int64, len(m.terminals))
+	for session, t := range m.terminals {
+		cursors[session] = t.lastSeq
+	}
+	return cursors
+}
+
+// Input applies keystrokes and resizes in order, once each.
+func (m *Manager) Input(session string, items []protocol.TerminalInput) {
+	m.mu.Lock()
+	t, ok := m.terminals[session]
+	m.mu.Unlock()
+	if !ok {
+		return
+	}
+	for _, item := range items {
+		if item.Seq <= t.lastSeq {
+			continue // re-delivered after a lost poll response
+		}
+		t.lastSeq = item.Seq
+		if item.Data != "" {
+			_, _ = t.master.Write([]byte(item.Data))
+		}
+		if item.Cols != nil && item.Rows != nil {
+			_ = pty.Resize(t.master, int(*item.Cols), int(*item.Rows))
+		}
+	}
+}
+
+// terminalTag marks every process of a container shell (the shell and what it
+// starts), so a closed session can hang them all up.
+const terminalTag = "HURUF_TERMINAL"
+
+// hangUpContainerShell sends SIGHUP to the container's processes carrying this
+// session's tag. Needs only /proc, tr and grep, which busybox images have too.
+func hangUpContainerShell(container, session string) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	script := fmt.Sprintf(`for p in /proc/[0-9]*; do
+  tr '\0' '\n' < "$p/environ" 2>/dev/null | grep -qx '%s=%s' && kill -HUP "${p#/proc/}" 2>/dev/null
+done; true`, terminalTag, session)
+	_ = exec.CommandContext(ctx, "docker", "exec", container, "sh", "-c", script).Run()
 }

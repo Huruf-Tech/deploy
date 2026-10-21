@@ -145,6 +145,7 @@ func ensureEdge(ctx context.Context, image string) error {
 		_, err = run(ctx, "docker", "run", "-d",
 			"--name", edgeContainer,
 			"--restart", "unless-stopped",
+			"--init", // reaps orphans, e.g. processes left by closed shells
 			"--network", "host",
 			"--label", labelPrefix+"managed=true",
 			"--label", labelPrefix+"role=edge",

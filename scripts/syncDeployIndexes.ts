@@ -14,6 +14,7 @@ import { SHARD_COUNT } from "@/lib/agents/sweep.ts";
 import { bootstrapSessionModel } from "@/schemas/infrastructure/bootstrapSession.ts";
 import {
   streamChunkModel,
+  streamInputModel,
   streamSessionModel,
 } from "@/schemas/infrastructure/stream.ts";
 
@@ -106,6 +107,14 @@ export const syncDeployIndexes = async () => {
       { name: "uniqueSeq", unique: true },
     ),
     streamChunkModel.createIndex(
+      { expiresAt: 1 },
+      { name: "ttl", expireAfterSeconds: 0 },
+    ),
+    streamInputModel.createIndex(
+      { session: 1, seq: 1 },
+      { name: "uniqueSeq", unique: true },
+    ),
+    streamInputModel.createIndex(
       { expiresAt: 1 },
       { name: "ttl", expireAfterSeconds: 0 },
     ),

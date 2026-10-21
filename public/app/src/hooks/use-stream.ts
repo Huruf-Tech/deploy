@@ -18,7 +18,9 @@ export type TStreamChunk = {
  */
 export function useStream(
   open: (() => Promise<string>) | null,
-  onChunk: (chunk: TStreamChunk) => void
+  onChunk: (chunk: TStreamChunk) => void,
+  /** How often to read new output; terminals use ~300 ms. */
+  intervalMs = 1_000
 ) {
   const [status, setStatus] = React.useState<
     "idle" | "open" | "done" | "error"
@@ -81,7 +83,7 @@ export function useStream(
       .finally(() => {
         reading.current = false
       })
-  }, 1_000)
+  }, intervalMs)
 
   return { status, error }
 }

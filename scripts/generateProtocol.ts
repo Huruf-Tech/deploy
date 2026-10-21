@@ -54,6 +54,7 @@ const SHARED: Array<[string, z.ZodType]> = [
   ["Inventory", protocol.$inventory],
   ["ResourceSummary", protocol.$resourceSummary],
   ["Command", protocol.$command],
+  ["TerminalInput", protocol.$terminalInput],
 ];
 const shape = (schema: TJsonSchema) =>
   JSON.stringify(

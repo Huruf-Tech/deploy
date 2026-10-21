@@ -100,6 +100,9 @@ type PollRequest struct {
 
 	// Sent at most every 60 s, or on a >10% change
 	Summary *ResourceSummary `json:"summary,omitempty"`
+
+	// Open terminals: session -> highest input seq applied. Only sent while one is open
+	Streams map[string]int64 `json:"streams,omitempty"`
 }
 
 type ResourceSummary struct {
@@ -117,6 +120,9 @@ type PollResponse struct {
 	ConfigVersion string `json:"configVersion"`
 
 	Commands []Command `json:"commands"`
+
+	// New terminal input per session, after the cursors in `streams`
+	StreamInput map[string][]TerminalInput `json:"streamInput,omitempty"`
 }
 
 type Command struct {
@@ -126,6 +132,16 @@ type Command struct {
 	Type string `json:"type"`
 
 	Payload map[string]any `json:"payload"`
+}
+
+type TerminalInput struct {
+	Seq int64 `json:"seq"`
+
+	Data string `json:"data,omitempty"`
+
+	Cols *int64 `json:"cols,omitempty"`
+
+	Rows *int64 `json:"rows,omitempty"`
 }
 
 type PollRefusal struct {
@@ -188,7 +204,7 @@ type EventsResponse struct {
 type StreamOpenPayload struct {
 	Session string `json:"session"`
 
-	// One of: logs, metrics, exec
+	// One of: logs, metrics, exec, terminal
 	Kind string `json:"kind"`
 
 	Params map[string]any `json:"params"`

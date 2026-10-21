@@ -38,7 +38,7 @@ type Agent struct {
 	Store     *state.Store
 	Commands  commands.Registry
 	// Stops streams the control plane reports as unwatched; may be nil.
-	Streams interface{ Close(session string) }
+	Streams Streams
 	Log     *slog.Logger
 
 	config        *protocol.AgentConfig
@@ -48,6 +48,7 @@ type Agent struct {
 	lastSummary   time.Time
 	sampler       host.Sampler
 	mu            sync.Mutex // guards events: commands finish on their own goroutines
+	wake          chan struct{}
 	events        []any
 }
 
@@ -95,6 +96,9 @@ func (a *Agent) step(ctx context.Context) (wait time.Duration, stop bool, err er
 	}
 
 	request := protocol.PollRequest{CommandCursor: a.Store.Cursor()}
+	if a.Streams != nil {
+		request.Streams = a.Streams.InputCursors() // nil (omitted) unless a terminal is open
+	}
 	summaryDue := time.Since(a.lastSummary) >= time.Duration(a.config.SummaryIntervalMs)*time.Millisecond
 	if summaryDue {
 		summary := a.sampler.Summary()
@@ -121,6 +125,11 @@ func (a *Agent) step(ctx context.Context) (wait time.Duration, stop bool, err er
 			a.lastSummary = time.Now()
 		}
 		a.setStatus("active", "online")
+		if a.Streams != nil {
+			for session, items := range response.StreamInput {
+				a.Streams.Input(session, items)
+			}
+		}
 		if err := a.runCommands(ctx, response.Commands); err != nil {
 			return 0, false, err
 		}
@@ -224,6 +233,7 @@ func (a *Agent) sendLoop(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
+		case <-a.wakeup():
 			if err := a.flushEvents(ctx); err != nil && ctx.Err() == nil {
 				a.Log.Warn("sending events failed; will retry", "error", err)
 			}
@@ -280,4 +290,28 @@ func (a *Agent) backoff(failures int) time.Duration {
 	}
 	ceiling := min(limit, time.Second<<min(failures, 16))
 	return time.Duration(rand.Int64N(int64(ceiling) + 1))
+}
+
+// Streams is what the poll loop needs from the stream manager.
+type Streams interface {
+	Close(session string)
+	InputCursors() map[string]int64
+	Input(session string, items []protocol.TerminalInput)
+}
+
+func (a *Agent) wakeup() chan struct{} {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.wake == nil {
+		a.wake = make(chan struct{}, 1)
+	}
+	return a.wake
+}
+
+// Wake makes the sender flush now instead of on its next tick (terminal echo).
+func (a *Agent) Wake() {
+	select {
+	case a.wakeup() <- struct{}{}:
+	default: // a flush is already pending
+	}
 }

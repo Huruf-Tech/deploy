@@ -70,5 +70,14 @@
   "State": "State",
   "Logs": "Logs",
   "Live data needs the server online": "Live data needs the server online",
-  "Metrics and logs stay on the server and are streamed only while it is connected.": "Metrics and logs stay on the server and are streamed only while it is connected."
+  "Metrics and logs stay on the server and are streamed only while it is connected.": "Metrics and logs stay on the server and are streamed only while it is connected.",
+  "Terminal": "Terminal",
+  "Shell": "Shell",
+  "Host shell": "Host shell",
+  "A shell inside the container.": "A shell inside the container.",
+  "A root shell on the server. Use with care.": "A root shell on the server. Use with care.",
+  "Nothing you type or see is stored.": "Nothing you type or see is stored.",
+  "Session ended.": "Session ended.",
+  "Line mode: type here, send with Enter (instant, screen-reader friendly)": "Line mode: type here, send with Enter (instant, screen-reader friendly)",
+  "Command": "Command"
 }

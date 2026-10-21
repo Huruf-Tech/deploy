@@ -81,7 +81,15 @@ export const $commandType = z.enum([
   "stream.close",
 ]);
 
-export const $streamKind = z.enum(["logs", "metrics", "exec"]);
+export const $streamKind = z.enum(["logs", "metrics", "exec", "terminal"]);
+
+/** Browser → terminal: keystrokes, or a resize. Ordered by `seq` per session. */
+export const $terminalInput = z.object({
+  seq: z.number().int().min(1),
+  data: z.string().max(16 * 1024).optional(),
+  cols: z.number().int().min(10).max(1_000).optional(),
+  rows: z.number().int().min(5).max(500).optional(),
+});
 
 /** `stream.open` payload (PLAN §3.6). Output comes back as `stream.chunk` events. */
 export const $streamOpenPayload = z.object({
@@ -142,6 +150,9 @@ export const $pollRequest = z.object({
   summary: $resourceSummary.optional().describe(
     "Sent at most every 60 s, or on a >10% change",
   ),
+  streams: z.record(z.string(), z.number().int().min(0)).optional().describe(
+    "Open terminals: session -> highest input seq applied. Only sent while one is open",
+  ),
 });
 
 export const $pollResponse = z.object({
@@ -149,6 +160,8 @@ export const $pollResponse = z.object({
   /** Refetch `POST /agents/api/config` when this differs from the agent's copy. */
   configVersion: z.string(),
   commands: z.array($command),
+  streamInput: z.record(z.string(), z.array($terminalInput)).optional()
+    .describe("New terminal input per session, after the cursors in `streams`"),
 });
 
 /** Returned with 403 when the server cannot poll; agents stop on `rejected`. */

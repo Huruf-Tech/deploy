@@ -871,7 +871,25 @@ Each phase ends with a **review checkpoint** (demo + code review + approval). Ph
     - real container stats;
     - idle close;
     - session and chunks gone about 3 min after closing.
-- **3b (next):** the terminal.
+- **3b (done):** the terminal.
+  - **Host and container shells:** a PTY on the agent using the standard library (`/dev/ptmx`). A container shell is `docker exec -it` inside that PTY. They are separate handlers (`openTerminal`, `openHostTerminal`), so RBAC can grant container shells without root host access.
+  - **Input:**
+    - The browser batches keystrokes every 50 ms, one insert each.
+    - Agents send input cursors only while a terminal is open, and the poll returns `streamInput`. Idle polls are unchanged.
+    - Inputs carry their server, so an agent can never read another server's keystrokes.
+  - **Output:** flushed every 30 ms and sent urgently, without waiting for the 500 ms sender cycle. The browser reads every 300 ms, and the server polls at terminal pace (`terminalUntil`, kept alive by typing).
+  - **Limits:** `concurrentTerminals`, `SAFETY_TERMINAL_IDLE_MIN` (no keystrokes), `SAFETY_TERMINAL_MAX_HOURS`.
+  - **Container shells are cleaned up:** tagged with `HURUF_TERMINAL=<session>` and hung up on close, because killing the `docker exec` client leaves the shell running.
+  - **`--init`:** the edge runs with `--init`, so killed processes are reaped. **Phase 6: run every project container with `--init`.**
+  - **UI:** xterm.js in a lazy chunk (85 kB gzipped), resize, and line mode for instant, screen-reader-friendly input.
+  - **Verified on a real VM:**
+    - keystroke echo 232–439 ms;
+    - `htop` renders;
+    - root host shell, and `exit` ends the session;
+    - container shell;
+    - idle close;
+    - no shell left in the container after closing.
+- **Phase 3 complete.**
 
 ### Phase 4 — Variables manager
 - Scopes (global per user), precedence, references, secrets, reveal auditing, `file`/`build` kinds, external `resolve` with API keys, SDK.

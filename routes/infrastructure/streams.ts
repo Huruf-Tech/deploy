@@ -4,7 +4,13 @@ import { Router } from "@/core/http/router.ts";
 import { bodyAsJson, paramsAsJson, queryAsJson } from "@/core/http/utils.ts";
 import { $objectId } from "@/core/utils/createCRUD.ts";
 import { withTenant } from "@/plugins/Huruf-Tech/thunder-core/utils/withTenant.ts";
-import { closeStream, openStream, readStream } from "@/lib/agents/streams.ts";
+import {
+  closeStream,
+  openStream,
+  readStream,
+  writeTerminalInput,
+} from "@/lib/agents/streams.ts";
+import { $terminalInput } from "@/schemas/protocol/agent.ts";
 
 /**
  * Live views of data that stays on the agent (PLAN §3.6). Each kind has its own
@@ -16,7 +22,7 @@ export default new Router("/api", function streams(router) {
   const $container = z.string().min(1).max(128).regex(/^[\w.-]+$/);
 
   const open = (
-    kind: "logs" | "metrics" | "exec",
+    kind: "logs" | "metrics" | "exec" | "terminal",
     $body: z.ZodObject,
   ) => ({
     shape: () => ({ body: $body, return: $opened }),
@@ -63,6 +69,38 @@ export default new Router("/api", function streams(router) {
         command: z.array(z.string().max(1_000)).min(1).max(32),
       }),
     );
+  });
+
+  const $size = {
+    cols: z.number().int().min(10).max(1_000).default(80),
+    rows: z.number().int().min(5).max(500).default(24),
+  };
+
+  // A shell inside a container.
+  router.post("/terminal", function openTerminal() {
+    return open(
+      "terminal",
+      z.object({ server: $objectId, container: $container, ...$size }),
+    );
+  });
+
+  // A root shell on the host itself: a separate permission from container shells.
+  router.post("/terminal/host", function openHostTerminal() {
+    return open("terminal", z.object({ server: $objectId, ...$size }));
+  });
+
+  router.post("/:id/input", function input() {
+    const $body = z.object({ items: z.array($terminalInput).min(1).max(64) });
+
+    return {
+      shape: () => ({ params: $params, body: $body }),
+      handler: async (req) => {
+        const { id } = $params.parse(paramsAsJson(req));
+        const { items } = $body.parse(await bodyAsJson(req));
+        await writeTerminalInput(id, (await withTenant(req)).tenant._id, items);
+        return Response.json({ ok: true });
+      },
+    };
   });
 
   router.get("/:id/chunks", function read() {

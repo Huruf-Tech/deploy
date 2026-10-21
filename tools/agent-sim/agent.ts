@@ -95,6 +95,8 @@ export class SimAgent {
   private privateKey?: CryptoKey;
   private fingerprint?: string;
   readonly executed: number[] = [];
+  /** Simulated terminals: session -> last input seq applied, last output seq. */
+  readonly terminals = new Map<string, { input: number; output: number }>();
   /** Decided by the control plane; set by hello, refreshed on version change. */
   config?: TAgentConfig;
   configVersion?: string;
@@ -192,13 +194,23 @@ export class SimAgent {
           diskFree: 60 * 2 ** 30,
         }
         : undefined,
+      streams: this.terminals.size
+        ? Object.fromEntries(
+          [...this.terminals].map(([session, t]) => [session, t.input]),
+        )
+        : undefined,
     });
 
     const version = response.json.configVersion;
     if (version && version !== this.configVersion) await this.refreshConfig();
 
     const commands = (response.json.commands ?? []) as TCommand[];
-    const events: TAgentEvent[] = [];
+    const events: TAgentEvent[] = this.echoTerminalInput(
+      (response.json.streamInput ?? {}) as Record<
+        string,
+        { seq: number; data?: string }[]
+      >,
+    );
 
     for (const command of commands) {
       // Durably record receipt before acking it on the next poll.
@@ -224,7 +236,14 @@ export class SimAgent {
             : { pong: Date.now() },
         },
       });
-      if (command.type === "stream.open") {
+      if (
+        command.type === "stream.open" && command.payload.kind === "terminal"
+      ) {
+        this.terminals.set(String(command.payload.session), {
+          input: 0,
+          output: 0,
+        });
+      } else if (command.type === "stream.open") {
         events.push(...simulatedStream(command.payload));
       }
     }
@@ -233,6 +252,29 @@ export class SimAgent {
     if (events.length) await this.sendEvents(events);
 
     return response;
+  }
+
+  /** A simulated terminal echoes its input, once per seq, like a shell would. */
+  private echoTerminalInput(
+    input: Record<string, { seq: number; data?: string }[]>,
+  ): TAgentEvent[] {
+    const events: TAgentEvent[] = [];
+    for (const [session, items] of Object.entries(input)) {
+      const terminal = this.terminals.get(session);
+      if (!terminal) continue;
+      for (const item of items) {
+        if (item.seq <= terminal.input) continue;
+        terminal.input = item.seq;
+        if (!item.data) continue;
+        terminal.output++;
+        events.push({
+          id: `term-${session}-${terminal.output}`,
+          type: "stream.chunk",
+          data: { session, seq: terminal.output, data: item.data },
+        });
+      }
+    }
+    return events;
   }
 
   sendEvents(events: TAgentEvent[]) {
