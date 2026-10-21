@@ -16,13 +16,7 @@
   "Development: runs a simulated agent until the installer ships.": "Development: runs a simulated agent until the installer ships.",
   "Server rejected": "Server rejected",
   "Ping sent as command #{{seq}}": "Ping sent as command #{{seq}}",
-  "Host": "Host",
-  "System": "System",
-  "Capacity": "Capacity",
   "{{cores}} CPU": "{{cores}} CPU",
-  "Free memory": "Free memory",
-  "Agent": "Agent",
-  "Last seen": "Last seen",
   "Accept": "Accept",
   "Reject": "Reject",
   "Ping": "Ping",
@@ -31,5 +25,13 @@
   "Accept {{name}}": "Accept {{name}}",
   "Enter the pairing code printed by the agent on that machine. Only accept servers you installed yourself.": "Enter the pairing code printed by the agent on that machine. Only accept servers you installed yourself.",
   "Pairing code": "Pairing code",
-  "Admin": "Administration"
+  "Admin": "Administration",
+  "CPU": "CPU",
+  "Memory": "Memory",
+  "Disk": "Disk",
+  "Check the pairing code printed by the agent on this machine, then accept it.": "Check the pairing code printed by the agent on this machine, then accept it.",
+  "Code expires {{when}}": "Code expires {{when}}",
+  "Usage appears after the agent's first report.": "Usage appears after the agent's first report.",
+  "Last seen {{when}}": "Last seen {{when}}",
+  "Agent {{version}}": "Agent {{version}}"
 }

@@ -1,8 +1,4 @@
-import {
-  IconServer2,
-  IconServerCog,
-  IconShieldLock,
-} from "@tabler/icons-react"
+import { IconServer2, IconServerCog, IconShieldLock } from "@tabler/icons-react"
 
 import type { TIconsOverride } from "@/core/types"
 

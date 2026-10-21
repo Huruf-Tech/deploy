@@ -16,13 +16,7 @@
   "Development: runs a simulated agent until the installer ships.": "للتطوير: يشغّل وكيلًا محاكى إلى أن يصدر المثبّت.",
   "Server rejected": "تم رفض الخادم",
   "Ping sent as command #{{seq}}": "أُرسل اختبار الاتصال كأمر رقم {{seq}}",
-  "Host": "المضيف",
-  "System": "النظام",
-  "Capacity": "السعة",
   "{{cores}} CPU": "{{cores}} معالج",
-  "Free memory": "الذاكرة المتاحة",
-  "Agent": "الوكيل",
-  "Last seen": "آخر ظهور",
   "Accept": "قبول",
   "Reject": "رفض",
   "Ping": "اختبار الاتصال",
@@ -31,5 +25,13 @@
   "Accept {{name}}": "قبول {{name}}",
   "Enter the pairing code printed by the agent on that machine. Only accept servers you installed yourself.": "أدخل رمز الاقتران الذي يطبعه الوكيل على ذلك الجهاز. لا تقبل إلا الخوادم التي ثبّتها بنفسك.",
   "Pairing code": "رمز الاقتران",
-  "Admin": "الإدارة"
+  "Admin": "الإدارة",
+  "CPU": "المعالج",
+  "Memory": "الذاكرة",
+  "Disk": "القرص",
+  "Check the pairing code printed by the agent on this machine, then accept it.": "تحقّق من رمز الاقتران الذي يطبعه الوكيل على هذا الجهاز، ثم اقبله.",
+  "Code expires {{when}}": "تنتهي صلاحية الرمز {{when}}",
+  "Usage appears after the agent's first report.": "يظهر الاستخدام بعد أول تقرير من الوكيل.",
+  "Last seen {{when}}": "آخر ظهور {{when}}",
+  "Agent {{version}}": "الوكيل {{version}}"
 }

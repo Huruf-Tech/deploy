@@ -61,6 +61,8 @@
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
   --destructive-foreground: var(--color-red-700);
+  --success: oklch(0.627 0.17 149.2);
+  --warning: oklch(0.705 0.16 62);
 }
 
 .dark {
@@ -97,6 +99,8 @@
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
   --destructive-foreground: var(--color-red-400);
+  --success: oklch(0.723 0.19 149.6);
+  --warning: oklch(0.795 0.16 70);
 }
 
 @theme inline {
@@ -141,6 +145,8 @@
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
   --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
 }
 
 @layer base {

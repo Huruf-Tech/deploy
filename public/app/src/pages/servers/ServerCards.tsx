@@ -6,18 +6,26 @@ import { ThunderSDK } from "thunder-sdk"
 import { formatDistanceToNow } from "date-fns"
 import { toast } from "sonner"
 import {
-  IconCircleCheck,
-  IconCircleX,
-  IconClockHour4,
-  IconPlugConnectedX,
+  IconActivityHeartbeat,
+  IconBrandUbuntu,
+  IconCpu,
+  IconKey,
   IconServer2,
 } from "@tabler/icons-react"
 
 import type { TCardProps } from "@/core/types"
+import { Container } from "@/core/custom/Container"
 import { zodToMongoProjection } from "@/core/lib/zodToMongoProjection"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import {
+  Card,
+  CardAction,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card"
 import { CopyButton } from "@/components/ui/copy-button"
 import {
   Empty,
@@ -28,7 +36,9 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty"
 import { Skeleton } from "@/components/ui/skeleton"
+import { ResourceBar } from "@/components/resource-bar"
 import { usePolling } from "@/hooks/use-polling"
+import { cn } from "@/lib/utils"
 import { AcceptServerDialog } from "./AcceptServerDialog"
 
 const serverSchema = z.object({
@@ -42,6 +52,7 @@ const serverSchema = z.object({
     arch: z.string(),
     cpuCores: z.number(),
     memory: z.number(),
+    disk: z.number(),
     agentVersion: z.string(),
   }),
   resources: z
@@ -51,40 +62,223 @@ const serverSchema = z.object({
 
 type TServer = z.infer<typeof serverSchema>
 type TLiveness = Awaited<ReturnType<typeof ThunderSDK.servers.liveness>>
+type TState = "pending" | "online" | "offline" | "rejected"
 
 const gib = (bytes: number) => `${(bytes / 2 ** 30).toFixed(1)} GiB`
 
-function StatusBadge({
+const stateOf = (server: TServer, live?: TLiveness[number]): TState =>
+  server.status === "active"
+    ? live?.online
+      ? "online"
+      : "offline"
+    : server.status
+
+const STATE_STYLE: Record<TState, { dot: string; pill: string; tile: string }> =
+  {
+    online: {
+      dot: "bg-success",
+      pill: "bg-success/10 text-success",
+      tile: "bg-primary/10 text-primary",
+    },
+    offline: {
+      dot: "bg-muted-foreground",
+      pill: "bg-muted text-muted-foreground",
+      tile: "bg-muted text-muted-foreground",
+    },
+    pending: {
+      dot: "bg-warning",
+      pill: "bg-warning/15 text-foreground",
+      tile: "bg-warning/15 text-foreground",
+    },
+    rejected: {
+      dot: "bg-destructive",
+      pill: "bg-destructive/10 text-destructive",
+      tile: "bg-destructive/10 text-destructive",
+    },
+  }
+
+function StatusPill({ state }: { state: TState }) {
+  const { t } = useTranslation()
+  const label = {
+    online: t("Online"),
+    offline: t("Offline"),
+    pending: t("Waiting for approval"),
+    rejected: t("Rejected"),
+  }[state]
+
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium",
+        STATE_STYLE[state].pill
+      )}
+    >
+      <span className="relative flex size-2">
+        {state === "online" && (
+          <span className="absolute inline-flex size-full rounded-full bg-success opacity-60 motion-safe:animate-ping" />
+        )}
+        <span
+          className={cn(
+            "relative inline-flex size-2 rounded-full",
+            STATE_STYLE[state].dot
+          )}
+        />
+      </span>
+      {label}
+    </span>
+  )
+}
+
+function Chip({
+  icon: Icon,
+  children,
+}: {
+  icon?: typeof IconCpu
+  children: React.ReactNode
+}) {
+  return (
+    <span className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+      {Icon && <Icon className="size-3.5" aria-hidden />}
+      {children}
+    </span>
+  )
+}
+
+function ServerCard({
   server,
   live,
+  onAccept,
+  onReject,
+  onPing,
 }: {
   server: TServer
   live?: TLiveness[number]
+  onAccept: () => void
+  onReject: () => void
+  onPing: () => void
 }) {
   const { t } = useTranslation()
+  const state = stateOf(server, live)
+  const { inventory, resources } = server
 
-  if (server.status === "pending")
-    return (
-      <Badge variant="outline">
-        <IconClockHour4 aria-hidden /> {t("Waiting for approval")}
-      </Badge>
-    )
-  if (server.status === "rejected")
-    return (
-      <Badge variant="destructive">
-        <IconCircleX aria-hidden /> {t("Rejected")}
-      </Badge>
-    )
-  if (live?.online)
-    return (
-      <Badge>
-        <IconCircleCheck aria-hidden /> {t("Online")}
-      </Badge>
-    )
   return (
-    <Badge variant="secondary">
-      <IconPlugConnectedX aria-hidden /> {t("Offline")}
-    </Badge>
+    <Card
+      size="sm"
+      className={cn(
+        "transition-shadow duration-200 hover:shadow-lg",
+        state === "pending" && "ring-2 ring-warning/40",
+        state === "offline" && "opacity-80"
+      )}
+    >
+      <CardHeader>
+        <div className="flex min-w-0 items-center gap-3">
+          <div
+            className={cn(
+              "flex size-10 shrink-0 items-center justify-center rounded-2xl",
+              STATE_STYLE[state].tile
+            )}
+          >
+            <IconServer2 className="size-5" aria-hidden />
+          </div>
+          <div className="min-w-0">
+            <CardTitle className="truncate">{server.name}</CardTitle>
+            <CardDescription className="truncate font-mono text-xs">
+              {inventory.hostname}
+            </CardDescription>
+          </div>
+        </div>
+        <CardAction>
+          <StatusPill state={state} />
+        </CardAction>
+      </CardHeader>
+
+      <CardContent className="flex flex-col gap-2.5">
+        {state === "pending" ? (
+          <div className="flex gap-3 rounded-2xl bg-muted/60 p-3 text-xs text-muted-foreground">
+            <IconKey className="size-4 shrink-0 text-foreground" aria-hidden />
+            <p>
+              {t(
+                "Check the pairing code printed by the agent on this machine, then accept it."
+              )}
+              {server.pairingExpiresAt && (
+                <span className="mt-1 block text-foreground">
+                  {t("Code expires {{when}}", {
+                    when: formatDistanceToNow(server.pairingExpiresAt, {
+                      addSuffix: true,
+                    }),
+                  })}
+                </span>
+              )}
+            </p>
+          </div>
+        ) : resources ? (
+          <>
+            <ResourceBar
+              label={t("CPU")}
+              used={resources.cpu}
+              total={1}
+              detail={`${Math.round(resources.cpu * 100)}%`}
+            />
+            <ResourceBar
+              label={t("Memory")}
+              used={inventory.memory - resources.memFree}
+              total={inventory.memory}
+              detail={`${gib(inventory.memory - resources.memFree)} / ${gib(inventory.memory)}`}
+            />
+            <ResourceBar
+              label={t("Disk")}
+              used={inventory.disk - resources.diskFree}
+              total={inventory.disk}
+              detail={`${gib(inventory.disk - resources.diskFree)} / ${gib(inventory.disk)}`}
+            />
+          </>
+        ) : (
+          <p className="text-xs text-muted-foreground">
+            {t("Usage appears after the agent's first report.")}
+          </p>
+        )}
+
+        <div className="flex flex-wrap gap-1.5 pt-1">
+          <Chip icon={IconBrandUbuntu}>{inventory.os}</Chip>
+          <Chip icon={IconCpu}>
+            {t("{{cores}} CPU", { cores: inventory.cpuCores })} ·{" "}
+            {inventory.arch}
+          </Chip>
+          <Chip>{gib(inventory.memory)}</Chip>
+        </div>
+      </CardContent>
+
+      <CardFooter className="justify-between gap-2 border-t">
+        <span
+          className="truncate text-xs text-muted-foreground"
+          title={live ? new Date(live.lastSeenAt).toLocaleString() : undefined}
+        >
+          {state === "offline" && live
+            ? t("Last seen {{when}}", {
+                when: formatDistanceToNow(new Date(live.lastSeenAt), {
+                  addSuffix: true,
+                }),
+              })
+            : t("Agent {{version}}", { version: inventory.agentVersion })}
+        </span>
+
+        {state === "pending" && (
+          <div className="flex shrink-0 gap-2">
+            <Button size="sm" variant="ghost" onClick={onReject}>
+              {t("Reject")}
+            </Button>
+            <Button size="sm" onClick={onAccept}>
+              {t("Accept")}
+            </Button>
+          </div>
+        )}
+        {state === "online" && (
+          <Button size="sm" variant="outline" onClick={onPing}>
+            <IconActivityHeartbeat aria-hidden /> {t("Ping")}
+          </Button>
+        )}
+      </CardFooter>
+    </Card>
   )
 }
 
@@ -107,7 +301,7 @@ function AddServerHint() {
         </EmptyDescription>
       </EmptyHeader>
       <EmptyContent>
-        <div className="flex w-full items-center gap-2 rounded-md bg-muted px-3 py-2 font-mono text-xs">
+        <div className="flex w-full items-center gap-2 rounded-xl bg-muted px-3 py-2 font-mono text-xs">
           <span className="truncate">{command}</span>
           <CopyButton value={command} />
         </div>
@@ -121,16 +315,19 @@ function AddServerHint() {
 
 export default function ServerCards({ data, isLoading, fetcher }: TCardProps) {
   const { t } = useTranslation()
-  const [liveness, setLiveness] = React.useState<Map<string, TLiveness[number]>>(
-    new Map()
-  )
+  const [liveness, setLiveness] = React.useState<
+    Map<string, TLiveness[number]>
+  >(new Map())
   const [accepting, setAccepting] = React.useState<TServer | null>(null)
 
-  const refetch = React.useCallback(
-    () => fetcher(zodToMongoProjection(serverSchema)),
-    [fetcher]
-  )
-  React.useEffect(refetch, [refetch])
+  const refetch = React.useCallback(() => {
+    fetcher(zodToMongoProjection(serverSchema))
+  }, [fetcher])
+
+  // A block body: an effect must not return fetcher's result, React would call it as cleanup.
+  React.useEffect(() => {
+    refetch()
+  }, [refetch])
 
   const servers = React.useMemo(
     () => (Array.isArray(data) ? serverSchema.array().parse(data) : []),
@@ -154,103 +351,39 @@ export default function ServerCards({ data, isLoading, fetcher }: TCardProps) {
   }
 
   const ping = async (server: TServer) => {
-    const { seq } = await ThunderSDK.servers.ping({ params: { id: server._id } })
+    const { seq } = await ThunderSDK.servers.ping({
+      params: { id: server._id },
+    })
     toast.success(t("Ping sent as command #{{seq}}", { seq }))
   }
 
-  if (isLoading)
-    return (
-      <div className="grid gap-3 p-2 sm:grid-cols-2 xl:grid-cols-3">
-        {[0, 1, 2].map((i) => (
-          <Skeleton key={i} className="h-40" />
-        ))}
-      </div>
-    )
-
-  if (!servers.length) return <AddServerHint />
-
   return (
-    <div className="grid gap-3 p-2 sm:grid-cols-2 xl:grid-cols-3" aria-live="polite">
-      {servers.map((server) => {
-        const live = liveness.get(server._id)
-
-        return (
-          <Card key={server._id}>
-            <CardHeader className="flex flex-row items-start justify-between gap-2">
-              <CardTitle className="truncate">{server.name}</CardTitle>
-              <StatusBadge server={server} live={live} />
-            </CardHeader>
-            <CardContent className="flex flex-col gap-3 text-sm">
-              <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-muted-foreground">
-                <dt>{t("Host")}</dt>
-                <dd className="truncate font-mono text-foreground">
-                  {server.inventory.hostname}
-                </dd>
-                <dt>{t("System")}</dt>
-                <dd className="truncate text-foreground">
-                  {server.inventory.os} · {server.inventory.arch}
-                </dd>
-                <dt>{t("Capacity")}</dt>
-                <dd className="text-foreground">
-                  {t("{{cores}} CPU", { cores: server.inventory.cpuCores })} ·{" "}
-                  {gib(server.inventory.memory)}
-                </dd>
-                {server.resources && (
-                  <>
-                    <dt>{t("Free memory")}</dt>
-                    <dd className="text-foreground">
-                      {gib(server.resources.memFree)}
-                    </dd>
-                  </>
-                )}
-                <dt>{t("Agent")}</dt>
-                <dd className="font-mono text-foreground">
-                  {server.inventory.agentVersion}
-                </dd>
-                {server.status === "active" && live && !live.online && (
-                  <>
-                    <dt>{t("Last seen")}</dt>
-                    <dd
-                      className="text-foreground"
-                      title={new Date(live.lastSeenAt).toLocaleString()}
-                    >
-                      {formatDistanceToNow(new Date(live.lastSeenAt), {
-                        addSuffix: true,
-                      })}
-                    </dd>
-                  </>
-                )}
-              </dl>
-
-              {server.status === "pending" && (
-                <div className="flex gap-2">
-                  <Button size="sm" onClick={() => setAccepting(server)}>
-                    {t("Accept")}
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => reject(server)}
-                  >
-                    {t("Reject")}
-                  </Button>
-                </div>
-              )}
-              {server.status === "active" && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="self-start"
-                  disabled={!live?.online}
-                  onClick={() => ping(server)}
-                >
-                  {t("Ping")}
-                </Button>
-              )}
-            </CardContent>
-          </Card>
-        )
-      })}
+    <Container className="py-4">
+      {isLoading ? (
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {[0, 1, 2].map((i) => (
+            <Skeleton key={i} className="h-56 rounded-4xl" />
+          ))}
+        </div>
+      ) : !servers.length ? (
+        <AddServerHint />
+      ) : (
+        <div
+          className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3"
+          aria-live="polite"
+        >
+          {servers.map((server) => (
+            <ServerCard
+              key={server._id}
+              server={server}
+              live={liveness.get(server._id)}
+              onAccept={() => setAccepting(server)}
+              onReject={() => reject(server)}
+              onPing={() => ping(server)}
+            />
+          ))}
+        </div>
+      )}
 
       {accepting && (
         <AcceptServerDialog
@@ -260,6 +393,6 @@ export default function ServerCards({ data, isLoading, fetcher }: TCardProps) {
           onAccepted={refetch}
         />
       )}
-    </div>
+    </Container>
   )
 }
