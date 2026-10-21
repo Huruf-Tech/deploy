@@ -9,7 +9,6 @@ import {
   IconBrandUbuntu,
   IconCpu,
   IconKey,
-  IconPlus,
   IconServer2,
 } from "@tabler/icons-react"
 
@@ -39,7 +38,8 @@ import { ResourceBar } from "@/components/resource-bar"
 import { usePolling } from "@/hooks/use-polling"
 import { cn } from "@/lib/utils"
 import { AcceptServerDialog } from "./AcceptServerDialog"
-import { AddServerDialog } from "./AddServerDialog"
+import { AddServerButton } from "./AddServerButton"
+import { onServersChanged } from "./events"
 
 const serverSchema = z.object({
   _id: z.string(),
@@ -282,7 +282,7 @@ function ServerCard({
   )
 }
 
-function AddServerHint({ onAdd }: { onAdd: () => void }) {
+function AddServerHint() {
   const { t } = useTranslation()
 
   return (
@@ -299,9 +299,7 @@ function AddServerHint({ onAdd }: { onAdd: () => void }) {
         </EmptyDescription>
       </EmptyHeader>
       <EmptyContent>
-        <Button onClick={onAdd}>
-          <IconPlus aria-hidden /> {t("Add server")}
-        </Button>
+        <AddServerButton />
       </EmptyContent>
     </Empty>
   )
@@ -313,7 +311,6 @@ export default function ServerCards({ data, isLoading, fetcher }: TCardProps) {
     Map<string, TLiveness[number]>
   >(new Map())
   const [accepting, setAccepting] = React.useState<TServer | null>(null)
-  const [adding, setAdding] = React.useState(false)
 
   const refetch = React.useCallback(() => {
     fetcher(zodToMongoProjection(serverSchema))
@@ -323,6 +320,9 @@ export default function ServerCards({ data, isLoading, fetcher }: TCardProps) {
   React.useEffect(() => {
     refetch()
   }, [refetch])
+
+  // The toolbar's "Add server" lives outside this component.
+  React.useEffect(() => onServersChanged(refetch), [refetch])
 
   const servers = React.useMemo(
     () => (Array.isArray(data) ? serverSchema.array().parse(data) : []),
@@ -361,37 +361,24 @@ export default function ServerCards({ data, isLoading, fetcher }: TCardProps) {
           ))}
         </div>
       ) : !servers.length ? (
-        <AddServerHint onAdd={() => setAdding(true)} />
+        <AddServerHint />
       ) : (
-        <div className="flex flex-col gap-4">
-          <div className="flex justify-end">
-            <Button size="sm" onClick={() => setAdding(true)}>
-              <IconPlus aria-hidden /> {t("Add server")}
-            </Button>
-          </div>
-          <div
-            className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3"
-            aria-live="polite"
-          >
-            {servers.map((server) => (
-              <ServerCard
-                key={server._id}
-                server={server}
-                live={liveness.get(server._id)}
-                onAccept={() => setAccepting(server)}
-                onReject={() => reject(server)}
-                onPing={() => ping(server)}
-              />
-            ))}
-          </div>
+        <div
+          className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3"
+          aria-live="polite"
+        >
+          {servers.map((server) => (
+            <ServerCard
+              key={server._id}
+              server={server}
+              live={liveness.get(server._id)}
+              onAccept={() => setAccepting(server)}
+              onReject={() => reject(server)}
+              onPing={() => ping(server)}
+            />
+          ))}
         </div>
       )}
-
-      <AddServerDialog
-        open={adding}
-        onOpenChange={setAdding}
-        onAdded={refetch}
-      />
 
       {accepting && (
         <AcceptServerDialog
