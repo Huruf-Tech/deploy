@@ -25,6 +25,7 @@ const (
 	// Bounded event queue (PLAN §20.4); events are batched up to 64 per request.
 	maxPendingEvents = 10_000
 	eventBatch       = 64
+	sendEvery        = 500 * time.Millisecond
 )
 
 type Agent struct {
@@ -36,7 +37,9 @@ type Agent struct {
 	Client    *transport.Client
 	Store     *state.Store
 	Commands  commands.Registry
-	Log       *slog.Logger
+	// Stops streams the control plane reports as unwatched; may be nil.
+	Streams interface{ Close(session string) }
+	Log     *slog.Logger
 
 	config        *protocol.AgentConfig
 	configVersion string
@@ -48,8 +51,20 @@ type Agent struct {
 	events        []any
 }
 
-// Run polls until ctx is cancelled or the tenant rejects this server.
+// Run polls until ctx is cancelled or the tenant rejects this server. Events
+// are sent by a separate loop every 500 ms, so stream output never waits for
+// the next poll (5 s when idle).
 func (a *Agent) Run(ctx context.Context) error {
+	sending, stopSending := context.WithCancel(context.Background())
+	sent := make(chan struct{})
+	go func() { a.sendLoop(sending); close(sent) }()
+	defer func() {
+		stopSending()
+		<-sent
+		// Last results (e.g. of the command that preceded a rejection).
+		_ = a.flushEvents(context.Background())
+	}()
+
 	failures := 0
 	for ctx.Err() == nil {
 		wait, stop, err := a.step(ctx)
@@ -121,9 +136,6 @@ func (a *Agent) step(ctx context.Context) (wait time.Duration, stop bool, err er
 		}
 	}
 
-	if err := a.flushEvents(ctx); err != nil {
-		return 0, false, err
-	}
 	return a.jitter(time.Duration(response.NextPollMs) * time.Millisecond), false, nil
 }
 
@@ -188,13 +200,34 @@ func (a *Agent) execute(ctx context.Context, command protocol.Command) {
 	a.Log.Info("ran command", "seq", command.Seq, "type", command.Type, "ok", data.Ok, "error", data.Error)
 
 	// ponytail: results queue in memory; a crash before they are sent leaves the command "delivered". Persist the queue once commands have side effects worth re-reporting.
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	a.events = append(a.events, protocol.CommandResultEvent{
+	a.Enqueue(protocol.CommandResultEvent{
 		Id: fmt.Sprintf("cmd-%d", command.Seq), Type: "command.result", Data: data,
 	})
+}
+
+// Enqueue adds an event for the next send; safe from any goroutine. The queue
+// is bounded: when full, the oldest events are dropped.
+func (a *Agent) Enqueue(event any) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.events = append(a.events, event)
 	if len(a.events) > maxPendingEvents {
 		a.events = a.events[len(a.events)-maxPendingEvents:]
+	}
+}
+
+func (a *Agent) sendLoop(ctx context.Context) {
+	ticker := time.NewTicker(sendEvery)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			if err := a.flushEvents(ctx); err != nil && ctx.Err() == nil {
+				a.Log.Warn("sending events failed; will retry", "error", err)
+			}
+		}
 	}
 }
 
@@ -206,12 +239,21 @@ func (a *Agent) flushEvents(ctx context.Context) error {
 		if len(batch) == 0 {
 			return nil
 		}
-		if _, err := a.Client.Post(ctx, "/agents/api/events", protocol.EventsRequest{Events: batch}, nil); err != nil {
+
+		var response protocol.EventsResponse
+		if _, err := a.Client.Post(ctx, "/agents/api/events", protocol.EventsRequest{Events: batch}, &response); err != nil {
 			return err
 		}
 		a.mu.Lock()
 		a.events = a.events[len(batch):]
 		a.mu.Unlock()
+
+		// Streams nobody is watching any more.
+		if a.Streams != nil {
+			for _, session := range response.Close {
+				a.Streams.Close(session)
+			}
+		}
 	}
 }
 

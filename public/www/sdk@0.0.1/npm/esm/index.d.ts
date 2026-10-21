@@ -273,6 +273,75 @@ export declare class ThunderSDK extends BaseSDK {
             finally: (onfinally?: (() => void) | null | undefined) => Promise<import("./modules/servers.js").liveness$return>;
         };
     };
+    static streams: {
+        readonly type: {
+            openLogs$body: import("./modules/streams.js").openLogs$body;
+            openLogs$return: import("./modules/streams.js").openLogs$return;
+            openMetrics$body: import("./modules/streams.js").openMetrics$body;
+            openMetrics$return: import("./modules/streams.js").openMetrics$return;
+            openExec$body: import("./modules/streams.js").openExec$body;
+            openExec$return: import("./modules/streams.js").openExec$return;
+            read$params: import("./modules/streams.js").read$params;
+            read$query: import("./modules/streams.js").read$query;
+            read$return: import("./modules/streams.js").read$return;
+            close$params: import("./modules/streams.js").close$params;
+        };
+        readonly openLogs: (data: {
+            params?: undefined;
+            query?: undefined;
+            body: import("./modules/streams.js").openLogs$body;
+        } & import("./types.js").TRequestOptions<import("./modules/streams.js").openLogs$return>) => {
+            readonly raw: Promise<import("axios").AxiosResponse<import("./modules/streams.js").openLogs$return, any, {}, any>>;
+            readonly data: Promise<import("./modules/streams.js").openLogs$return>;
+            then: <TResult1 = import("./modules/streams.js").openLogs$return, TResult2 = never>(onfulfilled?: ((value: import("./modules/streams.js").openLogs$return) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+            catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<import("./modules/streams.js").openLogs$return | TResult>;
+            finally: (onfinally?: (() => void) | null | undefined) => Promise<import("./modules/streams.js").openLogs$return>;
+        };
+        readonly openMetrics: (data: {
+            params?: undefined;
+            query?: undefined;
+            body: import("./modules/streams.js").openMetrics$body;
+        } & import("./types.js").TRequestOptions<import("./modules/streams.js").openMetrics$return>) => {
+            readonly raw: Promise<import("axios").AxiosResponse<import("./modules/streams.js").openMetrics$return, any, {}, any>>;
+            readonly data: Promise<import("./modules/streams.js").openMetrics$return>;
+            then: <TResult1 = import("./modules/streams.js").openMetrics$return, TResult2 = never>(onfulfilled?: ((value: import("./modules/streams.js").openMetrics$return) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+            catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<import("./modules/streams.js").openMetrics$return | TResult>;
+            finally: (onfinally?: (() => void) | null | undefined) => Promise<import("./modules/streams.js").openMetrics$return>;
+        };
+        readonly openExec: (data: {
+            params?: undefined;
+            query?: undefined;
+            body: import("./modules/streams.js").openExec$body;
+        } & import("./types.js").TRequestOptions<import("./modules/streams.js").openExec$return>) => {
+            readonly raw: Promise<import("axios").AxiosResponse<import("./modules/streams.js").openExec$return, any, {}, any>>;
+            readonly data: Promise<import("./modules/streams.js").openExec$return>;
+            then: <TResult1 = import("./modules/streams.js").openExec$return, TResult2 = never>(onfulfilled?: ((value: import("./modules/streams.js").openExec$return) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+            catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<import("./modules/streams.js").openExec$return | TResult>;
+            finally: (onfinally?: (() => void) | null | undefined) => Promise<import("./modules/streams.js").openExec$return>;
+        };
+        readonly read: (data: {
+            params: import("./modules/streams.js").read$params;
+            query: import("./modules/streams.js").read$query;
+            body?: undefined;
+        } & import("./types.js").TRequestOptions<import("./modules/streams.js").read$return>) => {
+            readonly raw: Promise<import("axios").AxiosResponse<import("./modules/streams.js").read$return, any, {}, any>>;
+            readonly data: Promise<import("./modules/streams.js").read$return>;
+            then: <TResult1 = import("./modules/streams.js").read$return, TResult2 = never>(onfulfilled?: ((value: import("./modules/streams.js").read$return) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+            catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<import("./modules/streams.js").read$return | TResult>;
+            finally: (onfinally?: (() => void) | null | undefined) => Promise<import("./modules/streams.js").read$return>;
+        };
+        readonly close: (data: {
+            params: import("./modules/streams.js").close$params;
+            query?: undefined;
+            body?: undefined;
+        } & import("./types.js").TRequestOptions<unknown>) => {
+            readonly raw: Promise<import("axios").AxiosResponse<unknown, any, {}, any>>;
+            readonly data: Promise<unknown>;
+            then: <TResult1 = unknown, TResult2 = never>(onfulfilled?: ((value: unknown) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+            catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<unknown>;
+            finally: (onfinally?: (() => void) | null | undefined) => Promise<unknown>;
+        };
+    };
     static wellKnown: {
         readonly type: {
             oauthServerMeta$params: import("./modules/.well-known.js").oauthServerMeta$params;

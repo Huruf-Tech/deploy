@@ -19,7 +19,10 @@ import (
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/agent"
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/commands"
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/identity"
+	"github.com/Huruf-Tech/huruf-deploy/agent/internal/metrics"
+	"github.com/Huruf-Tech/huruf-deploy/agent/internal/protocol"
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/state"
+	"github.com/Huruf-Tech/huruf-deploy/agent/internal/streams"
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/transport"
 )
 
@@ -61,6 +64,10 @@ func main() {
 
 	log.Info("huruf-deploy-agent starting", "version", version, "url", *url, "fingerprint", id.Fingerprint())
 
+	history := &metrics.Recorder{}
+	go history.Run(ctx)
+	streamManager := &streams.Manager{History: history}
+
 	a := &agent.Agent{
 		Tenant:    *tenant,
 		JoinToken: *joinToken,
@@ -68,9 +75,11 @@ func main() {
 		Identity:  id,
 		Client:    transport.New(*url, id),
 		Store:     store,
-		Commands:  commands.Default(),
+		Commands:  commands.Default(ctx, streamManager),
+		Streams:   streamManager,
 		Log:       log,
 	}
+	streamManager.Emit = func(event protocol.StreamChunkEvent) { a.Enqueue(event) }
 	if err := a.Run(ctx); err != nil {
 		log.Error("agent stopped", "error", err)
 		os.Exit(1)

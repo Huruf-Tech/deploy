@@ -8,7 +8,10 @@ export const syncDeployAccessControl = async () => {
   // Agents authenticate by signature inside the handlers, so the router is open to guests.
   await ACManager.resolvePolicy("public", ["agents"]);
 
-  const deploy = await ACManager.resolvePolicy("deploy", ["servers"]);
+  const deploy = await ACManager.resolvePolicy("deploy", [
+    "servers",
+    "streams",
+  ]);
   await ACManager.resolveRole("user", [deploy]);
 };
 

@@ -10,6 +10,7 @@ import { homeModule } from "./modules/home.ts";
 import { indexModule } from "./modules/index.ts";
 import { agentsModule } from "./modules/agents.ts";
 import { serversModule } from "./modules/servers.ts";
+import { streamsModule } from "./modules/streams.ts";
 import { wellKnownModule } from "./modules/.well-known.ts";
 import { accessControlModule } from "./modules/accessControl.ts";
 import { accessControlPoliciesModule } from "./modules/accessControlPolicies.ts";
@@ -37,6 +38,7 @@ export class ThunderSDK extends BaseSDK {
         "index",
         "agents",
         "servers",
+        "streams",
         "wellKnown",
         "accessControl",
         "accessControlPolicies",
@@ -60,6 +62,7 @@ export class ThunderSDK extends BaseSDK {
     static index = indexModule(this);
     static agents = agentsModule(this);
     static servers = serversModule(this);
+    static streams = streamsModule(this);
     static wellKnown = wellKnownModule(this);
     static accessControl = accessControlModule(this);
     static accessControlPolicies = accessControlPoliciesModule(this);

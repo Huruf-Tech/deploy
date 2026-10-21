@@ -851,6 +851,27 @@ Each phase ends with a **review checkpoint** (demo + code review + approval). Ph
   - The terminal echoes within about 1 s and runs `htop`.
   - Nothing remains in Mongo minutes after the views close.
   - Disk stays within caps.
+- **3a (done):** streams for logs, metrics and exec.
+  - **Transport:**
+    - Opening and closing a stream are commands (`stream.open` / `stream.close`), so the poll path is unchanged.
+    - Output travels as `stream.chunk` events, sent by the agent every 500 ms independently of polling.
+    - Chunks expire after 2 min. A closed session expires 2 min after closing.
+  - **Idle and silent views:**
+    - Unwatched sessions close when chunks arrive (`SAFETY_STREAM_IDLE_SEC`).
+    - Silent streams send a 15 s keepalive (not stored), so abandoned views of quiet containers close too.
+  - **Agent limits:**
+    - output batched every 500 ms or 32 KB, capped at `SAFETY_STREAM_BYTES_PER_SEC` with a visible truncation marker;
+    - at most 16 sessions.
+  - **Metrics:** the agent keeps 24 h at 1-minute resolution in a ring, plus live 2 s samples with per-container stats.
+  - **Permissions:** separate handlers per kind (`openLogs`, `openMetrics`, `openExec`), so RBAC can withhold exec. The default `deploy` policy grants all of them for now.
+  - **UI:** a server detail page (stat tiles, CPU and memory charts, a containers table) and a logs sheet (virtualized, 10k lines, follow).
+  - **Verified on a real VM:**
+    - log lag 2.1 s;
+    - exec output and exit codes;
+    - real container stats;
+    - idle close;
+    - session and chunks gone about 3 min after closing.
+- **3b (next):** the terminal.
 
 ### Phase 4 — Variables manager
 - Scopes (global per user), precedence, references, secrets, reveal auditing, `file`/`build` kinds, external `resolve` with API keys, SDK.

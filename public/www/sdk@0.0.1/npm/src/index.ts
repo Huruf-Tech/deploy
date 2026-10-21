@@ -10,6 +10,7 @@ import { homeModule } from "./modules/home.js";
 import { indexModule } from "./modules/index.js";
 import { agentsModule } from "./modules/agents.js";
 import { serversModule } from "./modules/servers.js";
+import { streamsModule } from "./modules/streams.js";
 import { wellKnownModule } from "./modules/.well-known.js";
 import { accessControlModule } from "./modules/accessControl.js";
 import { accessControlPoliciesModule } from "./modules/accessControlPolicies.js";
@@ -37,6 +38,7 @@ export class ThunderSDK extends BaseSDK {
         "index",
         "agents",
         "servers",
+        "streams",
         "wellKnown",
         "accessControl",
         "accessControlPolicies",
@@ -60,6 +62,7 @@ export class ThunderSDK extends BaseSDK {
     static index = indexModule(this);
     static agents = agentsModule(this);
     static servers = serversModule(this);
+    static streams = streamsModule(this);
     static wellKnown = wellKnownModule(this);
     static accessControl = accessControlModule(this);
     static accessControlPolicies = accessControlPoliciesModule(this);

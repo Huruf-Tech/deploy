@@ -12,6 +12,10 @@ import {
 } from "@/schemas/infrastructure/agentCommand.ts";
 import { SHARD_COUNT } from "@/lib/agents/sweep.ts";
 import { bootstrapSessionModel } from "@/schemas/infrastructure/bootstrapSession.ts";
+import {
+  streamChunkModel,
+  streamSessionModel,
+} from "@/schemas/infrastructure/stream.ts";
 
 /** Every Huruf Deploy index lives here (PLAN §6). Run by setup, never at startup. */
 export const syncDeployIndexes = async () => {
@@ -86,6 +90,22 @@ export const syncDeployIndexes = async () => {
       { name: "uniqueEvent", unique: true },
     ),
     agentEventModel.createIndex(
+      { expiresAt: 1 },
+      { name: "ttl", expireAfterSeconds: 0 },
+    ),
+    streamSessionModel.createIndex(
+      { tenant: 1, status: 1 },
+      { name: "tenantOpen" },
+    ),
+    streamSessionModel.createIndex(
+      { expiresAt: 1 },
+      { name: "ttl", expireAfterSeconds: 0 },
+    ),
+    streamChunkModel.createIndex(
+      { session: 1, seq: 1 },
+      { name: "uniqueSeq", unique: true },
+    ),
+    streamChunkModel.createIndex(
       { expiresAt: 1 },
       { name: "ttl", expireAfterSeconds: 0 },
     ),

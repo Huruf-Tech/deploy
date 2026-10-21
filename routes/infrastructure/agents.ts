@@ -11,6 +11,7 @@ import { installerScript } from "@/lib/agents/bootstrap.ts";
 import {
   $agentConfigResponse,
   $eventsRequest,
+  $eventsResponse,
   $helloRequest,
   $helloResponse,
   $pollRequest,
@@ -81,7 +82,7 @@ export default new Router("/api", function agents(router) {
   });
 
   router.post("/events", function events() {
-    const $return = z.object({ applied: z.number() });
+    const $return = $eventsResponse;
 
     return {
       shape: () => ({ body: $eventsRequest, return: $return }),

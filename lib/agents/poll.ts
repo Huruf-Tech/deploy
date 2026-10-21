@@ -11,11 +11,14 @@ import {
   agentCommandModel,
   agentEventModel,
 } from "@/schemas/infrastructure/agentCommand.ts";
+import type z from "zod";
 import type {
+  $commandResultEvent,
   TAgentEvent,
   TCommand,
   TPollRequest,
 } from "@/schemas/protocol/agent.ts";
+import { ingestChunks } from "@/lib/agents/streams.ts";
 
 const COMMAND_BATCH = 50;
 const EVENT_TTL_MS = 60 * 60_000;
@@ -165,12 +168,12 @@ const refuse = async (
 };
 
 /**
- * `POST /agents/api/events`: idempotent by event id. Duplicates (agent retries)
+ * Command results: idempotent by event id. Duplicates (agent retries)
  * are dropped by the unique index, so nothing is applied twice.
  */
-export const ingestEvents = async (
+const ingestCommandResults = async (
   identity: TAgentIdentity,
-  events: TAgentEvent[],
+  events: z.output<typeof $commandResultEvent>[],
 ) => {
   const now = new Date();
   let duplicates = new Set<number>();
@@ -193,7 +196,7 @@ export const ingestEvents = async (
   }
 
   const fresh = events.filter((_, index) => !duplicates.has(index));
-  if (!fresh.length) return { applied: 0 };
+  if (!fresh.length) return 0;
 
   await agentCommandModel.bulkWrite(
     fresh.map((event) => ({
@@ -229,5 +232,20 @@ export const ingestEvents = async (
     await recordHostSetup(identity.server, event.data);
   }
 
-  return { applied: fresh.length };
+  return fresh.length;
+};
+
+/** `POST /agents/api/events`: command results and stream output, batched. */
+export const ingestEvents = async (
+  identity: TAgentIdentity,
+  events: TAgentEvent[],
+) => {
+  const results = events.filter((e) => e.type === "command.result");
+  const chunks = events.filter((e) => e.type === "stream.chunk");
+
+  const [applied, streams] = await Promise.all([
+    results.length ? ingestCommandResults(identity, results) : 0,
+    ingestChunks(identity, chunks),
+  ]);
+  return { applied: applied + streams.applied, close: streams.close };
 };

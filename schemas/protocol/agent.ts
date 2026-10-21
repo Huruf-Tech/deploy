@@ -74,7 +74,46 @@ export const $helloResponse = $agentConfigResponse.extend({
   nextPollMs: z.number().int(),
 });
 
-export const $commandType = z.enum(["ping", "docker.ensure"]);
+export const $commandType = z.enum([
+  "ping",
+  "docker.ensure",
+  "stream.open",
+  "stream.close",
+]);
+
+export const $streamKind = z.enum(["logs", "metrics", "exec"]);
+
+/** `stream.open` payload (PLAN §3.6). Output comes back as `stream.chunk` events. */
+export const $streamOpenPayload = z.object({
+  session: z.string(),
+  kind: $streamKind,
+  params: z.record(z.string(), z.unknown()),
+  maxBytesPerSec: z.number().int().min(1024).describe(
+    "Output above this rate is dropped and marked as truncated",
+  ),
+});
+
+export const $streamClosePayload = z.object({ session: z.string() });
+
+/** One metrics point; `metrics` stream chunks carry a JSON array of these. */
+export const $metricsSample = z.object({
+  t: z.number().int().describe("Unix time in milliseconds"),
+  cpu: z.number().describe("Used fraction, 0..1"),
+  memUsed: z.number().int(),
+  memTotal: z.number().int(),
+  diskUsed: z.number().int(),
+  diskTotal: z.number().int(),
+  netRx: z.number().describe("Bytes per second"),
+  netTx: z.number().describe("Bytes per second"),
+  containers: z.array(z.object({
+    id: z.string(),
+    name: z.string(),
+    image: z.string(),
+    state: z.string(),
+    cpu: z.number().describe("Used fraction of one host, 0..1"),
+    mem: z.number().int(),
+  })).optional().describe("Live samples only; history points omit it"),
+});
 
 /** `docker.ensure` payload: host setup values decided by the control plane. */
 export const $dockerEnsurePayload = z.object({
@@ -130,10 +169,32 @@ export const $commandResultEvent = z.object({
   }),
 });
 
-export const $agentEvent = z.discriminatedUnion("type", [$commandResultEvent]);
+export const $streamChunkEvent = z.object({
+  id: z.string().min(1).max(64),
+  type: z.literal("stream.chunk"),
+  data: z.object({
+    session: z.string(),
+    seq: z.number().int().min(1),
+    data: z.string().max(64 * 1024),
+    done: z.boolean().optional().describe("The stream ended (exec finished)"),
+    error: z.string().max(500).optional(),
+  }),
+});
+
+export const $agentEvent = z.discriminatedUnion("type", [
+  $commandResultEvent,
+  $streamChunkEvent,
+]);
 
 export const $eventsRequest = z.object({
   events: z.array($agentEvent).min(1).max(64),
+});
+
+export const $eventsResponse = z.object({
+  applied: z.number().int(),
+  close: z.array(z.string()).describe(
+    "Stream sessions nobody is watching any more: stop them",
+  ),
 });
 
 export type TAgentConfig = z.output<typeof $agentConfig>;

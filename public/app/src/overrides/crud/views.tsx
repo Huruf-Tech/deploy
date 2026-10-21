@@ -1,6 +1,6 @@
 import type { TViewsOverride } from "@/core/types"
+import ServerDetail from "@/pages/servers/ServerDetail"
 
 export const views: TViewsOverride = {
-  // Add your custom detail components here
-  // E.g: posts: PostDetails
+  servers: ServerDetail,
 }

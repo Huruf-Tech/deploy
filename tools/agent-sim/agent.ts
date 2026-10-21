@@ -49,6 +49,45 @@ export const createState = async (hostname: string): Promise<TState> => {
   };
 };
 
+/** One burst of output per stream kind, so the UI and tests have something to show. */
+const simulatedStream = (payload: Record<string, unknown>): TAgentEvent[] => {
+  const session = String(payload.session);
+  const chunk = (seq: number, data: string, done?: boolean): TAgentEvent => ({
+    id: `stream-${session}-${seq}`,
+    type: "stream.chunk",
+    data: { session, seq, data, done },
+  });
+
+  switch (payload.kind) {
+    case "metrics":
+      return [chunk(1, JSON.stringify([{
+        t: Date.now(),
+        cpu: 0.12,
+        memUsed: 2 * 2 ** 30,
+        memTotal: 8 * 2 ** 30,
+        diskUsed: 20 * 2 ** 30,
+        diskTotal: 80 * 2 ** 30,
+        netRx: 1_000,
+        netTx: 500,
+        containers: [{
+          id: "sim1",
+          name: "huruf-edge",
+          image: "caddy:2-alpine",
+          state: "running",
+          cpu: 0.01,
+          mem: 30 * 2 ** 20,
+        }],
+      }]))];
+    case "exec":
+      return [chunk(1, "simulated exec output\n", true)];
+    default:
+      return [
+        chunk(1, `${new Date().toISOString()} simulated log line 1\n`),
+        chunk(2, `${new Date().toISOString()} simulated log line 2\n`),
+      ];
+  }
+};
+
 export class SimAgent {
   private privateKey?: CryptoKey;
   private fingerprint?: string;
@@ -182,6 +221,9 @@ export class SimAgent {
             : { pong: Date.now() },
         },
       });
+      if (command.type === "stream.open") {
+        events.push(...simulatedStream(command.payload));
+      }
     }
 
     if (commands.length) await this.opts.onStateChange?.(this.state);

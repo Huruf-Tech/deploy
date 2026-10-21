@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/dockerhost"
+	"github.com/Huruf-Tech/huruf-deploy/agent/internal/protocol"
+	"github.com/Huruf-Tech/huruf-deploy/agent/internal/streams"
 )
 
 type Handler func(ctx context.Context, payload map[string]any) (map[string]any, error)
@@ -34,17 +36,33 @@ func decode[T any](payload map[string]any) (T, error) {
 	return value, err
 }
 
-func Default() Registry {
+// handle wraps a typed handler so each command declares its payload once.
+func handle[T any](fn func(context.Context, T) (map[string]any, error)) Handler {
+	return func(ctx context.Context, payload map[string]any) (map[string]any, error) {
+		p, err := decode[T](payload)
+		if err != nil {
+			return nil, fmt.Errorf("invalid payload: %w", err)
+		}
+		return fn(ctx, p)
+	}
+}
+
+// Default is the agent's command set. `ctx` outlives single commands, so
+// streams keep running after their `stream.open` command has finished.
+func Default(ctx context.Context, s *streams.Manager) Registry {
 	return Registry{
 		"ping": func(context.Context, map[string]any) (map[string]any, error) {
 			return map[string]any{"pong": time.Now().UnixMilli()}, nil
 		},
-		"docker.ensure": func(ctx context.Context, payload map[string]any) (map[string]any, error) {
-			p, err := decode[dockerhost.Payload](payload)
-			if err != nil {
-				return nil, fmt.Errorf("invalid payload: %w", err)
-			}
+		"docker.ensure": handle(func(ctx context.Context, p dockerhost.Payload) (map[string]any, error) {
 			return dockerhost.Ensure(ctx, p)
-		},
+		}),
+		"stream.open": handle(func(_ context.Context, p protocol.StreamOpenPayload) (map[string]any, error) {
+			return map[string]any{"started": true}, s.Open(ctx, p)
+		}),
+		"stream.close": handle(func(_ context.Context, p protocol.StreamClosePayload) (map[string]any, error) {
+			s.Close(p.Session)
+			return map[string]any{"closed": true}, nil
+		}),
 	}
 }

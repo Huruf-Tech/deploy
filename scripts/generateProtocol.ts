@@ -30,6 +30,11 @@ const MESSAGES: Array<[string, z.ZodType, "input" | "output"]> = [
   ["PollResponse", protocol.$pollResponse, "output"],
   ["PollRefusal", protocol.$pollRefusal, "output"],
   ["CommandResultEvent", protocol.$commandResultEvent, "input"],
+  ["StreamChunkEvent", protocol.$streamChunkEvent, "input"],
+  ["EventsResponse", protocol.$eventsResponse, "output"],
+  ["StreamOpenPayload", protocol.$streamOpenPayload, "output"],
+  ["StreamClosePayload", protocol.$streamClosePayload, "output"],
+  ["MetricsSample", protocol.$metricsSample, "input"],
   ["EventsRequest", protocol.$eventsRequest, "input"],
 ];
 

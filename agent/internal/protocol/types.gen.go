@@ -122,7 +122,7 @@ type PollResponse struct {
 type Command struct {
 	Seq int64 `json:"seq"`
 
-	// One of: ping, docker.ensure
+	// One of: ping, docker.ensure, stream.open, stream.close
 	Type string `json:"type"`
 
 	Payload map[string]any `json:"payload"`
@@ -154,6 +154,91 @@ type CommandResultEventData struct {
 	Result map[string]any `json:"result,omitempty"`
 
 	Error string `json:"error,omitempty"`
+}
+
+type StreamChunkEvent struct {
+	Id string `json:"id"`
+
+	// Always "stream.chunk"
+	Type string `json:"type"`
+
+	Data StreamChunkEventData `json:"data"`
+}
+
+type StreamChunkEventData struct {
+	Session string `json:"session"`
+
+	Seq int64 `json:"seq"`
+
+	Data string `json:"data"`
+
+	// The stream ended (exec finished)
+	Done *bool `json:"done,omitempty"`
+
+	Error string `json:"error,omitempty"`
+}
+
+type EventsResponse struct {
+	Applied int64 `json:"applied"`
+
+	// Stream sessions nobody is watching any more: stop them
+	Close []string `json:"close"`
+}
+
+type StreamOpenPayload struct {
+	Session string `json:"session"`
+
+	// One of: logs, metrics, exec
+	Kind string `json:"kind"`
+
+	Params map[string]any `json:"params"`
+
+	// Output above this rate is dropped and marked as truncated
+	MaxBytesPerSec int64 `json:"maxBytesPerSec"`
+}
+
+type StreamClosePayload struct {
+	Session string `json:"session"`
+}
+
+type MetricsSample struct {
+	// Unix time in milliseconds
+	T int64 `json:"t"`
+
+	// Used fraction, 0..1
+	Cpu float64 `json:"cpu"`
+
+	MemUsed int64 `json:"memUsed"`
+
+	MemTotal int64 `json:"memTotal"`
+
+	DiskUsed int64 `json:"diskUsed"`
+
+	DiskTotal int64 `json:"diskTotal"`
+
+	// Bytes per second
+	NetRx float64 `json:"netRx"`
+
+	// Bytes per second
+	NetTx float64 `json:"netTx"`
+
+	// Live samples only; history points omit it
+	Containers []MetricsSampleContainersItem `json:"containers,omitempty"`
+}
+
+type MetricsSampleContainersItem struct {
+	Id string `json:"id"`
+
+	Name string `json:"name"`
+
+	Image string `json:"image"`
+
+	State string `json:"state"`
+
+	// Used fraction of one host, 0..1
+	Cpu float64 `json:"cpu"`
+
+	Mem int64 `json:"mem"`
 }
 
 type EventsRequest struct {

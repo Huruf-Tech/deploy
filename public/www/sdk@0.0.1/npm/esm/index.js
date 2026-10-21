@@ -9,6 +9,7 @@ import { homeModule } from "./modules/home.js";
 import { indexModule } from "./modules/index.js";
 import { agentsModule } from "./modules/agents.js";
 import { serversModule } from "./modules/servers.js";
+import { streamsModule } from "./modules/streams.js";
 import { wellKnownModule } from "./modules/.well-known.js";
 import { accessControlModule } from "./modules/accessControl.js";
 import { accessControlPoliciesModule } from "./modules/accessControlPolicies.js";
@@ -105,6 +106,7 @@ Object.defineProperty(ThunderSDK, "_moduleNames", {
         "index",
         "agents",
         "servers",
+        "streams",
         "wellKnown",
         "accessControl",
         "accessControlPolicies",
@@ -147,6 +149,12 @@ Object.defineProperty(ThunderSDK, "servers", {
     configurable: true,
     writable: true,
     value: serversModule(_a)
+});
+Object.defineProperty(ThunderSDK, "streams", {
+    enumerable: true,
+    configurable: true,
+    writable: true,
+    value: streamsModule(_a)
 });
 Object.defineProperty(ThunderSDK, "wellKnown", {
     enumerable: true,

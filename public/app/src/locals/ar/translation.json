@@ -56,5 +56,19 @@
   "Preparing host…": "جارٍ تجهيز الخادم…",
   "Docker {{version}}": "Docker الإصدار {{version}}",
   "{{count}} host warnings": "{{count}} تحذيرات للخادم",
-  "Host setup restarted": "أُعيد بدء تجهيز الخادم"
+  "Host setup restarted": "أُعيد بدء تجهيز الخادم",
+  "Waiting for output…": "بانتظار المخرجات…",
+  "Follow": "متابعة",
+  "The container stopped.": "توقف الحاوية.",
+  "Live, refreshed every second.": "مباشر، يتحدث كل ثانية.",
+  "Logs stay on the server; they are streamed only while open.": "تبقى السجلات على الخادم ولا تُبث إلا أثناء فتحها.",
+  "Network": "الشبكة",
+  "Containers": "الحاويات",
+  "No containers yet. They appear here once the host is prepared and projects are deployed.": "لا توجد حاويات بعد. ستظهر هنا بعد تجهيز الخادم ونشر المشاريع.",
+  "Name": "الاسم",
+  "Container image": "صورة الحاوية",
+  "State": "الحالة",
+  "Logs": "السجلات",
+  "Live data needs the server online": "تتطلب البيانات المباشرة أن يكون الخادم متصلًا",
+  "Metrics and logs stay on the server and are streamed only while it is connected.": "تبقى المقاييس والسجلات على الخادم ولا تُبث إلا أثناء اتصاله."
 }

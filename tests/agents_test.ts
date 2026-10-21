@@ -13,6 +13,11 @@ import { tenantUsageModel } from "@/schemas/limits/tenantUsage.ts";
 import { tenantModel } from "@/plugins/Huruf-Tech/thunder-core/schemas/tenant.ts";
 import { bootstrapSessionModel } from "@/schemas/infrastructure/bootstrapSession.ts";
 import { createHash, SupportedHashAlg } from "@/core/utils/hash.ts";
+import { openStream, readStream } from "@/lib/agents/streams.ts";
+import {
+  streamChunkModel,
+  streamSessionModel,
+} from "@/schemas/infrastructure/stream.ts";
 
 // End-to-end over the real handler, in process (needs MongoDB + `deno task setup:dev`).
 
@@ -143,6 +148,46 @@ Deno.test({
         },
       );
 
+      await t.step(
+        "streams: output reaches readers; idle and foreign sessions are refused",
+        async () => {
+          const session = await openStream({
+            tenant,
+            server,
+            user: user._id,
+            kind: "logs",
+            params: { container: "web", tail: 10 },
+          });
+
+          // The agent picks up stream.open on its next poll and sends output.
+          await poll();
+          const { chunks } = await readStream(session, tenant, 0);
+          assertEquals(chunks.map((c) => c.seq), [1, 2]);
+          assert(chunks[0].data.includes("simulated log line"));
+
+          // Another tenant cannot read it.
+          const foreign = await readStream(session, new ObjectId(), 0)
+            .catch((r: Response) => r.status);
+          assertEquals(foreign, 404);
+
+          // A session nobody reads any more is closed, and the agent is told to stop.
+          await streamSessionModel.updateOne({ _id: session }, {
+            $set: { lastReadAt: new Date(Date.now() - 60_000) },
+          });
+          const late = await agent.sendEvents([{
+            id: `late-${session}`,
+            type: "stream.chunk",
+            data: { session: session.toHexString(), seq: 3, data: "late\n" },
+          }]);
+          assertEquals(late.json.close, [session.toHexString()]);
+          assertEquals(late.json.applied, 0);
+          assertEquals(
+            (await streamSessionModel.findOne({ _id: session }))?.status,
+            "closed",
+          );
+        },
+      );
+
       await t.step("duplicate events are not applied twice", async () => {
         const event = {
           id: "dup-1",
@@ -234,6 +279,9 @@ Deno.test({
     } finally {
       await Promise.all([
         bootstrapSessionModel.deleteMany({ tenant }),
+        streamSessionModel.find({ tenant }).toArray().then((s) =>
+          streamChunkModel.deleteMany({ session: { $in: s.map((x) => x._id) } })
+        ).then(() => streamSessionModel.deleteMany({ tenant })),
         tenantModel.deleteOne({ _id: tenant }),
         serverModel.deleteMany({ tenant }),
         serverLeaseModel.deleteMany({ tenant }),

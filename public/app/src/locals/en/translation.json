@@ -56,5 +56,19 @@
   "Preparing host…": "Preparing host…",
   "Docker {{version}}": "Docker {{version}}",
   "{{count}} host warnings": "{{count}} host warnings",
-  "Host setup restarted": "Host setup restarted"
+  "Host setup restarted": "Host setup restarted",
+  "Waiting for output…": "Waiting for output…",
+  "Follow": "Follow",
+  "The container stopped.": "The container stopped.",
+  "Live, refreshed every second.": "Live, refreshed every second.",
+  "Logs stay on the server; they are streamed only while open.": "Logs stay on the server; they are streamed only while open.",
+  "Network": "Network",
+  "Containers": "Containers",
+  "No containers yet. They appear here once the host is prepared and projects are deployed.": "No containers yet. They appear here once the host is prepared and projects are deployed.",
+  "Name": "Name",
+  "Container image": "Container image",
+  "State": "State",
+  "Logs": "Logs",
+  "Live data needs the server online": "Live data needs the server online",
+  "Metrics and logs stay on the server and are streamed only while it is connected.": "Metrics and logs stay on the server and are streamed only while it is connected."
 }

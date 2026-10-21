@@ -332,7 +332,9 @@
                 "type": "string",
                 "enum": [
                   "ping",
-                  "docker.ensure"
+                  "docker.ensure",
+                  "stream.open",
+                  "stream.close"
                 ]
               },
               "payload": {
@@ -436,6 +438,221 @@
         "data"
       ]
     },
+    "StreamChunkEvent": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "type": {
+          "type": "string",
+          "const": "stream.chunk"
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "session": {
+              "type": "string"
+            },
+            "seq": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            },
+            "data": {
+              "type": "string",
+              "maxLength": 65536
+            },
+            "done": {
+              "description": "The stream ended (exec finished)",
+              "type": "boolean"
+            },
+            "error": {
+              "type": "string",
+              "maxLength": 500
+            }
+          },
+          "required": [
+            "session",
+            "seq",
+            "data"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "type",
+        "data"
+      ]
+    },
+    "EventsResponse": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "applied": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "close": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Stream sessions nobody is watching any more: stop them"
+        }
+      },
+      "required": [
+        "applied",
+        "close"
+      ],
+      "additionalProperties": false
+    },
+    "StreamOpenPayload": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "session": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "logs",
+            "metrics",
+            "exec"
+          ]
+        },
+        "params": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {}
+        },
+        "maxBytesPerSec": {
+          "type": "integer",
+          "minimum": 1024,
+          "maximum": 9007199254740991,
+          "description": "Output above this rate is dropped and marked as truncated"
+        }
+      },
+      "required": [
+        "session",
+        "kind",
+        "params",
+        "maxBytesPerSec"
+      ],
+      "additionalProperties": false
+    },
+    "StreamClosePayload": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "session": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "session"
+      ],
+      "additionalProperties": false
+    },
+    "MetricsSample": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "t": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991,
+          "description": "Unix time in milliseconds"
+        },
+        "cpu": {
+          "type": "number",
+          "description": "Used fraction, 0..1"
+        },
+        "memUsed": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "memTotal": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "diskUsed": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "diskTotal": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "netRx": {
+          "type": "number",
+          "description": "Bytes per second"
+        },
+        "netTx": {
+          "type": "number",
+          "description": "Bytes per second"
+        },
+        "containers": {
+          "description": "Live samples only; history points omit it",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "image": {
+                "type": "string"
+              },
+              "state": {
+                "type": "string"
+              },
+              "cpu": {
+                "type": "number",
+                "description": "Used fraction of one host, 0..1"
+              },
+              "mem": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "image",
+              "state",
+              "cpu",
+              "mem"
+            ]
+          }
+        }
+      },
+      "required": [
+        "t",
+        "cpu",
+        "memUsed",
+        "memTotal",
+        "diskUsed",
+        "diskTotal",
+        "netRx",
+        "netTx"
+      ]
+    },
     "EventsRequest": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "object",
@@ -484,6 +701,55 @@
                     "required": [
                       "seq",
                       "ok"
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "type",
+                  "data"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64
+                  },
+                  "type": {
+                    "type": "string",
+                    "const": "stream.chunk"
+                  },
+                  "data": {
+                    "type": "object",
+                    "properties": {
+                      "session": {
+                        "type": "string"
+                      },
+                      "seq": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 9007199254740991
+                      },
+                      "data": {
+                        "type": "string",
+                        "maxLength": 65536
+                      },
+                      "done": {
+                        "description": "The stream ended (exec finished)",
+                        "type": "boolean"
+                      },
+                      "error": {
+                        "type": "string",
+                        "maxLength": 500
+                      }
+                    },
+                    "required": [
+                      "session",
+                      "seq",
+                      "data"
                     ]
                   }
                 },

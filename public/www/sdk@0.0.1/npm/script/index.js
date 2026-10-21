@@ -12,6 +12,7 @@ const home_js_1 = require("./modules/home.js");
 const index_js_1 = require("./modules/index.js");
 const agents_js_1 = require("./modules/agents.js");
 const servers_js_1 = require("./modules/servers.js");
+const streams_js_1 = require("./modules/streams.js");
 const _well_known_js_1 = require("./modules/.well-known.js");
 const accessControl_js_1 = require("./modules/accessControl.js");
 const accessControlPolicies_js_1 = require("./modules/accessControlPolicies.js");
@@ -109,6 +110,7 @@ Object.defineProperty(ThunderSDK, "_moduleNames", {
         "index",
         "agents",
         "servers",
+        "streams",
         "wellKnown",
         "accessControl",
         "accessControlPolicies",
@@ -151,6 +153,12 @@ Object.defineProperty(ThunderSDK, "servers", {
     configurable: true,
     writable: true,
     value: (0, servers_js_1.serversModule)(_a)
+});
+Object.defineProperty(ThunderSDK, "streams", {
+    enumerable: true,
+    configurable: true,
+    writable: true,
+    value: (0, streams_js_1.streamsModule)(_a)
 });
 Object.defineProperty(ThunderSDK, "wellKnown", {
     enumerable: true,

@@ -57,7 +57,7 @@ export type poll$return = {
     configVersion: string;
     commands: {
         seq: number;
-        type: "ping" | "docker.ensure";
+        type: "ping" | "docker.ensure" | "stream.open" | "stream.close";
         payload: Record<string, unknown>;
     }[];
 };
@@ -84,10 +84,23 @@ export type events$body = {
             result?: Record<string, unknown> | undefined;
             error?: string | undefined;
         };
+    } | {
+        id: string;
+        type: "stream.chunk";
+        data: {
+            session: string;
+            seq: number;
+            data: string;
+            /** The stream ended (exec finished) */
+            done?: boolean | undefined;
+            error?: string | undefined;
+        };
     })[];
 };
 export type events$return = {
     applied: number;
+    /** Stream sessions nobody is watching any more: stop them */
+    close: string[];
 };
 export declare const agentsModule: (sdk: typeof BaseSDK) => {
     readonly type: {

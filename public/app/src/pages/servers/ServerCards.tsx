@@ -1,6 +1,6 @@
 import * as React from "react"
-import z from "zod"
 import { useTranslation } from "react-i18next"
+import { Link } from "react-router"
 import { ThunderSDK } from "thunder-sdk"
 import { formatDistanceToNow } from "date-fns"
 import { toast } from "sonner"
@@ -44,106 +44,15 @@ import { cn } from "@/lib/utils"
 import { AcceptServerDialog } from "./AcceptServerDialog"
 import { AddServerButton } from "./AddServerButton"
 import { onServersChanged } from "./events"
-
-const serverSchema = z.object({
-  _id: z.string(),
-  name: z.string(),
-  status: z.enum(["pending", "active", "rejected"]),
-  pairingExpiresAt: z.coerce.date().optional(),
-  inventory: z.object({
-    hostname: z.string(),
-    os: z.string(),
-    arch: z.string(),
-    cpuCores: z.number(),
-    memory: z.number(),
-    disk: z.number(),
-    agentVersion: z.string(),
-  }),
-  resources: z
-    .object({ cpu: z.number(), memFree: z.number(), diskFree: z.number() })
-    .optional(),
-  setup: z
-    .object({
-      status: z.enum(["pending", "ready", "failed"]),
-      dockerVersion: z.string().optional(),
-      checks: z
-        .array(
-          z.object({ name: z.string(), ok: z.boolean(), detail: z.string() })
-        )
-        .optional(),
-      error: z.string().optional(),
-    })
-    .optional(),
-})
-
-type TServer = z.infer<typeof serverSchema>
-type TLiveness = Awaited<ReturnType<typeof ThunderSDK.servers.liveness>>
-type TState = "pending" | "online" | "offline" | "rejected"
-
-const gib = (bytes: number) => `${(bytes / 2 ** 30).toFixed(1)} GiB`
-
-const stateOf = (server: TServer, live?: TLiveness[number]): TState =>
-  server.status === "active"
-    ? live?.online
-      ? "online"
-      : "offline"
-    : server.status
-
-const STATE_STYLE: Record<TState, { dot: string; pill: string; tile: string }> =
-  {
-    online: {
-      dot: "bg-success",
-      pill: "bg-success/10 text-success",
-      tile: "bg-primary/10 text-primary",
-    },
-    offline: {
-      dot: "bg-muted-foreground",
-      pill: "bg-muted text-muted-foreground",
-      tile: "bg-muted text-muted-foreground",
-    },
-    pending: {
-      dot: "bg-warning",
-      pill: "bg-warning/15 text-foreground",
-      tile: "bg-warning/15 text-foreground",
-    },
-    rejected: {
-      dot: "bg-destructive",
-      pill: "bg-destructive/10 text-destructive",
-      tile: "bg-destructive/10 text-destructive",
-    },
-  }
-
-function StatusPill({ state }: { state: TState }) {
-  const { t } = useTranslation()
-  const label = {
-    online: t("Online"),
-    offline: t("Offline"),
-    pending: t("Waiting for approval"),
-    rejected: t("Rejected"),
-  }[state]
-
-  return (
-    <span
-      className={cn(
-        "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium",
-        STATE_STYLE[state].pill
-      )}
-    >
-      <span className="relative flex size-2">
-        {state === "online" && (
-          <span className="absolute inline-flex size-full rounded-full bg-success opacity-60 motion-safe:animate-ping" />
-        )}
-        <span
-          className={cn(
-            "relative inline-flex size-2 rounded-full",
-            STATE_STYLE[state].dot
-          )}
-        />
-      </span>
-      {label}
-    </span>
-  )
-}
+import { StatusPill } from "./StatusPill"
+import {
+  gib,
+  serverSchema,
+  stateOf,
+  STATE_STYLE,
+  type TLiveness,
+  type TServer,
+} from "./server"
 
 function Chip({
   icon: Icon,
@@ -203,7 +112,7 @@ function ServerCard({
   onPrepare,
 }: {
   server: TServer
-  live?: TLiveness[number]
+  live?: TLiveness
   onAccept: () => void
   onReject: () => void
   onPing: () => void
@@ -233,7 +142,15 @@ function ServerCard({
             <IconServer2 className="size-5" aria-hidden />
           </div>
           <div className="min-w-0">
-            <CardTitle className="truncate">{server.name}</CardTitle>
+            <CardTitle className="truncate">
+              <Link
+                to={`./${server._id}`}
+                state={{ name: server.name }}
+                className="hover:underline focus-visible:underline"
+              >
+                {server.name}
+              </Link>
+            </CardTitle>
             <CardDescription className="truncate font-mono text-xs">
               {inventory.hostname}
             </CardDescription>
@@ -378,9 +295,9 @@ function AddServerHint() {
 
 export default function ServerCards({ data, isLoading, fetcher }: TCardProps) {
   const { t } = useTranslation()
-  const [liveness, setLiveness] = React.useState<
-    Map<string, TLiveness[number]>
-  >(new Map())
+  const [liveness, setLiveness] = React.useState<Map<string, TLiveness>>(
+    new Map()
+  )
   const [accepting, setAccepting] = React.useState<TServer | null>(null)
 
   const refetch = React.useCallback(() => {
