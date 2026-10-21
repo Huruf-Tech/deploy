@@ -52,6 +52,17 @@ export type get$return = {
             diskFree: number;
             reportedAt: Date;
         } | undefined;
+        setup?: {
+            status: "pending" | "ready" | "failed";
+            dockerVersion?: string | undefined;
+            checks?: {
+                name: string;
+                ok: boolean;
+                detail: string;
+            }[] | undefined;
+            error?: string | undefined;
+            updatedAt: Date;
+        } | undefined;
         acceptedBy?: string | undefined;
         acceptedAt?: Date | undefined;
         createdAt: Date;
@@ -76,6 +87,13 @@ export type accept$body = {
 };
 export type reject$params = {
     id?: string;
+};
+export type prepare$params = {
+    id?: string;
+};
+export type prepare$return = {
+    command: string;
+    seq: number;
 };
 export type ping$params = {
     id?: string;
@@ -129,6 +147,8 @@ export declare const serversModule: (sdk: typeof BaseSDK) => {
         accept$params: accept$params;
         accept$body: accept$body;
         reject$params: reject$params;
+        prepare$params: prepare$params;
+        prepare$return: prepare$return;
         ping$params: ping$params;
         ping$return: ping$return;
         bootstrap$body: bootstrap$body;
@@ -203,6 +223,17 @@ export declare const serversModule: (sdk: typeof BaseSDK) => {
         then: <TResult1 = unknown, TResult2 = never>(onfulfilled?: ((value: unknown) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
         catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<unknown>;
         finally: (onfinally?: (() => void) | null | undefined) => Promise<unknown>;
+    };
+    readonly prepare: (data: {
+        params: prepare$params;
+        query?: undefined;
+        body?: undefined;
+    } & TRequestOptions<prepare$return>) => {
+        readonly raw: Promise<import("axios").AxiosResponse<prepare$return, any, {}, any>>;
+        readonly data: Promise<prepare$return>;
+        then: <TResult1 = prepare$return, TResult2 = never>(onfulfilled?: ((value: prepare$return) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+        catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<prepare$return | TResult>;
+        finally: (onfinally?: (() => void) | null | undefined) => Promise<prepare$return>;
     };
     readonly ping: (data: {
         params: ping$params;

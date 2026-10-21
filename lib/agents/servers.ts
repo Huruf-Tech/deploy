@@ -6,16 +6,15 @@ import { pairingCodeOf } from "@/lib/agents/signing.ts";
 import { forgetAgent } from "@/lib/agents/agentAuth.ts";
 import { shardOf } from "@/lib/agents/sweep.ts";
 import { getAgentConfig } from "@/lib/agents/config.ts";
+import { prepareHost, resumeHostSetup } from "@/lib/agents/commands.ts";
 import { serverModel } from "@/schemas/infrastructure/server.ts";
 import { serverLeaseModel } from "@/schemas/infrastructure/serverLease.ts";
-import { agentCommandModel } from "@/schemas/infrastructure/agentCommand.ts";
 import { bootstrapSessionModel } from "@/schemas/infrastructure/bootstrapSession.ts";
 import { createHash, SupportedHashAlg } from "@/core/utils/hash.ts";
 import { tenantModel } from "@/plugins/Huruf-Tech/thunder-core/schemas/tenant.ts";
 import type { THelloResponse, TInventory } from "@/schemas/protocol/agent.ts";
 
 const PAIRING_TTL_MS = 15 * 60_000;
-const COMMAND_TTL_MS = 6 * 60 * 60_000;
 
 const tooManyRequests = async (message: string) =>
   Response.json({
@@ -45,7 +44,13 @@ export const registerAgent = async (
     { "identity.fingerprint": fingerprint },
     { $set: { inventory: hello.inventory } },
     {
-      projection: { tenant: 1, status: 1, pairingCode: 1, pairingExpiresAt: 1 },
+      projection: {
+        tenant: 1,
+        status: 1,
+        pairingCode: 1,
+        pairingExpiresAt: 1,
+        "setup.status": 1,
+      },
     },
   );
 
@@ -61,6 +66,10 @@ export const registerAgent = async (
           $set: { server: existing._id },
         });
       }
+    }
+    // An agent that restarts mid-setup lost the running command: start it again.
+    if (existing.status === "active" && existing.setup?.status !== "ready") {
+      await resumeHostSetup(existing._id, existing.tenant);
     }
     return {
       server: existing._id.toString(),
@@ -198,6 +207,7 @@ const registerJoinedAgent = async (
   await bootstrapSessionModel.updateOne({ _id: session._id }, {
     $set: { server: insertedId },
   });
+  await prepareHost(insertedId, tenant, session.createdBy);
 
   return {
     server: insertedId.toString(),
@@ -283,6 +293,7 @@ export const acceptServer = async (opts: {
   }
 
   await openLease(opts.server, opts.tenant);
+  await prepareHost(opts.server, opts.tenant, opts.user._id);
 };
 
 export const rejectServer = async (server: ObjectId, tenant: ObjectId) => {
@@ -310,47 +321,6 @@ export const releaseServer = async (
 
   await quotaGuard.release(tenant, "servers", session);
   await serverLeaseModel.deleteOne({ _id: server }, { session });
-};
-
-export const issueCommand = async (opts: {
-  server: ObjectId;
-  tenant: ObjectId;
-  type: "ping";
-  payload?: Record<string, unknown>;
-  createdBy?: ObjectId;
-}) => {
-  const pending = await agentCommandModel.countDocuments({
-    server: opts.server,
-    status: "pending",
-  });
-  if (pending >= await safetyLimit("SAFETY_PENDING_COMMANDS_PER_SERVER")) {
-    throw Response.forbidden("Too many commands are waiting for this server");
-  }
-
-  const now = new Date();
-  const lease = await serverLeaseModel.findOneAndUpdate(
-    { _id: opts.server, tenant: opts.tenant, status: "active" },
-    {
-      $inc: { commandSeq: 1 },
-      $set: { fastPollUntil: new Date(now.getTime() + 30_000) },
-    },
-    { returnDocument: "after", projection: { commandSeq: 1 } },
-  );
-  if (!lease) throw Response.notFound("No active server with this id");
-
-  const { insertedId } = await agentCommandModel.insertOne({
-    tenant: opts.tenant,
-    server: opts.server,
-    seq: lease.commandSeq,
-    type: opts.type,
-    payload: opts.payload ?? {},
-    status: "pending",
-    createdBy: opts.createdBy,
-    createdAt: now,
-    expiresAt: new Date(now.getTime() + COMMAND_TTL_MS),
-  });
-
-  return { command: insertedId, seq: lease.commandSeq };
 };
 
 /** Online state for the dashboard: online means the lease has not expired. */

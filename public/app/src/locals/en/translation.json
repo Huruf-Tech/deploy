@@ -50,5 +50,11 @@
   "Install the agent": "Install the agent",
   "Agent registers": "Agent registers",
   "Server online": "Server online",
-  "Run this on the server (Ubuntu 22.04 or 24.04). It prints a pairing code; accept the server here with that code.": "Run this on the server (Ubuntu 22.04 or 24.04). It prints a pairing code; accept the server here with that code."
+  "Run this on the server (Ubuntu 22.04 or 24.04). It prints a pairing code; accept the server here with that code.": "Run this on the server (Ubuntu 22.04 or 24.04). It prints a pairing code; accept the server here with that code.",
+  "Host setup failed": "Host setup failed",
+  "Retry setup": "Retry setup",
+  "Preparing host…": "Preparing host…",
+  "Docker {{version}}": "Docker {{version}}",
+  "{{count}} host warnings": "{{count}} host warnings",
+  "Host setup restarted": "Host setup restarted"
 }

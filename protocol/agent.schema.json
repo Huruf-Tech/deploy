@@ -331,7 +331,8 @@
               "type": {
                 "type": "string",
                 "enum": [
-                  "ping"
+                  "ping",
+                  "docker.ensure"
                 ]
               },
               "payload": {

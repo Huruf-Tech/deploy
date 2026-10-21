@@ -1,7 +1,11 @@
 import z from "zod";
 import { mongodb } from "@/database.ts";
 import { $objectId } from "@/core/utils/createCRUD.ts";
-import { $inventory, $resourceSummary } from "@/schemas/protocol/agent.ts";
+import {
+  $hostCheck,
+  $inventory,
+  $resourceSummary,
+} from "@/schemas/protocol/agent.ts";
 
 /** Cold server document (PLAN §6): agent polls never write it. */
 export const $serverUpdate = z.object({
@@ -27,6 +31,14 @@ export const $server = $serverUpdate.extend({
   }),
   inventory: $inventory,
   resources: $resourceSummary.extend({ reportedAt: z.date() }).optional(),
+  /** Host preparation by `docker.ensure` (PLAN §16 Phase 2). */
+  setup: z.object({
+    status: z.enum(["pending", "ready", "failed"]),
+    dockerVersion: z.string().optional(),
+    checks: z.array($hostCheck).optional(),
+    error: z.string().optional(),
+    updatedAt: z.date(),
+  }).optional(),
   acceptedBy: $objectId.meta({ ref: "users" }).optional(),
   acceptedAt: z.date().optional(),
   createdAt: z.date(),

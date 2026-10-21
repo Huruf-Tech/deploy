@@ -171,7 +171,16 @@ export class SimAgent {
       events.push({
         id: `cmd-${command.seq}`,
         type: "command.result",
-        data: { seq: command.seq, ok: true, result: { pong: Date.now() } },
+        data: {
+          seq: command.seq,
+          ok: true,
+          result: command.type === "docker.ensure"
+            ? {
+              dockerVersion: "27.0.0-sim",
+              checks: [{ name: "os", ok: true, detail: "simulated" }],
+            }
+            : { pong: Date.now() },
+        },
       });
     }
 

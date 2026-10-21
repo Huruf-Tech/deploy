@@ -74,7 +74,22 @@ export const $helloResponse = $agentConfigResponse.extend({
   nextPollMs: z.number().int(),
 });
 
-export const $commandType = z.enum(["ping"]);
+export const $commandType = z.enum(["ping", "docker.ensure"]);
+
+/** `docker.ensure` payload: host setup values decided by the control plane. */
+export const $dockerEnsurePayload = z.object({
+  logMaxSize: z.string().describe("Per-container log file size, e.g. 10m"),
+  logMaxFile: z.number().int().min(1),
+  edgeImage: z.string().describe("Caddy image for the edge proxy"),
+  network: z.string().describe("Local Docker network for projects"),
+});
+
+/** One host preflight result, reported by `docker.ensure`. */
+export const $hostCheck = z.object({
+  name: z.string(),
+  ok: z.boolean(),
+  detail: z.string(),
+});
 
 export const $command = z.object({
   seq: z.number().int().min(1),

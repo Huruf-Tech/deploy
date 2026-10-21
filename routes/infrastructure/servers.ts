@@ -5,11 +5,11 @@ import { $objectId, createCRUD } from "@/core/utils/createCRUD.ts";
 import { withTenant } from "@/plugins/Huruf-Tech/thunder-core/utils/withTenant.ts";
 import {
   acceptServer,
-  issueCommand,
   rejectServer,
   releaseServer,
   serverLiveness,
 } from "@/lib/agents/servers.ts";
+import { issueCommand, prepareHost } from "@/lib/agents/commands.ts";
 import {
   agentEndpoints,
   bootstrapStatus,
@@ -76,6 +76,21 @@ export default new Router("/api", function servers(router) {
         const { id } = $params.parse(paramsAsJson(req));
         await rejectServer(id, (await withTenant(req)).tenant._id);
         return Response.json({ ok: true });
+      },
+    };
+  });
+
+  // Retries host setup (Docker, network, edge proxy); the agent's steps are idempotent.
+  router.post("/:id/prepare", function prepare() {
+    const $return = z.object({ command: z.string(), seq: z.number() });
+
+    return {
+      shape: () => ({ params: $params, return: $return }),
+      handler: async (req) => {
+        const { id } = $params.parse(paramsAsJson(req));
+        const { tenant, user } = await withTenant(req);
+        const { command, seq } = await prepareHost(id, tenant._id, user._id);
+        return Response.json({ command: command.toString(), seq });
       },
     };
   });

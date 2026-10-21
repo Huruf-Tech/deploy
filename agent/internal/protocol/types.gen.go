@@ -122,7 +122,7 @@ type PollResponse struct {
 type Command struct {
 	Seq int64 `json:"seq"`
 
-	// One of: ping
+	// One of: ping, docker.ensure
 	Type string `json:"type"`
 
 	Payload map[string]any `json:"payload"`

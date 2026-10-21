@@ -50,5 +50,11 @@
   "Install the agent": "تثبيت الوكيل",
   "Agent registers": "تسجيل الوكيل",
   "Server online": "الخادم متصل",
-  "Run this on the server (Ubuntu 22.04 or 24.04). It prints a pairing code; accept the server here with that code.": "شغّل هذا على الخادم (Ubuntu 22.04 أو 24.04). سيطبع رمز اقتران؛ اقبل الخادم هنا بهذا الرمز."
+  "Run this on the server (Ubuntu 22.04 or 24.04). It prints a pairing code; accept the server here with that code.": "شغّل هذا على الخادم (Ubuntu 22.04 أو 24.04). سيطبع رمز اقتران؛ اقبل الخادم هنا بهذا الرمز.",
+  "Host setup failed": "فشل تجهيز الخادم",
+  "Retry setup": "إعادة التجهيز",
+  "Preparing host…": "جارٍ تجهيز الخادم…",
+  "Docker {{version}}": "Docker الإصدار {{version}}",
+  "{{count}} host warnings": "{{count}} تحذيرات للخادم",
+  "Host setup restarted": "أُعيد بدء تجهيز الخادم"
 }

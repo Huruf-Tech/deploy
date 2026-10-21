@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"math/rand/v2"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/commands"
@@ -43,6 +44,7 @@ type Agent struct {
 	lastStatus    string
 	lastSummary   time.Time
 	sampler       host.Sampler
+	mu            sync.Mutex // guards events: commands finish on their own goroutines
 	events        []any
 }
 
@@ -157,8 +159,10 @@ func (a *Agent) refreshConfig(ctx context.Context) error {
 	return nil
 }
 
-// runCommands executes each new command once, records it before reporting,
-// and queues the results.
+// runCommands records each new command as received and done before running
+// it (at-most-once: a restart never re-runs it; the control plane re-issues
+// idempotent work such as docker.ensure), then runs it in the background so
+// long commands never stop the poll loop and the lease stays alive.
 func (a *Agent) runCommands(ctx context.Context, list []protocol.Command) error {
 	for _, command := range list {
 		if a.Store.IsDone(command.Seq) {
@@ -167,37 +171,48 @@ func (a *Agent) runCommands(ctx context.Context, list []protocol.Command) error 
 			}
 			continue
 		}
-
-		result, runErr := a.Commands.Run(ctx, command.Type, command.Payload)
-		data := protocol.CommandResultEventData{Seq: command.Seq, Ok: runErr == nil, Result: result}
-		if runErr != nil {
-			data.Error = runErr.Error()
-		}
 		if err := a.Store.Received(command.Seq, command.Seq); err != nil {
 			return err
 		}
-		a.Log.Info("ran command", "seq", command.Seq, "type", command.Type, "ok", data.Ok)
-
-		// ponytail: results queue in memory; a crash before they are sent leaves the command "delivered". Persist the queue once commands have side effects worth re-reporting.
-		a.events = append(a.events, protocol.CommandResultEvent{
-			Id: fmt.Sprintf("cmd-%d", command.Seq), Type: "command.result", Data: data,
-		})
-		if len(a.events) > maxPendingEvents {
-			a.events = a.events[len(a.events)-maxPendingEvents:]
-		}
+		go a.execute(ctx, command)
 	}
 	return nil
 }
 
+func (a *Agent) execute(ctx context.Context, command protocol.Command) {
+	result, runErr := a.Commands.Run(ctx, command.Type, command.Payload)
+	data := protocol.CommandResultEventData{Seq: command.Seq, Ok: runErr == nil, Result: result}
+	if runErr != nil {
+		data.Error = runErr.Error()
+	}
+	a.Log.Info("ran command", "seq", command.Seq, "type", command.Type, "ok", data.Ok, "error", data.Error)
+
+	// ponytail: results queue in memory; a crash before they are sent leaves the command "delivered". Persist the queue once commands have side effects worth re-reporting.
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.events = append(a.events, protocol.CommandResultEvent{
+		Id: fmt.Sprintf("cmd-%d", command.Seq), Type: "command.result", Data: data,
+	})
+	if len(a.events) > maxPendingEvents {
+		a.events = a.events[len(a.events)-maxPendingEvents:]
+	}
+}
+
 func (a *Agent) flushEvents(ctx context.Context) error {
-	for len(a.events) > 0 {
-		batch := a.events[:min(eventBatch, len(a.events))]
+	for {
+		a.mu.Lock()
+		batch := append([]any(nil), a.events[:min(eventBatch, len(a.events))]...)
+		a.mu.Unlock()
+		if len(batch) == 0 {
+			return nil
+		}
 		if _, err := a.Client.Post(ctx, "/agents/api/events", protocol.EventsRequest{Events: batch}, nil); err != nil {
 			return err
 		}
+		a.mu.Lock()
 		a.events = a.events[len(batch):]
+		a.mu.Unlock()
 	}
-	return nil
 }
 
 func (a *Agent) setStatus(status, message string, attrs ...any) {

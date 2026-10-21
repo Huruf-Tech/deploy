@@ -3,6 +3,7 @@ import { BoundedCache } from "@/lib/core/boundedCache.ts";
 import { safetyLimit } from "@/lib/limits/safety.ts";
 import { forgetAgent, type TAgentIdentity } from "@/lib/agents/agentAuth.ts";
 import { getAgentConfig } from "@/lib/agents/config.ts";
+import { recordHostSetup } from "@/lib/agents/commands.ts";
 import { offlineSweep, shardOf } from "@/lib/agents/sweep.ts";
 import { serverModel } from "@/schemas/infrastructure/server.ts";
 import { serverLeaseModel } from "@/schemas/infrastructure/serverLease.ts";
@@ -214,6 +215,19 @@ export const ingestEvents = async (
     })),
     { ordered: false },
   );
+
+  // Host setup results also update the server, for the dashboard.
+  const setups = await agentCommandModel
+    .find({
+      server: identity.server,
+      seq: { $in: fresh.map((event) => event.data.seq) },
+      type: "docker.ensure",
+    }, { projection: { seq: 1 } })
+    .toArray();
+  for (const { seq } of setups) {
+    const event = fresh.find((e) => e.data.seq === seq)!;
+    await recordHostSetup(identity.server, event.data);
+  }
 
   return { applied: fresh.length };
 };

@@ -2,7 +2,8 @@ import { assert, assertEquals } from "@std/assert";
 import { ObjectId } from "mongodb";
 import handler from "@/serve.base.ts";
 import { mongodb } from "@/database.ts";
-import { acceptServer, issueCommand } from "@/lib/agents/servers.ts";
+import { acceptServer } from "@/lib/agents/servers.ts";
+import { issueCommand } from "@/lib/agents/commands.ts";
 import { sweepShard } from "@/lib/agents/sweep.ts";
 import { createState, SimAgent } from "@/tools/agent-sim/agent.ts";
 import { serverModel } from "@/schemas/infrastructure/server.ts";
@@ -84,13 +85,31 @@ Deno.test({
       });
 
       await t.step(
+        "accepting prepares the host with docker.ensure",
+        async () => {
+          const { json } = await poll({ summary: true });
+          const [command] = json.commands as {
+            type: string;
+            payload: Record<string, unknown>;
+          }[];
+          assertEquals(command.type, "docker.ensure");
+          assertEquals(command.payload.network, "huruf-internal");
+
+          const doc = await serverModel.findOne({ _id: server });
+          assertEquals(doc?.setup?.status, "ready");
+          assertEquals(doc?.inventory.dockerVersion, "27.0.0-sim");
+        },
+      );
+
+      await t.step(
         "polling pace comes from the control plane's config",
         async () => {
           assertEquals(agent.config?.poll.idleMs, 5_000);
 
-          const { status, json } = await poll({ summary: true });
+          // Right after a command the server polls at the active pace.
+          const { status, json } = await poll();
           assertEquals(status, 200);
-          assertEquals(json.nextPollMs, agent.config?.poll.idleMs);
+          assertEquals(json.nextPollMs, agent.config?.poll.activeMs);
           assertEquals(json.configVersion, agent.configVersion);
           assertEquals(json.commands, []);
 
@@ -108,10 +127,11 @@ Deno.test({
 
           // The agent receives the command but the response is "lost": it
           // replays the old cursor and gets the same command again.
-          await poll({ cursor: 0 });
-          const replay = await poll({ cursor: 0 });
+          const before = seq - 1;
+          await poll({ cursor: before });
+          const replay = await poll({ cursor: before });
           assertEquals((replay.json.commands as { seq: number }[])[0].seq, seq);
-          assertEquals(agent.executed, [seq]);
+          assertEquals(agent.executed.filter((s) => s === seq).length, 1);
 
           // Acking with the real cursor delivers nothing new.
           const acked = await poll();

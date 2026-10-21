@@ -41,7 +41,7 @@
     "agent:test": "docker run --rm -v ./agent:/src -v huruf-go-cache:/root/.cache -w /src golang:1.24 sh -c \"test -z \\\"\\$(gofmt -l .)\\\" || { gofmt -l .; exit 1; }; go vet ./... && go test ./...\"",
     "agent:build": "docker run --rm -v ./agent:/src -v huruf-go-cache:/root/.cache -w /src golang:1.24 sh -c \"for ARCH in amd64 arm64; do CGO_ENABLED=0 GOOS=linux GOARCH=\\$ARCH go build -trimpath -ldflags '-s -w -X main.version=dev' -o dist/huruf-deploy-agent-linux-\\$ARCH ./cmd/huruf-deploy-agent || exit 1; done; cd dist && sha256sum huruf-deploy-agent-linux-* > SHA256SUMS\"",
     "agent:serve": "deno run --allow-net --allow-read jsr:@std/http@1/file-server agent/dist --port 8090",
-    "dev:vm": "docker build -t huruf-test-vm tools/test-vm && docker run -d --rm --name huruf-test-vm --privileged --cgroupns=host -v /sys/fs/cgroup:/sys/fs/cgroup:rw -p 2223:22 --add-host=host.docker.internal:host-gateway huruf-test-vm",
+    "dev:vm": "docker build -t huruf-test-vm tools/test-vm && docker run -d --rm --name huruf-test-vm --privileged --cgroupns=host -v /sys/fs/cgroup:/sys/fs/cgroup:rw -v /var/lib/docker -v /var/lib/containerd -p 2223:22 --add-host=host.docker.internal:host-gateway huruf-test-vm",
     "generate:protocol": "deno run --allow-read --allow-write scripts/generateProtocol.ts",
     "check:layers": "deno run --allow-read scripts/checkLayers.ts",
     "init": "rm -rf .git && git init && deno task setup && deno run -A ./core/scripts/setupEnv.ts",

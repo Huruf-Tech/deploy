@@ -67,7 +67,7 @@ export type poll$return = {
     configVersion: string;
     commands: {
         seq: number;
-        type: "ping";
+        type: "ping" | "docker.ensure";
         payload: Record<string, unknown>;
     }[];
 };

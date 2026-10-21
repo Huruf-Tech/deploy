@@ -6,6 +6,10 @@ import { formatDistanceToNow } from "date-fns"
 import { toast } from "sonner"
 import {
   IconActivityHeartbeat,
+  IconAlertTriangle,
+  IconBrandDocker,
+  IconLoader2,
+  IconRefresh,
   IconBrandUbuntu,
   IconCpu,
   IconKey,
@@ -57,6 +61,18 @@ const serverSchema = z.object({
   }),
   resources: z
     .object({ cpu: z.number(), memFree: z.number(), diskFree: z.number() })
+    .optional(),
+  setup: z
+    .object({
+      status: z.enum(["pending", "ready", "failed"]),
+      dockerVersion: z.string().optional(),
+      checks: z
+        .array(
+          z.object({ name: z.string(), ok: z.boolean(), detail: z.string() })
+        )
+        .optional(),
+      error: z.string().optional(),
+    })
     .optional(),
 })
 
@@ -144,18 +160,54 @@ function Chip({
   )
 }
 
+function SetupChips({ setup }: { setup: TServer["setup"] }) {
+  const { t } = useTranslation()
+
+  if (!setup || setup.status === "pending")
+    return (
+      <Chip icon={IconLoader2}>
+        <span className="motion-safe:animate-pulse">
+          {t("Preparing host…")}
+        </span>
+      </Chip>
+    )
+
+  const warnings = setup.checks?.filter((c) => !c.ok) ?? []
+
+  return (
+    <>
+      {setup.dockerVersion && (
+        <Chip icon={IconBrandDocker}>
+          {t("Docker {{version}}", { version: setup.dockerVersion })}
+        </Chip>
+      )}
+      {warnings.length > 0 && (
+        <span
+          className="inline-flex items-center gap-1 rounded-md bg-warning/15 px-2 py-0.5 text-xs text-foreground"
+          title={warnings.map((w) => `${w.name}: ${w.detail}`).join("\n")}
+        >
+          <IconAlertTriangle className="size-3.5" aria-hidden />
+          {t("{{count}} host warnings", { count: warnings.length })}
+        </span>
+      )}
+    </>
+  )
+}
+
 function ServerCard({
   server,
   live,
   onAccept,
   onReject,
   onPing,
+  onPrepare,
 }: {
   server: TServer
   live?: TLiveness[number]
   onAccept: () => void
   onReject: () => void
   onPing: () => void
+  onPrepare: () => void
 }) {
   const { t } = useTranslation()
   const state = stateOf(server, live)
@@ -245,7 +297,26 @@ function ServerCard({
             {inventory.arch}
           </Chip>
           <Chip>{gib(inventory.memory)}</Chip>
+          {server.status === "active" && <SetupChips setup={server.setup} />}
         </div>
+
+        {server.setup?.status === "failed" && (
+          <div className="flex flex-col gap-2 rounded-2xl bg-destructive/10 p-3 text-xs text-destructive">
+            <p>
+              <span className="font-medium">{t("Host setup failed")}:</span>{" "}
+              {server.setup.error}
+            </p>
+            <Button
+              size="sm"
+              variant="outline"
+              className="self-start"
+              disabled={state !== "online"}
+              onClick={onPrepare}
+            >
+              <IconRefresh aria-hidden /> {t("Retry setup")}
+            </Button>
+          </div>
+        )}
       </CardContent>
 
       <CardFooter className="justify-between gap-2 border-t">
@@ -328,7 +399,14 @@ export default function ServerCards({ data, isLoading, fetcher }: TCardProps) {
     () => (Array.isArray(data) ? serverSchema.array().parse(data) : []),
     [data]
   )
-  const hasPending = servers.some((s) => s.status === "pending")
+  // Refetch while something is in flight: pending approval or host setup.
+  const hasPending = servers.some(
+    (s) =>
+      s.status === "pending" ||
+      (s.status === "active" &&
+        s.setup?.status !== "ready" &&
+        s.setup?.status !== "failed")
+  )
 
   usePolling(() => {
     ThunderSDK.servers
@@ -342,6 +420,12 @@ export default function ServerCards({ data, isLoading, fetcher }: TCardProps) {
   const reject = async (server: TServer) => {
     await ThunderSDK.servers.reject({ params: { id: server._id } })
     toast.success(t("Server rejected"))
+    refetch()
+  }
+
+  const prepare = async (server: TServer) => {
+    await ThunderSDK.servers.prepare({ params: { id: server._id } })
+    toast.success(t("Host setup restarted"))
     refetch()
   }
 
@@ -375,6 +459,7 @@ export default function ServerCards({ data, isLoading, fetcher }: TCardProps) {
               onAccept={() => setAccepting(server)}
               onReject={() => reject(server)}
               onPing={() => ping(server)}
+              onPrepare={() => prepare(server)}
             />
           ))}
         </div>

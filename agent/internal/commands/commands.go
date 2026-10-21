@@ -5,8 +5,11 @@ package commands
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
+
+	"github.com/Huruf-Tech/huruf-deploy/agent/internal/dockerhost"
 )
 
 type Handler func(ctx context.Context, payload map[string]any) (map[string]any, error)
@@ -21,10 +24,27 @@ func (r Registry) Run(ctx context.Context, kind string, payload map[string]any) 
 	return handler(ctx, payload)
 }
 
+// decode converts a command payload into the handler's typed struct.
+func decode[T any](payload map[string]any) (T, error) {
+	var value T
+	raw, err := json.Marshal(payload)
+	if err == nil {
+		err = json.Unmarshal(raw, &value)
+	}
+	return value, err
+}
+
 func Default() Registry {
 	return Registry{
 		"ping": func(context.Context, map[string]any) (map[string]any, error) {
 			return map[string]any{"pong": time.Now().UnixMilli()}, nil
+		},
+		"docker.ensure": func(ctx context.Context, payload map[string]any) (map[string]any, error) {
+			p, err := decode[dockerhost.Payload](payload)
+			if err != nil {
+				return nil, fmt.Errorf("invalid payload: %w", err)
+			}
+			return dockerhost.Ensure(ctx, p)
 		},
 	}
 }

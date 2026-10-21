@@ -831,7 +831,17 @@ Each phase ends with a **review checkpoint** (demo + code review + approval). Ph
   - **Installer:** the control plane serves it at `/agents/api/install.sh`. It is the same file the wizard uploads.
   - **Dev tooling:** a systemd test VM (`deno task dev:vm`), and `agent:build` / `agent:serve` standing in for releases.
   - **Verified on the VM:** online 2.2 s after the wizard returned; a re-run kept the same server and quota; credentials were never written to disk.
-- **2b (next):** `docker.ensure`, daemon config, preflight checks on the agent, the Caddy edge container and labels.
+- **2b (done):** `docker.ensure` is issued automatically when a server activates (accept or join token), re-issued when an agent restarts mid-setup, and retryable from the card.
+  - **Agent steps** (each checks before acting):
+    - preflight checks (OS, memory, disk, cgroup v2), reported as warnings only;
+    - Docker via get.docker.com, only if missing;
+    - `daemon.json` merged without dropping the user's keys: log driver `local` with control-plane limits, `live-restore`. Docker restarts only if nothing is running;
+    - the `huruf-internal` network;
+    - the Caddy edge (`huruf-edge`, host network, admin API on 127.0.0.1:2019, `deploy.huruf.*` labels).
+  - **Background commands:** the agent runs commands in the background, so long setup never stops polling. Commands are at-most-once; idempotent work is re-issued instead.
+  - **Settings:** `AGENT_CONTAINER_LOG_MAX_SIZE`, `AGENT_CONTAINER_LOG_MAX_FILE`, `AGENT_EDGE_IMAGE`.
+  - **Verified on a fresh VM:** online in 3 s, and host ready in about 2 min (Docker 29 installed) without ever going offline. A re-run finished in 5 s and changed nothing.
+- **Phase 2 complete** except confirming outbound SSH from Deno Deploy at first deploy.
 
 ### Phase 3 — Streams and terminal
 - Stream sessions and chunk buffer (TTL), log tailing, metrics store and charts, `exec.run`.

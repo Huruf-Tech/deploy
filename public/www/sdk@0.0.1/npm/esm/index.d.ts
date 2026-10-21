@@ -129,6 +129,8 @@ export declare class ThunderSDK extends BaseSDK {
             accept$params: import("./modules/servers.js").accept$params;
             accept$body: import("./modules/servers.js").accept$body;
             reject$params: import("./modules/servers.js").reject$params;
+            prepare$params: import("./modules/servers.js").prepare$params;
+            prepare$return: import("./modules/servers.js").prepare$return;
             ping$params: import("./modules/servers.js").ping$params;
             ping$return: import("./modules/servers.js").ping$return;
             bootstrap$body: import("./modules/servers.js").bootstrap$body;
@@ -203,6 +205,17 @@ export declare class ThunderSDK extends BaseSDK {
             then: <TResult1 = unknown, TResult2 = never>(onfulfilled?: ((value: unknown) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
             catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<unknown>;
             finally: (onfinally?: (() => void) | null | undefined) => Promise<unknown>;
+        };
+        readonly prepare: (data: {
+            params: import("./modules/servers.js").prepare$params;
+            query?: undefined;
+            body?: undefined;
+        } & import("./types.js").TRequestOptions<import("./modules/servers.js").prepare$return>) => {
+            readonly raw: Promise<import("axios").AxiosResponse<import("./modules/servers.js").prepare$return, any, {}, any>>;
+            readonly data: Promise<import("./modules/servers.js").prepare$return>;
+            then: <TResult1 = import("./modules/servers.js").prepare$return, TResult2 = never>(onfulfilled?: ((value: import("./modules/servers.js").prepare$return) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+            catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<import("./modules/servers.js").prepare$return | TResult>;
+            finally: (onfinally?: (() => void) | null | undefined) => Promise<import("./modules/servers.js").prepare$return>;
         };
         readonly ping: (data: {
             params: import("./modules/servers.js").ping$params;
