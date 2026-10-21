@@ -1,0 +1,22 @@
+{
+  "cSpell.words": [
+    "bullmq",
+    "chrono",
+    "chunkable",
+    "deinit",
+    "Huruf",
+    "ignorecase",
+    "lintstagedrc",
+    "llms",
+    "neondatabase",
+    "nldate",
+    "ohash",
+    "oridune",
+    "Sendgrid",
+    "surrealdb",
+    "treeify",
+    "unrepresentable",
+    "vectra"
+  ],
+  "deno.enable": true
+}

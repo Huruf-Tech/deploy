@@ -1,0 +1,32 @@
+{
+  "name": "thunder-sdk",
+  "version": "0.0.1",
+  "license": "MIT",
+  "main": "./script/index.js",
+  "module": "./esm/index.js",
+  "exports": {
+    ".": {
+      "import": "./esm/index.js",
+      "require": "./script/index.js"
+    },
+    "./base": {
+      "import": "./esm/base.js",
+      "require": "./script/base.js"
+    },
+    "./types": {
+      "import": "./esm/types.js",
+      "require": "./script/types.js"
+    }
+  },
+  "scripts": {
+    "test": "node test_runner.cjs"
+  },
+  "dependencies": {
+    "axios": "^1.18.1",
+    "path-to-regexp": "^8.3.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.9.0"
+  },
+  "_generatedBy": "dnt@0.44.0"
+}

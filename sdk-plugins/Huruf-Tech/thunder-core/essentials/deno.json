@@ -1,0 +1,9 @@
+{
+  "name": "essentials-plugin",
+  "exports": {
+    ".": "./entry.ts"
+  },
+  "imports": {
+    "thunder-sdk": "file:///D:/Deno/Repositories/thunder-core/public/www/sdk@0.3.0/index.ts"
+  }
+}

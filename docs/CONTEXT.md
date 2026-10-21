@@ -1,0 +1,75 @@
+# Huruf Deploy — Session Context (handoff)
+
+Background from the planning conversation that is **not** in [PLAN.md](PLAN.md). Read PLAN.md for the product and technical spec. This file covers how to work with the project owner, facts about the environment, why alternatives were rejected, and what to do on a new machine.
+
+---
+
+## 1. Working agreements with the project owner
+
+- **No code until explicitly asked.** Planning and discussion come first. When implementation starts, build **one phase or sub-phase at a time** (PLAN.md §16) and stop for review after each.
+- **The owner makes product decisions.** Give a clear recommendation with trade-offs, then follow their choice. When their idea has a hidden cost (security, scale, money), say so plainly with numbers. They value that, e.g. the attacker-machine pairing risk, the cost of a 10 s lease, and the hot-lock bottleneck they caught themselves.
+- **Priorities, in order:**
+  1. **Backend performance** (mandatory; nothing expensive on the agent poll path).
+  2. **Code quality** (no duplication; composable modules and classes).
+  3. Clean, accessible UI (shadcn-first).
+  4. Open-source friendliness.
+- **Data minimization:** store as little as possible on our side. Logs, metrics, footprints and capacity history stay on the agent machines.
+- **Caps everywhere:** every in-memory cache and buffer must be bounded (the owner raised memory-leak concerns).
+- **Trust the owner on Thunder internals.** They corrected two of my assumptions, now fixed in CLAUDE.md and PLAN.md:
+  - Route sub-folders are organizational only (`routes/hr/payroll.ts` ≡ `routes/payroll.ts`).
+  - The SDK is regenerated with `deno task generate:sdk -v 0.0.1 --overwrite`, followed by `npm run build` in `public/app`.
+
+## 2. Environment facts verified during planning
+
+- **Thunder project** with the **thunder-core** plugin already present in `plugins/Huruf-Tech/thunder-core/`. It's unknown whether its setup lifecycle (indexes + RBAC seed) has been run; if not, run `deno task setup:plugin -n Huruf-Tech/thunder-core`.
+- **thunder-ui** is generated in `public/app/`:
+  - Its rules are in `public/app/llms.txt`, which matches the upstream copy that was read.
+  - The layout is **navbar**, the default, since `VITE_APP_LAYOUT` isn't set in `public/app/.env`.
+  - It's served at `/app` from the build output `public/app/www` (`routes/index.ts`, handler `app`). `public/www` holds the API's own static files and `sdk@0.0.1`.
+- shadcn config (`public/app/components.json`): style `base-luma` (Base UI primitives), Tabler icons, RTL on, extra registries `@reui` and `@coss`.
+- Ignore `_temp/` entirely (CLAUDE.md rule; `generate:app` uses it as a clone cache).
+
+## 3. Rejected alternatives (and why). Don't re-propose without new reasons
+
+| Rejected | Reason |
+|---|---|
+| Stateful **gateway** service holding agent WebSockets | The owner wants no extra infrastructure. Polling plus a webhook fits serverless Thunder on Deno Deploy. |
+| **Docker Swarm** | The owner wants full control and simplicity. Swarm needs every node to reach every node (NAT problems) and has no native blue-green. Plain Docker + our reconciler + an optional WireGuard mesh was chosen. |
+| **Cron / scheduled tick / `Deno.cron`** | Explicitly refused. Liveness comes from poll leases; the sharded sweep is piggybacked on requests. |
+| Long lease (60 s) | The owner wants **10 s** (5 s idle polls). The extra request cost was accepted knowingly. |
+| Nixpacks / Railpack auto-detect | Out of scope. Only predefined or custom templates (an AI template assistant comes later). |
+| macOS agents | Skipped for the MVP (Docker Desktop VM/licensing, no Swarm need anymore but still deferred). |
+| Managing domains / hosting a load balancer ourselves | The deploy app must never host a load balancer. Future direction is Cloudflare (Tunnel or LB); deferred until the owner decides. |
+| Footprints stored on our side, platform-wide usage averages | Footprints stay on agents; cross-customer averages dropped. |
+| Automatic rescheduling to other servers | Users pick servers explicitly ("self-hosted AWS"), so dead servers raise alerts only. |
+| Separate agent repo | Monorepo chosen. The agent uses the same license. |
+
+## 4. Things the owner still has to provide (not decided in the plan)
+
+- **Infrastructure and accounts:**
+  - A Deno Deploy project (and region).
+  - A MongoDB replica set (e.g. Atlas) in the same region. Transactions and TTL indexes need a replica set.
+- **Agent distribution:**
+  - The public domain for the control plane and for the agent install script (`https://get.<domain>/agent`).
+  - A GitHub org/repo for signed agent releases, plus a signing key.
+- **Secrets and settings:**
+  - Generated secrets: `SECRET_KEY` (thunder-core) and **a separate** `DEPLOY_MASTER_KEY` (envelope encryption).
+  - An **HTTP email provider** for alerts (`Mailer.onSendMail`; SMTP is discouraged on hot paths), plus `SMTP_*` if used elsewhere.
+  - The `PLATFORM_TENANT` (the tenant receiving subscription payments) and `DEFAULT_CURRENCY`.
+- **Later:** a wallet top-up/payment provider (explicitly deferred).
+
+## 5. Moving to the new machine
+
+1. **Nothing is committed yet.** Every file is untracked on branch `master`, and the intended main branch is `main`. Commit everything and push it to the remote before switching machines.
+2. **`.env` files are git-ignored**, including those inside `public/app/`. The root `.gitignore` patterns match at any depth, even though thunder-ui intends its `.env` files to be committed. Copy them manually, or decide whether to un-ignore `public/app/.env*`.
+3. On the new machine:
+   - Clone the repo.
+   - Run **`deno task setup`**. **Never `deno task init`**, which resets git history.
+   - Restore the `.env` files.
+   - Run `npm install` in `public/app`, then `deno task generate:sdk -v 0.0.1 --overwrite` and `npm run build`.
+   - Run `deno task dev`.
+4. **Claude memory doesn't travel** (it is stored per machine). Its contents are in §1 of this file, which CLAUDE.md links to.
+
+## 6. Next step
+
+**Phase 0 — Foundations** (PLAN.md §16), started only when the owner says go.

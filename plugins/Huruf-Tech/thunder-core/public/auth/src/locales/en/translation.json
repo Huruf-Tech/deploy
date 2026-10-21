@@ -1,0 +1,12 @@
+{
+  "{{count}} active sessions_one": "{{count}} active session",
+  "{{count}} active sessions_other": "{{count}} active sessions",
+  "{{count}} recommended actions_one": "{{count}} recommended action",
+  "{{count}} recommended actions_other": "{{count}} recommended actions",
+  "{{count}} redirect URIs_one": "{{count}} redirect URI",
+  "{{count}} redirect URIs_other": "{{count}} redirect URIs",
+  "{{count}} tenants_one": "{{count}} tenant",
+  "{{count}} tenants_other": "{{count}} tenants",
+  "Last used {{time}} · {{count}} requests_one": "Last used {{time}} · {{count}} request",
+  "Last used {{time}} · {{count}} requests_other": "Last used {{time}} · {{count}} requests"
+}

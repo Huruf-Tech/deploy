@@ -1,0 +1,127 @@
+/**
+ * Copyright © Huruf Tech <%- new Date().getFullYear() %>
+ *
+ * This is a generated file. Do not edit the contents of this file!
+ */
+
+import { BaseSDK } from "./base.ts";
+
+<% for (const [filename, { name }] of Object.entries(modulesToImport)) { -%>
+import { <%- name %>Module } from "./modules/<%- filename %>";
+<% } -%>
+
+<% for (const pluginName of pluginsToImport) { -%>
+import { <%- pluginName %>Entry } from "./plugins/<%- pluginName %>/entry.ts";
+<% } -%>
+
+export class ThunderSDK extends BaseSDK {
+    protected static _actionsList?: string[];
+    protected static _moduleNames = [
+<% for (const [, { name }] of Object.entries(modulesToImport)) { -%>
+        "<%- name %>",
+<% } -%>
+    ];
+    
+<% for (const [, { name }] of Object.entries(modulesToImport)) { -%>
+    static <%- name %> = <%- name %>Module(this);
+<% } -%>
+
+    static override plugins = {
+<% for (const pluginName of pluginsToImport) { -%>
+        <%- pluginName %>: <%- pluginName %>Entry,
+<% } -%>
+    }
+
+    static getModuleNames() {
+        return this._moduleNames;
+    }
+
+    static getModule(name: string) {
+        if (!this.getModuleNames().includes(name)) {
+            throw new Error(`Module not found: ${name}`);
+        }
+
+        return this[name as keyof ThunderSDK] as Record<
+            string,
+            (data: unknown) => Promise<unknown>
+        >;
+    }
+
+    static hasModule(name: string) {
+        return this.getModuleNames().includes(name);
+    }
+
+    static getMetadata(module: object | string) {
+        if (typeof module === "object") {
+            return this._moduleMetadata.get(module);
+        }
+
+        return this._moduleMetadata.get(
+            this.getModule(module),
+        );
+    }
+
+    static hasMetadata(module: object | string) {
+        try {
+            if (typeof module === "object") {
+                return this._moduleMetadata.has(module);
+            }
+
+            return this._moduleMetadata.has(
+                this.getModule(module),
+            );
+        } catch {
+            return false;
+        }
+    }
+
+    static getGroup(module: object | string) {
+        if (typeof module === "object") {
+            return this._moduleGroup.get(module);
+        }
+
+        return this._moduleGroup.get(
+            this.getModule(module),
+        );
+    }
+
+    static hasGroup(module: object | string) {
+        try {
+            if (typeof module === "object") {
+                return this._moduleGroup.has(module);
+            }
+
+            if(!this.hasModule(module)) {
+                return [...this._moduleGroup.values()].includes(module);
+            }
+
+            return this._moduleGroup.has(
+                this.getModule(module),
+            );
+        } catch {
+            return false;
+        }
+    }
+
+    static listActions(moduleName?: string) {
+        const actions = (() => {
+            if (this._actionsList) return this._actionsList;
+
+            const unpackModules: string[] = [];
+
+            this.getModuleNames().forEach((name) => {
+                Object.keys(this.getModule(name)).forEach((action) => {
+                    unpackModules.push(`${name}.${action}`);
+                });
+            });
+
+            return this._actionsList = unpackModules;
+        })();
+
+        if (moduleName) {
+            return actions.filter((action) => action.startsWith(`${moduleName}.`));
+        }
+
+        return actions;
+    }
+}

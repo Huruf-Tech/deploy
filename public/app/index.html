@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/png" href="/logo.png" />
+    <!--
+      `viewport-fit=cover` lets the page paint under the notch and the home
+      indicator, and is what makes `env(safe-area-inset-*)` report anything other
+      than 0px. `interactive-widget=resizes-content` makes the Android keyboard
+      shrink the layout viewport, so `dvh` and bottom-pinned UI react to it the
+      way they already do on iOS.
+    -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content"
+    />
+    <!--
+      Browser chrome and status bar colour. These follow the OS setting, which is
+      the default theme; an explicit light/dark override in-app does not move them.
+    -->
+    <meta name="color-scheme" content="light dark" />
+    <meta
+      name="theme-color"
+      media="(prefers-color-scheme: light)"
+      content="#ffffff"
+    />
+    <meta
+      name="theme-color"
+      media="(prefers-color-scheme: dark)"
+      content="#000000"
+    />
+    <title>Thunder UI</title>
+    <script>
+      /*
+       * Applies the stored theme and text direction before first paint.
+       *
+       * ThemeProvider adds the `light`/`dark` class in an effect, and the
+       * language effect sets `dir`/`lang` — both of which run after React
+       * mounts, so every load flashed light-mode and left-to-right first.
+       *
+       * Must stay in sync with:
+       *   - ThemeProvider `storageKey` ("theme")   src/components/theme-provider.tsx
+       *   - i18next `lookupLocalStorage`           src/i18n.ts
+       *   - detection order + fallbackLng          src/i18n.ts
+       */
+      (function () {
+        var root = document.documentElement
+
+        try {
+          var theme = localStorage.getItem("theme") || "system"
+          var dark =
+            theme === "dark" ||
+            (theme === "system" &&
+              window.matchMedia("(prefers-color-scheme: dark)").matches)
+
+          root.classList.add(dark ? "dark" : "light")
+        } catch (e) {
+          root.classList.add("light")
+        }
+
+        try {
+          // Mirrors detection.order: ["localStorage", "navigator"] with
+          // supportedLngs ["en", "ar"] and fallbackLng "en".
+          var stored = localStorage.getItem("i18nextLng")
+          var detected =
+            stored ||
+            (navigator.languages && navigator.languages[0]) ||
+            navigator.language ||
+            "en"
+          var lang = String(detected).toLowerCase().indexOf("ar") === 0 ? "ar" : "en"
+
+          root.setAttribute("lang", lang)
+          root.setAttribute("dir", lang === "ar" ? "rtl" : "ltr")
+        } catch (e) {
+          root.setAttribute("dir", "ltr")
+        }
+      })()
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

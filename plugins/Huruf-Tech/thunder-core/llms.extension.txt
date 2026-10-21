@@ -1,0 +1,635 @@
+# Thunder Core Plugin - AI Agent Instructions
+
+thunder-core is the official Thunder plugin that adds authentication, an OAuth2 /
+OpenID Connect provider, role-based access control (RBAC), multi-tenancy, a
+double-entry wallet/ledger, API keys, transactional email, ImageKit upload auth, and
+database-backed environment variables. It is installed like any other Thunder plugin:
+
+```bash
+deno task add:plugin -n Huruf-Tech/thunder-core
+```
+
+Once installed it lives under `plugins/Huruf-Tech/thunder-core/`. Its `routes`, `hooks`,
+`schemas`, `lib`, `utils`, `scripts` and `public` files are copied into the host project
+and its routes/hooks are auto-discovered and merged into the app. Consumer-facing
+utilities are imported via the `@/` alias, e.g.
+`@/plugins/Huruf-Tech/thunder-core/utils/withAuthSession.ts` (within this repo they
+resolve as `@/utils/...`, `@/lib/...`, `@/schemas/...`).
+
+> Source of truth: this document describes behavior, concepts, and gotchas that are NOT
+> obvious from the code. For exact routes, request/response shapes, and model fields,
+> always read the referenced source files — they are the authoritative, up-to-date spec.
+
+## Plugin Lifecycle & Setup
+
+Installing the plugin only copies files and merges the import map. The setup script does
+**NOT** run automatically. Setup (DB indexes + RBAC seeding) must be triggered explicitly,
+in one of two ways:
+
+```bash
+# Option A: install and set up in one step.
+# `--setup` alone runs setup against the "production" environment by default.
+deno task add:plugin -n Huruf-Tech/thunder-core --setup
+# Or target specific environments (comma-separated):
+deno task add:plugin -n Huruf-Tech/thunder-core --setup=development,production
+
+# Option B: run setup later (interactive env selection if omitted).
+deno task setup:plugin -n Huruf-Tech/thunder-core
+deno task setup:plugin -n Huruf-Tech/thunder-core --envs=development,production
+```
+
+Setup runs `scripts/setupPlugin.ts` once per selected environment, with `ENV_TYPE` set to
+that environment so the script connects to the correct database. The lifecycle scripts:
+
+- `scripts/setupPlugin.ts` → calls `syncDBIndexes()` then `syncAccessControl()`.
+- `scripts/syncDBIndexes.ts` → creates the plugin's MongoDB indexes (read for the exact
+  index definitions and unique constraints).
+- `scripts/syncAccessControl.ts` → seeds the default RBAC policies and roles (read for the
+  exact seeded policy permissions and role→policy mappings).
+- `scripts/cleanupPlugin.ts` → runs on uninstall.
+
+> `syncAccessControl` is **idempotent** — it goes through `ACManager` (see "Access-Control
+> Manager"), which upserts policies and roles and `$addToSet`s permissions/policies. Re-run
+> it safely after adding new default permissions; it will not duplicate or remove anything.
+
+## Environment Variables
+
+thunder-core reads the env vars below. Set them in `.env`, or store them at runtime in the
+`envs` collection (see "Database-backed Env Vars"). The authoritative list is whatever the
+code reads — grep for `Env.get`/`Env.list`/`Env.number`/`Env.enabled`/`Env.params` across
+`lib/`, `utils/`, `routes/`, and `hooks/` if in doubt.
+
+### Required
+
+```bash
+BASE_URL=http://localhost:8000          # Public base URL; used by better-auth & OAuth2 issuer
+SECRET_KEY=<random-strong-secret>        # Signing secret for sessions and OAuth2 JWTs
+BETTER_AUTH_CAPABILITIES=email,signup    # Comma list enabling auth features (see below)
+```
+
+`BETTER_AUTH_CAPABILITIES` toggles auth features (see `lib/auth.ts`):
+- `signup`   - allow new user creation
+- `email`    - enable email + password auth
+- `magicLink`- enable magic-link sign up/sign in
+- `github`   - enable GitHub social provider (requires GITHUB_* vars)
+- `google`   - enable Google social provider (requires GOOGLE_* vars)
+- `facebook` - enable Facebook social provider (requires FACEBOOK_* vars)
+- `multiSession` - allow multiple concurrent sessions per user
+
+### Auth / Session (optional)
+
+```bash
+BETTER_AUTH_TRUSTED_ORIGIN=http://localhost:3000   # Comma list of trusted origins
+BETTER_AUTH_TRUST_DEVICE_DAYS=30                    # 2FA trust-device window (default 30)
+BETTER_AUTH_MAX_MULTI_SESSIONS=5                    # Max sessions when multiSession enabled (default 5)
+BETTER_AUTH_SAME_SITE=Lax                           # Overrides the session cookie SameSite attribute
+GITHUB_CLIENT_ID=...                                # Required only if "github" capability is on
+GITHUB_CLIENT_SECRET=...
+GOOGLE_CLIENT_ID=...                                # Required only if "google" capability is on
+GOOGLE_CLIENT_SECRET=...
+FACEBOOK_CLIENT_ID=...                              # Required only if "facebook" capability is on
+FACEBOOK_CLIENT_SECRET=...
+```
+
+Cookie defaults come from `lib/auth.ts`: `sameSite` is `BETTER_AUTH_SAME_SITE` if set,
+otherwise `Strict` in production and `Lax` elsewhere; `secure` and `httpOnly` are enabled
+in production only.
+
+### Branding (served by the auth branding endpoint)
+
+```bash
+APP_DISPLAY_NAME=My App        # Optional; falls back to "Thunder"
+APP_DESCRIPTION=...            # Optional
+APP_LOGO=https://.../logo.png  # Optional
+APP_HOMEPAGE_URL=https://...   # Optional
+APP_TERMS_URL=https://...      # Optional
+APP_PRIVACY_URL=https://...    # Optional
+APP_THEME=primary:#000&bg:#fff # Parsed via Env.params() into a key/value record
+APP_HIDE_POWERED_BY=true       # Hides the "powered by" label in the auth UI
+```
+
+Every branding var is optional — the endpoint returns `name: "Thunder"` when
+`APP_DISPLAY_NAME` is unset. See `routes/auth.ts`.
+
+### Email (SMTP, used by Mailer)
+
+```bash
+SMTP_HOST=smtp.example.com
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USERNAME=...
+SMTP_PASSWORD=...
+SMTP_SENDER=no-reply@example.com
+SMTP_SENDER_NAME=My App
+SMTP_DEBUG=false                # Enables nodemailer debug output
+```
+
+### ImageKit
+
+```bash
+IMAGEKIT_PRIVATE_KEY=private_...
+IMAGEKIT_PUBLIC_KEY=public_...
+```
+
+### Wallet / currencies
+
+```bash
+DEFAULT_CURRENCY=pkr               # Default wallet currency (defaults to "pkr")
+AVAILABLE_CURRENCIES=pkr,usd,eur   # Comma list surfaced by the wallet metadata endpoint
+```
+
+### RBAC behavior
+
+```bash
+RBAC_NO_CASCADE=false  # If true, a tenant member's role does NOT cascade from the parent inviter
+```
+
+## Database-backed Env Vars
+
+The `essentials` hook (`hooks/essentials.ts`) installs `Env.onGetFailed`, so any env var
+not found in the process environment is looked up in the `envs` MongoDB collection
+(`{ key, value }`). This lets you manage secrets/config at runtime through the envs CRUD
+route instead of redeploying. The same hook also handles CORS (preflight + response
+headers, allowing the `X-TENANT-ID`, `X-API-KEY` and `X-PAYLOAD-SIGNATURE` headers). Its
+`corsHeaders` record is exported, so your own hooks/routes can reuse it.
+
+## Authentication (better-auth)
+
+`lib/auth.ts` exports a configured `better-auth` instance (`auth`) plus `betterAuthConfig`
+and `capabilities`. It uses the MongoDB adapter with plural collection names and enables
+the `admin`, `passkey`, `twoFactor`, `magicLink`, and `multiSession` better-auth plugins.
+Read `lib/auth.ts` for the exact configuration. Behaviors worth knowing:
+
+- New users get a Gravatar `image` fallback derived from a SHA-256 hash of their email.
+- Signup is blocked unless `signup` is in `BETTER_AUTH_CAPABILITIES`.
+- Password-reset and magic-link emails are sent via `Mailer`.
+- better-auth is mounted under the `auth` route; its handler base path is `/auth/api`, so
+  better-auth client SDKs should target that base URL. See `routes/auth.ts` for the
+  branding/capabilities endpoints and the better-auth UI fallback.
+
+## Auth Session Resolution — `withAuthSession`
+
+`utils/withAuthSession.ts` is the primary helper for authenticating a request inside a
+handler. It supports **three** credential strategies (checked in order) and memoizes the
+result per-request:
+
+1. **OAuth2 Bearer token** (`Authorization: Bearer <access_token>`) — verified via
+   `OAuth2.verifyAccessToken`; scopes come from the consent (optionally narrowed per
+   tenant via the consent's `resourceGrant[tenantId]`).
+2. **API key** (`X-Api-Key: <secret>`) — resolved via `APIKey.resolve`; scopes from the
+   key (optionally narrowed per tenant via `resourceGrant`).
+3. **Session cookie** — resolved via `auth.api.getSession(req)`.
+
+```typescript
+import { withAuthSession } from "@/utils/withAuthSession.ts";
+
+const { user, session, tenantId, scopes, auth } = await withAuthSession(req);
+// Pass `true` for silent mode (returns `undefined` instead of throwing 401):
+const maybe = await withAuthSession(req, true);
+```
+
+`tenantId` is read from the `X-TENANT-ID` request header (ObjectId). Throws
+`Response.unauthorized()` on failure unless `silent` is true. See `utils/withAuthSession.ts`
+for the exact return type.
+
+`utils/withCachedOnRequest.ts` is the underlying per-request memoization helper (a
+`WeakMap<Request, ...>`); use it to cache expensive per-request computations by key.
+
+## Multi-Tenancy
+
+A tenant is an isolated workspace; membership links users to tenants with a role. Requests
+select the active tenant via the `X-TENANT-ID` header.
+
+### `withTenant` — `utils/withTenant.ts`
+
+```typescript
+import { withTenant } from "@/utils/withTenant.ts";
+
+const { tenant, member, user, owner, getParentMember } = await withTenant(req);
+const maybe = await withTenant(req, true); // silent mode
+```
+
+Resolves the auth session, requires `X-TENANT-ID`, then loads the tenant + the caller's
+membership. In silent mode the session lookup is silent too, so an unauthenticated request
+returns `undefined` instead of throwing 401. Otherwise it throws `Response.forbidden(...)`
+with a specific message ("You are not a member of this tenant!", "Tenant not found!",
+"Tenant owner not found!") when the membership, tenant or owner is missing. For
+non-owner members it also returns `owner` (the tenant creator) and a lazy
+`getParentMember()` (the inviter's membership) used for RBAC role cascading.
+
+Tenancy-related routes (read each file for endpoints and exact behavior):
+- `routes/tenants.ts` — tenants; creating one atomically creates an owner member, deleting
+  one removes its members.
+- `routes/tenantMembers.ts` — members; the create handler consumes a `tenantInvite`.
+  `update` may change a member's `role` and `expiresAt`.
+- `routes/tenantInvites.ts` — invites; validates the invited role against the caller's
+  `subRoles` and the optional `membershipExpiresAt`, renders the invite URL, and emails it.
+- `routes/tenantMemberships.ts` — lists the current user's memberships with the joined
+  tenant document.
+
+### Temporary memberships (expiry)
+
+A membership can be time-limited. The inviter opts in by passing `membershipExpiresAt` (an
+absolute date) when creating the invite; on acceptance it is copied onto the new member as
+`expiresAt`. Both fields are **optional** — omit them and the membership never expires.
+
+```jsonc
+// POST /api/tenantInvites
+{
+  "email": "temp@contractor.com",
+  "role": "member",
+  "url": "https://app.com/invite/{{_id}}",
+  "membershipExpiresAt": "2026-12-31T23:59:59Z" // optional
+}
+```
+
+Enforcement lives in **one place**: `withTenant` throws
+`Response.forbidden("Your membership of this tenant has expired!")` once `expiresAt` has
+passed. The predicate is `isMembershipExpired(member, now?)`, exported from
+`schemas/tenantMember.ts` — reuse it rather than re-comparing dates.
+
+Note how far that one check reaches. Like the "not a member" check above it, it throws
+**even in silent mode** (only the missing-session/missing-`X-TENANT-ID` case returns
+`undefined`). Since `hooks/guard.ts` calls `withAuthGuard` → `withTenant(req, true)` on
+*every* request, a request carrying an expired `X-TENANT-ID` is rejected globally — not
+just on routes that call `withTenant` themselves. An expired member hitting `me.get` with
+the header set gets the expiry 403; dropping the header gets them their non-tenant access
+back.
+
+Gotchas:
+
+- Expiry is **absolute**, not a duration from acceptance. An invite accepted after its
+  `membershipExpiresAt` produces a membership that is already expired, so pair a short
+  membership window with a prompt acceptance. `membershipExpiresAt` must be in the future
+  at invite-creation time (rejected otherwise).
+- Expired member documents are **not deleted** — they stay listed and keep their audit
+  trail, and the membership is reinstated by `PATCH`ing `expiresAt` to a later date (or
+  clearing it). There is no TTL cleanup.
+- `PATCH`ing `expiresAt` to a past date is the way to revoke access immediately.
+- Only the member's inviter can patch/delete them (`isolationFields` pins `createdBy`).
+- Owner memberships created by `routes/tenants.ts` never carry an expiry.
+- A member whose membership expires still exists as a *user*; only tenant-scoped access is
+  denied.
+
+## RBAC / Access Control
+
+Permissions are `scope.action` strings, where `scope` is the **router function name** and
+`action` is the **handler function name** (e.g. for `createCRUD`, actions like `create`,
+`get`, `count`, `update`, `del`). A bare `scope` grants all actions in that router; `*`
+grants everything.
+
+Data model (read the schema files for exact fields):
+- `schemas/accessControlPolicy.ts` — a named bundle of permission strings.
+- `schemas/accessControl.ts` — maps a role to policies, with `subRoles` (roles this role
+  may assign to invitees) and `skipIntersection`. When a role resolves to multiple
+  access-control docs, their policy sets are **intersected** unless `skipIntersection`.
+
+### `withAuthGuard` — `utils/withAuthGuard.ts`
+
+```typescript
+import { withAuthGuard } from "@/utils/withAuthGuard.ts";
+
+const { role, subRoles, policies, allow } = await withAuthGuard(req);
+if (!allow("tenants", "create")) throw Response.forbidden();
+```
+
+Resolves the effective role for the request (defaults to `guest` when unauthenticated),
+applies tenant role cascading (parent inviter's role unless `RBAC_NO_CASCADE`), loads the
+relevant policies (further narrowed by OAuth/API-key `scopes` unless they include `*` or
+`full_access`), and returns an `allow(scope, action)` predicate.
+
+Behaviors worth knowing:
+
+- The whole access-control + policy set is loaded once and **cached for 30 seconds** (via
+  `core/utils/cache.ts`). Policy/role edits take up to 30s to take effect.
+- Scope narrowing by name: when the resolved role holds the `root` policy (`["*"]`), the
+  requested `scopes` are treated as policy *names* and resolved directly, so a root role
+  with `scopes: ["iam"]` gets exactly the `iam` policy. For non-root roles the scopes only
+  filter the policies the role already has.
+
+### Guard hook — `hooks/guard.ts`
+
+Runs at very high priority (before everything). For every request it calls `withAuthGuard`
+and throws `Response.forbidden(...)` if `allow(scope, name)` is false. The error names the
+missing permission plus the resolved role and subRoles, e.g.
+`missing permission tenants.create for role user and subRoles member`. **Every route is
+permission-gated by default** based on the seeded policies.
+
+Default seeded roles and policies are defined in `scripts/syncAccessControl.ts` — read it
+for the current, authoritative list. At the time of writing:
+
+| Policy      | Permissions |
+| ----------- | ----------- |
+| `public`    | `index`, `home`, `wellKnown`, `auth`, `oauth`, `me.get` |
+| `developer` | `oauthClients`, `apiKeys` |
+| `iam`       | `tenants`, `tenantMembers`, `tenantInvites`, `tenantMemberships.get`, `accessControlPolicies.myPolicies`, `accessControlPolicies.get` |
+| `media`     | `imageKit.auth` |
+| `root`      | `*` |
+
+| Role    | Policies | Notes |
+| ------- | -------- | ----- |
+| `guest` | `public` | |
+| `user`  | `public`, `developer`, `iam`, `media` | |
+| `admin` | `root`   | `skipIntersection: true` — an admin's invitee inherits the admin policy set (narrowed by their own scopes) instead of the intersection |
+
+### Access-Control Manager — `lib/accessControlManager.ts`
+
+`ACManager` is the programmatic way to declare permissions from your own code (this is what
+`scripts/syncAccessControl.ts` uses). All methods are upsert-based and safe to re-run:
+
+```typescript
+import { ACManager } from "@/lib/accessControlManager.ts";
+
+// Upsert a policy and $addToSet its permissions. Returns the policy doc.
+const billing = await ACManager.resolvePolicy("billing", ["billing.charge"]);
+
+// Remove permissions from an existing policy ($pullAll; throws on failure).
+await ACManager.denyFromPolicy("billing", ["billing.refund"]);
+
+// Upsert a role and $addToSet policies. Accepts policy docs or policy NAMES
+// (a `"*"` name attaches every policy). `opts` is only applied on insert.
+await ACManager.resolveRole("cashier", [billing, "media"], {
+  skipIntersection: true,
+});
+
+// Add assignable sub-roles to a role.
+await ACManager.setSubRole("cashier", ["teller"]);
+```
+
+Called with no permissions/policies, `resolvePolicy`/`resolveRole` degrade to a plain
+`findOne` — handy for looking a policy up without creating it. The upserts
+(`resolvePolicy`, `resolveRole`, `setSubRole`) are `.catch(() => null)`-guarded, so a
+failure returns `null` rather than throwing; `denyFromPolicy` is not, so a failed removal
+surfaces as an error.
+
+Access-control management routes: `routes/accessControl.ts` (role→policy mappings) and
+`routes/accessControlPolicies.ts` (policies; also exposes a "my policies" endpoint
+returning the caller's role/subRoles/policies).
+
+## OAuth2 / OpenID Connect Provider
+
+thunder-core can act as an OAuth2 + OIDC provider (Authorization Code + PKCE, refresh
+tokens, ID tokens). Core logic is the `OAuth2` class in `lib/oauth2.ts` — read it for the
+full method set. Key methods: `resolveJWKs` (lazily generates/persists an RS256 keypair in
+the `jwks` collection), `createOAuthConfig` (discovery metadata), `validateOAuthParams` /
+`validateConfidentialClient`, `signJWT`/`verifyJWT` (HS256, `SECRET_KEY`-based, for
+access/refresh/authorization codes), `signIdToken` (RS256, JWKS-based), and
+`generateAuthorizationCode`/`exchangeToken`/`revoke`/`verifyAccessToken` (S256 PKCE only).
+
+Concepts not obvious from method names:
+- Consent versioning: each consent has a `version`; `exchangeToken` increments it, which
+  revokes previously issued tokens carrying an older version.
+- Refresh tokens are only issued when the consent includes `offline_access`; ID tokens
+  only when it includes `openid`.
+- `signJWT`/`verifyJWT` take `issuer`/`audience` as **optional** — both default to
+  `BASE_URL`. That makes them reusable as a general-purpose signed-token helper for
+  non-OAuth flows (the wallet transfer challenge token uses exactly this), e.g.
+  `await OAuth2.signJWT(payload, { subject, ttl: 300 })`. Pass a `secret` to derive a
+  separate signing key (`SECRET_KEY + secret`) so tokens from different flows cannot be
+  cross-verified.
+
+Routes (read for exact request/response shapes):
+- `routes/.well-known.ts` — OAuth2 / OpenID discovery metadata.
+- `routes/oauth.ts` — authorize, consent, token, revoke, and JWKS endpoints.
+- `routes/oauthClients.ts` — CRUD over registered OAuth clients (the `secret` is hidden in
+  responses; confidential clients authenticate via HTTP Basic at the token/revoke
+  endpoints). See `schemas/oauthClient.ts` and `schemas/oauthConsent.ts`.
+
+## API Keys
+
+`lib/apiKey.ts` (class `APIKey`): `APIKey.hash(secret)` produces the stored SHA-1 hash (the
+raw secret is never stored); `APIKey.resolve(secret)` looks up by hashed secret and bumps
+`accessCount` / `lastAccessAt`. `routes/apiKeys.ts` exposes CRUD isolated to the creator
+with the hashed `secret` excluded from responses. The secret is validated as a plain string
+(8–100 chars) on input and auto-hashed by `apiKeySchema`. API keys authenticate requests
+via the `X-Api-Key` header (see `withAuthSession`). Fields: `schemas/apiKey.ts`.
+
+## Wallet & Ledger (double-entry)
+
+`lib/wallet.ts` (class `Wallet`) implements an integer-cent, double-entry wallet system
+with idempotency, overdraft, refunds, and pluggable fees. Wallets are per
+`{ tenant, currency }`. All ledger entries are written in debit+credit pairs inside a
+MongoDB transaction. Read `lib/wallet.ts`, `schemas/wallet.ts`, and
+`schemas/walletLedger.ts` for the full option and field set.
+
+```typescript
+import { Wallet } from "@/lib/wallet.ts";
+
+// Transfer 1000 cents between two tenants' wallets in a currency.
+await Wallet.transfer({
+  fromTenant, toTenant,        // ObjectId
+  currency: "usd",
+  amount: 1000,                // positive integer, in cents
+  idempotencyKey,              // optional; auto-derived if omitted
+  reference,                   // optional; auto-generated via References
+  allowOverdraft, overdraftLimit,
+  foreignRefType, foreignRef,  // link to an external object
+  purpose, description, metadata,
+  tags,                        // optional string[] stamped on both ledger legs
+  checkWalletExist,            // if true, fail instead of lazily creating a wallet
+  databaseSession,             // optional existing Mongo session
+});
+
+// Refund an existing transaction by its reference.
+await Wallet.refund({ refToRefund, /* ...subset of transfer opts */ });
+```
+
+Rules & extension points:
+- `amount` must be a positive non-zero integer (cents). Self-transfers are rejected.
+- Idempotency is enforced by a unique index; the auto key incorporates
+  currency/amount/minute/from/to/description/foreignRef.
+- Overdraft is off by default. When `allowOverdraft` is on, the limit is
+  `opts.overdraftLimit ?? fromWallet.overdraftLimit ?? 0` — i.e. a per-wallet
+  `overdraftLimit` persisted on the wallet document acts as the default.
+- `Wallet.beforeTransferApproval?` — optional static hook; receives
+  `{ fromWallet, toWallet, transferOpts, overdraftApplied, minimumAllowedBalance }`,
+  return `false` to reject.
+- `Wallet.onCalculateFee?` — optional static hook returning
+  `{ total, breakdown: Array<{ tenant, name, amount }> }`.
+- `Wallet.calculateFee(opts)` — public; calls `onCalculateFee` when set, otherwise returns
+  `{ total: 0, breakdown: [] }`. **It only computes the fee; it does not move money.**
+  Charging the breakdown is the caller's job (see `routes/wallets.ts` for the pattern).
+- `Wallet.resolve()` — finds or lazily creates a wallet for a tenant+currency. It opens its
+  own transaction when no `databaseSession` is passed. Both wallets are resolved *before*
+  the transfer transaction opens.
+
+### Wallet routes
+
+- `routes/wallets.ts` (router fn `wallets`) — read-only `createCRUD` (create/update/del
+  disabled) isolated to the active tenant, plus:
+  - `metadata` — `{ defaultCurrency, availableCurrencies }` from `DEFAULT_CURRENCY` /
+    `AVAILABLE_CURRENCIES`.
+  - `signTransfer` + `transfer` — a **two-step signed transfer flow**. `signTransfer`
+    resolves the receiver, computes the fee, and returns a 5-minute HS256 challenge token
+    (via `OAuth2.signJWT`) holding the whole quote; `transfer` verifies that token and
+    executes the main transfer plus every fee leg in one Mongo transaction. The sender
+    cannot change the quote between the two calls, and the token's `challengeId` doubles as
+    the idempotency key.
+    The `receiver` query param is `<ref>[:<tenantId>]`, where `<ref>` is an ObjectId, email
+    or `phoneNumber`; without a tenant id it targets the receiver's owned tenant. Fee legs
+    that are zero/negative or self-directed are skipped.
+  - `updateOverdraftLimit` / `getOverdraftLimit` — set and read a wallet's
+    `overdraftLimit` by `{ userId, tenantId }` (the setter upserts the wallet).
+- `routes/walletLedgers.ts` (router fn `walletLedgers`) — read-only `createCRUD` over the
+  ledger, isolated to the active tenant.
+
+Neither router is in a default seeded policy, so grant `wallets`/`walletLedgers`
+permissions explicitly (see RBAC above).
+
+## References (sequential counters)
+
+`lib/references.ts` (class `References`): `References.inc(label, prefix, databaseSession?)`
+atomically increments a named counter in the `references` collection and returns
+`prefix + count` (e.g. `TX1`, `TX2`). Pass an existing Mongo `ClientSession` as the third
+argument to enlist the increment in a surrounding transaction. Used to generate
+human-readable wallet transfer references.
+
+## Mailer (transactional email)
+
+`lib/mailer.ts` (class `Mailer`) wraps nodemailer with a Handlebars template registry.
+
+```typescript
+import { Mailer } from "@/lib/mailer.ts";
+
+// Register a named template (lazy fetcher; cached after first render).
+Mailer.addTemplate("welcome", () => ({
+  subject: "Welcome {{name}}",
+  html: "<h1>Hi {{name}}</h1>",
+}));
+
+// Send using a template (extra fields are passed to Handlebars), or raw html/text.
+await Mailer.send({ template: "welcome", to: "a@b.com", name: "Alice" });
+await Mailer.send({ to: "a@b.com", subject: "Hi", html: "<p>...</p>" });
+```
+
+A `_blank` template id is used as a fallback when a requested template isn't registered.
+SMTP transport is configured from the `SMTP_*` env vars (nodemailer timeouts: 15s connect,
+15s greeting, 30s socket; debug output via `SMTP_DEBUG`).
+
+Set `Mailer.onSendMail` to bypass SMTP entirely and route the rendered payload
+(`{ from, to, subject, html, text }`) to your own provider — templates still render, but
+nodemailer is never touched:
+
+```typescript
+Mailer.onSendMail = async (payload) => { await myProvider.send(payload); };
+```
+
+Note: `routes/tenantInvites.ts` swallows mail errors on invite creation, so an invite is
+still created when SMTP is down.
+
+## SMS — `lib/sms.ts`
+
+`SMS` has **no built-in provider**. It is a hook point: assign `SMS.onSendSms` at boot, or
+`SMS.send` throws `"SMS sending is not configured."`. The phone-number verification
+endpoints on `routes/me.ts` depend on it.
+
+```typescript
+import { SMS } from "@/lib/sms.ts";
+
+SMS.onSendSms = async ({ to, text }) => { await myGateway.send(to, text); };
+
+await SMS.send({ to: "+10000000000", text: "Your code is 123456" });
+```
+
+## ImageKit upload auth
+
+`routes/imagekit.ts` exposes an endpoint that returns short-lived ImageKit client-side
+upload credentials using `IMAGEKIT_PRIVATE_KEY` / `IMAGEKIT_PUBLIC_KEY`. Read the file for
+the exact path and response shape.
+
+## Users, Me & Status
+
+- `routes/users.ts` — admin user management wrapping better-auth admin APIs (create,
+  update, ban, and read-only list/get/count), plus `addFcmToken` (`$addToSet` onto the
+  user's `fcmTokens`, for push notifications) and `getUserTenants` (the tenants a given
+  user is a member of).
+- `routes/me.ts` — `get` returns the current authenticated user, plus phone-number
+  verification: `setPhoneNumber` stores an E.164 number with a 6-digit code and texts it via
+  `SMS` (rate-limited to one request per minute by a conditional `updateOne`, so it also
+  rejects re-submitting the number already on file), and `verifyPhoneNumber` checks the
+  code and flips `phoneNumberVerified`. Requires `SMS.onSendSms` to be configured.
+- `routes/home.ts` — health/status endpoint.
+
+## Shipped Hooks
+
+- `hooks/essentials.ts` (highest priority) — CORS (preflight + headers, allows
+  `X-TENANT-ID`, `X-API-KEY`, `X-PAYLOAD-SIGNATURE`; exports `corsHeaders`) and the
+  DB-backed env fallback (`Env.onGetFailed`).
+- `hooks/guard.ts` (very high priority) — RBAC enforcement on every route via
+  `withAuthGuard`.
+- `hooks/requestLogs.ts` (lowest priority) — logs every response at the appropriate level.
+
+## Schemas / Collections
+
+All models use the framework's `mongodb` instance with a Zod schema. Read each schema file
+for the exact fields, defaults, and unique indexes (`scripts/syncDBIndexes.ts`):
+
+`schemas/user.ts`, `schemas/session.ts`, `schemas/tenant.ts`, `schemas/tenantMember.ts`,
+`schemas/tenantInvite.ts`, `schemas/accessControl.ts`, `schemas/accessControlPolicy.ts`,
+`schemas/apiKey.ts`, `schemas/oauthClient.ts`, `schemas/oauthConsent.ts`, `schemas/jwk.ts`,
+`schemas/env.ts`, `schemas/references.ts`, `schemas/wallet.ts`, `schemas/walletLedger.ts`.
+
+`resourceGrantSchema` (exported from `schemas/oauthConsent.ts`) maps a tenant id → granted
+scopes, and is reused by both OAuth consents and API keys to scope access per tenant.
+
+Some fields carry Zod `.meta({ canFilter: true, label: "..." })` — this is consumed by the
+Thunder UI to offer filters on a collection, not by the API itself. Currently applied in
+`schemas/user.ts` (name, email, emailVerified, phoneNumber, role, createdAt) and
+`schemas/walletLedger.ts` (type, reference, amount, createdAt, updatedAt).
+
+`schemas/tenantMember.ts` carries an optional `expiresAt` (temporary memberships, see
+"Temporary memberships") and exports the `isMembershipExpired` predicate;
+`schemas/tenantInvite.ts` carries the matching optional `membershipExpiresAt`.
+
+`schemas/user.ts` also holds the non-better-auth extras: `fcmTokens` (push tokens),
+`phoneNumber` (E.164), `phoneNumberVerified`, `phoneNumberVerificationCode` and
+`phoneNumberVerificationRequestAt`.
+
+## Common Consumer Patterns
+
+Inside your own routes, gate access and read context like this:
+
+```typescript
+import { Router } from "@/core/http/router.ts";
+import { withAuthSession } from "@/utils/withAuthSession.ts";
+import { withTenant } from "@/utils/withTenant.ts";
+import { Wallet } from "@/lib/wallet.ts";
+
+export default new Router("/api", function billing(router) {
+  router.post("/charge", function charge() {
+    return async (req) => {
+      // Auth + tenant resolution (guard hook already enforced "billing.charge" permission)
+      const { user } = await withAuthSession(req);
+      const { tenant } = await withTenant(req);
+
+      await Wallet.transfer({
+        fromTenant: tenant._id,
+        toTenant: platformTenantId,
+        currency: "usd",
+        amount: 500,
+        user: user._id,
+        purpose: "subscription",
+      });
+
+      return Response.ok();
+    };
+  });
+}).group("Billing");
+```
+
+To make a new route's permission available, add its `scope.action` (router fn name +
+handler fn name) to an access-control policy and attach that policy to the appropriate
+role(s). Three ways, in order of preference:
+
+1. `ACManager` from your own setup/bootstrap code — idempotent, keeps the declaration next
+   to the routes it covers:
+   ```typescript
+   const policy = await ACManager.resolvePolicy("billing", ["billing.charge"]);
+   await ACManager.resolveRole("user", [policy]);
+   ```
+2. Edit `scripts/syncAccessControl.ts` and re-run `deno task sync:ac:dev` / `sync:ac:prod`
+   — safe to re-run, see "Plugin Lifecycle & Setup".
+3. At runtime via the access-control routes.
+
+Remember the 30-second `withAuthGuard` cache: a new permission may take up to 30s to take
+effect.

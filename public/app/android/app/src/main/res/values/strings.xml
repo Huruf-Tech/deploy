@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">thunder-ui</string>
+    <string name="title_activity_main">thunder-ui</string>
+    <string name="package_name">com.huruf.thunderui</string>
+    <string name="custom_url_scheme">com.huruf.thunderui</string>
+</resources>

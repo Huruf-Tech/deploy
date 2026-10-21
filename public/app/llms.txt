@@ -1,0 +1,1548 @@
+# Thunder UI - AI Agent Instructions
+
+Thunder UI is a React + Vite dashboard boilerplate for Thunder Framework. It reads your
+backend's schemas through a generated `thunder-sdk` and builds navigation, list pages and forms
+for every module automatically — and beyond that it is **a normal React app** you can build
+anything in.
+
+Because every generated screen comes from that SDK, a backend change only reaches the UI once
+the SDK is rebuilt. See [Two Kinds of Update](#two-kinds-of-update).
+
+## Upstream Context
+
+- [Thunder Framework llms.txt](https://thunder.huruftech.com/llms.txt): the backend this UI is
+  generated from — routers, `createCRUD`, schemas, and the `generate:app` task.
+- [React docs](https://react.dev/): React 19 is the runtime.
+- [Vite docs](https://vite.dev/): build tool, `import.meta.env`, modes.
+- [Tailwind CSS v4](https://tailwindcss.com/docs): CSS-first config via `@theme`.
+- [Base UI](https://base-ui.com/): headless primitives under the shadcn/ui components.
+- [react-hook-form](https://react-hook-form.com/): form state for generated forms.
+- [React Router](https://reactrouter.com/): `createBrowserRouter` data router.
+- [Capacitor](https://capacitorjs.com/docs): the Android/iOS build.
+- [ImageKit](https://imagekit.io/docs): upload and image transformation.
+
+**Provenance.** Verified against the `thunder-ui` repository at commit `641ed47` on 2026-10-06.
+Figures were measured, not estimated.
+
+## Ground Rules For This File
+
+1. **Treat this file as the boundary of what is known.** Do not state anything about Thunder UI
+   that is not here, and do not infer behaviour from how similar tools work.
+2. [Verify With The Framework Team](#verify-with-the-framework-team) lists facts that live in
+   the framework's own tooling and could not be determined from this repository. Do not invent
+   them.
+3. File paths, type names and environment variable names are exact. Copy them verbatim.
+
+---
+
+## Project Structure
+
+Inside a Thunder Framework project the app lives at `public/app/`, and the SDK it links to at
+`public/www/sdk@<version>/`.
+
+```
+public/app/                # ← the generated Thunder UI app
+├── src/
+│   ├── core/              # FRAMEWORK INTERNALS (DO NOT MODIFY)
+│   │   ├── router.tsx     # builds every route from SDK metadata
+│   │   ├── protected.tsx  # auth gate (OIDC or cookie session)
+│   │   ├── types.ts       # the override contracts
+│   │   ├── crud/          # ListPage, FormPage, ViewPage, filters, field renderers
+│   │   ├── layouts/       # navbar | sidebar | mobile | native + registry.ts
+│   │   ├── custom/        # composite components (RefSelect, Datatable, …)
+│   │   ├── lib/           # jsonSchemaToFields, utils, features, constants
+│   │   ├── locals/        # Thunder UI's own translations
+│   │   ├── pages/         # built-in pages (overview, wallet, users, notifications)
+│   │   └── styles/        # mechanics only: keyframes, utilities, fonts
+│   │
+│   ├── overrides/         # Extension points — replace generated screens
+│   │   ├── crud/{lists,cards,forms,views}.tsx
+│   │   ├── icons.tsx
+│   │   ├── layouts.ts
+│   │   └── routes.tsx
+│   │
+│   ├── pages/             # YOUR pages
+│   ├── components/        # YOUR components + the shadcn/ui primitives
+│   ├── hooks/, lib/       # YOUR hooks and helpers
+│   ├── locals/            # YOUR translations (merged over core's)
+│   ├── index.css          # YOUR theme tokens
+│   ├── App.tsx            # route tree + layout wiring
+│   ├── main.tsx           # app entry
+│   └── i18n.ts            # i18next setup
+│
+├── android/, ios/         # Capacitor native projects
+├── www/                   # build output (gitignored; produced by the build)
+├── .env, .env.example     # environment
+└── capacitor.config.ts
+```
+
+### Critical: Never Edit `src/core/`
+
+`src/core/` is managed by Thunder UI and is **overwritten** when the developer runs:
+
+```bash
+deno task generate:app --forceSync
+```
+
+That command replaces `src/core/` wholesale with the latest Thunder UI and leaves everything
+else untouched. It is how fixes and security patches reach an existing project without
+discarding the developer's work. Any manual change inside `src/core/` **will be lost — every
+time, with no warning and no prompt.**
+
+> The ONLY time editing `src/core/` is acceptable is while experimenting or debugging locally.
+> Treat such edits as throwaway.
+
+**Build on top instead:**
+
+- Add pages in `src/pages/`, components in `src/components/`, helpers in `src/lib/`.
+- Register replacements for generated screens in `src/overrides/`.
+- Wrap or compose core utilities in your own modules.
+
+Everything outside `src/core/` is yours and survives every update.
+
+---
+
+## It Is Still a Normal React App
+
+**Do not present Thunder UI as a system you can only use through its CRUD generator.** The
+generator removes the repetitive part — one list page and one form per backend module — and
+nothing more. The rest is an ordinary React + Vite application.
+
+Developers are free to:
+
+- Add pages with any content, generated or hand-written, CRUD-related or not.
+- Add components, hooks, contexts and utilities anywhere outside `src/core/`.
+- Install any npm dependency and use it normally.
+- Call the SDK directly, call their own endpoints, or call a third-party API.
+- Build features with no backend module behind them at all — a dashboard, a report, a wizard,
+  a landing page.
+- Add as many layouts/themes as they want and switch between them.
+- Restyle everything through theme tokens, or ignore the tokens and write their own CSS.
+
+```tsx
+// src/pages/analytics.tsx — a plain React page, nothing schema-driven about it
+import { useEffect, useState } from "react"
+import { Card, CardContent, CardHeader } from "@/components/ui/card"
+
+export default function Analytics() {
+  const [data, setData] = useState<number[]>([])
+
+  useEffect(() => {
+    fetch("/analytics/api/daily")
+      .then((r) => r.json())
+      .then(setData)
+  }, [])
+
+  return (
+    <Card>
+      <CardHeader>Daily signups</CardHeader>
+      <CardContent>{data.length} days loaded</CardContent>
+    </Card>
+  )
+}
+```
+
+```tsx
+// src/overrides/routes.tsx — make it reachable
+import { IconChartBar } from "@tabler/icons-react"
+import Analytics from "@/pages/analytics"
+import type { TRoutesOverride } from "@/core/types"
+
+export const routes: TRoutesOverride = {
+  analytics: { name: "Analytics", icon: IconChartBar, Component: Analytics },
+}
+```
+
+The only hard rule is the one above: don't edit `src/core/`.
+
+---
+
+## Installation
+
+Thunder UI is not installed with a package manager. It is generated into a Thunder Framework
+project, from that project's root:
+
+```bash
+deno task generate:app
+```
+
+`--forceSync` is the only flag.
+
+What it does:
+
+1. Clones Thunder UI into **`public/app/`** in the framework project.
+2. Generates an SDK from the backend's routes and schemas into **`public/www/sdk@<version>/`**.
+3. Rewrites the app's `package.json` to point `thunder-sdk` at that SDK:
+   ```jsonc
+   "thunder-sdk": "file:///../www/sdk@<latest-version>/npm"
+   ```
+4. Runs the install and the first build for you.
+5. The app then derives its navigation and CRUD screens from that SDK.
+
+So the dependency is a **local `file:` link to a versioned directory on the backend**, not a
+package downloaded from a registry.
+
+> The `thunder-sdk` entry committed in this repository points at a published tarball
+> (`https://…/sdk@x.y.z/package.tgz`). That is only the standalone default so the boilerplate
+> can be built on its own — `generate:app` replaces it with the `file:` link above.
+
+The web build outputs to `www/` inside the app directory and is served under the base path
+`/app` (`vite.config.ts` sets `build.outDir: "./www"`; the build passes `--base=/app`). `www/`
+is **gitignored** — it is a build artifact, produced by `generate:app` on install and by
+`npm run build` afterwards. The `.env` files, by contrast, are committed deliberately.
+
+### Two Kinds of Update
+
+**Do not conflate these.** It is the distinction developers get wrong most often — two
+independent things can go stale, with two different commands:
+
+| What changed | What to run | What it refreshes |
+| --- | --- | --- |
+| **Your backend** — a schema, or a route's shape | `deno task generate:sdk` then rebuild | the generated screens: columns, filters, form fields |
+| **Thunder UI itself** — a fix or new feature upstream | `deno task generate:app --forceSync` | `src/core/` |
+
+#### After changing a backend schema or route
+
+The UI reads everything from the generated SDK, so a backend change is invisible until the SDK
+is rebuilt:
+
+```bash
+# 1. Rebuild the SDK from the current routes and schemas
+deno task generate:sdk -v <latest-version> --overwrite
+```
+
+Then pick up the new SDK in the app, either way:
+
+```bash
+# 2a. relinks package.json to the new SDK version, reinstalls and rebuilds
+deno task generate:app --forceSync
+
+# 2b. or, from public/app, just rebuild
+npm run build
+```
+
+Choose by whether the **version changed**: the `thunder-sdk` entry names a specific
+`sdk@<version>` directory, so a new version needs `generate:app` to rewrite that link.
+Overwriting the same version in place leaves the link valid, and a rebuild is enough.
+
+Nothing in `src/` needs editing. New modules appear in navigation on their own, new properties
+appear as columns and form fields, and a changed `fieldHint` or `ref` changes the control that
+renders — all from the schema.
+
+> **Symptom to recognise:** a developer says they added a field (or a whole module) on the
+> backend and "Thunder UI isn't showing it". The answer is almost always that the SDK has not
+> been regenerated.
+
+#### Updating Thunder UI itself
+
+```bash
+deno task generate:app --forceSync
+```
+
+Replaces `src/core/` with the latest Thunder UI, relinks the SDK, reinstalls and rebuilds.
+Everything outside `src/core/` is left alone.
+
+> **It replaces `src/core/` unconditionally and does not warn.** Any edit inside that directory
+> is lost, every time. Commit your own work first so the resulting diff is reviewable.
+
+---
+
+## How CRUD Screens Are Generated
+
+`src/core/router.tsx` builds the route tree at module load **from the installed SDK** — so a
+backend module that does not appear here is usually a stale SDK, not a routing problem. See
+[Two Kinds of Update](#two-kinds-of-update).
+
+1. **Module names** come from `ThunderSDK.getModuleNames()`, plus any key in
+   `src/overrides/routes.tsx` that is not an SDK group and is not a built-in route key.
+2. **Per module**, if an override exists without `merge: true`, it replaces the generated route
+   entirely. Otherwise a route is generated and the override is spread over it, so `merge: true`
+   changes `name`/`icon`/`priority` while keeping the generated children.
+3. **Grouping** uses `ThunderSDK.getGroup(name)` — the `.group("Label")` on the backend router,
+   deliberately shared across several route files (see
+   [Route level](#route-level-the-router-file)). Each group becomes a parent route whose path is the group name lowercased with
+   whitespace replaced by dashes. A group's index redirects to its first visible child.
+4. **Visibility** requires `ThunderSDK.isPermitted(name, "get")` or
+   `isPermitted(name, "create")`, and the override's `display` must allow it. A group shows only
+   if a child is visible.
+5. **Built-ins** `overview`, `wallet` and `notifications` are prepended and replaceable by name.
+
+### Generated children per module
+
+| Child path | Component | Condition |
+| --- | --- | --- |
+| index | `ListPage`, or the `lists` override | always |
+| `form`, `form/:id` | `FormPage` | only if the module has `create` or `update` |
+| `:id` | `ViewPage` | always |
+
+### URL shape
+
+| URL | Page |
+| --- | --- |
+| `/` | redirects to `/select-tenant` |
+| `/select-tenant` | tenant picker |
+| `/:tenant/overview` | landing page |
+| `/:tenant/<group>/<module>` | list |
+| `/:tenant/<group>/<module>/form` | create |
+| `/:tenant/<group>/<module>/form/:id` | edit |
+| `/:tenant/<group>/<module>/:id` | detail |
+
+The `:tenant` segment is pushed into the SDK via `ThunderSDK.plugins.essentials.setTenant()`.
+
+### TRouteObject
+
+```ts
+type TRouteObject = {
+  name?: string                        // nav label; passed through t()
+  priority?: number | (() => number)   // ascending; ties keep declaration order
+  group?: string
+  icon?: TablerIcon
+  display?: boolean | (() => boolean)
+  children?: TRouteObject[]
+  button?: React.ComponentType         // rendered beside the nav entry
+} & RouteObject
+```
+
+---
+
+## Controlling the UI From the Backend Schema
+
+This is the part that ties the two projects together, and the part a developer is most likely to
+be looking for.
+
+Thunder UI never guesses at layout. **The form's grouping, labels, control types, help text and
+which columns are filterable are all declared on the backend**, as zod `.meta()` on the schema
+fields. Those keys have no meaning to the database or to validation — they exist only to shape
+the generated UI, and they travel to the frontend inside the JSON Schema the SDK carries.
+
+It happens at two levels: the **router file** decides the module's name, its navigation group
+and which pages exist; the **schema fields** decide the form's layout and controls.
+
+A field's plain zod type already decides a lot (see [What plain zod already
+implies](#what-plain-zod-already-implies)); `.meta()` is for everything zod cannot express.
+
+### Route level: the router file
+
+A backend route file becomes one module in the UI. Two things on it matter:
+
+```ts
+// routes/rosters.ts  (Thunder Framework — backend)
+import { Router } from "@/core/http/router.ts";
+import { createCRUD } from "@/core/utils/createCRUD.ts";
+import {
+  rosterInputSchema,
+  rosterModel,
+  rosterSchema,
+} from "@/schemas/hr/roster.ts";
+import { withTenant } from "@plugins/Huruf-Tech/thunder-core/utils/withTenant.ts";
+
+export default new Router("/api", function rosters(router) {
+  createCRUD({
+    router,
+    schema: rosterSchema,             // → list columns, filters, detail
+    insertSchema: rosterInputSchema,  // → the create form
+    model: rosterModel,
+  }, {
+    isolationFields: async (req, action) => {
+      const { tenant, user } = await withTenant(req);
+
+      if (action === "create") {
+        return { tenant: tenant._id, createdBy: user._id };
+      }
+
+      return { tenant: tenant._id };
+    },
+  });
+}).group("HR Admin");               // → the UI's navigation group
+```
+
+**The router's name is the module name.** `function rosters(router)` — matching the filename by
+convention — is the key you use everywhere in the UI: `overrides/crud/cards.tsx`,
+`overrides/routes.tsx`, `<ListPage name="rosters" />`.
+
+Navigation **order** is not set here. `priority` is a frontend-only concern — see
+[Reordering modules and groups](#reordering-modules-and-groups).
+
+**`.group("Label")` is what groups routes in the navigation.** It is a *shared label*, reused
+deliberately across several route files — every file tagged `.group("HR Admin")` lands in one
+`HR Admin` group in the sidebar, with one parent route:
+
+```
+routes/rosters.ts           .group("HR Admin")  ─┐
+routes/overtimePolicies.ts  .group("HR Admin")  ─┼─→  /:tenant/hr-admin/...
+routes/leavePolicies.ts     .group("HR Admin")  ─┘
+```
+
+The group's URL segment is the label lowercased with whitespace replaced by dashes, so
+`.group("HR Admin")` serves at `/:tenant/hr-admin/<module>`. A module with no `.group()` falls
+into a group literally named `Other`.
+
+### The three schemas and what each one drives
+
+`createCRUD` takes up to three schemas, and the UI uses a different one per surface:
+
+| `createCRUD` option | Used for | UI surface |
+| --- | --- | --- |
+| `schema` | the full document shape | list columns, the filter menu, and the `output` intent |
+| `insertSchema` | the create payload | the **create** form (`/form`) |
+| `updateSchema` | the update payload | the **edit** form (`/form/:id`) |
+
+Resolution is tolerant, so you only declare what differs:
+
+| Intent | Falls back through |
+| --- | --- |
+| create | `insertSchema` → `schema` |
+| edit | `updateSchema` → `insertSchema` → `schema` |
+| list / detail | `schema` |
+
+So a module with only `schema` still gets working create and edit forms. Supplying
+`insertSchema` keeps server-generated fields (`_id`, `createdAt`, `tenant`) out of the form, and
+supplying `updateSchema` lets you narrow what is editable after creation:
+
+```ts
+createCRUD({
+  router,
+  schema: rosterSchema,
+  insertSchema: rosterInputSchema,
+  updateSchema: rosterInputSchema.pick({ name: true }),  // only the name is editable
+  model: rosterModel,
+});
+```
+
+### Disabled operations remove pages
+
+The UI generates pages from the endpoints the SDK actually exposes:
+
+- No `create` **and** no `update` on the module → **no form route at all**.
+- No `del` → the delete action disappears from the list page's action bar.
+
+So disabling an endpoint on the backend (`createCRUD(..., { disable: { del: true } })`) removes
+the corresponding UI, with nothing to change in the frontend.
+
+Fields injected by `isolationFields` — `tenant`, `createdBy` and similar — are set server-side
+and normally absent from `insertSchema`, so they never appear as form inputs. That is the
+intended arrangement: keep them out of the insert schema and the UI will not ask for them.
+
+### Field level: a worked schema
+
+Excerpt from a real employee schema, showing every technique in one place:
+
+```ts
+// schemas/employee.ts  (Thunder Framework — backend)
+export const employeeInputSchema = z.object({
+  // pick a specific control
+  avatar: z.url().meta({ fieldHint: "avatar" }).optional(),
+
+  // three fields on one row: the GROUP's classes go on its FIRST field
+  fname: z.string().max(50).meta({
+    group: "fullName",
+    groupClassName: "grid grid-cols-2 gap-4",
+    label: "First Name",
+  }),
+  mname: z.string().max(50).optional().meta({
+    group: "fullName",
+    label: "Middle Name",
+  }),
+  lname: z.string().max(50).optional().meta({
+    group: "fullName",
+    className: "col-span-2",          // this one field spans the grid
+    label: "Last Name",
+  }),
+
+  // enum + filterable
+  gender: z.enum(Gender).optional().meta({ group: "bio", canFilter: true }),
+
+  // a reference, rendered as a type-ahead over the users module
+  user: $objectId.meta({
+    ref: "users",
+    refLabel: ["name", "email"],
+    fieldHint: "autocomplete",
+  }).optional(),
+
+  // long text becomes a textarea automatically (maxLength > 100)
+  address_1: z.string().max(300).optional().meta({
+    group: "address",
+    groupClassName: "grid grid-cols-2 gap-4",
+    className: "col-span-2",
+  }),
+
+  // an array of objects → a repeatable field group with add/remove
+  identity: z.array(
+    z.object({
+      kind: z.enum(IdentityKind),
+      description: z.optional(z.string().max(150)),
+      documents: z.array(
+        z.url().meta({ label: "Identity documents", fieldHint: "upload" }),
+      ).optional(),
+    }),
+  ).meta({
+    label: "Identify your employee",
+    description: "A proof of identity is a must in order to proceed",
+  }),
+
+  // a nested object → its own fieldset, with its own internal grouping
+  bankDetails: z.object({
+    bankName: z.string().max(100).meta({
+      group: "bankName",
+      groupClassName: "grid grid-cols-2 gap-4",
+    }),
+    accountName: z.string().max(50).meta({ group: "bankName" }),
+    accountNumber: z.string().max(120).optional(),
+  }).meta({
+    label: "Bank Details",
+    description: "How is this employee going to be paid?",
+  }).optional(),
+
+  // `.describe()` is the same as `.meta({ description })`
+  contract: z.object({
+    kind: z.enum(ContractKind).meta({ label: "Contract Kind" }),
+    joinedAt: z.coerce.date().describe("Start the payroll period").meta({
+      group: "dates",
+      groupClassName: "grid grid-cols-2 gap-4",
+      canFilter: true,
+    }),
+    department: $objectId.meta({ ref: "departments" }).meta({
+      group: "work",
+      canFilter: true,
+    }),
+  }).optional(),
+})
+```
+
+> `.meta()` can be chained — `z.coerce.date().meta({ label }).optional().meta({ group })` merges
+> both objects. This is why you often see one `.meta()` on the inner type (for `ref`) and
+> another after `.optional()` (for layout).
+
+### The metadata keys
+
+| Key | Put it on | Effect in Thunder UI |
+| --- | --- | --- |
+| `label` | any field, object, array | The visible label. On an object or array it becomes the fieldset legend. Passed through `t()`. |
+| `description` (or `.describe()`) | any field, object, array | Help text under the field, or under a fieldset's legend. Passed through `t()`. |
+| `group` | a field | Renders this field in the same row/grid as its neighbours carrying the same value. See below. |
+| `groupClassName` | the **first** field of a group | Tailwind classes for the group container, e.g. `"grid grid-cols-2 gap-4"`. |
+| `groupStyle` | the **first** field of a group | Inline styles for the group container. |
+| `className` | a field | Tailwind classes for that one field, e.g. `"col-span-2"` to span a grid. |
+| `style` | a field | Inline styles for that one field. |
+| `fieldHint` | a field | Picks a specific control. See the [`fieldHint` table](#fieldhint). |
+| `canFilter` | a field | **Required** for the field to appear in the list page's filter menu. |
+| `ref` | an ObjectId field | Module this field references; renders a searchable picker. |
+| `refLabel` | a `ref` field | Property or properties to display, e.g. `["fname", "lname"]`. |
+| `refValue` | a `ref` field | Property to submit. Defaults to `_id`. |
+| `refFilters` | a `ref` field | Filters applied when querying the referenced module. |
+| `example` | a field | Placeholder text. |
+| `requirementKey` | a field | Render only when the watched field's value equals this field's name. |
+| `fileType`, `fileSize` | an upload field | Accepted types and max size. |
+| `filterSchema` | an object field | Schema name for `fieldHint: "filters"`. |
+| `queryValue`, `ignoreQueryValue` | a field | Prefill from a URL query parameter, or opt out of it. |
+
+Any other key on a schema property is carried through to the field object untouched, so a custom
+override component can read whatever it likes.
+
+### Grouping: two rules that surprise people
+
+**1. Grouping is by *consecutive* fields.** Thunder UI walks the properties in order and starts a
+new group each time the `group` value changes. Two blocks with the same `group` name separated by
+a differently-grouped field become **two separate groups** — the name is not an identifier.
+Declare grouped fields next to each other in the schema.
+
+```ts
+// ✅ one row of three
+fname: …meta({ group: "fullName", groupClassName: "grid grid-cols-2 gap-4" }),
+mname: …meta({ group: "fullName" }),
+lname: …meta({ group: "fullName" }),
+
+// ❌ two separate "fullName" groups, because `email` interrupts
+fname: …meta({ group: "fullName" }),
+email: …,
+lname: …meta({ group: "fullName" }),
+```
+
+**2. The group's own classes come from its first field.** `groupClassName` and `groupStyle` are
+read off `fields[0]` of each group, so set them on the first member only. Setting them on a later
+member has no effect.
+
+Fields with no `group` are rendered one per row.
+
+### `canFilter` is opt-in
+
+A field does **not** appear in the list page's filter menu unless it carries
+`canFilter: true`. The menu additionally excludes `url`, `hidden`, `object` and `array` fields,
+so `canFilter` on those does nothing.
+
+This is the single most commonly missed key: the field shows up as a table column and a form
+input regardless, but is unfilterable until the backend says otherwise.
+
+### What plain zod already implies
+
+Most of the UI follows from the type alone — reach for `.meta()` only when you need to override
+one of these:
+
+| On the backend | In Thunder UI |
+| --- | --- |
+| `.optional()` | field is not required; label gets an "(optional)" suffix |
+| required (no `.optional()`) | field is required, with a generated message |
+| `z.string().max(n)` where `n <= 100` | single-line input, with `maxLength` validation |
+| `z.string().max(n)` where `n > 100`, or no `max` | **textarea** |
+| `z.string().min(n)` | `minLength` validation |
+| `z.number().min()/.max()` | number input with range validation |
+| `z.boolean()` | switch |
+| `z.enum(X)` | dropdown (multiselect when inside an array) |
+| `z.url()` | url input — or an uploader with `fieldHint` |
+| `z.email()` | email input |
+| `z.e164()` | international phone input |
+| `z.coerce.date()` | date input (add `fieldHint: "datetime-local"` for a time too) |
+| `z.array(z.string())` | tag input |
+| `z.array(z.object({…}))` | repeatable field group with add/remove |
+| `z.object({…})` | nested fieldset |
+| `z.record(…)` | JSON textarea |
+| `.default(v)` | pre-filled value |
+| `$objectId.meta({ ref })` | searchable reference picker |
+| `z.literal(v)` / a `const` | hidden, submitted as that value |
+| `.regex(...)` | `pattern` validation |
+
+A field's `required` state comes from the parent object's `required` list, which zod derives from
+`.optional()`. Nothing in the UI needs to be told about it.
+
+### After editing a schema
+
+The UI reads all of this from the generated SDK, so none of it takes effect until the SDK is
+rebuilt — see [Two Kinds of Update](#two-kinds-of-update).
+
+---
+
+## Schema to Form Fields
+
+`src/core/crud/metadata.ts` exports `fieldsFromModuleMetadata(metadata, opts)`, which picks the
+schema by intent and converts it with `JSONSchemaToFields.toFields`:
+
+| Intent | Schema resolution |
+| --- | --- |
+| `insert` | `crud.insertSchema ?? crud.schema` |
+| `update` | `crud.updateSchema ?? crud.insertSchema ?? crud.schema` |
+| `output` | `crud.schema` |
+
+The function is **total** — it always returns `TField[]` and never rejects. A module that exposes
+`create`/`update` without a schema yields an empty array and the form shows an empty state.
+
+The [worked schema](#field-level-a-worked-schema) above exercises most of this.
+
+### JSON Schema support matrix
+
+| Construct | Result |
+| --- | --- |
+| `object` with `properties` | nested field group, arbitrarily deep |
+| `array` of objects | repeatable group (`orders.0.lines.0.sku`) |
+| `array` of scalars | tag input (`multi`) |
+| `array` of arrays of scalars | per-row tag input |
+| `required` | propagates, including inside array items |
+| `enum` | dropdown (strings or numbers) |
+| `format`: `date`, `date-time`, `email`, `uri`, `e164` | date / date / email / url / phone |
+| `$ref` / `$defs` | resolved, including recursive refs |
+| `allOf` | merged into the host schema |
+| `oneOf` / `anyOf` | branches merged into one object; a `const` discriminator becomes an enum |
+| `type: ["string","null"]` | resolves to the non-null type |
+| `default` | becomes the field's initial value |
+| `const` | submitted, rendered hidden |
+| `additionalProperties` | JSON textarea |
+| `prefixItems` | sibling fields `name.0`, `name.1` |
+
+**Default rule:** a property is **optional** unless its parent lists it in `required`.
+
+Unsupported constructs degrade to a text input **and** emit a one-time `console.warn`. Set
+`JSONSchemaToFields.silent = true` to suppress those.
+
+### Field type to control
+
+| Field | Control |
+| --- | --- |
+| `text`, `maxLength` absent or > 100 | textarea |
+| `text`, `maxLength` ≤ 100 | single-line input |
+| `number` | number input |
+| `boolean` | switch |
+| `date` | date input |
+| `email` / `url` | input with the matching type |
+| `phone` | international phone input (lazy-loaded) |
+| `hidden` | not rendered; still registered if it has `const` |
+| `enum` present | dropdown, or multiselect when `multi` |
+| `ref` present | searchable, server-paginated picker |
+| `array` of objects | repeatable group with add/remove |
+| `object` | nested field group |
+| any `multi` scalar | tag input |
+
+### fieldHint
+
+A schema property may carry `fieldHint` to pick a specific control:
+
+| `fieldHint` | Applies to | Control |
+| --- | --- | --- |
+| `avatar` | `url`, single | avatar uploader |
+| `upload` | `url` | file table uploader (`fileType`, `fileSize`, `maxItems` honoured) |
+| `markdown` | `text` | markdown editor (lazy-loaded) |
+| `json` | `text` | JSON textarea; blocks invalid JSON |
+| `autocomplete` | `enum` | type-ahead instead of a dropdown |
+| `amount` | `number` | amount-styled number input |
+| `datetime-local` | `date` | date + time input |
+| `filters` | `object` | MongoDB filter builder; requires `filterSchema` |
+
+### Reference fields
+
+A field with `ref` renders a searchable, server-paginated picker that queries the referenced
+module on demand — 25 per page, debounced search, every request abortable. This is what
+Thunder's foreign-reference fields produce.
+
+| Key | Meaning |
+| --- | --- |
+| `ref` | module name this field references |
+| `refLabel` | `string \| string[]` — property/properties to display |
+| `refValue` | property to submit (default `_id`) |
+| `refFilters` | filters applied when querying the referenced module |
+
+### TField
+
+The shape the renderers consume. Any extra key on a JSON Schema property is carried through onto
+the field, which is how the hints above work.
+
+| Key | Meaning |
+| --- | --- |
+| `type` | field type above, or `"array"` / `"object"` |
+| `name` | dotted path used as the form field name |
+| `label`, `description` | passed through `t()` |
+| `placeholder`, `example` | placeholder text |
+| `optional` | `true` unless the parent requires it |
+| `defaultValue` | from the schema's `default` |
+| `multi` | scalar array → tag input |
+| `enum` | `string[]` or `{ label, value }[]` |
+| `minLength`, `maxLength`, `minimum`, `maximum`, `minItems`, `maxItems`, `pattern` | validation |
+| `fieldHint` | see above |
+| `const` | single legal value; submitted, not editable |
+| `group` | consecutive fields sharing a group render in one `FieldGroup` |
+| `groupClassName`, `groupStyle`, `className`, `style` | styling passthrough |
+| `requirementKey` | render only when the watched field's value equals this field's name |
+| `fileType`, `fileSize` | upload constraints |
+| `queryValue`, `ignoreQueryValue` | prefill from a URL query parameter, or opt out |
+| `fields` | child fields for `array` and `object` |
+
+### Validation
+
+`buildRules(field, t)` derives the react-hook-form rules from the schema: `required`, `pattern`,
+`minLength`/`maxLength` for text, `min`/`max` for numbers, `minItems`/`maxItems` for arrays. All
+messages go through `t()`.
+
+Server-side messages surface automatically: an axios interceptor registered in `initThunder()`
+raises one toast per entry in `error.response.data.messages`. Aborted requests never toast.
+
+---
+
+## Customization
+
+### Replacing a generated screen
+
+Everything in `src/overrides/` is a registry `src/core/` reads at startup. Keys are SDK module
+names, group names, or built-in route keys.
+
+```tsx
+// src/overrides/crud/lists.tsx — replace a whole list page
+export const lists: TListPagesOverride = { posts: PostList }
+// props: TListPageProps = { group?: string; name: string }
+```
+
+```tsx
+// src/overrides/crud/forms.tsx — replace a whole form (component takes no props)
+export const forms: TFormsOverride = { posts: PostForm }
+
+// src/overrides/crud/views.tsx — supply a detail page (no props, like forms)
+export const views: TViewsOverride = { posts: PostDetail }
+
+// src/overrides/icons.tsx — nav icon per module or group
+export const icons: TIconsOverride = { posts: IconNotebook }
+
+// src/overrides/layouts.ts — your own layouts, loaded on demand
+export const layouts: TLayoutsOverride = { compact: () => import("@/layouts/compact") }
+```
+
+`src/overrides/crud/cards.tsx` and `src/overrides/routes.tsx` do the most work and are covered
+in their own sections below.
+
+A detail component takes **no props**. Read the record id from the route and fetch it however
+you like — data loading is entirely yours:
+
+```tsx
+// src/pages/posts/PostDetail.tsx
+import React from "react"
+import { useParams } from "react-router"
+import { ThunderSDK } from "thunder-sdk"
+
+import { use } from "@/core/hooks/use"
+import { Skeleton } from "@/components/ui/skeleton"
+
+export default function PostDetail() {
+  const { id } = useParams<{ id: string }>()
+
+  const request = React.useMemo(
+    () =>
+      ThunderSDK.useCaching(
+        ["posts", id],
+        async ({ signal }) =>
+          (await ThunderSDK.posts.get({ signal, params: { id } })) as {
+            results: unknown[]
+          }
+      ),
+    [id]
+  )
+
+  const { data, isLoading } = use(request)
+  const post = data?.results?.[0]
+
+  if (isLoading) return <Skeleton className="h-40 w-full" />
+
+  return <pre>{JSON.stringify(post, null, 2)}</pre>
+}
+```
+
+`use()` (`@/core/hooks/use`) pairs with `ThunderSDK.useCaching` and gives you
+`{ data, error, isLoading, refetch }`. A module `get` with `params: { id }` returns
+`{ results: [record] }`.
+
+When no view is registered for a module, its detail route goes to that module's edit form.
+
+### Table vs card list
+
+The two list views fetch differently, and the difference drives the choice between them:
+
+| | Table (default) | Card view (an override) |
+| --- | --- | --- |
+| Fetching | the **whole collection**, in one request | one page at a time, `offset`/`limit` |
+| Paging, sorting | client-side, owned by the table itself | server-side; core renders the pager below your component |
+| Fetch trigger | automatic | **your component must call `fetcher()`** |
+
+The table loads the full set on purpose: it then pages, sorts and filters client-side with no
+further round trips. Card views take the server-paginated path instead, which is what you want
+when the view should fetch incrementally.
+
+### Card views
+
+A card view replaces the table on a module's list page. Registering one adds a table/cards
+toggle to the header and makes cards the default:
+
+```tsx
+// src/overrides/crud/cards.tsx
+import type { TCardsOverride } from "@/core/types"
+import JobsList from "@/pages/jobs/JobsList"
+
+export const cards: TCardsOverride = { jobs: JobsList }
+```
+
+#### Critical: a card view must call `fetcher()`
+
+In card mode the list page's fetch hooks are created with `manualTrigger: true`, so **nothing
+is requested until your component asks for it.** Call `fetcher()` from an effect or your card
+renders forever against an empty `data` array.
+
+`fetcher(projection?, sorting?)` both triggers the request and, if you pass them, sets the
+projection and sort for it. Projections matter here: a card usually needs a handful of fields,
+not the whole document.
+
+```tsx
+React.useEffect(() => {
+  fetcher(zodToMongoProjection(jobsSchema))
+}, [fetcher])
+```
+
+`zodToMongoProjection` (from `@/core/lib/zodToMongoProjection`) walks a zod schema and returns
+`{ field: 1 }` for every leaf, flattening nested objects to dot paths (`education.fieldOfStudy`)
+and arrays without an index segment. Declaring the schema once gives you the projection *and* a
+parser for the `unknown[]` you receive back.
+
+#### The props
+
+| Prop | Use |
+| --- | --- |
+| `data: unknown[]` | the records — parse them yourself |
+| `isLoading` | first load; show a skeleton |
+| `isRefetching` | a later load; usually a subtler indicator |
+| `fetcher(projection?, sorting?)` | **trigger a fetch**, optionally setting projection and sort |
+| `setProject(projection)` | change the projection without fetching |
+| `setSort({ field: 1 \| -1 })` | change sort order; triggers a refetch |
+| `setFilters(filters)` | set the SDK-level `filters` for the query |
+| `setPage(index)` | **zero-based** page index |
+| `selectedIds` | `_id`s currently selected |
+| `toggleSelect(id?)` | toggle one row; with no argument, toggles the whole page |
+| `name` | the module name, for cache keys or labels |
+
+Selection is shared with the core action bar — call `toggleSelect` and the delete/edit bar at
+the bottom of the page lights up with no extra work.
+
+Pagination is rendered by the list page **below** your component, driven by the same
+`page`/`pageSize` it passes into the query. You only need `setPage` if you want to drive paging
+yourself, for example from an infinite scroller.
+
+#### A worked example
+
+```tsx
+// src/pages/jobs/JobsList.tsx
+import React from "react"
+import z from "zod"
+import { useNavigate } from "react-router"
+import { useTranslation } from "react-i18next"
+import { VirtuosoGrid } from "react-virtuoso"
+
+import type { TCardProps } from "@/core/types"
+import { zodToMongoProjection } from "@/core/lib/zodToMongoProjection"
+import { Card, CardContent } from "@/components/ui/card"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
+import { Empty, EmptyHeader, EmptyTitle } from "@/components/ui/empty"
+
+// Declared once: drives the projection AND parses the response.
+const jobsSchema = z.object({
+  _id: z.string(),
+  title: z.string(),
+  salary: z.number().optional(),
+  vacancies: z.number().optional(),
+  applicationDeadline: z.union([z.string(), z.date()]).optional(),
+  positionDetails: z
+    .object({ position: z.string(), jobType: z.string() })
+    .optional(),
+  education: z.object({ highestQualification: z.string() }),
+})
+
+export default function JobsList({
+  data,
+  isLoading,
+  fetcher,
+  setSort,
+  setFilters,
+  toggleSelect,
+  selectedIds = [],
+}: TCardProps) {
+  const { t, i18n } = useTranslation()
+  const navigate = useNavigate()
+  const [scrollParent, setScrollParent] = React.useState<HTMLDivElement | null>(null)
+
+  // REQUIRED: card mode does not fetch on its own.
+  React.useEffect(() => {
+    fetcher(zodToMongoProjection(jobsSchema))
+  }, [fetcher])
+
+  // `data` is `unknown[]`; parse it with the same schema.
+  const jobs = React.useMemo(
+    () => (Array.isArray(data) ? jobsSchema.array().parse(data) : []),
+    [data]
+  )
+
+  return (
+    <div
+      ref={setScrollParent}
+      className="flex h-full min-h-0 flex-1 flex-col overflow-y-auto"
+    >
+      {/* Your own controls can drive the query directly. */}
+      <div className="flex gap-2 p-2">
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => setSort({ applicationDeadline: 1 })}
+        >
+          {t("Closing soonest")}
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => setFilters({ isOpen: true })}
+        >
+          {t("Open only")}
+        </Button>
+      </div>
+
+      {isLoading ? (
+        <JobsListSkeleton />
+      ) : jobs.length === 0 ? (
+        <Empty className="min-h-[50vh]">
+          <EmptyHeader>
+            <EmptyTitle>{t("No jobs found")}</EmptyTitle>
+          </EmptyHeader>
+        </Empty>
+      ) : (
+        <VirtuosoGrid
+          customScrollParent={scrollParent ?? undefined}
+          computeItemKey={(_, job) => job._id}
+          data={jobs}
+          listClassName="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3"
+          itemContent={(_, job) => {
+            const position = job.positionDetails?.position ?? job.title
+            const deadline = job.applicationDeadline
+              ? new Date(job.applicationDeadline).toLocaleDateString(i18n.language)
+              : null
+
+            return (
+              <Card className="flex h-full flex-col gap-3 p-4">
+                <CardContent className="flex flex-1 flex-col gap-3 p-0">
+                  <div className="flex items-center justify-between gap-3">
+                    {/* Selection feeds the core action bar. */}
+                    <Checkbox
+                      checked={selectedIds.includes(job._id)}
+                      onCheckedChange={() => toggleSelect(job._id)}
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                    {job.vacancies ? (
+                      <Badge variant="secondary">
+                        {t("{{count}} openings", { count: job.vacancies })}
+                      </Badge>
+                    ) : null}
+                  </div>
+
+                  <h3 className="line-clamp-1 text-lg font-semibold">{position}</h3>
+
+                  {deadline && (
+                    <small className="text-muted-foreground">
+                      {t("Deadline")}: {deadline}
+                    </small>
+                  )}
+
+                  <Button
+                    size="sm"
+                    className="mt-auto"
+                    // `state.name` becomes the trailing breadcrumb on the detail page.
+                    onClick={() => navigate(`./${job._id}`, { state: { name: position } })}
+                  >
+                    {t("Details")}
+                  </Button>
+                </CardContent>
+              </Card>
+            )
+          }}
+        />
+      )}
+    </div>
+  )
+}
+```
+
+Notes on the example worth repeating in prose:
+
+- **Virtualise long lists.** `react-virtuoso` is already a dependency. Pass
+  `customScrollParent` so the card view scrolls inside the page shell rather than the window.
+- **`state: { name }` on navigate** sets the detail page's trailing breadcrumb — the breadcrumb
+  reads `location.state.name`. `useBreadcrumbTitle()` does the same thing from inside a page.
+- Driving the query from your own UI is just calling `setSort`, `setFilters` or `setProject`;
+  each triggers a refetch through the same cached query the table uses.
+
+### Routes: hiding, reordering and replacing
+
+`src/overrides/routes.tsx` is the single most used extension point. Keys are **SDK module
+names**, **group names** (as the SDK reports them, usually capitalised), or the built-in keys
+`overview`, `wallet`, `notifications`.
+
+#### The one rule that governs everything here
+
+| Form | Effect |
+| --- | --- |
+| `key: { … }` | **Replaces** the generated route entirely. Only what you write exists. |
+| `key: { merge: true, … }` | **Merges** over the generated route. Keeps its `path`, `Component` and generated children. |
+
+Everything below follows from that.
+
+#### Hiding a module
+
+Two different outcomes, and the difference matters:
+
+```tsx
+// Remove it completely — the list/form/detail pages stop existing.
+// No `merge`, so `{ display: false }` *becomes* the whole route.
+tenants: { display: false },
+apiKeys: { display: false },
+accessControl: { display: false },
+
+// Keep the pages reachable by URL, just hide them from navigation.
+// Use this for screens you link to yourself from somewhere else.
+attributeValues: { merge: true, display: false },
+stores: { merge: true, display: false },
+```
+
+#### Gating visibility on a permission
+
+`display` may be a function, re-evaluated whenever navigation renders. Any permission works —
+including a different module's, which is how you hide a screen behind the permission that
+actually guards its data:
+
+```tsx
+products: { merge: true, display: () => ThunderSDK.isPermitted(ThunderSDK.products.update) },
+brands:   { merge: true, display: () => ThunderSDK.isPermitted(ThunderSDK.brands.update) },
+
+// gated by a *different* module's permission
+categories: {
+  merge: true,
+  display: () => ThunderSDK.isPermitted(ThunderSDK.manageOrders.get),
+},
+```
+
+#### Reordering modules and groups
+
+`priority` sorts ascending; ties keep declaration order. **It can only be set here** — the
+backend has no say in navigation order. Group keys work exactly like module keys:
+
+```tsx
+orders:             { merge: true, priority: 0 },
+orderSubscriptions: { merge: true, priority: 1 },
+
+// group-level overrides — keyed by the group name
+Management: { merge: true, priority: 1 },
+Admin:      { merge: true, priority: 4 },
+Orders:     { merge: true, priority: 4 },
+```
+
+> A group's own `display` is ANDed with "has at least one visible child", so a group
+> disappears automatically once everything inside it is hidden. You do not need to hide the
+> group as well.
+
+#### Adding your own page into an existing group
+
+Set `group` to the group you want it to appear under. The group does not have to come from the
+SDK — naming a new one creates it:
+
+```tsx
+refundableOrders: {
+  name: "Refundable Orders",
+  path: "refundableOrders",
+  group: "Management",                     // joins an existing group
+  icon: IconCreditCardRefund,
+  display: () => ThunderSDK.isPermitted(ThunderSDK.manageOrders.refundable),
+  Component: RefundableOrders,
+},
+
+manageCareers: {
+  name: "Manage Careers",
+  path: "manageCareers",
+  group: "Careers",                        // creates a new group
+  icon: IconDeviceDesktopCog,
+  display: () => ThunderSDK.isPermitted(ThunderSDK.manageCareers.get),
+  Component: ManageCareers,
+},
+```
+
+> Routes are grouped by `group ?? "Other"`. A route with no `group` therefore lands in a group
+> literally named **Other** — which is visible if that route is. Always set `group` on a custom
+> route unless you actually want that. (This is also why a bare `{ display: false }` is safe:
+> with nothing visible inside it, the `Other` group hides itself.)
+
+#### Hidden deep-linked routes
+
+A route with `display: false` is reachable by URL but absent from navigation — the usual shape
+for a detail page you link to from a list. `path` can be several segments with parameters:
+
+```tsx
+manageCareerDetail: {
+  path: "manageCareers/:id",
+  group: "Careers",
+  display: false,
+  Component: ManageCareerDetail,
+},
+
+orderSubscriptionsTriggers: {
+  path: "orderSubscriptions/:subscriptionId/triggers/:triggerId",
+  group: "Orders",
+  display: false,
+  Component: SubscriptionTriggerDetailView,
+},
+```
+
+#### Rebuilding the children yourself
+
+Because an override without `merge` replaces the route outright, you can declare the children
+by hand — and still reuse the generated pages. `ListPage`, `ViewPage` and `FormPage` are
+exported from core and take `group` and `name`, so you keep the schema-driven screens while
+changing the URL layout. Here the module is relabelled and its `form` segment becomes `apply`:
+
+```tsx
+import { Outlet } from "react-router"
+import { ListPage } from "@/core/crud/ListPage.tsx"
+import { ViewPage } from "@/core/crud/ViewPage.tsx"
+import { FormPage } from "@/core/crud/FormPage.tsx"
+
+careers: {
+  name: "Applications",                    // nav label differs from the module name
+  path: "careers",
+  group: "Careers",
+  icon: IconDeviceDesktopCog,
+  display: () => ThunderSDK.isPermitted(ThunderSDK.careers.get),
+  Component: () => <Outlet />,             // parent renders its children
+  children: [
+    {
+      index: true,
+      display: false,
+      Component: () => <ListPage group="Careers" name="careers" />,
+    },
+    {
+      path: ":id",
+      display: false,
+      Component: () => <ViewPage group="Careers" name="careers" />,
+    },
+    {
+      path: "apply",                       // instead of the generated `form`
+      display: false,
+      Component: () => <FormPage group="Careers" name="careers" />,
+    },
+  ],
+},
+```
+
+Mix this freely with your own components: replace only the form and keep the generated list, or
+wrap `ListPage` in your own layout, or add extra children the generator never produces.
+
+#### Replacing a built-in page
+
+```tsx
+// keeps the built-in's icon, priority and permission checks
+overview: { Component: MyDashboard },
+```
+
+Built-in keys: `overview`, `wallet`, `notifications`.
+
+### Breadcrumbs from a custom page
+
+```tsx
+import { useBreadcrumbTitle } from "@/core/layouts/shared/breadcrumb"
+
+useBreadcrumbTitle(post?.title) // sets the trailing crumb
+```
+
+---
+
+## Layouts and Theming
+
+Four layouts ship, selected by `VITE_APP_LAYOUT`:
+
+| Value | Shell |
+| --- | --- |
+| `navbar` (default) | collapsible icon sidebar + top header with breadcrumb and actions |
+| `sidebar` | classic full sidebar grouped by route group |
+| `mobile` | sticky header with back/logo/actions and floating bottom tabs |
+| `native` | one adaptive shell: native app on a phone, sidebar on a desktop |
+
+All four read the same route tree, so navigation stays consistent.
+
+#### `native`
+
+The one to reach for when the app is going to be installed. It is a single shell that changes
+shape at the `md` breakpoint rather than two layouts behind a branch:
+
+- **Phone** — a floating translucent tab bar (first four routes plus a `More` sheet), a large
+  title on each tab's own screen that becomes a compact centred title with a back button once you
+  drill in, and an edge swipe that goes back with 1:1 tracking and momentum projection.
+- **Desktop** — the same destinations as a persistent sidebar, a navigable breadcrumb in the
+  toolbar, and the account actions in a side sheet.
+
+Which half renders is decided by `md:` variants, not by a measured window width, so the first
+painted frame is already the right size class. Safe-area insets, RTL, dark mode and
+`prefers-reduced-motion` are all handled.
+
+The platform baseline it relies on lives in `src/core/styles/index.css` and `index.html` and
+applies to every layout: `env(safe-area-inset-*)` exposed as the `safe-t`/`safe-b`/`safe-l`/
+`safe-r` spacing tokens (`pt-safe-t`, `pb-safe-b`, `mb-safe-b`, and so on), a `glass` utility for
+translucent chrome that falls back to opaque without `backdrop-filter` or under
+`prefers-reduced-transparency`, no tap highlight, no pull-to-refresh, no input-focus zoom, and
+`viewport-fit=cover` so the insets report anything at all.
+
+### How a layout is selected
+
+There are two registries. `src/core/layouts/registry.ts` holds the built-ins and is replaced on
+every sync; `src/overrides/layouts.ts` is yours and is not. `VITE_APP_LAYOUT` is looked up in
+yours first, then in the built-ins, so a layout of yours named `navbar` takes over the built-in
+one without you renaming it across your env files.
+
+Both registries map a name onto a function that **loads** a layout rather than onto the layout
+itself:
+
+```ts
+// src/core/layouts/registry.ts — core-owned
+export const coreLayouts = {
+  navbar: () => import("./navbar"),
+  sidebar: () => import("./sidebar"),
+  mobile: () => import("./mobile"),
+  native: () => import("./native"),
+}
+```
+
+Only the selected layout is ever requested, so every layout after the first costs nothing in the
+initial bundle. The loader body has to be a literal `import("...")` with a static path — a
+bundler cannot split a path it has to compute at runtime.
+
+An unknown `VITE_APP_LAYOUT` is not a white screen: the app comes up on `navbar` and logs which
+names are registered.
+
+### Adding your own layout
+
+A layout is a component that renders `children`. Put the file anywhere outside `src/core/` and
+export it as `default` or as a named `Layout` — either is picked up.
+
+```tsx
+// src/layouts/compact.tsx
+export default function CompactLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex h-dvh">
+      <aside className="w-56 border-e">{/* your nav */}</aside>
+      <main className="flex-1 overflow-auto p-4">{children}</main>
+    </div>
+  )
+}
+```
+
+```ts
+// src/overrides/layouts.ts
+import type { TLayoutsOverride } from "@/core/types"
+
+export const layouts: TLayoutsOverride = {
+  compact: () => import("@/layouts/compact"),
+  brand: () => import("@/layouts/brand"),
+}
+```
+
+```bash
+VITE_APP_LAYOUT=compact
+```
+
+That is the whole registration. Inside the layout, read the route tree with
+`getNavRoutes(useLayout().router.routes)`.
+
+Copy `src/core/layouts/{navbar,sidebar,mobile,native}/index.tsx` as starting points. `native/` is
+the one to copy for a hybrid build; it already has the gesture, safe-area and size-class handling
+worked out.
+
+#### Choosing in code instead
+
+`LayoutProvider` still takes a `layout` prop, and `src/App.tsx` is yours. Passing it skips the
+registry and the lazy load entirely, which is what you want when the decision is made in code
+rather than in an env file:
+
+```tsx
+<LayoutProvider router={router} layout={CompactLayout}>
+  <Outlet />
+</LayoutProvider>
+```
+
+### Theme tokens
+
+- `src/index.css` is **yours**: OKLCH colour variables under `:root` and `.dark`, radii, and the
+  font stacks (`--font-sans`, `--font-heading`). Restyling means editing tokens here.
+- `src/core/styles/index.css` is **core's**: mechanics only — `@property` declarations,
+  keyframes, scroll-mask utilities, safe-area spacing tokens, the `glass` material and the
+  hybrid platform baseline. No colour tokens.
+
+That split is the model for the whole ownership boundary: restyle freely, core still ships new
+utilities, neither side loses work on sync.
+
+Dark mode is the `dark` class on `<html>`, driven by `ThemeProvider` with `light` / `dark` /
+`system` and a `localStorage` key of `theme`. Theme and direction are applied **before first
+paint** by an inline script in `index.html`, so there is no flash.
+
+`src/core/styles/fonts.css` bundles Inter (body), Geist (headings) and Cairo (Arabic). Each
+`@font-face` carries a `unicode-range`, so Latin uses Inter/Geist and Arabic resolves to Cairo
+per character. Fonts are bundled, not fetched, so they work offline on mobile.
+
+> `src/index.css` contains a deliberate `@source inline(...)` block that force-generates grid and
+> gap utilities, because `className` and `groupClassName` can arrive from a backend schema at
+> runtime where Tailwind's scanner cannot see them. **Do not remove it**; extend the ranges if a
+> schema needs a value outside them.
+
+---
+
+## Internationalisation
+
+Languages `en` and `ar`, with full RTL. Detection order: `localStorage` (`i18nextLng`), then the
+browser's language. Fallback `en`.
+
+Two layers, merged in `src/i18n.ts`:
+
+```ts
+translation: { ...coreTranslations, ...appTranslations }
+```
+
+`src/core/locals/{en,ar}/` holds Thunder UI's own strings (227 keys) and is replaced on sync, so
+translation fixes arrive with updates. `src/locals/{en,ar}/` is yours and starts empty. Because
+the app layer merges last, **redefining a key there overrides the core string** — that is the
+supported way to reword Thunder UI's text.
+
+Schema-driven labels go through `t()` too: a field's `label`, or its name when there is no label,
+is looked up — so module and field names are translatable by adding those keys.
+
+---
+
+## Integrations
+
+### Triggers — notifications
+
+Notifications are served by **Triggers** — a separate notification service, itself built with
+Thunder Framework but deployed independently and not part of the framework core. It is not the
+main API, and it is configured with its own base URL and tenant:
+
+```bash
+VITE_TRIGGERS_BASE_URL=https://triggers.example.com
+VITE_TRIGGERS_TENANT_ID=...
+VITE_UNREAD_COUNT_INTERVAL=30000   # milliseconds
+```
+
+Both the base URL and the tenant id are required for any notification UI to appear, and the
+whole feature is additionally gated by `VITE_ENABLE_NOTIFICATIONS`.
+
+What ships: a navbar popover, a mobile side sheet, and a full notifications page, plus a polled
+unread count. `src/core/endpoints/notification.ts` holds the client; `useUnreadCount(userId)` in
+`src/core/hooks/useUnreadCount.ts` is the polling hook. These requests send no credentials.
+
+Push notifications on native are registered through `@capacitor/push-notifications`, and the
+device token is posted to the backend with `ThunderSDK.users.addFcmToken`.
+
+### ImageKit — uploads and image transforms
+
+File uploads go to **ImageKit**. The browser never holds an ImageKit key: the SDK mints a
+short-lived signature with `ThunderSDK.imageKit.auth()`, and `@imagekit/react` uploads directly
+from the browser.
+
+```ts
+import { handleUpload, transformImage } from "@/core/lib/utils"
+
+// Upload a file. Returns the ImageKit response, including `url`.
+const res = await handleUpload(file, {
+  folder: "invoices",            // defaults to VITE_UPLOAD_FOLDER
+  path: ["2026", "q1"],          // optional path prefix
+  filename: "custom-name.pdf",   // defaults to file.name
+  signal: controller.signal,     // cancellable
+  onProgress: (pct) => setProgress(pct),
+})
+
+// Request a resized variant via ImageKit's `tr` query parameter.
+const thumb = transformImage(res.url, { width: 64, height: 64 })
+```
+
+Schema fields with `fieldHint: "avatar"` or `"upload"` use this automatically — the avatar
+uploader and the file-table uploader both call `handleUpload` and store the returned URL.
+
+```bash
+VITE_UPLOAD_FOLDER=   # ImageKit folder; empty uses the account default
+```
+
+---
+
+## Authentication and Multi-tenancy
+
+Two strategies, chosen by whether `VITE_OAUTH_CLIENT_ID` is set:
+
+| Mode | Behaviour |
+| --- | --- |
+| **OIDC** | `oidc-client-ts`. Redirect flow on web; in-app browser with a custom-scheme callback (`<appId>://auth/callback`) on native, tokens in Capacitor Preferences. |
+| **Cookie session** | The default when no client id is set. Checks `/auth/api/get-session`; sign-in and sign-out go to `/auth`. |
+
+After authentication, `ThunderSDK.plugins.essentials.registerPermissions()` runs before the app
+renders — that is what makes `ThunderSDK.isPermitted()` reliable for route visibility.
+
+The `:tenant` URL segment is pushed into the SDK. A 403 while loading permissions redirects to
+the tenant picker.
+
+---
+
+## Mobile (Capacitor)
+
+Capacitor 8 is pre-configured and `android/` and `ios/` are committed. The mobile build runs the
+web build in `mobile` mode and then `npx cap sync`.
+
+`capacitor.config.ts` sets `webDir: "www"`. Plugins installed: app, browser, camera, clipboard,
+keyboard, preferences, push-notifications, share, splash-screen, and Android edge-to-edge.
+
+Handled by core: status and navigation bar colours follow the resolved theme; safe-area insets in
+the mobile layout; OIDC via in-app browser.
+
+> `capacitor.config.ts` ships with `appId: "com.huruf.thunderui"` and `appName: "thunder-ui"`,
+> and the committed native projects carry that identifier. **A real app must change these.** The
+> visible app name comes from the `name` field in `package.json`.
+
+---
+
+## Environment Variables
+
+All must be prefixed `VITE_`. `.env.example` is the canonical annotated list. Every value is a
+string; boolean flags go through `envFlag()` in `src/core/lib/utils.ts`, which treats `0`,
+`false`, `off` and `no` as disabled, and unset or empty as the default (`false`).
+
+| Variable | Meaning |
+| --- | --- |
+| `VITE_API_BASE_URL` | Backend base URL. Defaults to `window.location.origin`. |
+| `VITE_OAUTH_SERVER_URL` | OIDC issuer |
+| `VITE_OAUTH_CLIENT_ID` | Set → OIDC. Empty → cookie session. **Chooses the auth strategy.** |
+| `VITE_OAUTH_SCOPE` | e.g. `full_access offline_access` |
+| `VITE_APP_LAYOUT` | `navbar` (default) \| `sidebar` \| `mobile` \| `native`, or any name in `src/overrides/layouts.ts` |
+| `VITE_DEFAULT_PAGINATION_LIMIT` | Page size for the card list view |
+| `VITE_DEFAULT_CACHE_TTL` | SDK cache stale time, in **seconds**. Falls back to `1`. |
+| `VITE_ENABLE_WALLET` | Wallet route + navbar balance widget |
+| `VITE_ENABLE_USERS` | Built-in users card view |
+| `VITE_ENABLE_NOTIFICATIONS` | Notifications route, navbar bell, mobile bell |
+| `VITE_DEFAULT_CURRENCY` | Fallback currency code, default `LYD` |
+| `VITE_TRIGGERS_BASE_URL` | Triggers service host; required for notifications |
+| `VITE_TRIGGERS_TENANT_ID` | Required for notifications |
+| `VITE_UNREAD_COUNT_INTERVAL` | Poll interval in **milliseconds**, default `30000` |
+| `VITE_UPLOAD_FOLDER` | ImageKit folder; empty uses the account default |
+
+### Feature flags
+
+`src/core/lib/features.ts` exposes `features.wallet`, `features.users` and
+`features.notifications`. **All are off by default** — a generated app does not inherit wallet,
+user or notification UI it did not ask for.
+
+> These replace an older `VITE_DISABLE_WALLET`, which ran the opposite way. A project that relied
+> on the wallet being on by default now needs `VITE_ENABLE_WALLET=1`.
+
+---
+
+## Built-in Pages
+
+| Page | Flag |
+| --- | --- |
+| Overview — placeholder landing page; replace via `overrides/routes.tsx` | — |
+| Tenant select — tenant picker and creation form | — |
+| Wallet — balance, transfer, receive via QR, currency swap, ledger, PDF export | `VITE_ENABLE_WALLET` |
+| Notifications — popover, mobile sheet, full page, polled unread count | `VITE_ENABLE_NOTIFICATIONS` |
+| Users — card view with ban and overdraft-limit actions | `VITE_ENABLE_USERS` |
+| Not found — 404 | — |
+
+**Onboarding.** `src/components/onboarding.tsx` is a first-launch carousel shipping with an
+**empty** screen list, so nothing shows. Add entries to its `Screens` array to enable it.
+
+---
+
+## Verify With The Framework Team
+
+**Do not invent any of these.** They live in the framework's tooling, not this repository.
+
+1. For `deno task generate:sdk -v <latest-version> --overwrite`: where `<latest-version>` comes
+   from — is it chosen by the developer, or read from the backend's config?
+2. Which directory Thunder actually serves the UI from (`public/app/www`?), and whether the
+   committed build output is what gets served in production or a build runs at deploy time.
+3. How to run Triggers locally for development, since it is a separate deployment.
+
+---
+
+## Suggested Documentation Outline
+
+If asked to write documentation for Thunder UI, these pages cover it:
+
+| Page | Source |
+| --- | --- |
+| Introduction | what it generates, and that it is otherwise a normal React app |
+| Installation | [Installation](#installation) |
+| Updating | [Two Kinds of Update](#two-kinds-of-update) — SDK regeneration vs core sync, and the read-only rule |
+| Project structure | [Project Structure](#project-structure) |
+| Building your own features | [It Is Still a Normal React App](#it-is-still-a-normal-react-app) |
+| How CRUD screens are generated | [How CRUD Screens Are Generated](#how-crud-screens-are-generated) |
+| Shaping the UI from the backend | [Controlling the UI From the Backend Schema](#controlling-the-ui-from-the-backend-schema) — the `.meta()` reference. Arguably the most important page. |
+| Schema reference | [Schema to Form Fields](#schema-to-form-fields) |
+| Customization | [Customization](#customization) — one page per registry |
+| Layouts and theming | [Layouts and Theming](#layouts-and-theming) |
+| Internationalisation | [Internationalisation](#internationalisation) |
+| Integrations | [Integrations](#integrations) — Triggers and ImageKit |
+| Authentication | [Authentication and Multi-tenancy](#authentication-and-multi-tenancy) |
+| Mobile build | [Mobile (Capacitor)](#mobile-capacitor) |
+| Configuration | [Environment Variables](#environment-variables) |
+
+**Tone.** Write for a developer who has a working Thunder Framework backend and wants a UI for
+it. Lead every customization page with the file to edit. State the `src/core/` read-only rule
+before any customization instruction. Prefer a short code sample over description. Do not imply
+the developer is limited to the CRUD generator.

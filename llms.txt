@@ -1,0 +1,1635 @@
+# Thunder Framework - AI Agent Instructions
+
+Thunder is a Deno-based full-stack web framework with file-based routing, hooks system, and MongoDB integration.
+
+## Upstream Context
+
+- [Deno llms.txt](https://docs.deno.com/llms.txt): Runtime, permissions, standard APIs, and deployment behavior.
+- [MongoDB Node Driver docs](https://www.mongodb.com/docs/drivers/node/current/): MongoDB driver behavior relevant to this project.
+- [Zod documentation](https://zod.dev/): Validation concepts used by this framework.
+
+## Project Structure
+
+```
+thunder/
+├── routes/           # Route handlers (file-based routing)
+│   ├── index.ts      # Fallback router (handles /)
+│   ├── {name}.ts     # Route modules (e.g., users.ts → /users/*)
+│   └── admin/        # Sub-folders are ignored (not included in routing)
+├── hooks/            # Pre/post request hooks (interceptors)
+├── plugins/          # External plugins (Thunder projects installed as plugins)
+│   └── {org}/{name}/ # Plugin with its own routes/hooks
+├── schemas/          # MongoDB collection schemas with Zod validation
+├── scripts/          # One-time setup scripts (database indexes, migrations, etc.)
+│   └── createIndexes.ts
+├── workers/          # (Optional) Background workers for separate deployment
+│   └── emailWorker.ts
+├── public/           # Static assets
+│   └── www/          # Default web root
+├── core/             # Framework internals (DO NOT MODIFY)
+├── serve.ts          # Server entry point
+├── serve.base.ts     # Request handler setup (DO NOT MODIFY)
+├── database.ts       # MongoDB connection instance
+├── .env              # Environment variables (Database URL, secrets, etc.)
+└── deno.json         # Project configuration
+```
+
+### Important Routing Rules
+
+- **Files in `routes/` directory** → Converted to routes
+  - `routes/users.ts` → handles `/users/*`
+  - `routes/posts.ts` → handles `/posts/*`
+  - `routes/index.ts` → handles `/` (fallback)
+
+- **Sub-folders in `routes/` are ignored** by the framework
+  - `routes/admin/users.ts` is **not** registered (sub-folders are skipped)
+  - Only top-level `.ts` files in `routes/` are discovered
+  - Use this for code organization, not routing
+
+### Serverless-First Architecture
+
+Thunder is designed for **serverless environments**:
+- **No background jobs** - Serverless doesn't support long-running processes
+- **Fast cold starts** - Database indexes created via scripts, not on app startup
+- **Stateless** - Each request is independent
+- **Workers for async tasks** - Deploy to separate stateful server if needed
+
+## VS Code Snippets
+
+Thunder provides VS Code snippets for faster development:
+- `router` - Scaffolds a new router file
+- `req` - Scaffolds a route handler with validation
+- `model` - Scaffolds a database schema/model
+- `crud` - Scaffolds a complete crud operation
+
+## Creating Routes
+
+Routes are defined in `routes/` directory. Each file exports a Router instance.
+
+**File-based Routing:** The filename becomes the route prefix. `routes/posts.ts` handles `/posts/*` endpoints.
+
+### Basic Router Pattern
+
+```typescript
+# /routes/foo.ts
+import { Router } from "@/core/http/router.ts";
+
+export default new Router("/api", function routerName(router) {
+  // GET /foo/api
+  router.get("/", function handlerName() {
+    return () => Response.json({ message: "Hello" });
+  });
+
+  // GET /foo/api/users/:id
+  router.get("/users/:id", function getUser() {
+    return (req) => {
+      // Handler logic
+      return Response.json({ id: "123" });
+    };
+  });
+}).group("GroupName");
+```
+
+### CRITICAL RULES FOR ROUTES
+
+1. **Named Functions Required**: Both the router function and handler functions MUST be named functions (not arrow functions):
+   ```typescript
+   // ✅ CORRECT
+   new Router("/api/", function users(router) { ... })
+   router.get("/", function listUsers() { ... })
+   
+   // ❌ WRONG - will throw error
+   new Router("/api/", (router) => { ... })
+   router.get("/", () => { ... })
+   ```
+
+2. **Handler names must be unique** within a router - no duplicate function names.
+
+3. **Prepare Pattern**: Route handlers use a "prepare" pattern - the outer function is called once at registration, the inner function handles requests.
+
+### Route Grouping with `.group()` (Read Carefully)
+
+`.group("Label")` assigns a router file to a **named group**. A group is a
+**shared label across multiple route files**, NOT a per-file/per-route unique
+name. Its purpose is to organize related endpoints together in the generated
+OpenAPI spec and SDK.
+
+**CRITICAL: The same group label is intentionally reused across related files.**
+
+```typescript
+// routes/blog/posts.ts
+export default new Router("/api", function posts(router) { ... }).group("Blog");
+
+// routes/blog/categories.ts
+export default new Router("/api", function categories(router) { ... }).group("Blog");
+
+// routes/blog/author.ts
+export default new Router("/api", function author(router) { ... }).group("Blog");
+```
+
+All three files above belong to the **same** `"Blog"` group — do NOT give each
+file a different group name just because the filename differs.
+
+**Best practice — colocate grouped files in a same-named folder.** When several
+route files share a group, move them into a folder named after that group:
+
+```
+routes/
+└── blog/
+    ├── posts.ts       → .group("Blog")
+    ├── categories.ts  → .group("Blog")
+    └── author.ts      → .group("Blog")
+```
+
+> Reminder: sub-folders in `routes/` are NOT registered as routes — the folder
+> is purely for code organization. Each file's URL prefix still comes from its
+> own filename + the `Router` base path, independent of the folder.
+
+4. **Shape Function**: The `shape()` function registers validators with the framework. This is used for:
+   - Runtime validation of requests
+   - OpenAPI specification generation (`deno task generate:openapi`)
+   - TypeScript SDK generation (`deno task generate:sdk`)
+
+Example of the prepare pattern:
+   ```typescript
+   router.get("/users", function listUsers() {
+     // This code runs ONCE at registration (prepare phase)
+     const schema = z.object({ limit: z.number() });
+     
+     // This function handles each request
+     return (req) => {
+       // Request handling logic
+       return Response.json({ users: [] });
+     };
+   });
+   ```
+
+### Router with Validation (Shapes)
+
+```typescript
+import { Router } from "@/core/http/router.ts";
+import { paramsAsJson, queryAsJson, bodyAsJson } from "@/core/http/utils.ts";
+import z from "zod";
+
+export default new Router("/api/", function users(router) {
+  router.post("/users", function createUser() {
+    const $body = z.object({
+      name: z.string().min(1),
+      email: z.string().email(),
+    });
+
+    const $return = z.object({
+      id: z.string(),
+      name: z.string(),
+    });
+
+    return {
+      shape: () => ({
+        body: $body,
+        return: $return,
+      }),
+      handler: async (req) => {
+        const body = $body.parse(await bodyAsJson(req));
+        
+        // Create user logic...
+        
+        // Use `satisfies` for compile-time type checking against $return
+        return Response.json({ id: "123", name: body.name } satisfies z.output<typeof $return>);
+      },
+    };
+  });
+
+  router.get("/users/:id", function getUser() {
+    const $params = z.object({
+      id: z.string(),
+    });
+
+    return {
+      shape: () => ({ params: $params }),
+      handler: (req) => {
+        const { id } = $params.parse(paramsAsJson(req));
+        return Response.json({ id });
+      },
+    };
+  });
+}).group("Users");
+```
+
+### Available HTTP Methods
+
+- `router.get(path, handler)` - GET requests
+- `router.post(path, handler)` - POST requests  
+- `router.put(path, handler)` - PUT requests
+- `router.patch(path, handler)` - PATCH requests
+- `router.del(path, handler)` - DELETE requests (note: `del` not `delete`)
+- `router.all(path, handler)` - All methods
+
+### Path Parameters
+
+Use `path-to-regexp` syntax:
+- `:id` - Named parameter
+- `:id?` - Optional parameter
+- `{/*path}` - Wildcard (captures rest of path as array)
+- `{/:id}` - Optional segment
+
+```typescript
+router.get("/users/:userId/posts/:postId", function getPost() { ... });
+router.get("/files{/*filepath}", function serveFile() { ... });
+router.get("/items{/:id}", function getItems() { ... }); // id is optional
+```
+
+## Request Utilities
+
+```typescript
+import { 
+  paramsAsJson,   // Get URL params as object
+  queryAsJson,    // Get query string as object
+  bodyAsJson,     // Parse body (JSON or form-urlencoded)
+  parseBasicAuth, // Parse Basic auth header
+  serveAssets,    // Serve static files
+} from "@/core/http/utils.ts";
+
+// Usage
+const params = paramsAsJson<{ id: string }>(req);
+const query = queryAsJson(req);
+const body = await bodyAsJson(req);
+const auth = parseBasicAuth(req); // { username, password } | null
+```
+
+## Response Helpers
+
+```typescript
+import { Response } from "@/core/http/response.ts";
+
+Response.ok();                    // 200 OK
+Response.ok("Success");           // 200 with body
+Response.json({ data: "value" }); // JSON response (standard)
+Response.created({ id: "123" });  // 201 Created
+Response.badRequest();            // 400 Bad Request
+Response.unauthorized();          // 401 Unauthorized
+Response.forbidden();             // 403 Forbidden
+Response.notFound();              // 404 Not Found
+Response.redirect("/path");       // 302 Redirect
+```
+
+## Hooks System
+
+Hooks intercept requests before/after handlers. Create files in `hooks/` directory.
+
+### Hook Priority
+
+Priority controls execution order. **Higher numbers run first:**
+
+| Priority | Execution Order | Use Case |
+|----------|-----------------|----------|
+| 100      | First           | Security/auth checks |
+| 3, 2...  | Descending      | Validation, rate limiting |
+| 1        | Last            | Logging, cleanup |
+
+### Hook Structure
+
+```typescript
+// hooks/auth.ts
+import type { THook } from "@/core/http/hooks.ts";
+
+export default {
+  priority: 100, // Higher = runs first (optional)
+  
+  pre: async ({ req, scope, name }) => {
+    // Runs BEFORE handler
+    // scope = router name, name = handler name
+    
+    const token = req.headers.get("Authorization");
+    if (!token) {
+      return new Response("Unauthorized", { status: 401 });
+    }
+    
+    // Return Response to short-circuit, or void to continue
+  },
+  
+  post: async ({ req, res, scope, name }) => {
+    // Runs AFTER handler
+    // Can modify or replace response
+    
+    // Return Response to override, or void to keep original
+  },
+} satisfies THook;
+```
+
+### Logging Hook Example
+
+```typescript
+// hooks/logger.ts
+
+import type { THook } from "@/core/http/hooks.ts";
+import { Logger } from "@/core/utils/logger.ts";
+
+export default {
+  priority: -100, // Lower number = runs last (after all other hooks)
+  post: async ({ req, res, name }) => {
+    Logger.info(`[${req.method}] ${req.url} → ${res.status} (${name})`);
+  },
+} satisfies THook;
+```
+
+## Project Setup
+
+### Quick Start
+
+```bash
+# 1. Clone Thunder framework (or create new project)
+git clone https://github.com/Huruf-Tech/thunder.git my-app
+cd my-app
+
+# 2. Initialize the project (Warning! This command should only be executed if its a fresh cloned project or you can possibly loose your work!)
+#    `init` RESETS git history (deletes .git, re-inits a fresh repo), runs `setup`, and configures env.
+#    Use this only when starting a BRAND-NEW project from the Thunder template.
+deno task init
+
+# 3. Create .env file with database connection
+echo "DATABASE_URL=mongodb://localhost:27017/my-db" > .env
+
+# 4. (Recommended) Install thunder-core plugin for auth, CORS, security, etc.
+deno task add:plugin -n Huruf-Tech/thunder-core
+
+# 5. Start development server with hot reload
+deno task dev
+
+# Server runs on http://localhost:8000
+```
+
+### `init` vs `setup` — Pick the Right One
+
+Choose based on how you obtained the project:
+
+- **Starting a brand-new project** from the Thunder template → run `deno task init`.
+  It wipes the existing git history (`rm -rf .git`), initializes a fresh repo,
+  runs `deno task setup`, and sets up environment files.
+  ⚠️ Destructive — never run it on a repo whose history you want to keep.
+
+- **Cloned or forked an existing repository** (contributing to or continuing an
+  existing project) → run `deno task setup`.
+  It only configures the local git settings (`core.ignorecase false` and the
+  `.githooks` path) without touching history, so the project's git hooks (lint,
+  commit-message checks) work correctly.
+
+```bash
+# Brand-new project from the template:
+deno task init
+
+# Cloned/forked an existing project:
+deno task setup
+```
+
+### Environment Variables
+
+Create `.env` file with required variables:
+
+```bash
+# Database connection (required)
+DATABASE_URL=mongodb://username:password@localhost:27017/my-db
+
+# Environment type
+ENV_TYPE=development
+
+# Plugin-specific variables
+# (Each plugin documents its required vars - errors will tell you which ones)
+```
+
+Env files supported:
+- `.env` - Default (always loaded)
+- `.env.development` - Loaded in development
+- `.env.production` - Loaded in production
+- `.env.test` - Loaded in test
+
+### Accessing Environment Variables in Code
+
+```typescript
+import { Env, EnvType } from "@/core/utils/env.ts";
+
+// Check current environment
+if (Env.is(EnvType.DEVELOPMENT)) { ... }
+if (Env.is(EnvType.PRODUCTION)) { ... }
+
+// Get variables (async - with fallback support)
+const dbUrl = await Env.get("DATABASE_URL");
+const debug = await Env.enabled("DEBUG"); // boolean
+const port = await Env.number("PORT");     // number
+const hosts = await Env.list("ALLOWED_HOSTS"); // string[]
+
+// Sync versions (no fallback)
+const dbUrl = Env.getSync("DATABASE_URL");
+const debug = Env.enabledSync("DEBUG");
+
+// Silent mode (returns undefined instead of throwing)
+const optional = await Env.get("OPTIONAL_VAR", true);
+```
+
+## Database Indexes (Serverless Optimization)
+
+Thunder is designed for **serverless-first deployment**. To optimize cold starts, database indexes are not created automatically at startup.
+
+### Creating Database Indexes
+
+Create scripts in the `scripts/` folder and run them manually during development:
+
+```typescript
+// scripts/createIndexes.ts
+
+import { mongodb } from "@/database.ts";
+import { userModel } from "@/schemas/user.ts";
+
+async function createIndexes() {
+  // Create indexes for users collection
+  await userModel.createIndex({ email: 1 }, { unique: true });
+  await userModel.createIndex({ createdAt: -1 });
+  
+  console.log("✓ Indexes created successfully");
+}
+
+await createIndexes();
+```
+
+Run during development:
+```bash
+deno run -A scripts/createIndexes.ts
+```
+
+### Why Manual Indexes?
+
+- **Cold start optimization** - Indexes aren't created on every app startup
+- **Serverless efficiency** - Reduces initialization time in serverless environments
+- **Predictable performance** - Indexes created once, not repeatedly
+- **Better developer experience** - No hidden database operations
+
+---
+
+## Create a (Mongodb based) Schema/Model
+ 
+Create a user model
+
+```typescript
+// schemas/user.ts
+
+import z from "zod";
+import { mongodb } from "@/database.ts";
+import { $objectId } from "@/core/utils/createCRUD.ts";
+
+export const $userInput = z.object({
+  name: z.string(),
+  email: z.string().email(),
+});
+
+export const $user = $userInput.extend({
+  _id: $objectId.optional(),
+  createdAt: z.date().default(() => new Date()),
+});
+
+export const userModel = mongodb.db().collection<
+  z.infer<typeof $user>
+>("users");
+
+```
+
+### CRITICAL: Reference Field Naming (Foreign References)
+
+Fields that store a reference to another document MUST **NOT** end with the `Id`
+suffix. Name the field after the entity it points to, not after the column.
+
+```typescript
+// ✅ CORRECT - reference fields named after the entity
+const $post = z.object({
+  title: z.string(),
+  user: $objectId.meta({ ref: "users" }),            // references a user document
+  tenant: $objectId.meta({ ref: "tenants" }),          // references a tenant document
+  categories: z.array($objectId.meta({ ref: "categories" })), // references many category documents
+});
+
+// ❌ WRONG - do NOT suffix reference fields with `Id`
+const $post = z.object({
+  title: z.string(),
+  userId: $objectId,
+  tenantId: $objectId,
+  categoryIds: z.array($objectId),
+});
+```
+
+**Naming rules:**
+
+- Single reference: use the singular entity name → `user`, `tenant`, `category`.
+- Multiple references: use the plural entity name → `users`, `categories`, `tags`.
+- Drop the `Id` / `Ids` suffix entirely.
+
+**Why:** Thunder treats these as **foreign references** (`forignRef`). The
+generated SDK can unwrap a reference field into the actual related object on
+demand (a `user` field becomes the populated `User` object, `categories`
+becomes an array of `Category` objects). Suffixing with `Id` breaks this
+relationship inference and forces consumers to resolve references manually.
+
+Basic schema/model usage
+
+```typescript
+import { mongodb } from "@/database.ts";
+import { userModel, $user } from "@/schemas/user.ts";
+
+// Basic operations
+await userModel.insertOne(
+  $user.strictParse({ name: "John", email: "john@mail.com" }) // Validate before insert (This is a better practice and also auto inserts the default values instead of hard-coding) (You can also use regular zod .parse method but .strictParse is our type safe custom implementation that forces the input shape when typing manually)
+);
+await userModel.findOne({ _id: new ObjectId(id) });
+await userModel.updateOne({ _id }, { $set: { name: "Jane" } });
+await userModel.deleteOne({ _id });
+
+// With transactions
+await mongodb.withSession(session => 
+  session.withTransaction(async () => {
+    await userModel.insertOne({ ... }, { session });
+    await logs.insertOne({ ... }, { session });
+  })
+);
+```
+
+## CRUD Helper
+
+Quickly create REST endpoints:
+
+```typescript
+// routes/users.ts
+
+import { Router } from "@/core/http/router.ts";
+import { createCRUD } from "@/core/utils/createCRUD.ts";
+import { userModel, $user, $userInput } from "@/schemas/user.ts";
+
+export default new Router("/api/users", function users(router) {
+  createCRUD({
+    router,
+    schema: $user, // Full document shape, every insert is validated against it
+    model: userModel,
+    insertSchema: $userInput, // Optional: POST body shape (defaults to schema)
+
+    // Optional: narrowed fields in case of update
+    updateSchema: $userInput.pick({ name: true }),
+  }, {
+    // Optional: disable specific endpoints
+    disable: { del: true },
+
+    // Optional: fixed $project stage (or an array of them) applied on GET
+    // before the client's own pagination/projection stages.
+    projection: { password: 0 },
+
+    // Optional: field isolation (multi-tenancy or ownership isolation)
+    // Note: in case of post method (create operation) isolation field is inserted on the database for later isolation match.
+    isolationFields: async (req, action) => {
+      // action is "create" | "get" | "count" | "update" | "del"
+
+      // Optional: In case of create action, if you want to pass more or less fields to the insert operation you can do the following
+      if(action === "create") {
+        return {
+          orgId: req.headers.get("X-Org-Id"),
+          userId: req.headers.get("X-User-Id"), // A userId may usually be accessed from the logged in session but for now we are using the headers for simplicity.
+        }
+      }
+
+      // Optional: Imagine you want to allow only the creator to be able to edit or delete the object
+      if(["update", "del"].includes(action)) {
+        return {
+          orgId: req.headers.get("X-Org-Id"),
+          userId: req.headers.get("X-User-Id"),
+        }
+      }
+
+      return {
+        orgId: req.headers.get("X-Org-Id"),
+      }
+    },
+
+    // Optional: lifecycle hooks. Every hook also receives `session` (see Gotchas).
+    hooks: {
+      // Returning a value replaces the data that gets inserted
+      beforeCreate: ({ data, session }) => ({ ...data, createdBy: "system" }),
+      // The inserted id is on `results`, NOT on `data` (which is the parsed body)
+      afterCreate: ({ results, data, session }) => console.log("Created:", results._id),
+
+      // Returning a value replaces the $set payload
+      beforeUpdate: ({ _id, data, session }) => ({ ...data, touchedAt: new Date() }),
+      afterUpdate: ({ _id, results, data, session }) => {},
+
+      beforeDel: ({ _id, session }) => {},
+      afterDel: ({ _id, results, session }) => {},
+    },
+  });
+}).group("Users"); // Optional: allows you to group the endpoints for better openapi spec generation
+```
+
+A route's path is the router's root path plus the endpoint. The router's
+function name (`users` above) is only a scope label used for metadata and
+OpenAPI generation — it is **not** part of the URL. So a root of `/api/users`
+creates:
+
+| Endpoint | Response |
+| --- | --- |
+| `POST /api/users` | `{ _id: string }` |
+| `GET /api/users` | `{ results: [...] }` — list |
+| `GET /api/users/:id` | `{ results: [...] }` — the **same array shape**, with 0 or 1 entry |
+| `GET /api/users/count` | `{ count: number }` |
+| `PATCH /api/users/:id` | `200 OK`, empty body |
+| `DELETE /api/users/:id` | `200 OK`, empty body |
+
+`createCRUD` also writes `schema`, `insertSchema` and `updateSchema` onto
+`router.metadata.crud` as JSON Schema, which is what drives SDK and OpenAPI
+generation.
+
+### Querying GET and /count
+
+`GET` accepts the full pagination query below; `/count` accepts only `filters`
+and `subFilters`. Query strings are parsed with `qs`, so send nested values in
+bracket notation (`?filters[name][$eq]=john&limit=50`).
+
+| Param | Default | Notes |
+| --- | --- | --- |
+| `filters` | — | Client-side filter object (see below) |
+| `subFilters` | — | A second, independently applied filter layer |
+| `offset` | `0` | `$skip` |
+| `limit` | `2000` | `$limit`, min `1`, **max `2000`** |
+| `sort` | `{ _id: -1 }` | Mongodb sort object, values `-1`..`1` |
+| `project` | — | Mongodb projection object; a value may also be `{ $slice: n }` or `{ $slice: [n, n] }` |
+
+A filter value is either a plain string or a tagged object, which is how a
+client sends typed values over a query string:
+
+```jsonc
+{
+  "name":      { "$regex": { "type": "regex", "value": "^jo", "options": { "regexFlags": "i" } } },
+  "user":      { "$eq": { "type": "objectId", "value": "68f0a1..." } },
+  "age":       { "$gte": { "type": "number", "value": "18" } },
+  "verified":  { "$eq": { "type": "boolean", "value": "true" } },   // "true" / "1" are truthy
+  "deletedAt": { "$exists": { "type": "boolean", "value": "false" } },
+  "parent":    { "$eq": { "type": "null", "value": "" } },
+  "role":      { "$in": ["admin", "owner"] },
+  "banned":    { "$not": { "$eq": "true" } },
+
+  // A date takes an ISO string, or `nldate:` + a natural-language expression
+  "createdAt": { "$gte": { "type": "date", "value": "nldate:7 days ago" } },
+  "expiresAt": { "$lte": { "type": "date", "value": "nldate:next friday" } }
+}
+```
+
+- Value types: `string`, `number`, `boolean`, `objectId`, `date`, `regex`, `null`.
+- Operators: `$exists`, `$eq`, `$ne`, `$gt`, `$gte`, `$lt`, `$lte`, `$regex`,
+  `$in`, `$nin`, `$all`, `$mod` (a raw `[divisor, remainder]` tuple, not a
+  tagged value), and `$not` wrapping any expression.
+- Combine with `{ "$and": [...] }` / `{ "$or": [...] }` of filter objects.
+- A `$regex` pattern longer than 200 characters is rejected with a `400` — the
+  pattern comes from the client and is run by mongod too.
+
+### Gotchas
+
+- **Registering a hook turns the operation into a transaction.** If any hook
+  exists for create / update / delete, that operation runs inside
+  `mongodb.withSession(_ => _.withTransaction(...))`, which requires a replica
+  set. With no hooks it stays a plain single operation.
+- **`updatedAt` is always written on `PATCH`**, whether or not your schema
+  declares it.
+- **A zero-match `PATCH`/`DELETE` throws** (`No record updated!` /
+  `No record deleted!`) — **but only while no `afterUpdate`/`afterDel` hook is
+  registered.** Register one and a no-op write silently returns `200`, so check
+  `results.modifiedCount` / `results.deletedCount` inside the hook yourself.
+- `GET /:id` is the list route with an optional param, so it returns an array
+  and the pagination query still applies to it.
+
+### Filter helpers
+
+The filter layer is exported separately, so the same client filter format can be
+reused outside a CRUD endpoint:
+
+- `normalizeFilters(filters)` / `normalizeFilterExpression(value)` — convert a
+  client filter into a mongodb filter (resolving `objectId`, `date`, `nldate:`,
+  `regex`, …).
+- `testFilters(filters, data)` — evaluate a client filter against a plain object
+  in memory, with no database round trip (useful for access rules and policies).
+- `paginatedAggregation(query)` — the `$match` / `$sort` / `$skip` / `$limit` /
+  `$project` stages for a parsed pagination query, for hand-rolled aggregations.
+- Schemas: `$pagination`, `$filter`, `$basicFilter`, `$multiFilter`,
+  `$expression`, `$clientValue` (each also exported as `…Schema`).
+
+## Validation with Zod
+
+Always use Zod for input validation:
+
+```typescript
+import z from "zod";
+
+// Define schemas outside handler (in prepare phase)
+const $input = z.object({
+  name: z.string().min(1).max(100),
+  age: z.coerce.number().int().min(0), // coerce for query params
+  email: z.string().email().optional(),
+  tags: z.array(z.string()).default([]),
+});
+
+// Parse and validate
+const data = $input.parse(await bodyAsJson(req));
+
+// For query params (always strings), use coerce
+const $query = z.object({
+  page: z.coerce.number().default(1),
+  limit: z.coerce.number().max(100).default(20),
+});
+```
+
+## Logging
+
+```typescript
+import { Logger } from "@/core/utils/logger.ts";
+
+Logger.info("Processing request...");
+Logger.success("Operation completed");
+Logger.warn("Rate limit approaching");
+Logger.error("Failed to connect", error);
+```
+
+Note: Only errors log in production mode.
+
+## Caching
+
+```typescript
+import { cache, memoize } from "@/core/utils/cache.ts";
+
+// Cache function results with TTL (milliseconds). The arguments are hashed
+// (ohash), so every distinct argument list gets its own entry.
+const getUser = cache(async (id: string) => {
+  return await db.users.findOne({ _id: id });
+}, 60_000); // 1 minute TTL
+
+// Use Infinity for permanent cache
+const getConfig = cache(async () => {
+  return await loadConfig();
+}, Infinity);
+
+// Second overload: pass a key object instead of a ttl. The entries live exactly
+// as long as that object stays reachable, so a cache can be scoped to a request
+// (or a tenant, or a client instance) and be collected along with it.
+const handler = (req: Request) => {
+  const getPermissions = cache(async (role: string) => {
+    return await permissionModel.find({ role }).toArray();
+  }, req); // Cleared once the request object is gone
+};
+
+// `memoize` caches forever under a key you compute yourself. It skips the
+// argument hashing entirely, so prefer it on hot paths that look up the same
+// constant keys on every request.
+export const findRouter = memoize(
+  async (globPattern: string, target: string) => { /* ... */ },
+  (globPattern, target) => `${globPattern}\0${target}`,
+);
+```
+
+- **`cache()` is deduplicated per `(fn, ttl)` or `(fn, keyObject)` pair** —
+  calling it twice with the same function and the same ttl hands back the *same*
+  cached function, so calling it inline inside a handler is safe and does not
+  need hoisting to module scope. A different ttl is a separate cache.
+- **A rejected promise is evicted from the cache**, so failed async work retries
+  on the next call instead of the rejection being served until it expires. True
+  for both `cache` and `memoize`.
+- The TTL sweep timer is unref'd and `fn` is held weakly, so a cache never keeps
+  the process alive or pins its function in memory. Nothing to clear manually.
+- Calling a `keyObject` cached function after that object has been collected
+  throws. A second argument that is neither a number nor an object throws a
+  `TypeError`.
+
+## Background Jobs (Async Tasks)
+
+⚠️ **Note**: Background jobs are **not supported** in Thunder because it's designed for **serverless-first deployment**.
+
+### Option 1: Separate Worker Server (Recommended for Async Tasks)
+
+Create a separate worker application deployed to stateful hosting:
+
+```typescript
+// workers/emailWorker.ts - Run on separate server
+
+import { mongodb } from "@/database.ts";
+import { emailQueueModel } from "@/schemas/emailQueue.ts";
+
+async function processEmailQueue() {
+  while (true) {
+    // Fetch pending emails
+    const email = await emailQueueModel.findOne({ status: "pending" });
+    
+    if (!email) {
+      await new Promise(resolve => setTimeout(resolve, 5000)); // Wait 5s
+      continue;
+    }
+    
+    try {
+      // Send email (via service like Sendgrid)
+      await sendEmail(email);
+      
+      // Mark as sent
+      await emailQueueModel.updateOne(
+        { _id: email._id },
+        { $set: { status: "sent", sentAt: new Date() } }
+      );
+    } catch (error) {
+      // Mark as failed
+      await emailQueueModel.updateOne(
+        { _id: email._id },
+        { $set: { status: "failed", error: error.message } }
+      );
+    }
+  }
+}
+
+// Start worker
+await processEmailQueue();
+```
+
+Deploy to:
+- Dedicated server (e.g., VPS, Docker)
+- Job platform (e.g., Railway, Heroku)
+- Kubernetes cluster
+
+### Option 2: Third-Party Queue Service (Simplest)
+
+Use managed job queue services like **BullMQ**:
+
+```typescript
+// routes/emails.ts - Enqueue job from Thunder app
+
+import Queue from "bullmq";
+
+const emailQueue = new Queue("emails", {
+  connection: {
+    host: process.env.REDIS_HOST,
+    port: process.env.REDIS_PORT,
+  },
+});
+
+export default new Router("/api", function email(router) {
+  router.post("/send", function sendEmail() {
+    const $body = z.object({
+      to: z.string().email(),
+      subject: z.string(),
+      body: z.string(),
+    });
+
+    return {
+      shape: () => ({ body: $body }),
+      handler: async (req) => {
+        const data = $body.parse(await bodyAsJson(req));
+        
+        // Add to queue (returns immediately)
+        await emailQueue.add("send", data, {
+          attempts: 3,
+          backoff: { type: "exponential", delay: 2000 },
+        });
+        
+        return Response.ok();
+      },
+    };
+  });
+});
+```
+
+Then run worker separately:
+```typescript
+// workers/emailWorker.ts
+
+import Queue from "bullmq";
+
+const emailQueue = new Queue("emails", {
+  connection: { host: process.env.REDIS_HOST }
+});
+
+emailQueue.process(async (job) => {
+  await sendEmail(job.data);
+});
+```
+
+### Option 3: Queue in Database
+
+Simple alternative using MongoDB as a queue:
+
+```typescript
+// In route handler - Enqueue
+await emailQueueModel.insertOne(
+  $emailQueue.strictParse({
+    type: "send-email",
+    data: { to, subject, body },
+    status: "pending",
+    createdAt: new Date(),
+  })
+);
+
+// In separate worker - Process
+// (Similar to Option 1 example above)
+```
+
+### Why Not Built-in Background Jobs?
+
+Thunder is **serverless-first**, which means:
+- ❌ No persistent connections between requests
+- ❌ No long-running background processes
+- ❌ Functions scale independently
+- ✅ Each request is stateless and isolated
+
+For async tasks, use external services instead of built-in job queues.
+
+---
+
+## Static File Serving
+
+```typescript
+import { paramsAsJson, serveAssets } from "@/core/http/utils.ts";
+import { fromFileUrl } from "@std/path/from-file-url";
+
+router.get("{/*path}", function staticFiles() {
+  return (req) => serveAssets(
+    req,
+    fromFileUrl(import.meta.resolve("../public/www")),
+    paramsAsJson<{ path?: string[] }>(req).path?.join("/"),
+  );
+});
+```
+
+The second argument can also be an array of roots, e.g. `[www, uploads]`. The first root that has the file serves it. If none has it, the index file of the first root is served.
+
+## Import Conventions
+
+Always use the `@/` alias for project imports:
+
+```typescript
+// ✅ CORRECT
+import { Router } from "@/core/http/router.ts";
+import { Env } from "@/core/utils/env.ts";
+import { mongodb } from "@/database.ts";
+
+// ❌ WRONG - relative imports for core/database
+import { Router } from "../../core/http/router.ts";
+import { mongodb } from "../database.ts";
+```
+
+## Code Style Guidelines
+
+1. **TypeScript strict mode** - All code must be properly typed
+2. **Named exports** for utilities, **default export** for routers/hooks
+3. **Async/await** preferred over Promise chains
+4. **Zod schemas** defined in prepare phase (outside request handler)
+5. **No comments explaining obvious code** - code should be self-documenting
+6. **Use Response helpers** from `@/core/http/response.ts`
+7. **Validate all inputs** with Zod before processing
+
+### CRITICAL: Prefer Built-in Framework Utilities (Do Not Reinvent or Over-install)
+
+Before writing helper code or reaching for a third-party/npm package, you MUST
+check whether Thunder already ships the capability under `@/core/utils/` (and
+the HTTP helpers under `@/core/http/`). Reuse the built-in utility instead of
+writing your own copy or installing a redundant dependency.
+
+Built-ins that already exist (do NOT re-implement these):
+
+- **Env management** → `Env` from `@/core/utils/env.ts` (don't read `Deno.env` directly or add dotenv libs).
+- **Logging** → `Logger` from `@/core/utils/logger.ts` (don't add a logging package).
+- **Caching / memoization** → `cache` (ttl or key-object scoped) and
+  `memoize` (forever, caller-supplied key) from `@/core/utils/cache.ts`.
+- **Hashing** → `createHash` family from `@/core/utils/hash.ts` (don't add crypto/hash libs unless it becomes mandatory or the required feature doesn't exists).
+- **Query parsing** → `queryAsJson` / `parseQueryParams` (don't add a query-string parser).
+- **Pagination** → `paginated` from `@/core/utils/paginate.ts`.
+- **Template rendering** → `ejsRender` / `handlebarsRender` from `@/core/utils/textRender.ts`.
+- **CRUD endpoints** → `createCRUD` and `$objectId` from `@/core/utils/createCRUD.ts`.
+- **Client-side filters** → `normalizeFilters` / `testFilters` / `paginatedAggregation`
+  and the `$pagination` / `$filter` schema family, also from
+  `@/core/utils/createCRUD.ts` (don't invent a second filter format).
+- **Request parsing & auth** → `paramsAsJson`, `bodyAsJson`, `parseBasicAuth`, `serveAssets` from `@/core/http/utils.ts`.
+- **Responses** → `Response` helpers from `@/core/http/response.ts`.
+- **Validation** → `zod` (already a dependency).
+
+Rules:
+
+1. **Search the framework first.** If a utility exists, use it — never hand-roll
+   a duplicate or pull in an external library for something already provided.
+2. **Only add a dependency when there is a genuine, unmet need** (e.g. a
+   third-party SDK like Stripe). Justify any new dependency.
+3. **Prefer Deno std (`@std/*`)** already mapped in `deno.json` over arbitrary
+   npm packages when a standard option exists.
+4. If you believe a built-in is insufficient, prefer composing/wrapping it in
+   your own module over replacing it.
+
+## Error Handling
+
+Errors are automatically caught and formatted:
+- `ZodError` → 400 with validation details
+- `Response` thrown → returned as-is
+- `Error` → 500 with message (stack only in development)
+
+```typescript
+// Throw Response for custom error responses
+if (!authorized) {
+  throw Response.forbidden("Access denied");
+}
+
+// Regular errors become 500
+throw new Error("Something went wrong");
+```
+
+## Critical: Never Edit `core/` or `plugins/`
+
+These directories are managed by the framework and are overwritten by update
+commands. Any manual changes you make inside them WILL BE LOST.
+
+1. **Never edit anything in `core/`.** It contains framework internals that are
+   replaced when the developer runs `deno task update:core`. Editing core files
+   means your changes vanish on the next update, and you also miss out on
+   upstream bug fixes and security patches.
+
+2. **Never edit anything in `plugins/`.** Each plugin under
+   `plugins/{org}/{name}/` is an externally-managed package. Running
+   `deno task update:plugin -n org/plugin-name` re-pulls the plugin and discards
+   any local edits.
+
+3. **Build on top instead of modifying.** To change or extend behavior:
+   - Add your own files in `routes/`, `hooks/`, `schemas/`, `scripts/`, etc.
+   - Use **hooks** to intercept/augment request and response handling.
+   - Wrap or compose core utilities in your own modules under the project root.
+   - For plugins, configure them via environment variables and your own hooks —
+     never by editing the plugin source.
+
+> The ONLY time editing `core/` or `plugins/` is acceptable is while
+> **experimenting or debugging locally**. Treat such edits as throwaway and
+> never rely on them persisting — they will be overwritten on the next update.
+
+## Updating the Framework Core
+
+Keep the project current with the latest features, bug fixes, and security
+patches by regularly updating the core:
+
+```bash
+deno task update:core
+```
+
+This pulls the latest framework files from the official Thunder repository
+(`Huruf-Tech/thunder`) and overwrites the managed files (primarily `core/` and
+`serve.base.ts`). Because it overwrites these files, this is exactly why you must
+NOT edit them manually (see the section above).
+
+Recommended workflow:
+
+1. Commit or stash your own work first (so the update diff is clean).
+2. Run `deno task update:core`.
+3. Run `deno task check` (format + lint) and verify the app still boots with
+   `deno task dev`.
+4. Review the update diff for any new conventions or breaking changes.
+
+Keep installed plugins up to date as well:
+
+```bash
+deno task update:plugin -n org/plugin-name
+```
+
+## Plugin System
+
+Thunder uses a **unified project-plugin architecture**: A Thunder project IS a Thunder plugin. No special structure needed.
+
+### How It Works
+
+1. **Create a Thunder project** normally
+2. **Publish to GitHub**
+3. **Install as a plugin** into other Thunder projects
+
+Plugins are discovered in `plugins/{org}/{name}/` and routes/hooks are automatically merged with the main app.
+
+```bash
+# Add plugin from GitHub
+deno task add:plugin -n org/plugin-name
+
+# Add a plugin AND run its setup lifecycle script (indexes, seeding, migrations)
+deno task add:plugin -n org/plugin-name --setup                       # runs setup against the "production" env
+deno task add:plugin -n org/plugin-name --setup=development,production # run setup against specific envs
+
+# Run a plugin's setup lifecycle script separately (after install)
+deno task setup:plugin -n org/plugin-name                       # interactive env selection
+deno task setup:plugin -n org/plugin-name --envs=development    # non-interactive
+
+# Update plugin to latest
+deno task update:plugin -n org/plugin-name
+
+# Remove plugin (optionally run its cleanup lifecycle script)
+deno task remove:plugin -n org/plugin-name
+deno task remove:plugin -n org/plugin-name --clean                    # also runs cleanup against the "production" env
+deno task remove:plugin -n org/plugin-name --clean=development,production
+```
+
+> ⚠️ Installing a plugin only copies its files and merges its import map — it does **NOT**
+> run the plugin's setup script automatically. You must run setup explicitly (via
+> `--setup` during `add:plugin`, or `setup:plugin` afterwards) for the plugin to create
+> its database indexes, seed data, or run migrations. See "Plugin Lifecycle Scripts" below.
+
+### Getting Started: Use thunder-core
+
+Thunder ships as a **minimal framework**. To access essential features (auth, CORS, security, RBAC, admin user management), install the official core plugin:
+
+```bash
+deno task add:plugin -n Huruf-Tech/thunder-core
+```
+
+**thunder-core** provides:
+- Authentication (via [better-auth](https://www.better-auth.com/))
+- Role-based access control (RBAC)
+- Security headers & CORS
+- User management admin panel
+- Session management
+- Built-in database migrations
+- Common utilities (withAuthSession, withTenant, withAuthGuard, etc.)
+
+### Project Setup Workflow
+
+```bash
+# 1. Clone Thunder framework repository
+git clone https://github.com/Huruf-Tech/thunder.git my-project
+cd my-project
+
+# 2. Prepare the project
+#    - Brand-new project from the template?   → deno task init  (resets git history)
+#    - Cloned/forked an existing project?      → deno task setup (configures git hooks only)
+deno task init   # or: deno task setup
+
+# 3. Add .env file with database connection
+echo "DATABASE_URL=mongodb://localhost:27017/my-db" > .env
+
+# 4. Install core plugin (recommended for most projects)
+deno task add:plugin -n Huruf-Tech/thunder-core
+
+# 5. Handle any missing env variables
+# Run: deno task dev
+# Fix any errors by setting required env vars in .env
+# (Plugin docs should mention required variables)
+
+# 6. Start coding
+deno task dev
+```
+
+### Plugin Development Guide
+
+Creating a reusable plugin is simple—it's just a Thunder project published to GitHub.
+
+#### Plugin Naming Convention
+
+Use the naming pattern `thunder-plugin-{feature}`:
+- `thunder-plugin-stripe` - Payment processing
+- `thunder-plugin-email-sendgrid` - Email service
+- `thunder-plugin-analytics` - Analytics
+- `thunder-plugin-sms-twilio` - SMS service
+
+#### Plugin Structure
+
+A plugin is identical to any Thunder project:
+
+```
+thunder-plugin-feature/
+├── routes/
+│   └── feature.ts        # Routes use semantic namespace
+├── hooks/
+│   └── middleware.ts     # If needed
+├── schemas/
+│   └── model.ts          # Database models
+├── lib/
+│   └── utilities.ts      # Helper functions
+├── scripts/
+│   ├── setupPlugin.ts    # (Optional) Setup lifecycle: runs when consumer sets up the plugin
+│   └── cleanupPlugin.ts  # (Optional) Cleanup lifecycle: runs when consumer removes the plugin
+├── types/
+│   └── plugin.ts         # Export types for consumers
+├── serve.ts              # Entry point
+├── database.ts           # DB connection
+├── deno.json             # Project config
+├── .env.example          # Template for required env vars
+├── README.md             # Plugin documentation
+├── llms.txt              # The file you're reading right now (with probably extra plugin instructions)
+└── PLUGIN_GUIDE.md       # (Optional) Plugin usage guide
+```
+
+### Plugin Lifecycle Scripts (Setup & Cleanup)
+
+Because Thunder is **serverless-first**, plugins must **not** create database indexes,
+seed data, or run migrations at app startup (that would slow cold starts and run on every
+request/instance). Instead, plugins ship **lifecycle scripts** that the consumer runs
+explicitly, once, against a chosen environment.
+
+#### How lifecycle scripts work
+
+A plugin may include two optional files in its `scripts/` folder:
+
+- `scripts/setupPlugin.ts` — runs when the plugin is **set up** (`--setup` during install,
+  or `deno task setup:plugin`). Put index creation, seeding, and migrations here.
+- `scripts/cleanupPlugin.ts` — runs when the plugin is **removed with cleanup**
+  (`remove:plugin --clean`). Put teardown logic here (drop collections, remove seeded data,
+  etc.). Safe to omit entirely if not needed.
+
+When the consumer triggers setup/cleanup, Thunder executes the script **once per selected
+environment**, spawning `deno run -A <script>` with `ENV_TYPE` set to that environment.
+This is what lets the script connect to the correct database (development vs production)
+when creating indexes. If a plugin has no lifecycle script, setup/cleanup is a safe no-op.
+
+#### Writing a setup script (index creation example)
+
+Keep the actual work in importable functions and call them from the lifecycle script. This
+also lets you expose your own `deno task` shortcuts during plugin development.
+
+```typescript
+// scripts/syncDBIndexes.ts — reusable index sync
+import { userModel } from "@/schemas/user.ts";
+import { orderModel } from "@/schemas/order.ts";
+
+export const syncDBIndexes = async () => {
+  // Use Promise.allSettled so one failing index doesn't abort the rest.
+  await Promise.allSettled([
+    userModel.createIndex({ email: 1 }, { name: "email", unique: true, background: true }),
+    orderModel.createIndex({ createdAt: -1 }, { name: "createdAt", background: true }),
+  ]);
+};
+
+// Allow running directly: `deno run -A scripts/syncDBIndexes.ts`
+if (import.meta.main) {
+  await syncDBIndexes();
+  Deno.exit();
+}
+```
+
+```typescript
+// scripts/setupPlugin.ts — the lifecycle entry point the consumer runs
+import { syncDBIndexes } from "./syncDBIndexes.ts";
+import { seedDefaults } from "./seedDefaults.ts";
+
+await syncDBIndexes().catch(console.warn);
+await seedDefaults().catch(console.warn);
+
+Deno.exit();
+```
+
+```typescript
+// scripts/cleanupPlugin.ts — runs on remove --clean (optional)
+console.log("Plugin uninstalled successfully!");
+```
+
+> Setup scripts should be **idempotent** where possible. `createIndex` is naturally
+> idempotent (re-creating an existing index is a no-op), but inserting seed documents is
+> not — guard seeds with unique indexes or upserts so re-running setup doesn't duplicate
+> data or crash on unique-constraint violations.
+
+#### How a consumer runs setup
+
+```bash
+# During install (defaults to the "production" env if no envs are given):
+deno task add:plugin -n org/plugin-name --setup
+deno task add:plugin -n org/plugin-name --setup=development,production
+
+# Or any time after install (prompts for envs if --envs is omitted):
+deno task setup:plugin -n org/plugin-name
+deno task setup:plugin -n org/plugin-name --envs=development,production
+
+# Run cleanup when removing:
+deno task remove:plugin -n org/plugin-name --clean
+deno task remove:plugin -n org/plugin-name --clean=development,production
+```
+
+The `--setup` / `--clean` / `--envs` values accept a comma-separated list of environments
+(`development`, `production`, `test`). The matching `.env`/`.env.<environment>` files are
+loaded for that run, so make sure `DATABASE_URL` (and any plugin env vars) are set for each
+environment you target before running setup. Each environment is processed with a timeout,
+so keep lifecycle scripts reasonably fast.
+
+> Document in your plugin's README/`llms.txt` exactly what its setup script does (which
+> indexes/seed data it creates) and which env vars must be set before running it.
+
+#### Plugin Development Best Practices
+
+**1. Use Semantic Route Namespaces**
+
+Routes should be namespaced by feature:
+```typescript
+// routes/stripe.ts
+
+// ✅ GOOD - Clear namespace
+export default new Router("/api", function stripe(router) {
+  router.post("/checkout", function checkout() { ... });
+  router.get("/invoices", function listInvoices() { ... });
+});
+// Routes: /stripe/api/checkout, /stripe/api/invoices
+```
+
+**2. Document Environment Variables**
+
+Always provide `.env.example` with required variables:
+```bash
+# .env.example for thunder-plugin-stripe
+
+# Stripe API keys (from https://stripe.com)
+STRIPE_API_KEY=sk_test_...
+STRIPE_WEBHOOK_SECRET=whsec_...
+
+# Optional configuration
+STRIPE_LOG_LEVEL=debug
+```
+
+The plugin developer should document what each variable does in the README.
+
+**3. Document the Plugin in README**
+
+```markdown
+# Thunder Plugin: Stripe Integration
+
+## Installation
+deno task add:plugin -n myorg/thunder-plugin-stripe
+
+## Configuration
+Set these environment variables in `.env`:
+- STRIPE_API_KEY: Your Stripe API key
+- STRIPE_WEBHOOK_SECRET: Webhook signing secret
+
+## Usage
+
+Routes exposed:
+- POST /stripe/api/checkout - Create payment intent
+- GET /stripe/api/invoices - List invoices
+- POST /stripe/api/webhook - Receive Stripe events
+
+## Example
+See PLUGIN_GUIDE.md for detailed usage examples
+```
+
+**4. Hook Priority Convention**
+
+Plugins should follow hook priority guidelines:
+- **100+**: Authentication/security hooks (CORS, auth validation)
+- **50-99**: Business logic hooks (validation, enrichment)
+- **0-49**: Optional hooks
+- **-100**: Logging/cleanup hooks
+
+```typescript
+// hooks/stripe.ts
+export default {
+  priority: 50,  // Below auth (100+), before app logic
+  pre: async ({ req, name }) => {
+    // Validate Stripe webhooks, etc.
+  },
+} satisfies THook;
+```
+
+### Installing Multiple Plugins
+
+Compose multiple plugins in a single project:
+
+```bash
+deno task add:plugin -n Huruf-Tech/thunder-core
+deno task add:plugin -n myorg/thunder-plugin-stripe
+deno task add:plugin -n myorg/thunder-plugin-email-sendgrid
+```
+
+Routes and hooks from all plugins auto-merge:
+```
+/auth/* → from thunder-core
+/users/* → from thunder-core
+/stripe/* → from thunder-plugin-stripe
+/email/* → from thunder-plugin-email-sendgrid
+```
+
+### Important Plugin Limitations (Current)
+
+⚠️ **No Recursive Dependencies** - A plugin cannot depend on another plugin.
+- Plugin A can be installed alone ✅
+- Plugin A + Plugin B can be installed together ✅
+- Plugin A depending on Plugin B, then installing A ❌
+
+If your plugin needs features from another plugin, document it in README and assume the consumer installs both.
+
+### Plugin Best Practices
+
+1. **Make plugins composable** - Work independently or with other plugins
+2. **Use semantic routes** - Avoid generic names like `/api/*`
+3. **Document env vars** - List all required/optional variables
+4. **Export types** - Let consumers use TypeScript types from your plugin
+5. **Keep hooks focused** - One hook per concern
+6. **Test standalone** - Ensure plugin works without other plugins
+7. **Version properly** - Use semantic versioning (major.minor.patch)
+
+### Example: Creating a Simple Plugin
+
+Here's a minimal email plugin:
+
+```typescript
+// thunder-plugin-email/routes/email.ts
+import { Router } from "@/core/http/router.ts";
+import { bodyAsJson } from "@/core/http/utils.ts";
+import z from "zod";
+
+export default new Router("/email", function email(router) {
+  router.post("/send", function sendEmail() {
+    const $body = z.object({
+      to: z.string().email(),
+      subject: z.string(),
+      body: z.string(),
+    });
+
+    return {
+      shape: () => ({ body: $body }),
+      handler: async (req) => {
+        const data = $body.parse(await bodyAsJson(req));
+        // Send email via provider (Sendgrid, AWS SES, etc.)
+        return Response.json({ success: true, messageId: "msg_123" });
+      },
+    };
+  });
+});
+```
+
+Publish to GitHub and consumers can install with:
+```bash
+deno task add:plugin -n myorg/thunder-plugin-email
+```
+
+## Available Tasks
+
+```bash
+deno task init             # Initialize a BRAND-NEW project (resets git history, runs setup, sets up env) — destructive
+deno task setup            # Prepare a CLONED/FORKED project (configures git settings + .githooks; no history reset)
+deno task dev              # Development server with hot reload
+deno task start            # Production server
+deno task check            # Format and lint
+deno task update:core      # Update the framework core (latest features + security patches; overwrites core/)
+deno task generate:openapi # Generate OpenAPI spec
+deno task generate:sdk     # Generate TypeScript SDK
+deno task generate:app     # Generate a dashboard app in public folder (based on the boilerplate repo: github.com/Huruf-Tech/thunder-ui)
+
+# Plugin management
+deno task add:plugin    -n org/plugin-name [--setup[=env,...]]  # Install (optionally run setup)
+deno task setup:plugin  -n org/plugin-name [--envs=env,...]     # Run a plugin's setup lifecycle (indexes/seeds/migrations)
+deno task update:plugin -n org/plugin-name                      # Update an installed plugin
+deno task remove:plugin -n org/plugin-name [--clean[=env,...]]  # Remove (optionally run cleanup lifecycle)
+```
+
+## Common Patterns
+
+### Authentication Middleware via Hook
+
+```typescript
+// hooks/auth.ts
+
+import type { THook } from "@/core/http/hooks.ts";
+
+export default {
+  priority: 100,
+  pre: async ({ req }) => {
+    const token = req.headers.get("Authorization")?.replace("Bearer ", "");
+    if (!token) return Response.unauthorized();
+    
+    try {
+      const user = await verifyToken(token);
+      
+      // Store user in header for handlers to access
+      req.headers.set("X-User-Id", user.id);
+    } catch {
+      return Response.unauthorized();
+    }
+  },
+} satisfies THook;
+```
+
+### Pagination
+
+```typescript
+router.get("/items", function listItems() {
+  const $query = z.object({
+    offset: z.coerce.number().min(0).default(0),
+    limit: z.coerce.number().min(1).max(2000).default(100),
+  });
+
+  return {
+    shape: () => ({ query: $query }),
+    handler: async (req) => {
+      const { offset, limit } = $query.parse(queryAsJson(req));
+      
+      const [results, count] = await Promise.all([
+        collection.find().skip(offset).limit(limit).toArray(),
+        collection.countDocuments(),
+      ]);
+      
+      return Response.json({
+        results,
+        count,
+      });
+    },
+  };
+});
+```
+
+### File Upload
+
+```typescript
+router.post("/upload", function uploadFile() {
+  return async (req) => {
+    const formData = await req.formData();
+    const file = formData.get("file") as File;
+    
+    if (!file) return Response.badRequest("No file provided");
+    
+    const bytes = await file.arrayBuffer();
+    await Deno.writeFile(`./uploads/${file.name}`, new Uint8Array(bytes));
+    
+    return Response.json({ filename: file.name });
+  };
+});
+```
+
+---
+
+## Additional Utilities
+
+These utilities ship with Thunder under `@/core/utils/`. Import paths and signatures below match the actual source.
+
+### denoConfig
+
+Provides access to your project's `deno.json` configuration at runtime. Useful for reading project metadata, import maps, tasks, or custom config values. `denoConfig` is an already-resolved object (loaded at module init), NOT a function.
+
+```typescript
+import { denoConfig, readDenoConfig, denoConfigPath } from "@/core/utils/denoConfig.ts";
+
+console.log(denoConfig.name);  // your project name
+console.log(denoConfig.tasks); // configured deno tasks
+
+// To read a different config file explicitly:
+const other = await readDenoConfig("./plugins/foo/deno.json");
+// Pass `true` as the second arg to read statically (JSON.parse, no import cache):
+const fresh = await readDenoConfig(denoConfigPath, true);
+```
+
+### Template Rendering (ejsRender / handlebarsRender)
+
+Render [EJS](https://ejs.co/) or [Handlebars](https://handlebarsjs.com/) templates to strings. Both take the template **content as a string** (not a file path) plus a data object. `ejsRender` is async; `handlebarsRender` is sync.
+
+```typescript
+import { ejsRender, handlebarsRender } from "@/core/utils/textRender.ts";
+
+const html = await ejsRender("<h1>Hello <%= name %></h1>", { name: "Alice" });
+
+const greeting = handlebarsRender("Hello {{name}}", { name: "Bob" });
+
+// To render a file, read it first:
+const tpl = await Deno.readTextFile("templates/welcome.ejs");
+const out = await ejsRender(tpl, { name: "Alice", appName: "Thunder App" });
+
+return new Response(html, { headers: { "Content-Type": "text/html" } });
+```
+
+### Hashing (createHash family)
+
+One-way hashing built on Web Crypto (async) and Node crypto (sync). These produce digests only — there is no `verify` helper; compare digests yourself. Not suitable for password storage on their own (no salting); use a dedicated KDF for passwords.
+
+```typescript
+import {
+  createHash,           // async, hex output
+  createHashBase64,     // async, base64url output
+  createHashSync,       // sync, hex output
+  createHashBase64Sync, // sync, base64url output
+  SupportedHashAlg,
+} from "@/core/utils/hash.ts";
+
+const hex = await createHash(SupportedHashAlg.SHA_256, "data");
+const b64 = await createHashBase64(SupportedHashAlg.SHA_256, "data");
+const hexSync = createHashSync(SupportedHashAlg.SHA_256, "data");
+
+// Manual verification:
+const isMatch = (await createHash(SupportedHashAlg.SHA_256, input)) === stored;
+```
+
+### parseQueryParams
+
+Parses a query string into a nested object via `qs`. Takes a **string** (not a `Request`). `queryAsJson(req)` from `@/core/http/utils.ts` wraps this for requests — prefer that in route handlers.
+
+```typescript
+import { parseQueryParams } from "@/core/utils/parseQueryParams.ts";
+
+const params = parseQueryParams("?page=1&filter[status]=active");
+// { page: "1", filter: { status: "active" } }
+```
+
+### paginated
+
+Repeatedly invokes a callback in fixed-size pages until a page returns fewer items than `limit` (i.e. the last page). Useful for batch-processing an entire collection without loading it all at once.
+
+```typescript
+import { paginated } from "@/core/utils/paginate.ts";
+
+await paginated(100, async (offset, limit) => {
+  const batch = await collection.find().skip(offset).limit(limit).toArray();
+
+  for (const doc of batch) {
+    // process each doc...
+  }
+
+  return batch.length; // loop continues while this equals `limit`
+});
+```
+
+### Already documented above
+
+These also live in `@/core/utils/` and are covered in earlier sections: `Env` (env.ts), `Logger` (logger.ts), `cache` / `memoize` (cache.ts), and the CRUD helpers including `createCRUD` and `$objectId` (createCRUD.ts).

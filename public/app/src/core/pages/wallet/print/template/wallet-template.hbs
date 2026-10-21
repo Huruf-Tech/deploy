@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="{{lang}}" dir="{{dir}}">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{title}}</title>
+
+  <style>
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body { font-family: 'Cairo', system-ui, sans-serif; background: #fff; }
+
+    @page {
+      size: A4;
+      margin: 14mm;
+    }
+
+    @media print {
+      body {
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+
+      thead {
+        display: table-header-group;
+      }
+
+      tr {
+        break-inside: avoid;
+        page-break-inside: avoid;
+      }
+    }
+
+    {{{tailwind}}}
+    {{{fonts}}}
+
+    body {
+      font-family: 'Cairo', system-ui, sans-serif;
+      height: -webkit-fill-available;
+    }
+  </style>
+</head>
+
+<body>
+  {{{content}}}
+</body>
+<script>
+  window.addEventListener("load", () => {
+    setTimeout(() => window.print(), 500);
+  });
+</script>
+
+</html>

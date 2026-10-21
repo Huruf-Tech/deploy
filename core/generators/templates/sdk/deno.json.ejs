@@ -1,0 +1,14 @@
+{
+  "name": "<%- packageName %>",
+  "version": "<%- packageVersion %>",
+  "exports": {
+    ".": "./index.ts",
+    "./base": "./base.ts",
+    "./types": "./types.ts"
+  },
+  "imports": {
+    "axios": "npm:axios@^1.18.1",
+    "path-to-regexp": "npm:path-to-regexp@^8.3.0"
+  },
+  "workspace": <%- JSON.stringify(workspace) %>
+}
