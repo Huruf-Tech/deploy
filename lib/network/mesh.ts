@@ -114,7 +114,8 @@ export async function builtinRegistry(
 export async function meshSpecFor(
   server: TServerDoc,
 ): Promise<Pick<TDesiredSpec, "mesh" | "registry">> {
-  if (!inMesh(server)) return {};
+  // Host setup installs WireGuard's tools: join only once it's done.
+  if (!inMesh(server) || server.setup?.status !== "ready") return {};
   const servers = await meshServers(server.tenant);
   const index = server.mesh!.index;
 

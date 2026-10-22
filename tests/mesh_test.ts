@@ -61,6 +61,13 @@ Deno.test({
             "10.210.3.0/24",
           ]);
           assert(ensure.every((c) => c.payload.meshCidr === "10.209.0.0/16"));
+
+          // An agent added again keeps its old cursor: it's told to start over.
+          await sleep(110);
+          const stale = await agents[0].poll({ cursor: 999 });
+          assertEquals(stale.json.resetCommands, true);
+          await sleep(110);
+          assertEquals((await agents[0].poll()).json.resetCommands, undefined);
           await pollAll();
         },
       );

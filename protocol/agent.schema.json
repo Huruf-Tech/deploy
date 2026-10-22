@@ -420,6 +420,10 @@
             }
           }
         },
+        "resetCommands": {
+          "description": "The agent's cursor is ahead of this server's commands (state from an earlier registration): forget received commands and the stored desired state",
+          "type": "boolean"
+        },
         "desired": {
           "description": "Only when the version is newer than appliedVersion",
           "type": "object",

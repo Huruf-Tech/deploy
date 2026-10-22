@@ -127,6 +127,9 @@ type PollResponse struct {
 	// New terminal input per session, after the cursors in `streams`
 	StreamInput map[string][]TerminalInput `json:"streamInput,omitempty"`
 
+	// The agent's cursor is ahead of this server's commands (state from an earlier registration): forget received commands and the stored desired state
+	ResetCommands *bool `json:"resetCommands,omitempty"`
+
 	// Only when the version is newer than appliedVersion
 	Desired *PollResponseDesired `json:"desired,omitempty"`
 }

@@ -316,6 +316,9 @@ export const $pollResponse = z.object({
   commands: z.array($command),
   streamInput: z.record(z.string(), z.array($terminalInput)).optional()
     .describe("New terminal input per session, after the cursors in `streams`"),
+  resetCommands: z.boolean().optional().describe(
+    "The agent's cursor is ahead of this server's commands (state from an earlier registration): forget received commands and the stored desired state",
+  ),
   desired: z.object({
     version: z.number().int(),
     sealed: z.string().describe(

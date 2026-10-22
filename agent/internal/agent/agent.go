@@ -145,6 +145,13 @@ func (a *Agent) step(ctx context.Context) (wait time.Duration, stop bool, err er
 			a.lastSummary = time.Now()
 		}
 		a.setStatus("active", "online")
+		if response.ResetCommands != nil && *response.ResetCommands {
+			a.Log.Info("command state is from an earlier registration; starting over")
+			if err := a.Store.Reset(); err != nil {
+				return 0, false, err
+			}
+			return 0, false, nil // the next poll starts from the beginning
+		}
 		if d := response.Desired; d != nil && d.Version > applied {
 			if err := a.applyDesired(ctx, d.Version, d.Sealed); err != nil {
 				a.Log.Error("cannot apply the desired state", "version", d.Version, "error", err)
@@ -220,6 +227,12 @@ func (a *Agent) hello(ctx context.Context) error {
 		return err
 	}
 
+	// Registered as a new server (removed and added again): start over.
+	if changed, err := a.Store.RegisteredAs(response.Server); err != nil {
+		return err
+	} else if changed {
+		a.Log.Info("registered as a new server; starting over", "server", response.Server)
+	}
 	a.config, a.configVersion, a.registered = &response.Config, response.Version, true
 	a.reconcileMs.Store(response.Config.ReconcileIntervalMs)
 	if response.Status == "pending" {

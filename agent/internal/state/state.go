@@ -21,6 +21,7 @@ type Store struct {
 	path string
 	mu   sync.Mutex
 	data struct {
+		Server        string  `json:"server"`
 		CommandCursor int64   `json:"commandCursor"`
 		Done          []int64 `json:"done"`
 		SpecVersion   int64   `json:"specVersion"`
@@ -62,6 +63,35 @@ func (s *Store) Received(cursor int64, done ...int64) error {
 	if len(s.data.Done) > maxDone {
 		s.data.Done = s.data.Done[len(s.data.Done)-maxDone:]
 	}
+	return s.save()
+}
+
+// RegisteredAs records the server this agent is registered as. A different
+// one (removed and added again) starts over: its command seqs and desired
+// state begin again from zero. Reports whether it changed.
+func (s *Store) RegisteredAs(server string) (bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if server == "" || s.data.Server == server {
+		return false, nil
+	}
+	previous := s.data.Server
+	s.data.Server = server
+	// State from before agents recorded this belongs to the same server: keep it.
+	if previous != "" {
+		s.data.CommandCursor, s.data.Done = 0, nil
+		s.data.SpecVersion, s.data.Spec = 0, ""
+	}
+	return previous != "", s.save()
+}
+
+// Reset forgets received commands and the desired state (the control plane
+// saw a cursor from an earlier registration).
+func (s *Store) Reset() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.data.CommandCursor, s.data.Done = 0, nil
+	s.data.SpecVersion, s.data.Spec = 0, ""
 	return s.save()
 }
 

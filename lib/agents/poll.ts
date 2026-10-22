@@ -156,6 +156,8 @@ export const pollAgent = async (
       commands,
       ...(streamInput ? { streamInput } : {}),
       ...(desired ? { desired } : {}),
+      // A cursor past every command came from an earlier registration of this agent.
+      ...(cursor > lease.commandSeq ? { resetCommands: true } : {}),
     },
   };
 };
