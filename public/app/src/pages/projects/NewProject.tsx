@@ -36,6 +36,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
+import { getLocalPath } from "@/core/lib/utils"
 import { cn, errorMessage } from "@/lib/utils"
 import { InputField } from "@/pages/templates/Detail"
 import { slugify, TemplateIcon } from "@/pages/templates/shared"
@@ -186,8 +187,7 @@ function GitHubPicker({
         <AlertDescription>
           {t("Connect GitHub first; it takes three clicks.")}{" "}
           <Link
-            to="../../build/gitIntegrations"
-            relative="path"
+            to={getLocalPath("build/gitIntegrations")}
             className="font-medium underline"
           >
             {t("Connect GitHub")}
@@ -767,8 +767,7 @@ export default function NewProject() {
                 <AlertDescription>
                   {t("Add a server first.")}{" "}
                   <Link
-                    to="../../infrastructure/servers"
-                    relative="path"
+                    to={getLocalPath("infrastructure/servers")}
                     className="font-medium underline"
                   >
                     {t("Servers")}
