@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next"
 import { IconPlus, IconX } from "@tabler/icons-react"
 
 import { use } from "@/core/hooks/use"
+import { useFresh } from "@/hooks/use-fresh"
 import { getLocalPath } from "@/core/lib/utils"
 import { Button } from "@/components/ui/button"
 import { FieldDescription, FieldLegend, FieldSet } from "@/components/ui/field"
@@ -37,12 +38,13 @@ export function VolumesEditor({
   onChange: (volumes: TVolume[]) => void
 }) {
   const { t } = useTranslation()
-  const storages = use(
-    ThunderSDK.useCaching(
-      ["storages"],
-      async ({ signal }) => await ThunderSDK.storages.list({ signal })
-    )
-  ).data
+  const request = ThunderSDK.useCaching(
+    ["storages"],
+    async ({ signal }) => await ThunderSDK.storages.list({ signal })
+  )
+  useFresh(request)
+  const cached = use(request).data
+  const storages = Array.isArray(cached) ? cached : undefined
   const locations = [
     { value: LOCAL, label: t("On the server (local)") },
     ...(storages ?? []).map((s) => ({

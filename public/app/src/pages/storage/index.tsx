@@ -39,6 +39,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
+import { useFresh } from "@/hooks/use-fresh"
 import { errorMessage } from "@/lib/utils"
 
 type TStorage = Awaited<ReturnType<typeof ThunderSDK.storages.list>>[number]
@@ -254,7 +255,10 @@ export default function StoragePage() {
     ["storages"],
     async ({ signal }) => await ThunderSDK.storages.list({ signal })
   )
-  const { data, isLoading } = use(request)
+  useFresh(request)
+  const { data: cached, isLoading } = use(request)
+  // The cache keeps whatever came back; anything but a list is stale.
+  const data = Array.isArray(cached) ? cached : undefined
 
   const remove = async (s: TStorage) => {
     try {
