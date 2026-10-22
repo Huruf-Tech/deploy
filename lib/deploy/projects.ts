@@ -312,7 +312,11 @@ export async function createProject(opts: {
   });
 
   let deployKey: { publicKey: string; privateKey: string } | undefined;
-  if (input.source.type === "git" && !/^https?:\/\//.test(input.source.url)) {
+  // SSH URLs (ssh://… or user@host:path) need a key; https:// and git:// are public.
+  if (
+    input.source.type === "git" &&
+    /^(ssh:\/\/|[\w.-]+@[\w.-]+:)/.test(input.source.url)
+  ) {
     deployKey = await generateDeployKey(`huruf-deploy-${input.slug}`);
   }
 

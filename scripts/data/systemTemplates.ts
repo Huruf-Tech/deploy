@@ -3,7 +3,9 @@
  * upserts them by slug and adds a version when the content changes. Templates
  * see `inputs.*` and `build.cacheKey` (a per-project BuildKit cache id).
  * Guidelines: multi-stage builds, lockfile before source, caches hold only
- * package-manager download stores.
+ * package-manager download stores. Build-stage variables come as the
+ * `huruf-env` secret: `RUN --mount=type=secret,id=huruf-env . /run/secrets/huruf-env && …`
+ * (never ARG/ENV, which would keep them in the image).
  */
 
 const nodeVersion = {
@@ -103,7 +105,7 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN --mount=type=cache,id={{build.cacheKey}}-npm,target=/root/.npm npm ci
 COPY . .
-RUN {{inputs.buildCommand}}
+RUN --mount=type=secret,id=huruf-env . /run/secrets/huruf-env && {{inputs.buildCommand}}
 
 FROM caddy:2-alpine
 COPY --from=build /app/{{inputs.outputDir}} /srv
@@ -138,7 +140,7 @@ ENV NEXT_TELEMETRY_DISABLED=1
 COPY package.json package-lock.json ./
 RUN --mount=type=cache,id={{build.cacheKey}}-npm,target=/root/.npm npm ci
 COPY . .
-RUN npm run build && npm prune --omit=dev
+RUN --mount=type=secret,id=huruf-env . /run/secrets/huruf-env && npm run build && npm prune --omit=dev
 
 FROM node:{{inputs.nodeVersion}}-alpine
 WORKDIR /app
@@ -185,7 +187,7 @@ COPY package.json package-lock.json ./
 RUN --mount=type=cache,id={{build.cacheKey}}-npm,target=/root/.npm npm ci
 COPY . .
 {{#if inputs.buildCommand}}
-RUN {{inputs.buildCommand}}
+RUN --mount=type=secret,id=huruf-env . /run/secrets/huruf-env && {{inputs.buildCommand}}
 {{/if}}
 RUN npm prune --omit=dev
 

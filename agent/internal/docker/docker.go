@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -25,6 +26,9 @@ import (
 // Images we build are tagged huruf/<project>:<release>-<sha>; only those are garbage-collected.
 const builtImages = "huruf/*"
 
+// Colors in app output would end up as escape codes in the dashboard.
+var ansi = regexp.MustCompile(`\x1b\[[0-9;?]*[ -/]*[@-~]`)
+
 type Docker struct {
 	// SecretsDir holds `file` variables on tmpfs (/run), one directory per container.
 	SecretsDir string
@@ -36,10 +40,11 @@ type Docker struct {
 var _ reconcile.Runtime = (*Docker)(nil)
 
 type inspected struct {
-	ID     string                             `json:"Id"`
-	Name   string                             `json:"Name"`
-	Config struct{ Labels map[string]string } `json:"Config"`
-	State  struct {
+	ID           string                             `json:"Id"`
+	Name         string                             `json:"Name"`
+	RestartCount int                                `json:"RestartCount"`
+	Config       struct{ Labels map[string]string } `json:"Config"`
+	State        struct {
 		Running   bool
 		Status    string
 		ExitCode  int
@@ -233,6 +238,7 @@ func WithLogin(ctx context.Context, auth protocol.RegistryAuth, fn func(config s
 func (d *Docker) WaitHealthy(ctx context.Context, c reconcile.Container, rel protocol.WorkloadRelease) error {
 	deadline := time.Now().Add(time.Duration(rel.Healthcheck.TimeoutSec) * time.Second)
 	var last error
+	restarts := -1
 	for {
 		list, err := d.inspect(ctx, c.ID)
 		if err != nil || len(list) == 0 {
@@ -242,6 +248,11 @@ func (d *Docker) WaitHealthy(ctx context.Context, c reconcile.Container, rel pro
 		if !state.Running {
 			return fmt.Errorf("exited with code %d: %s", state.ExitCode, d.tail(ctx, c.ID))
 		}
+		// The restart policy hides crashes: a restart while waiting means it can't start.
+		if restarts >= 0 && list[0].RestartCount > restarts {
+			return fmt.Errorf("crashes on start (exit code %d): %s", state.ExitCode, d.tail(ctx, c.ID))
+		}
+		restarts = list[0].RestartCount
 		last = probe(ctx, list[0], c.IP, rel)
 		if last == nil {
 			return nil
@@ -295,7 +306,16 @@ func probe(ctx context.Context, i inspected, ip string, rel protocol.WorkloadRel
 // tail is the container's last log lines, so a failed deploy says why.
 func (d *Docker) tail(ctx context.Context, id string) string {
 	out, _ := run(context.WithoutCancel(ctx), nil, "docker", "logs", "--tail", "15", id)
-	out = strings.TrimSpace(out)
+	var lines []string
+	for _, line := range strings.Split(ansi.ReplaceAllString(out, ""), "\n") {
+		// tini's notice when an image brings its own init under our --init.
+		if strings.Contains(line, "Tini is not running as PID 1") || strings.Contains(line, "zombie reaping") ||
+			strings.Contains(line, "use the -s option") {
+			continue
+		}
+		lines = append(lines, line)
+	}
+	out = strings.TrimSpace(strings.Join(lines, "\n"))
 	if len(out) > 400 {
 		out = "…" + out[len(out)-400:]
 	}
