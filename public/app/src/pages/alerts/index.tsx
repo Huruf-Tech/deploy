@@ -11,6 +11,7 @@ import {
 } from "@tabler/icons-react"
 
 import { use } from "@/core/hooks/use"
+import { useFresh } from "@/hooks/use-fresh"
 import { Page } from "@/components/page"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -128,6 +129,13 @@ function RuleDialog({
       async ({ signal }) => await ThunderSDK.projects.list({ signal })
     )
   ).data
+  // The server list must be current: invalidating "projects" also refreshes "projects:placement".
+  useFresh(
+    ThunderSDK.useCaching(
+      ["projects"],
+      async ({ signal }) => await ThunderSDK.projects.list({ signal })
+    )
+  )
   const [name, setName] = React.useState("")
   const [kind, setKind] = React.useState<TKind>("server")
   const [ref, setRef] = React.useState("all")

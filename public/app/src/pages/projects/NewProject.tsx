@@ -14,6 +14,7 @@ import {
 
 import { Page } from "@/components/page"
 import { use } from "@/core/hooks/use"
+import { useFresh } from "@/hooks/use-fresh"
 import { useBreadcrumbTitle } from "@/core/layouts/shared/breadcrumb"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
@@ -370,6 +371,13 @@ export default function NewProject() {
     )
   )
   const projects = use(
+    ThunderSDK.useCaching(
+      ["projects"],
+      async ({ signal }) => await ThunderSDK.projects.list({ signal })
+    )
+  )
+  // The server list must be current: invalidating "projects" also refreshes "projects:placement".
+  useFresh(
     ThunderSDK.useCaching(
       ["projects"],
       async ({ signal }) => await ThunderSDK.projects.list({ signal })

@@ -23,6 +23,7 @@ import {
 } from "@tabler/icons-react"
 
 import { use } from "@/core/hooks/use"
+import { usePolling } from "@/hooks/use-polling"
 import { getAuthUrl, getLocalPath } from "@/core/lib/utils"
 import { Page } from "@/components/page"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
@@ -417,6 +418,16 @@ export default function Overview() {
         signal,
       })
   )
+  // Cached data shows at once; servers, projects and alerts refetch every 30 s.
+  usePolling(() => {
+    for (const r of [
+      meRequest,
+      placementRequest,
+      projectsRequest,
+      alertsRequest,
+    ])
+      r.invalidate()
+  }, 30_000)
   const { data: me } = use(meRequest)
   const { data: servers } = use(placementRequest)
   const { data: projects } = use(projectsRequest)
@@ -604,7 +615,12 @@ export default function Overview() {
           <Button
             variant="outline"
             className="bg-background/70"
-            onClick={() => capacity.request.invalidate()}
+            onClick={() => {
+              placementRequest.invalidate()
+              projectsRequest.invalidate()
+              alertsRequest.invalidate()
+              capacity.request.invalidate()
+            }}
             disabled={capacity.isLoading}
           >
             <IconRefresh
