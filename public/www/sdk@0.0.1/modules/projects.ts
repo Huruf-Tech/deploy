@@ -18,7 +18,7 @@ export type list$return = {
     status: "new" | "deploying" | "running" | "failed";
     /** Short description, e.g. acme/shop@main */
     source: string;
-    sourceType: "github" | "git" | "image" | "template";
+    sourceType: "github" | "git" | "image" | "template" | "compose";
     servers: number;
     publicPort?: number | undefined;
     release?: number | undefined;
@@ -55,6 +55,9 @@ export type create$body = {
     } | {
         /** One-click service: everything comes from the template */
         type: "template";
+    } | {
+        /** A compose file pasted by the user (stored encrypted) */
+        type: "compose";
     };
     build?: {
         mode?: ("template" | "dockerfile" | "compose" | "none") | undefined;
@@ -69,6 +72,8 @@ export type create$body = {
     } | undefined;
     /** Template inputs; secret ones become project secret variables */
     inputs?: Record<string, unknown>;
+    /** The compose file, for the `compose` source */
+    compose?: string | undefined;
     runtime?: {
         port?: (number | undefined) | undefined;
         healthcheckPath?: (string | undefined) | undefined;
@@ -138,6 +143,9 @@ export type get$return = {
     } | {
         /** One-click service: everything comes from the template */
         type: "template";
+    } | {
+        /** A compose file pasted by the user (stored encrypted) */
+        type: "compose";
     };
     build: {
         mode: string;
@@ -178,6 +186,8 @@ export type get$return = {
     distribution: string;
     registry?: string | undefined;
     deployKeyPublic?: string | undefined;
+    /** The pasted compose file */
+    compose?: string | undefined;
     release?: {
         _id: string;
         number: number;
@@ -223,6 +233,7 @@ export type update$body = {
     branch?: string | undefined;
     templateVersion?: number | undefined;
     inputs?: Record<string, string | number | boolean> | undefined;
+    compose?: string | undefined;
     acknowledgeVolumeRisk?: boolean | undefined;
 };
 export type update$return = {

@@ -183,3 +183,45 @@ export function parseCompose(
   }
   return services;
 }
+
+const VARIABLE = /\$\$|\$\{([A-Za-z_][A-Za-z0-9_]*)(?:(:?)-([^}]*))?\}/g;
+
+/**
+ * Compose's own interpolation, from the project's variables: `${VAR}`,
+ * `${VAR:-default}` (default when unset or empty), `${VAR-default}` (when
+ * unset), and `$$` for a literal `$`. A variable that's missing without a
+ * default is an error, unless `lenient` (validating before variables exist:
+ * missing ones read as "value").
+ */
+export function interpolate(
+  text: string,
+  variables: Record<string, string>,
+  { lenient = false } = {},
+) {
+  const missing = new Set<string>();
+  const result = text.replace(
+    VARIABLE,
+    (match, name?: string, colon?: string, fallback?: string) => {
+      if (match === "$$") return "$";
+      const value = variables[name!];
+      if (
+        fallback !== undefined && (value === undefined || (colon && !value))
+      ) {
+        return fallback;
+      }
+      if (value === undefined) {
+        missing.add(name!);
+        return "value";
+      }
+      return value;
+    },
+  );
+  if (missing.size && !lenient) {
+    throw new ComposeError(
+      `Set ${
+        [...missing].join(", ")
+      } in the project's variables (the compose file uses them)`,
+    );
+  }
+  return result;
+}

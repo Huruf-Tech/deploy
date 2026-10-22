@@ -8,10 +8,14 @@ import { sealTo } from "@/lib/agents/sealing.ts";
 import { issueCommand } from "@/lib/agents/commands.ts";
 import { getTemplate } from "@/lib/build/templates.ts";
 import { renderContent, TemplateError } from "@/lib/build/render.ts";
-import { ComposeError, parseCompose } from "@/lib/deploy/compose.ts";
+import {
+  ComposeError,
+  interpolate,
+  parseCompose,
+} from "@/lib/deploy/compose.ts";
 import { defaultRef, sourceOf, type TCommit } from "@/lib/deploy/sources.ts";
 import { refreshSpecs, sealReleaseSpec } from "@/lib/deploy/specs.ts";
-import { isSecretInput, toEnvKey } from "@/lib/deploy/projects.ts";
+import { isSecretInput, openCompose, toEnvKey } from "@/lib/deploy/projects.ts";
 import { forStage, resolveVariableSet } from "@/lib/variables/variables.ts";
 import { projectModel, type TProject } from "@/schemas/applications/project.ts";
 import {
@@ -194,7 +198,7 @@ async function start(deployment: TDeploymentDoc) {
     commit,
     cacheKey,
     runtime,
-    secretInputs: Object.fromEntries(variables.map((v) => [v.key, v.value])),
+    values: Object.fromEntries(variables.map((v) => [v.key, v.value])),
   });
 
   const builds = project.build.mode === "template" ||
@@ -330,7 +334,8 @@ async function serviceSpecs(project: TProjectDoc, opts: {
   commit?: TCommit;
   cacheKey: string;
   runtime: { env: Record<string, string>; files: Record<string, string> };
-  secretInputs: Record<string, string>;
+  /** Every resolved variable by key: secret template inputs and compose `${VAR}`. */
+  values: Record<string, string>;
 }) {
   const appVolumes = project.volumes.map((v) => ({
     name: `huruf-${project._id}-${v.name}`,
@@ -363,7 +368,7 @@ async function serviceSpecs(project: TProjectDoc, opts: {
     const inputs: Record<string, unknown> = { ...project.templateInputs };
     for (const field of content.inputs) {
       if (isSecretInput(field)) {
-        inputs[field.key] = opts.secretInputs[toEnvKey(field.key)] ?? "";
+        inputs[field.key] = opts.values[toEnvKey(field.key)] ?? "";
       }
     }
     try {
@@ -396,14 +401,18 @@ async function serviceSpecs(project: TProjectDoc, opts: {
     case "compose": {
       const text = project.template
         ? (await rendered())["compose.yaml"]
+        : project.source.type === "compose"
+        ? await openCompose(project)
         : await sourceOf(project).readFile(
           project,
           opts.commit!.sha,
           project.build.composePath,
         );
       try {
+        // `${VAR}` comes from the project's variables, like compose's .env.
+        const resolved = interpolate(text, opts.values);
         return {
-          services: parseCompose(text, `huruf-${project._id}-`).map((
+          services: parseCompose(resolved, `huruf-${project._id}-`).map((
             s,
           ): TServiceSpec => ({
             name: s.name,

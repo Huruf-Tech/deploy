@@ -329,6 +329,86 @@ Deno.test({
       );
 
       await t.step(
+        "a pasted compose file, with ${VAR} from variables",
+        async () => {
+          const compose = `services:
+  cache:
+    image: redis:8-alpine
+    command: redis-server --requirepass \${REDIS_PASSWORD}
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+  web:
+    image: nginx:1.27-alpine
+    ports: ["8090:80"]
+`;
+          const created = await call("POST", "/projects/api", {
+            name: "Stack",
+            slug: "stack",
+            source: { type: "compose" },
+            compose,
+            servers: [servers[0]],
+          });
+          assertEquals(created.status, 200, JSON.stringify(created.json));
+          const stack = created.json._id;
+
+          // The file is stored encrypted, and read back for editing.
+          const stored = JSON.stringify(
+            await mongodb.db().collection("projects").findOne({
+              _id: new ObjectId(stack),
+            }),
+          );
+          assert(
+            !stored.includes("requirepass"),
+            "compose stored in plaintext",
+          );
+          assertEquals(
+            (await call("GET", `/projects/api/${stack}`)).json.compose,
+            compose,
+          );
+
+          // A variable the file uses but nobody set fails the deploy clearly.
+          let { json } = await call(
+            "POST",
+            `/projects/api/${stack}/deploy`,
+            {},
+          );
+          assertMatch(
+            (await deployment(json.deployment)).errorSummary,
+            /Set REDIS_PASSWORD/,
+          );
+
+          await call("POST", "/variables/api", {
+            scope: "project",
+            project: stack,
+            key: "REDIS_PASSWORD",
+            value: "p4ss",
+            isSecret: true,
+          });
+          ({ json } = await call("POST", `/projects/api/${stack}/deploy`, {}));
+          await poll(agents[0]);
+          const cache = agents[0].spec!.workloads.find((w) =>
+            w.name === "stack-cache"
+          )!;
+          assertEquals(cache.releases[0].command, [
+            "redis-server",
+            "--requirepass",
+            "p4ss",
+          ]);
+          assertEquals(cache.dnsNames, ["cache.stack.internal"]);
+          assertEquals(
+            agents[0].spec!.workloads.find((w) => w.name === "stack-web")!
+              .releases[0].port,
+            80,
+          );
+          assertEquals((await deployment(json.deployment)).status, "healthy");
+          assertEquals(
+            (await call("DELETE", `/projects/api/${stack}`)).status,
+            200,
+          );
+        },
+      );
+
+      await t.step(
         "deleting a project removes it from the servers",
         async () => {
           assertEquals(

@@ -43,6 +43,7 @@ import {
   FieldSet,
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
 import {
   Select,
   SelectContent,
@@ -285,6 +286,7 @@ function Settings({
   const [memLimit, setMemLimit] = React.useState(
     project.runtime.memLimitMb ? String(project.runtime.memLimitMb) : ""
   )
+  const [compose, setCompose] = React.useState(project.compose ?? "")
   const [busy, setBusy] = React.useState(false)
   const [deleting, setDeleting] = React.useState(false)
   const [confirm, setConfirm] = React.useState("")
@@ -302,6 +304,9 @@ function Settings({
           deployStrategy: strategy,
           acknowledgeVolumeRisk: strategy !== project.deployStrategy,
           autoDeploy,
+          ...(project.compose !== undefined && compose !== project.compose
+            ? { compose }
+            : {}),
           ...(branch && "branch" in project.source ? { branch } : {}),
           runtime: {
             cpuReserve: Number(cpuReserve),
@@ -486,6 +491,25 @@ function Settings({
             />
           </Field>
         </div>
+
+        {project.source.type === "compose" && (
+          <Field>
+            <FieldLabel htmlFor="s-compose">{t("Compose file")}</FieldLabel>
+            <Textarea
+              id="s-compose"
+              value={compose}
+              onChange={(e) => setCompose(e.target.value)}
+              rows={16}
+              spellCheck={false}
+              className="font-mono text-xs"
+            />
+            <FieldDescription>
+              {t(
+                "Changes apply on the next deploy. ${VAR} comes from the project's variables."
+              )}
+            </FieldDescription>
+          </Field>
+        )}
 
         {"branch" in project.source && (
           <div className="grid gap-4 sm:grid-cols-2">
@@ -672,7 +696,9 @@ export default function ProjectDetail() {
                 ? `${project.source.url} · ${project.source.branch}`
                 : project.source.type === "image"
                   ? project.source.image
-                  : t("One-click service")}
+                  : project.source.type === "compose"
+                    ? t("Compose file")
+                    : t("One-click service")}
           </p>
         </div>
         <DeployButton project={project} onDeployed={deployed} />

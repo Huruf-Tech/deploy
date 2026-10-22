@@ -8,6 +8,7 @@ import {
   IconBrandDocker,
   IconBrandGithub,
   IconDatabase,
+  IconStack2,
   IconGitBranch,
 } from "@tabler/icons-react"
 
@@ -26,6 +27,7 @@ import {
   FieldSet,
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
 import {
   Select,
   SelectContent,
@@ -38,7 +40,7 @@ import { cn, errorMessage } from "@/lib/utils"
 import { InputField } from "@/pages/templates/Detail"
 import { slugify, TemplateIcon } from "@/pages/templates/shared"
 
-type TSourceKind = "github" | "git" | "image" | "template"
+type TSourceKind = "github" | "git" | "image" | "compose" | "template"
 type TBuildMode = "template" | "dockerfile" | "compose"
 type TTemplateDetail = Awaited<ReturnType<typeof ThunderSDK.templates.get>>
 type TRepository = Awaited<
@@ -68,6 +70,12 @@ const SOURCES: {
     icon: IconBrandDocker,
     title: "Docker image",
     hint: "Already built and published",
+  },
+  {
+    kind: "compose",
+    icon: IconStack2,
+    title: "Compose file",
+    hint: "Paste a docker-compose.yml",
   },
   {
     kind: "template",
@@ -329,6 +337,7 @@ export default function NewProject() {
   const [gitUrl, setGitUrl] = React.useState("")
   const [gitBranch, setGitBranch] = React.useState("main")
   const [image, setImage] = React.useState("")
+  const [compose, setCompose] = React.useState("")
   const [mode, setMode] = React.useState<TBuildMode>("template")
   const [templateId, setTemplateId] = React.useState<string>()
   const [template, setTemplate] = React.useState<TTemplateDetail>()
@@ -401,7 +410,8 @@ export default function NewProject() {
     }
   }, [kind, github.repo, gitUrl, slugEdited])
 
-  const usesTemplate = kind === "template" || mode === "template"
+  const fromRepo = kind === "github" || kind === "git"
+  const usesTemplate = kind === "template" || (fromRepo && mode === "template")
   const needCpu = 0.1 * replicas
   const needMem = 128 * replicas
 
@@ -425,7 +435,9 @@ export default function NewProject() {
             }
           : kind === "image"
             ? { type: "image" as const, image: image.trim() }
-            : { type: "template" as const }
+            : kind === "compose"
+              ? { type: "compose" as const }
+              : { type: "template" as const }
     setBusy(true)
     try {
       const { _id, deployKeyPublic } = await ThunderSDK.projects.create({
@@ -446,6 +458,7 @@ export default function NewProject() {
             ? { template: { template: templateId } }
             : {}),
           inputs,
+          ...(kind === "compose" ? { compose } : {}),
           runtime: {
             ...(port ? { port: Number(port) } : {}),
             ...(healthPath ? { healthcheckPath: healthPath } : {}),
@@ -479,7 +492,9 @@ export default function NewProject() {
         ? !!gitUrl && !!gitBranch
         : kind === "image"
           ? !!image
-          : true
+          : kind === "compose"
+            ? !!compose.trim()
+            : true
   const buildReady = !usesTemplate || !!template
   const ready =
     sourceReady && buildReady && !!name && !!slug && servers.length > 0
@@ -498,7 +513,7 @@ export default function NewProject() {
           <div
             role="radiogroup"
             aria-label={t("Source")}
-            className="grid gap-2 sm:grid-cols-4"
+            className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5"
           >
             {SOURCES.map((s) => (
               <button
@@ -570,9 +585,28 @@ export default function NewProject() {
               />
             </Field>
           )}
+          {kind === "compose" && (
+            <Field>
+              <FieldLabel htmlFor="compose">{t("Compose file")}</FieldLabel>
+              <Textarea
+                id="compose"
+                value={compose}
+                onChange={(e) => setCompose(e.target.value)}
+                rows={14}
+                spellCheck={false}
+                placeholder={`services:\n  web:\n    image: nginx:1.27-alpine\n    ports: ["8080:80"]`}
+                className="font-mono text-xs"
+              />
+              <FieldDescription>
+                {t(
+                  "Each service runs as its own container and is reachable as <service>.<slug>.internal. Use ${VAR} for secrets and set them in the project's variables; the file itself is stored encrypted. Services need an image (no build:)."
+                )}
+              </FieldDescription>
+            </Field>
+          )}
         </Section>
 
-        {kind !== "image" && (
+        {kind !== "image" && kind !== "compose" && (
           <Section
             step={2}
             title={kind === "template" ? t("Service") : t("Build")}
@@ -686,7 +720,10 @@ export default function NewProject() {
           </Section>
         )}
 
-        <Section step={kind === "image" ? 2 : 3} title={t("Where it runs")}>
+        <Section
+          step={kind === "image" || kind === "compose" ? 2 : 3}
+          title={t("Where it runs")}
+        >
           <div className="grid gap-4 sm:grid-cols-2">
             <Field>
               <FieldLabel htmlFor="project-name">{t("Name")}</FieldLabel>
@@ -809,7 +846,7 @@ export default function NewProject() {
                 }
               />
             </Field>
-            {kind !== "template" && (
+            {kind !== "template" && kind !== "compose" && (
               <Field>
                 <FieldLabel htmlFor="port">{t("App port")}</FieldLabel>
                 <Input
@@ -835,7 +872,7 @@ export default function NewProject() {
                 placeholder={t("Private")}
               />
             </Field>
-            {kind !== "template" && (
+            {kind !== "template" && kind !== "compose" && (
               <Field>
                 <FieldLabel htmlFor="health">
                   {t("Health check path")}

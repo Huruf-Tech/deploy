@@ -8,7 +8,11 @@ import {
   resolveInputs,
   TemplateError,
 } from "@/lib/build/render.ts";
-import { ComposeError, parseCompose } from "@/lib/deploy/compose.ts";
+import {
+  ComposeError,
+  interpolate,
+  parseCompose,
+} from "@/lib/deploy/compose.ts";
 import { generateDeployKey } from "@/lib/deploy/deployKeys.ts";
 import { usableIntegration } from "@/lib/github/integrations.ts";
 import {
@@ -56,6 +60,22 @@ export async function getProject(tenant: ObjectId, id: ObjectId) {
   if (!project) throw Response.notFound("Project not found");
   return project;
 }
+
+// A pasted compose file often holds passwords: encrypted, bound to its project.
+const composeOwner = (tenant: ObjectId) => ({
+  kind: "tenant" as const,
+  ref: tenant,
+});
+export const openCompose = (
+  project: Pick<WithId<TProject>, "_id" | "tenant" | "composeEnc">,
+) =>
+  keyring.decrypt(
+    composeOwner(project.tenant),
+    project.composeEnc!,
+    `compose:${project._id}`,
+  );
+const sealCompose = (tenant: ObjectId, id: ObjectId, text: string) =>
+  keyring.encrypt(composeOwner(tenant), text, `compose:${id}`);
 
 /** camelCase input keys become UPPER_SNAKE variable keys: rootPassword → ROOT_PASSWORD. */
 export const toEnvKey = (key: string) =>
@@ -268,10 +288,20 @@ export async function createProject(opts: {
     };
   } else if (input.source.type === "template") {
     throw Response.badRequest("Pick the service template");
+  } else if (input.source.type === "compose") {
+    if (!input.compose?.trim()) {
+      throw Response.badRequest("Paste the compose file");
+    }
+    kind = "service";
+    composeVolumes = (await checkCompose(input.compose, _id)).some((s) =>
+      s.volumes.length > 0
+    );
   }
 
   const mode: TProject["build"]["mode"] = template
     ? (kind === "service" ? "compose" : "template")
+    : input.source.type === "compose"
+    ? "compose"
     : input.source.type === "image"
     ? "none"
     : input.build?.mode === "compose"
@@ -352,6 +382,9 @@ export async function createProject(opts: {
       autoDeploy: input.autoDeploy,
       distribution: input.distribution,
       ...(input.registry ? { registry: input.registry } : {}),
+      ...(input.source.type === "compose"
+        ? { composeEnc: await sealCompose(tenant, _id, input.compose!) }
+        : {}),
       ...(deployKey
         ? {
           deployKeyPublic: deployKey.publicKey,
@@ -416,8 +449,12 @@ export async function updateProject(opts: {
   const strategy = patch.deployStrategy ?? project.deployStrategy;
 
   await assertRegistry(tenant, patch.registry);
+  if (patch.compose && project.source.type === "compose") {
+    await checkCompose(patch.compose, id);
+  }
   assertVolumeRules({
-    hasVolumes: project.volumes.length > 0 || await hasComposeVolumes(project),
+    hasVolumes: project.volumes.length > 0 ||
+      await hasComposeVolumes(project, patch.compose),
     servers,
     strategy,
     acknowledged: patch.acknowledgeVolumeRisk ??
@@ -462,6 +499,9 @@ export async function updateProject(opts: {
   if (patch.inputs) {
     $set.templateInputs = { ...project.templateInputs, ...patch.inputs };
   }
+  if (patch.compose && project.source.type === "compose") {
+    $set.composeEnc = await sealCompose(tenant, id, patch.compose);
+  }
 
   await projectModel.updateOne({ _id: id, tenant }, {
     $set,
@@ -478,7 +518,19 @@ export async function updateProject(opts: {
 const sameServers = (a: ObjectId[], b: ObjectId[]) =>
   a.length === b.length && a.every((x) => b.some((y) => y.equals(x)));
 
-async function hasComposeVolumes(project: WithId<TProject>) {
+/** Validates a pasted compose file; `${VAR}`s may be set as variables later. */
+const checkCompose = (text: string, id: ObjectId) =>
+  asBadRequest(() =>
+    parseCompose(interpolate(text, {}, { lenient: true }), `huruf-${id}-`)
+  );
+
+async function hasComposeVolumes(project: WithId<TProject>, pasted?: string) {
+  if (project.source.type === "compose") {
+    const text = pasted ?? await openCompose(project);
+    return (await checkCompose(text, project._id)).some((s) =>
+      s.volumes.length > 0
+    );
+  }
   if (project.build.mode !== "compose" || !project.template) return false;
   const { content } = await getTemplate(
     project.template.template,

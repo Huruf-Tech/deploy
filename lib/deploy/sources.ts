@@ -116,6 +116,7 @@ const providers: Record<TProject["source"]["type"], SourceProvider> = {
   git: new GitSource(),
   image: new NoSource(),
   template: new NoSource(),
+  compose: new NoSource(),
 };
 
 export const sourceOf = (project: TProjectDoc) =>

@@ -949,6 +949,7 @@ Each phase ends with a **review checkpoint** (demo + code review + approval). Ph
   - **Deploy on push** is verified against a fake GitHub (`tests/github_test.ts`); a local control plane can't receive GitHub webhooks, so a real push needs a public `BASE_URL`.
   - **Deviations from the plan:**
     - Compose files are parsed on the control plane with `@std/yaml` (not `compose-go` on the agent): no new Go dependency, and unsupported keys fail before anything reaches a server. Compose services must use images; `build:` in compose isn't supported. Compose from a repository needs a GitHub source.
+    - **Added (owner request): a pasted compose file as a source.** Stored encrypted (`composeEnc`), editable in Settings. Every compose source gets compose's own interpolation from the project's resolved variables (`${VAR}`, `${VAR:-default}`, `$$`), so secrets stay in Variables; a missing variable fails the deploy with its name. Host ports in `ports:` are ignored: the project's public port routes to the first service with a port.
     - Generic Git: the builder resolves the branch, so the commit is known after the build.
     - Per-server builds don't pin the first builder's base-image digest yet.
     - One build at a time per server.

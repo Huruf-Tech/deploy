@@ -9,6 +9,7 @@ import {
   createProject,
   deleteProject,
   getProject,
+  openCompose,
   placement,
   updateProject,
 } from "@/lib/deploy/projects.ts";
@@ -65,7 +66,7 @@ export default new Router("/api", function projects(router) {
       kind: z.enum(["app", "service"]),
       status: $status,
       source: z.string().describe("Short description, e.g. acme/shop@main"),
-      sourceType: z.enum(["github", "git", "image", "template"]),
+      sourceType: z.enum(["github", "git", "image", "template", "compose"]),
       servers: z.number(),
       publicPort: z.number().optional(),
       release: z.number().optional(),
@@ -128,6 +129,8 @@ export default new Router("/api", function projects(router) {
               ? `${p.source.url}@${p.source.branch}`
               : p.source.type === "image"
               ? p.source.image
+              : p.source.type === "compose"
+              ? "compose file"
               : "template",
             sourceType: p.source.type,
             servers: p.servers.length,
@@ -208,6 +211,7 @@ export default new Router("/api", function projects(router) {
       distribution: z.string(),
       registry: z.string().optional(),
       deployKeyPublic: z.string().optional(),
+      compose: z.string().optional().describe("The pasted compose file"),
       release: z.object({
         _id: z.string(),
         number: z.number(),
@@ -263,11 +267,17 @@ export default new Router("/api", function projects(router) {
             })
           );
 
-        const { deployKeyEnc: _, tenant: __, createdBy: ___, ...rest } =
-          project as typeof project & {
-            deployKeyEnc?: string;
-          };
+        const {
+          deployKeyEnc: _,
+          composeEnc: ____,
+          tenant: __,
+          createdBy: ___,
+          ...rest
+        } = project as typeof project & { deployKeyEnc?: string };
         return Response.json({
+          ...(project.source.type === "compose"
+            ? { compose: await openCompose(project) }
+            : {}),
           ...rest,
           servers: project.servers.map((s) => {
             const doc = serverDocs.find((d) => d._id.equals(s));

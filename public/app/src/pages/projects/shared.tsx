@@ -4,6 +4,7 @@ import {
   IconBrandGithub,
   IconBrandDocker,
   IconGitBranch,
+  IconStack2,
   IconTemplate,
 } from "@tabler/icons-react"
 import { ThunderSDK } from "thunder-sdk"
@@ -107,7 +108,9 @@ export function SourceIcon({
         ? IconGitBranch
         : source === "image"
           ? IconBrandDocker
-          : IconTemplate
+          : source === "compose"
+            ? IconStack2
+            : IconTemplate
   return <Icon className={cn("size-4", className)} aria-hidden />
 }
 

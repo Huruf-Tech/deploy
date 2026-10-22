@@ -1,6 +1,7 @@
 import { assertEquals, assertThrows } from "@std/assert";
 import {
   ComposeError,
+  interpolate,
   parseCompose,
   splitCommand,
 } from "@/lib/deploy/compose.ts";
@@ -69,4 +70,21 @@ Deno.test("compose: commands split like a shell", () => {
     ":9001",
     "",
   ]);
+});
+
+Deno.test("compose: ${VAR} comes from variables", () => {
+  const vars = { PASSWORD: "s3cret", EMPTY: "" };
+  assertEquals(
+    interpolate(
+      "a=${PASSWORD} b=${EMPTY:-x} c=${EMPTY-y} d=${NOPE:-z} e=$$HOME",
+      vars,
+    ),
+    "a=s3cret b=x c= d=z e=$HOME",
+  );
+  assertThrows(
+    () => interpolate("${MISSING}", vars),
+    ComposeError,
+    "Set MISSING",
+  );
+  assertEquals(interpolate("${MISSING}", vars, { lenient: true }), "value");
 });

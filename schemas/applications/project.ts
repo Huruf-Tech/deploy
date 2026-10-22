@@ -27,6 +27,11 @@ export const $projectSource = z.discriminatedUnion("type", [
       "One-click service: everything comes from the template",
     ),
   }),
+  z.object({
+    type: z.literal("compose").describe(
+      "A compose file pasted by the user (stored encrypted)",
+    ),
+  }),
 ]);
 
 /** How the image is made: a template's Dockerfile, the repo's own, or a compose file. */
@@ -90,6 +95,8 @@ export const $project = z.object({
   registry: $objectId.meta({ ref: "registries" }).optional(),
   /** Generic Git over SSH: the private half of the deploy key, encrypted. */
   deployKeyEnc: z.string().optional(),
+  /** Pasted compose file, encrypted: it often holds passwords. */
+  composeEnc: z.string().optional(),
   deployKeyPublic: z.string().optional(),
   activeRelease: $objectId.meta({ ref: "releases" }).optional(),
   releaseCounter: z.number().int().default(0),
@@ -131,6 +138,9 @@ export const $projectInput = z.object({
   inputs: z.record(z.string(), z.unknown()).default({}).describe(
     "Template inputs; secret ones become project secret variables",
   ),
+  compose: z.string().max(100_000).optional().describe(
+    "The compose file, for the `compose` source",
+  ),
   runtime: $projectRuntime.partial().optional(),
   servers: $project.shape.servers,
   replicasPerServer: z.number().int().min(0).max(20).default(1),
@@ -159,6 +169,7 @@ export const $projectUpdate = z.object({
   branch: z.string().min(1).max(255),
   templateVersion: z.number().int().min(1),
   inputs: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])),
+  compose: z.string().min(1).max(100_000),
   acknowledgeVolumeRisk: z.boolean(),
 }).partial();
 
