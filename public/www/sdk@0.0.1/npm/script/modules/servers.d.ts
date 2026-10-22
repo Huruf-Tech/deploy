@@ -44,6 +44,8 @@ export type get$return = {
             privateIp?: string | undefined;
             dockerVersion?: string | undefined;
             agentVersion: string;
+            /** SHA-256 of the running agent binary: compared with the published one for updates */
+            agentSha256?: string | undefined;
         };
         resources?: {
             /** Used fraction */
@@ -87,6 +89,13 @@ export type update$body = {
 };
 export type del$params = {
     id: string;
+};
+export type agentRelease$return = {
+    /** arch -> SHA-256 */
+    sums: Record<string, string>;
+};
+export type updateAgent$params = {
+    id?: string;
 };
 export type accept$params = {
     id?: string;
@@ -153,6 +162,8 @@ export declare const serversModule: (sdk: typeof BaseSDK) => {
         update$params: update$params;
         update$body: update$body;
         del$params: del$params;
+        agentRelease$return: agentRelease$return;
+        updateAgent$params: updateAgent$params;
         accept$params: accept$params;
         accept$body: accept$body;
         reject$params: reject$params;
@@ -202,6 +213,28 @@ export declare const serversModule: (sdk: typeof BaseSDK) => {
     };
     readonly del: (data: {
         params: del$params;
+        query?: undefined;
+        body?: undefined;
+    } & TRequestOptions<unknown>) => {
+        readonly raw: Promise<import("axios").AxiosResponse<unknown, any, {}, any>>;
+        readonly data: Promise<unknown>;
+        then: <TResult1 = unknown, TResult2 = never>(onfulfilled?: ((value: unknown) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+        catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<unknown>;
+        finally: (onfinally?: (() => void) | null | undefined) => Promise<unknown>;
+    };
+    readonly agentRelease: (data?: {
+        params?: undefined;
+        query?: undefined;
+        body?: undefined;
+    } & TRequestOptions<agentRelease$return>) => {
+        readonly raw: Promise<import("axios").AxiosResponse<agentRelease$return, any, {}, any>>;
+        readonly data: Promise<agentRelease$return>;
+        then: <TResult1 = agentRelease$return, TResult2 = never>(onfulfilled?: ((value: agentRelease$return) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+        catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<agentRelease$return | TResult>;
+        finally: (onfinally?: (() => void) | null | undefined) => Promise<agentRelease$return>;
+    };
+    readonly updateAgent: (data: {
+        params: updateAgent$params;
         query?: undefined;
         body?: undefined;
     } & TRequestOptions<unknown>) => {

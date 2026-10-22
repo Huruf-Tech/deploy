@@ -6,6 +6,7 @@ import { ThunderSDK } from "thunder-sdk"
 import { format } from "date-fns"
 import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from "recharts"
 import {
+  IconCloudDownload,
   IconFileText,
   IconTerminal2,
   IconPlugConnectedX,
@@ -42,7 +43,8 @@ import {
 } from "@/components/ui/table"
 import { usePolling } from "@/hooks/use-polling"
 import { useStream, type TStreamChunk } from "@/hooks/use-stream"
-import { cn } from "@/lib/utils"
+import { cn, errorMessage } from "@/lib/utils"
+import { toast } from "sonner"
 import { LogsSheet } from "./LogsSheet"
 
 // xterm.js is loaded only when a terminal opens (PLAN §15.5 per-route bundles).
@@ -353,6 +355,49 @@ function LiveMetrics({
 }
 
 /** A server's page (PLAN §15.4): essentials up top, live data on demand. */
+/**
+ * Offers the published agent when this server runs another build (PLAN §16
+ * Phase 12). The agent verifies the download, restarts, then host setup
+ * brings its dependencies up to date.
+ */
+function AgentUpdate({
+  server,
+}: {
+  server: { _id: string; inventory: { arch: string; agentSha256?: string } }
+}) {
+  const { t } = useTranslation()
+  const { data } = use(
+    ThunderSDK.useCaching(
+      ["servers", "agentRelease"],
+      async ({ signal }) => await ThunderSDK.servers.agentRelease({ signal })
+    )
+  )
+  const [busy, setBusy] = React.useState(false)
+  const latest = data?.sums[server.inventory.arch]
+  if (!latest || latest === server.inventory.agentSha256) return null
+
+  const update = async () => {
+    setBusy(true)
+    try {
+      await ThunderSDK.servers.updateAgent({ params: { id: server._id } })
+      toast.success(
+        t(
+          "Updating: the agent restarts in a few seconds, then host setup runs."
+        )
+      )
+    } catch (e) {
+      toast.error(errorMessage(e) ?? t("Could not update the agent"))
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Button variant="outline" onClick={update} disabled={busy}>
+      <IconCloudDownload aria-hidden /> {t("Update agent")}
+    </Button>
+  )
+}
+
 export default function ServerDetail() {
   const { t } = useTranslation()
   const { id = "" } = useParams<{ id: string }>()
@@ -414,6 +459,7 @@ export default function ServerDetail() {
           </p>
         </div>
         <StatusPill state={state} />
+        {state === "online" && <AgentUpdate server={server} />}
         {state === "online" &&
           ThunderSDK.isPermitted("streams", "openHostTerminal") && (
             <Button

@@ -25,6 +25,9 @@ export const $inventory = z.object({
   privateIp: z.string().max(64).optional(),
   dockerVersion: z.string().max(50).optional(),
   agentVersion: z.string().max(50),
+  agentSha256: z.string().max(64).optional().describe(
+    "SHA-256 of the running agent binary: compared with the published one for updates",
+  ),
 });
 
 export const $resourceSummary = z.object({
@@ -95,7 +98,14 @@ export const $commandType = z.enum([
   "stream.close",
   "build.run",
   "server.prune",
+  "agent.update",
 ]);
+
+/** `agent.update`: replace the binary with a verified download, then restart. */
+export const $agentUpdatePayload = z.object({
+  url: z.string().describe("The binary for this server's architecture"),
+  sha256: z.string().length(64),
+});
 
 export const $streamKind = z.enum([
   "logs",

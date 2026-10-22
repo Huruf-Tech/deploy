@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/protocol"
+	"github.com/Huruf-Tech/huruf-deploy/agent/internal/update"
 )
 
 func Inventory(agentVersion string) protocol.Inventory {
@@ -31,6 +32,7 @@ func Inventory(agentVersion string) protocol.Inventory {
 		PrivateIp:     privateIP(),
 		DockerVersion: dockerVersion(),
 		AgentVersion:  agentVersion,
+		AgentSha256:   update.SelfSha256(),
 	}
 }
 

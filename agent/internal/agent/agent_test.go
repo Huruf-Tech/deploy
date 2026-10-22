@@ -102,7 +102,7 @@ func TestAgentLoop(t *testing.T) {
 		Identity: id,
 		Client:   transport.New(server.URL, id),
 		Store:    store,
-		Commands: commands.Default(context.Background(), &streams.Manager{}, &build.Builder{Dir: t.TempDir()}, id.Open),
+		Commands: commands.Default(context.Background(), &streams.Manager{}, &build.Builder{Dir: t.TempDir()}, id.Open, func() {}),
 		Log:      slog.New(slog.NewTextHandler(io.Discard, nil)),
 	}
 

@@ -15,6 +15,7 @@ import (
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/dockerhost"
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/protocol"
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/streams"
+	"github.com/Huruf-Tech/huruf-deploy/agent/internal/update"
 )
 
 type Handler func(ctx context.Context, payload map[string]any) (map[string]any, error)
@@ -67,7 +68,8 @@ func sealed[T any](open func(string) ([]byte, error), fn func(context.Context, T
 
 // Default is the agent's command set. `ctx` outlives single commands, so
 // streams keep running after their `stream.open` command has finished.
-func Default(ctx context.Context, s *streams.Manager, builder *build.Builder, open func(string) ([]byte, error)) Registry {
+// `restart` stops the agent after an update; systemd starts the new binary.
+func Default(ctx context.Context, s *streams.Manager, builder *build.Builder, open func(string) ([]byte, error), restart func()) Registry {
 	return Registry{
 		"ping": func(context.Context, map[string]any) (map[string]any, error) {
 			return map[string]any{"pong": time.Now().UnixMilli()}, nil
@@ -83,6 +85,14 @@ func Default(ctx context.Context, s *streams.Manager, builder *build.Builder, op
 			return map[string]any{"closed": true}, nil
 		}),
 		"build.run": sealed(open, builder.Run),
+		"agent.update": handle(func(ctx context.Context, p protocol.AgentUpdatePayload) (map[string]any, error) {
+			result, err := update.Apply(ctx, p)
+			if err == nil && result["restarting"] == true {
+				// Long enough for the result to be sent (events flush every 500 ms).
+				time.AfterFunc(3*time.Second, restart)
+			}
+			return result, err
+		}),
 		// Build cache older than 3 days and dangling images; release images
 		// are kept by the reconciler's own cleanup (PLAN §9.2).
 		"server.prune": func(ctx context.Context, _ map[string]any) (map[string]any, error) {

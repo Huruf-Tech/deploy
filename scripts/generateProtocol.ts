@@ -44,6 +44,7 @@ const MESSAGES: Array<[string, z.ZodType, "input" | "output"]> = [
   ["AlertEvent", protocol.$alertEvent, "input"],
   ["AutoscaleEvent", protocol.$autoscaleEvent, "input"],
   ["CapacityReport", protocol.$capacityReport, "input"],
+  ["AgentUpdatePayload", protocol.$agentUpdatePayload, "output"],
 ];
 
 const schemas = Object.fromEntries(

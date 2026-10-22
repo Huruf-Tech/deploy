@@ -10,6 +10,7 @@ import {
   serverLiveness,
 } from "@/lib/agents/servers.ts";
 import { issueCommand, prepareHost } from "@/lib/agents/commands.ts";
+import { latestAgent, requestAgentUpdate } from "@/lib/agents/updates.ts";
 import {
   agentEndpoints,
   bootstrapStatus,
@@ -46,6 +47,38 @@ export default new Router("/api", function servers(router) {
       beforeDel: async ({ _id, session }, req) =>
         releaseServer(_id, (await withTenant(req)).tenant._id, session),
     },
+  });
+
+  // The published agent per architecture, to tell which servers can update.
+  router.get("/agent/latest", function agentRelease() {
+    const $return = z.object({
+      sums: z.record(z.string(), z.string()).describe("arch -> SHA-256"),
+    });
+
+    return {
+      shape: () => ({ return: $return }),
+      handler: async () => {
+        const { sums } = await latestAgent().catch(() => ({ sums: {} }));
+        return Response.json({ sums });
+      },
+    };
+  });
+
+  // The agent replaces itself with the published binary, then host setup runs.
+  router.post("/:id/updateAgent", function updateAgent() {
+    return {
+      shape: () => ({ params: $params }),
+      handler: async (req) => {
+        const { id } = $params.parse(paramsAsJson(req));
+        const { tenant, user } = await withTenant(req);
+        await requestAgentUpdate({
+          tenant: tenant._id,
+          server: id,
+          user: user._id,
+        });
+        return Response.json({ ok: true });
+      },
+    };
   });
 
   router.post("/:id/accept", function accept() {

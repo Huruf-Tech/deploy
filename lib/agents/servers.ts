@@ -57,6 +57,7 @@ export const registerAgent = async (
         pairingCode: 1,
         pairingExpiresAt: 1,
         "setup.status": 1,
+        "inventory.agentSha256": 1,
       },
     },
   );
@@ -77,6 +78,13 @@ export const registerAgent = async (
     // An agent that restarts mid-setup lost the running command: start it again.
     if (existing.status === "active" && existing.setup?.status !== "ready") {
       await resumeHostSetup(existing._id, existing.tenant);
+    } else if (
+      // A new agent binary (an update): host setup brings its dependencies up to date.
+      existing.status === "active" && existing.inventory?.agentSha256 &&
+      inventory.agentSha256 &&
+      existing.inventory.agentSha256 !== inventory.agentSha256
+    ) {
+      await prepareHost(existing._id, existing.tenant);
     }
     return {
       server: existing._id.toString(),

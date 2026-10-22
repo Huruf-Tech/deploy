@@ -29,6 +29,8 @@ export type hello$body = {
         privateIp?: string | undefined;
         dockerVersion?: string | undefined;
         agentVersion: string;
+        /** SHA-256 of the running agent binary: compared with the published one for updates */
+        agentSha256?: string | undefined;
     };
     /** One-time token from the SSH wizard: activates the server without pairing */
     joinToken?: string | undefined;
@@ -79,7 +81,7 @@ export type poll$return = {
     configVersion: string;
     commands: {
         seq: number;
-        type: "ping" | "docker.ensure" | "stream.open" | "stream.close" | "build.run" | "server.prune";
+        type: "ping" | "docker.ensure" | "stream.open" | "stream.close" | "build.run" | "server.prune" | "agent.update";
         payload: Record<string, unknown>;
     }[];
     /** New terminal input per session, after the cursors in `streams` */

@@ -1052,7 +1052,11 @@ Each phase ends with a **review checkpoint** (demo + code review + approval). Ph
 - Cloudflare integration: Tunnel and/or Load Balancer modes, hostnames per project, health-check alignment.
 
 ### Phase 12 — Backlog (after MVP)
-- Ability to upgrade already installed agent along with its deps
+- Ability to upgrade already installed agent along with its deps — **done (pending review):**
+  - Agents report the SHA-256 of their binary. The control plane compares it with the `SHA256SUMS` the installer uses (`AGENT_DOWNLOAD_BASE`; optional `AGENT_CHECKSUMS_BASE` when the control plane reaches that host under another address), cached 5 minutes.
+  - "Update agent" on the server page sends `agent.update`. The agent downloads the binary, verifies the checksum and renames it into place, then exits after its result is sent, and systemd starts the new one.
+  - A `hello` with a changed binary re-runs host setup, so dependencies (Docker settings, WireGuard tools…) come from the new agent.
+  - **Verified on a VM:** two consecutive updates, each restarting as the new version, with host setup after the restart.
 - Long-poll/streamed responses for near-instant streams
 - Standby servers and auto-placement
 - Mesh relay for NAT'd servers

@@ -50,6 +50,9 @@ type Inventory struct {
 	DockerVersion string `json:"dockerVersion,omitempty"`
 
 	AgentVersion string `json:"agentVersion"`
+
+	// SHA-256 of the running agent binary: compared with the published one for updates
+	AgentSha256 string `json:"agentSha256,omitempty"`
 }
 
 type HelloResponse struct {
@@ -150,7 +153,7 @@ type PollResponse struct {
 type Command struct {
 	Seq int64 `json:"seq"`
 
-	// One of: ping, docker.ensure, stream.open, stream.close, build.run, server.prune
+	// One of: ping, docker.ensure, stream.open, stream.close, build.run, server.prune, agent.update
 	Type string `json:"type"`
 
 	Payload map[string]any `json:"payload"`
@@ -719,4 +722,11 @@ type CapacityReportDailyItem struct {
 
 	// workload -> memory peak per replica
 	Workloads map[string]int64 `json:"workloads"`
+}
+
+type AgentUpdatePayload struct {
+	// The binary for this server's architecture
+	Url string `json:"url"`
+
+	Sha256 string `json:"sha256"`
 }

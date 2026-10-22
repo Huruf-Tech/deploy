@@ -75,6 +75,11 @@
             "agentVersion": {
               "type": "string",
               "maxLength": 50
+            },
+            "agentSha256": {
+              "description": "SHA-256 of the running agent binary: compared with the published one for updates",
+              "type": "string",
+              "maxLength": 64
             }
           },
           "required": [
@@ -422,7 +427,8 @@
                   "stream.open",
                   "stream.close",
                   "build.run",
-                  "server.prune"
+                  "server.prune",
+                  "agent.update"
                 ]
               },
               "payload": {
@@ -2160,6 +2166,26 @@
         "workloads",
         "daily"
       ]
+    },
+    "AgentUpdatePayload": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "url": {
+          "type": "string",
+          "description": "The binary for this server's architecture"
+        },
+        "sha256": {
+          "type": "string",
+          "minLength": 64,
+          "maxLength": 64
+        }
+      },
+      "required": [
+        "url",
+        "sha256"
+      ],
+      "additionalProperties": false
     }
   }
 }

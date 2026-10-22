@@ -960,6 +960,8 @@ export declare class ThunderSDK extends BaseSDK {
             update$params: import("./modules/servers.js").update$params;
             update$body: import("./modules/servers.js").update$body;
             del$params: import("./modules/servers.js").del$params;
+            agentRelease$return: import("./modules/servers.js").agentRelease$return;
+            updateAgent$params: import("./modules/servers.js").updateAgent$params;
             accept$params: import("./modules/servers.js").accept$params;
             accept$body: import("./modules/servers.js").accept$body;
             reject$params: import("./modules/servers.js").reject$params;
@@ -1009,6 +1011,28 @@ export declare class ThunderSDK extends BaseSDK {
         };
         readonly del: (data: {
             params: import("./modules/servers.js").del$params;
+            query?: undefined;
+            body?: undefined;
+        } & import("./types.js").TRequestOptions<unknown>) => {
+            readonly raw: Promise<import("axios").AxiosResponse<unknown, any, {}, any>>;
+            readonly data: Promise<unknown>;
+            then: <TResult1 = unknown, TResult2 = never>(onfulfilled?: ((value: unknown) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+            catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<unknown>;
+            finally: (onfinally?: (() => void) | null | undefined) => Promise<unknown>;
+        };
+        readonly agentRelease: (data?: {
+            params?: undefined;
+            query?: undefined;
+            body?: undefined;
+        } & import("./types.js").TRequestOptions<import("./modules/servers.js").agentRelease$return>) => {
+            readonly raw: Promise<import("axios").AxiosResponse<import("./modules/servers.js").agentRelease$return, any, {}, any>>;
+            readonly data: Promise<import("./modules/servers.js").agentRelease$return>;
+            then: <TResult1 = import("./modules/servers.js").agentRelease$return, TResult2 = never>(onfulfilled?: ((value: import("./modules/servers.js").agentRelease$return) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+            catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<import("./modules/servers.js").agentRelease$return | TResult>;
+            finally: (onfinally?: (() => void) | null | undefined) => Promise<import("./modules/servers.js").agentRelease$return>;
+        };
+        readonly updateAgent: (data: {
+            params: import("./modules/servers.js").updateAgent$params;
             query?: undefined;
             body?: undefined;
         } & import("./types.js").TRequestOptions<unknown>) => {

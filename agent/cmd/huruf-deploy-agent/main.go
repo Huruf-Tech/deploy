@@ -109,13 +109,16 @@ func main() {
 	}
 
 	a := &agent.Agent{
-		Tenant:     *tenant,
-		JoinToken:  *joinToken,
-		Version:    version,
-		Identity:   id,
-		Client:     transport.New(*url, id),
-		Store:      store,
-		Commands:   commands.Default(ctx, streamManager, builder, id.Open),
+		Tenant:    *tenant,
+		JoinToken: *joinToken,
+		Version:   version,
+		Identity:  id,
+		Client:    transport.New(*url, id),
+		Store:     store,
+		Commands: commands.Default(ctx, streamManager, builder, id.Open, func() {
+			log.Info("agent updated; restarting")
+			stop() // Run returns, the last events flush, systemd starts the new binary
+		}),
 		Streams:    streamManager,
 		Reconciler: reconciler,
 		Network:    network,
