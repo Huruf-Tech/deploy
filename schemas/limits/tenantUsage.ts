@@ -13,10 +13,15 @@ export const $tenantUsage = z.object({
   gitIntegrations: z.number().int().optional(),
   registries: z.number().int().optional(),
   managedServers: z.number().int().optional(),
+  /** Since when the tenant has had more servers than its plan allows (PLAN §22.5). */
+  overLimitSince: z.date().optional(),
 });
 
 export type TTenantUsage = z.output<typeof $tenantUsage>;
-export type TCountQuota = Exclude<keyof TTenantUsage, "tenant">;
+export type TCountQuota = Exclude<
+  keyof TTenantUsage,
+  "tenant" | "overLimitSince"
+>;
 
 export const tenantUsageModel = mongodb.db().collection<TTenantUsage>(
   "tenantUsage",

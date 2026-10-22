@@ -2,6 +2,9 @@ import { Outlet } from "react-router"
 import {
   IconBell,
   IconBox,
+  IconCreditCard,
+  IconReceipt2,
+  IconReportMoney,
   IconBucket,
   IconHistory,
   IconBraces,
@@ -28,6 +31,8 @@ import NewProject from "@/pages/projects/NewProject"
 import ProjectDetail from "@/pages/projects/Detail"
 import Registries from "@/pages/registries"
 import Storage from "@/pages/storage"
+import Billing from "@/pages/billing"
+import BillingAdmin from "@/pages/billing/Admin"
 import Network from "@/pages/network"
 import AlertRules from "@/pages/alerts"
 import AlertHistory from "@/pages/alerts/History"
@@ -61,6 +66,26 @@ export const routes: TRoutesOverride = {
     icon: IconLock,
     display: isAdmin,
   }),
+
+  plans: { merge: true, name: "Plans", icon: IconReceipt2, display: isAdmin },
+  billingAdmin: {
+    name: "Billing",
+    path: "billing",
+    group: "Admin",
+    icon: IconReportMoney,
+    display: isAdmin,
+    Component: BillingAdmin,
+  },
+  // Every member sees plan & usage; only the owner changes it.
+  billing: {
+    name: "Plan & usage",
+    path: "plan",
+    group: "Configuration",
+    icon: IconCreditCard,
+    priority: 10,
+    display: () => ThunderSDK.isPermitted("billing", "get"),
+    Component: Billing,
+  },
 
   // Reached through the built-in wallet page, not navigation.
   wallets: { merge: true, display: false },

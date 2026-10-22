@@ -31,6 +31,8 @@ import { refreshSpecs } from "@/lib/deploy/specs.ts";
 import { serverSpecModel } from "@/schemas/infrastructure/serverSpec.ts";
 
 const COMMAND_BATCH = 50;
+/** Servers beyond the plan's quota after the grace poll this slowly (PLAN §22.5). */
+const THROTTLED_POLL_MS = 60_000;
 const EVENT_TTL_MS = 60 * 60_000;
 
 /** Last poll per server, the first-line rate limit (PLAN §20.3): no DB writes. */
@@ -80,9 +82,15 @@ export const pollAgent = async (
       $set: {
         aliveUntil: {
           $cond: [
-            { $lt: ["$aliveUntil", new Date(nowMs + renewBelowMs)] },
-            new Date(nowMs + leaseMs),
-            "$aliveUntil",
+            { $eq: ["$throttled", true] },
+            new Date(nowMs + 2 * THROTTLED_POLL_MS),
+            {
+              $cond: [
+                { $lt: ["$aliveUntil", new Date(nowMs + renewBelowMs)] },
+                new Date(nowMs + leaseMs),
+                "$aliveUntil",
+              ],
+            },
           ],
         },
         deliveredSeq: {
@@ -98,6 +106,7 @@ export const pollAgent = async (
       projection: {
         shard: 1,
         offline: 1,
+        throttled: 1,
         commandSeq: 1,
         deliveredSeq: 1,
         fastPollUntil: 1,
@@ -156,7 +165,9 @@ export const pollAgent = async (
   return {
     status: 200,
     body: {
-      nextPollMs: lease.terminalUntil && lease.terminalUntil > now
+      nextPollMs: lease.throttled
+        ? THROTTLED_POLL_MS
+        : lease.terminalUntil && lease.terminalUntil > now
         ? config.poll.terminalMs
         : commands.length || desired ||
             (lease.fastPollUntil && lease.fastPollUntil > now)

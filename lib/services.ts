@@ -4,6 +4,7 @@ import { importMasterKey, Keyring } from "@/lib/core/keyring.ts";
 import { QuotaGuard } from "@/lib/core/quotaGuard.ts";
 import { RateLimiter } from "@/lib/core/rateLimiter.ts";
 import { Entitlements } from "@/lib/billing/entitlements.ts";
+import { BillingService } from "@/lib/billing/billing.ts";
 import { GitHubApi } from "@/lib/github/githubApi.ts";
 import { keyringModel } from "@/schemas/crypto/keyring.ts";
 import {
@@ -44,7 +45,7 @@ const freePlan = cache(async () => {
   };
 }, 60_000);
 
-export const entitlements = new Entitlements({
+export const entitlements: Entitlements = new Entitlements({
   currentPeriod: (tenant, now) =>
     subscriptionPeriodModel.findOne(
       { tenant, periodStart: { $lte: now }, periodEnd: { $gt: now } },
@@ -54,4 +55,9 @@ export const entitlements = new Entitlements({
       },
     ),
   freePlan,
+  renew: (tenant): Promise<void> => billing.renewIfDue(tenant),
+  enforce: (tenant, resolved): Promise<void> =>
+    billing.enforceLimits(tenant, resolved),
 });
+
+export const billing: BillingService = new BillingService(entitlements);

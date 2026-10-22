@@ -1,4 +1,5 @@
 import { storageModel } from "@/schemas/infrastructure/storage.ts";
+import { subscriptionModel } from "@/schemas/billing/subscription.ts";
 import { planModel } from "@/schemas/billing/plan.ts";
 import { alertEventModel, alertRuleModel } from "@/schemas/monitoring/alert.ts";
 import { subscriptionPeriodModel } from "@/schemas/billing/subscriptionPeriod.ts";
@@ -210,6 +211,16 @@ export const syncDeployIndexes = async () => {
     ),
     registryModel.createIndex({ tenant: 1, name: 1 }, { name: "tenantName" }),
     storageModel.createIndex({ tenant: 1, name: 1 }, { name: "tenantName" }),
+    // One subscription per tenant (PLAN §22.1).
+    subscriptionModel.createIndex({ tenant: 1 }, {
+      name: "uniqueTenant",
+      unique: true,
+    }),
+    // Throttling servers beyond the quota (PLAN §22.5).
+    serverLeaseModel.createIndex({ tenant: 1, throttled: 1 }, {
+      name: "throttled",
+      partialFilterExpression: { throttled: true },
+    }),
     // Projects mounting a storage connection (update and delete checks).
     projectModel.createIndex({ "volumes.storage": 1 }, {
       name: "volumeStorage",

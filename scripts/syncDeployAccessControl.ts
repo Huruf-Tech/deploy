@@ -29,6 +29,8 @@ export const syncDeployAccessControl = async () => {
     "projectGroups",
     "registries",
     "storages",
+    // Everyone sees plan & usage; subscribe/cancel check for the owner.
+    "billing",
     "networks",
     "alertRules",
     "alertEvents",

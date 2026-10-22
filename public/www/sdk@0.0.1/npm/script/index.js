@@ -10,6 +10,9 @@ exports.ThunderSDK = void 0;
 const base_js_1 = require("./base.js");
 const projectGroups_js_1 = require("./modules/projectGroups.js");
 const projects_js_1 = require("./modules/projects.js");
+const billing_js_1 = require("./modules/billing.js");
+const billingAdmin_js_1 = require("./modules/billingAdmin.js");
+const plans_js_1 = require("./modules/plans.js");
 const gitIntegrations_js_1 = require("./modules/gitIntegrations.js");
 const githubHooks_js_1 = require("./modules/githubHooks.js");
 const templates_js_1 = require("./modules/templates.js");
@@ -119,6 +122,9 @@ Object.defineProperty(ThunderSDK, "_moduleNames", {
     value: [
         "projectGroups",
         "projects",
+        "billing",
+        "billingAdmin",
+        "plans",
         "gitIntegrations",
         "githubHooks",
         "templates",
@@ -163,6 +169,24 @@ Object.defineProperty(ThunderSDK, "projects", {
     configurable: true,
     writable: true,
     value: (0, projects_js_1.projectsModule)(_a)
+});
+Object.defineProperty(ThunderSDK, "billing", {
+    enumerable: true,
+    configurable: true,
+    writable: true,
+    value: (0, billing_js_1.billingModule)(_a)
+});
+Object.defineProperty(ThunderSDK, "billingAdmin", {
+    enumerable: true,
+    configurable: true,
+    writable: true,
+    value: (0, billingAdmin_js_1.billingAdminModule)(_a)
+});
+Object.defineProperty(ThunderSDK, "plans", {
+    enumerable: true,
+    configurable: true,
+    writable: true,
+    value: (0, plans_js_1.plansModule)(_a)
 });
 Object.defineProperty(ThunderSDK, "gitIntegrations", {
     enumerable: true,

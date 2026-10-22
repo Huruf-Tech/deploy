@@ -80,6 +80,16 @@ export async function deploy(opts: {
     tenant: opts.tenant,
   });
   if (!project) throw Response.notFound("Project not found");
+  // Servers beyond the plan's quota after the grace take no deploys (PLAN §22.5).
+  const throttled = await serverLeaseModel.countDocuments({
+    _id: { $in: project.servers },
+    throttled: true,
+  });
+  if (throttled) {
+    throw Response.forbidden(
+      "Some of these servers are beyond your plan's server limit. Upgrade, or remove servers, to deploy to them.",
+    );
+  }
 
   const { limits } = await entitlements.resolve(opts.tenant);
   if (

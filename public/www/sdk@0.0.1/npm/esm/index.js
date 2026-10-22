@@ -7,6 +7,9 @@ var _a;
 import { BaseSDK } from "./base.js";
 import { projectGroupsModule } from "./modules/projectGroups.js";
 import { projectsModule } from "./modules/projects.js";
+import { billingModule } from "./modules/billing.js";
+import { billingAdminModule } from "./modules/billingAdmin.js";
+import { plansModule } from "./modules/plans.js";
 import { gitIntegrationsModule } from "./modules/gitIntegrations.js";
 import { githubHooksModule } from "./modules/githubHooks.js";
 import { templatesModule } from "./modules/templates.js";
@@ -115,6 +118,9 @@ Object.defineProperty(ThunderSDK, "_moduleNames", {
     value: [
         "projectGroups",
         "projects",
+        "billing",
+        "billingAdmin",
+        "plans",
         "gitIntegrations",
         "githubHooks",
         "templates",
@@ -159,6 +165,24 @@ Object.defineProperty(ThunderSDK, "projects", {
     configurable: true,
     writable: true,
     value: projectsModule(_a)
+});
+Object.defineProperty(ThunderSDK, "billing", {
+    enumerable: true,
+    configurable: true,
+    writable: true,
+    value: billingModule(_a)
+});
+Object.defineProperty(ThunderSDK, "billingAdmin", {
+    enumerable: true,
+    configurable: true,
+    writable: true,
+    value: billingAdminModule(_a)
+});
+Object.defineProperty(ThunderSDK, "plans", {
+    enumerable: true,
+    configurable: true,
+    writable: true,
+    value: plansModule(_a)
 });
 Object.defineProperty(ThunderSDK, "gitIntegrations", {
     enumerable: true,

@@ -21,6 +21,10 @@ export type TEntitlementSources = {
   freePlan(): Promise<
     { plan?: ObjectId; limits: TPlanLimits; features: TPlanFeatures }
   >;
+  /** Lazy renewal, before the current period is read (PLAN §22.3). */
+  renew?(tenant: ObjectId): Promise<void>;
+  /** Over-limit enforcement with the resolved plan (PLAN §22.5). */
+  enforce?(tenant: ObjectId, entitlements: TEntitlements): Promise<void>;
 };
 
 /**
@@ -39,6 +43,8 @@ export class Entitlements {
     const cached = this.cache.get(tenant.toString());
     if (cached) return cached;
 
+    // Billing upkeep rides on resolution; a failure there never blocks the request.
+    await this.sources.renew?.(tenant).catch(this.onError);
     const period = await this.sources.currentPeriod(tenant, new Date());
     const entitlements: TEntitlements = period
       ? {
@@ -49,9 +55,13 @@ export class Entitlements {
       }
       : { source: "free", ...(await this.sources.freePlan()) };
 
+    await this.sources.enforce?.(tenant, entitlements).catch(this.onError);
     this.cache.set(tenant.toString(), entitlements);
     return entitlements;
   }
+
+  private onError = (error: unknown) =>
+    console.warn("[billing] upkeep failed:", error);
 
   /** Call after a subscription change so this instance sees it immediately. */
   invalidate(tenant: ObjectId) {

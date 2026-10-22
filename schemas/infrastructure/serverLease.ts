@@ -20,6 +20,8 @@ export const $serverLease = z.object({
   deliveredSeq: z.number().int(),
   fastPollUntil: z.date().optional(),
   terminalUntil: z.date().optional(),
+  /** Beyond the plan's server quota after the grace (PLAN §22.5): slow polls, no deploys. */
+  throttled: z.boolean().optional(),
 });
 
 export type TServerLease = z.output<typeof $serverLease>;

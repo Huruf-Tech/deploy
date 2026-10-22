@@ -1027,6 +1027,26 @@ Each phase ends with a **review checkpoint** (demo + code review + approval). Ph
   - A renewal with an empty wallet falls back to Free with no manual step.
   - A private plan is visible only to its allowed tenant.
   - Concurrent renewal attempts charge exactly once (tested).
+- **Status (done, pending review):**
+  - **BillingService** (`lib/billing/billing.ts`) does every charge. Each one is a thunder-core `Wallet.transfer` to `PLATFORM_TENANT` plus its `subscriptionPeriods` entry, in one transaction. Usage meters (§24) get their own method there later.
+  - **Subscribe:**
+    - new plans and upgrades start now with a full period, and the period being replaced ends now (no proration; the dialog says so);
+    - a cheaper plan waits for the period end (`nextPlan`);
+    - Free and cancel end at the period end (`cancelAtPeriodEnd`);
+    - choosing the current plan again resumes a canceled one.
+    - The idempotency key names the change (`sub:<id>:to:<plan>:from:<period>`), so a double click charges once.
+  - **Lazy renewal:** this runs when entitlements are resolved (on a cache miss, about once a minute per instance). It does one indexed read unless a period has ended. The key names the ended period, and the subscription moves forward only while it still points at that period, so concurrent attempts charge once (tested with 5 in parallel). With an empty wallet the subscription becomes `pastDue`, the workspace falls back to Free, and a retry happens at most hourly.
+  - **Complimentary periods:** granted by an admin (plan, days, reason). They apply at once with no ledger entry.
+  - **Over limit:** nothing is deleted. Creating things past a quota is refused, as before. The grace starts on the usage doc (`overLimitSince`). After `PLAN_OVERLIMIT_GRACE_DAYS` (3), the newest servers beyond the quota get `throttled` on their lease: the poll answers them every 60 s with a 120 s lease (same single update) and deploys to them are refused. Being back within the quota clears it.
+  - **Routes and permissions:**
+    - `billing`: everyone sees plan & usage; only the owner subscribes or cancels;
+    - `plans`: generated CRUD, admin only; the seeded Free plan can't be set or deleted;
+    - `billingAdmin`: subscriptions and grants, admin only.
+    - Alert rules now follow the plan's `alertRules` quota.
+  - **UI:**
+    - Configuration → Plan & usage: usage bars, the current period, past-due and over-limit banners, plan cards (private plans marked "For you"), a confirm dialog, history;
+    - Admin → Plans and Admin → Billing.
+  - **Not done:** wallet top-up (decided separately). The past-due notice is a banner only; no email yet.
 
 ### Phase 11 — Domains and public ingress (deferred, starts when you decide)
 - Cloudflare integration: Tunnel and/or Load Balancer modes, hostnames per project, health-check alignment.

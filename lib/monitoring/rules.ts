@@ -2,7 +2,7 @@ import { ObjectId, type WithId } from "mongodb";
 import z from "zod";
 import { Response } from "@/core/http/response.ts";
 import { $objectId } from "@/core/utils/createCRUD.ts";
-import { keyring } from "@/lib/services.ts";
+import { entitlements, keyring } from "@/lib/services.ts";
 import { refreshSpecs } from "@/lib/deploy/specs.ts";
 import { assertPublicUrl, maskUrl } from "@/lib/monitoring/channels.ts";
 import {
@@ -189,8 +189,10 @@ export async function createRule(
   user: ObjectId,
   input: TAlertRuleInput,
 ) {
-  if (await alertRuleModel.countDocuments({ tenant }) >= MAX_RULES) {
-    throw Response.badRequest(`A workspace can have ${MAX_RULES} alert rules`);
+  const { limits } = await entitlements.resolve(tenant);
+  const allowed = Math.min(MAX_RULES, limits.alertRules);
+  if (await alertRuleModel.countDocuments({ tenant }) >= allowed) {
+    throw Response.badRequest(`Your plan allows ${allowed} alert rules`);
   }
   await validate(tenant, input);
   const _id = new ObjectId();

@@ -8,6 +8,9 @@ import { BaseSDK } from "./base.js";
 
 import { projectGroupsModule } from "./modules/projectGroups.js";
 import { projectsModule } from "./modules/projects.js";
+import { billingModule } from "./modules/billing.js";
+import { billingAdminModule } from "./modules/billingAdmin.js";
+import { plansModule } from "./modules/plans.js";
 import { gitIntegrationsModule } from "./modules/gitIntegrations.js";
 import { githubHooksModule } from "./modules/githubHooks.js";
 import { templatesModule } from "./modules/templates.js";
@@ -47,6 +50,9 @@ export class ThunderSDK extends BaseSDK {
     protected static _moduleNames = [
         "projectGroups",
         "projects",
+        "billing",
+        "billingAdmin",
+        "plans",
         "gitIntegrations",
         "githubHooks",
         "templates",
@@ -82,6 +88,9 @@ export class ThunderSDK extends BaseSDK {
     
     static projectGroups = projectGroupsModule(this);
     static projects = projectsModule(this);
+    static billing = billingModule(this);
+    static billingAdmin = billingAdminModule(this);
+    static plans = plansModule(this);
     static gitIntegrations = gitIntegrationsModule(this);
     static githubHooks = githubHooksModule(this);
     static templates = templatesModule(this);

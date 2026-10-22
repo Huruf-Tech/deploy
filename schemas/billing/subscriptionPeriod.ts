@@ -17,6 +17,8 @@ export const $subscriptionPeriod = z.object({
   featuresSnapshot: $planFeatures,
   kind: z.enum(["paid", "complimentary"]),
   paidAt: z.date().optional(),
+  /** Why a complimentary period was granted. */
+  note: z.string().max(300).optional(),
   createdAt: z.date().default(() => new Date()),
 });
 
