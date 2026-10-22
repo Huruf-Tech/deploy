@@ -4,7 +4,7 @@ import { Link, useNavigate } from "react-router"
 import { useTranslation } from "react-i18next"
 import { IconCopy } from "@tabler/icons-react"
 
-import { Container } from "@/core/custom/Container"
+import { Page } from "@/components/page"
 import { use } from "@/core/hooks/use"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -117,7 +117,7 @@ export default function TemplatesPage() {
   const system = (data ?? []).filter((x) => x.scope === "system")
 
   return (
-    <Container className="flex flex-col gap-8 py-4">
+    <Page className="flex flex-col gap-8 py-4">
       <div>
         <h1 className="text-xl font-semibold">{t("Templates")}</h1>
         <p className="text-sm text-muted-foreground">
@@ -167,6 +167,6 @@ export default function TemplatesPage() {
           navigate(`./${id}`)
         }}
       />
-    </Container>
+    </Page>
   )
 }

@@ -12,7 +12,7 @@ import {
   IconServer2,
 } from "@tabler/icons-react"
 
-import { Container } from "@/core/custom/Container"
+import { Page } from "@/components/page"
 import { use } from "@/core/hooks/use"
 import { useBreadcrumbTitle } from "@/core/layouts/shared/breadcrumb"
 import { Badge } from "@/components/ui/badge"
@@ -385,16 +385,16 @@ export default function ServerDetail() {
 
   if (isLoading || !server)
     return (
-      <Container className="flex flex-col gap-4 py-4">
+      <Page className="flex flex-col gap-4 py-4">
         <Skeleton className="h-20 rounded-4xl" />
         <Skeleton className="h-64 rounded-4xl" />
-      </Container>
+      </Page>
     )
 
   const state = stateOf(server, live)
 
   return (
-    <Container className="flex flex-col gap-6 py-4">
+    <Page className="flex flex-col gap-6 py-4">
       <div className="flex flex-wrap items-center gap-4">
         <div
           className={cn(
@@ -456,6 +456,6 @@ export default function ServerDetail() {
           />
         </React.Suspense>
       )}
-    </Container>
+    </Page>
   )
 }

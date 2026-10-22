@@ -12,7 +12,7 @@ import {
   IconTerminal2,
 } from "@tabler/icons-react"
 
-import { Container } from "@/core/custom/Container"
+import { Page } from "@/components/page"
 import { use } from "@/core/hooks/use"
 import { useBreadcrumbTitle } from "@/core/layouts/shared/breadcrumb"
 import { Badge } from "@/components/ui/badge"
@@ -637,10 +637,10 @@ export default function ProjectDetail() {
 
   if (!project) {
     return (
-      <Container className="flex flex-col gap-4 py-4">
+      <Page className="flex flex-col gap-4 py-4">
         <Skeleton className="h-20 rounded-3xl" />
         <Skeleton className="h-64 rounded-3xl" />
-      </Container>
+      </Page>
     )
   }
 
@@ -657,7 +657,7 @@ export default function ProjectDetail() {
   const latest = deployments?.[0]
 
   return (
-    <Container className="flex flex-col gap-6 py-4">
+    <Page className="flex flex-col gap-6 py-4">
       <div className="flex flex-wrap items-start gap-4">
         <div className="min-w-0 flex-1">
           <h1 className="flex flex-wrap items-center gap-3 text-xl font-semibold">
@@ -919,6 +919,6 @@ export default function ProjectDetail() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </Container>
+    </Page>
   )
 }

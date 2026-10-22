@@ -14,7 +14,7 @@ import {
   IconTrash,
 } from "@tabler/icons-react"
 
-import { Container } from "@/core/custom/Container"
+import { Page } from "@/components/page"
 import { use } from "@/core/hooks/use"
 import { getAuthUrl } from "@/core/lib/utils"
 import { Badge } from "@/components/ui/badge"
@@ -366,7 +366,7 @@ export default function VariablesPage() {
   const { t } = useTranslation()
 
   return (
-    <Container className="flex flex-col gap-6 py-4">
+    <Page className="flex flex-col gap-6 py-4">
       <div>
         <h1 className="text-xl font-semibold">{t("Variables")}</h1>
         <p className="text-sm text-muted-foreground">
@@ -390,6 +390,6 @@ export default function VariablesPage() {
       </Tabs>
 
       <ScriptAccess />
-    </Container>
+    </Page>
   )
 }

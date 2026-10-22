@@ -3,7 +3,7 @@ import { Link } from "react-router"
 import { useTranslation } from "react-i18next"
 import { IconPlus, IconRocket, IconServer2 } from "@tabler/icons-react"
 
-import { Container } from "@/core/custom/Container"
+import { Page } from "@/components/page"
 import { use } from "@/core/hooks/use"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -99,7 +99,7 @@ export default function ProjectsPage() {
   )
 
   return (
-    <Container className="flex flex-col gap-6 py-4">
+    <Page className="flex flex-col gap-6 py-4">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="text-xl font-semibold">{t("Projects")}</h1>
@@ -138,6 +138,6 @@ export default function ProjectsPage() {
           ))}
         </div>
       )}
-    </Container>
+    </Page>
   )
 }

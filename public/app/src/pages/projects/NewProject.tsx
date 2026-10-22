@@ -11,7 +11,7 @@ import {
   IconGitBranch,
 } from "@tabler/icons-react"
 
-import { Container } from "@/core/custom/Container"
+import { Page } from "@/components/page"
 import { use } from "@/core/hooks/use"
 import { useBreadcrumbTitle } from "@/core/layouts/shared/breadcrumb"
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -485,7 +485,7 @@ export default function NewProject() {
     sourceReady && buildReady && !!name && !!slug && servers.length > 0
 
   return (
-    <Container className="flex max-w-3xl flex-col gap-6 py-4">
+    <Page className="flex max-w-3xl flex-col gap-6 py-4">
       <div>
         <h1 className="text-xl font-semibold">{t("New project")}</h1>
         <p className="text-sm text-muted-foreground">
@@ -859,6 +859,6 @@ export default function NewProject() {
           </Button>
         </div>
       </form>
-    </Container>
+    </Page>
   )
 }

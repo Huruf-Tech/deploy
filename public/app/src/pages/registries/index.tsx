@@ -4,7 +4,7 @@ import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
 import { IconBox, IconPlus, IconStar, IconTrash } from "@tabler/icons-react"
 
-import { Container } from "@/core/custom/Container"
+import { Page } from "@/components/page"
 import { use } from "@/core/hooks/use"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -209,7 +209,7 @@ export default function RegistriesPage() {
   )
 
   return (
-    <Container className="flex flex-col gap-6 py-4">
+    <Page className="flex flex-col gap-6 py-4">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="text-xl font-semibold">{t("Registries")}</h1>
@@ -296,6 +296,6 @@ export default function RegistriesPage() {
         onOpenChange={setAdding}
         onAdded={() => request.invalidate()}
       />
-    </Container>
+    </Page>
   )
 }
