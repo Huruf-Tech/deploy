@@ -72,6 +72,22 @@ Background from the planning conversation that is **not** in [PLAN.md](PLAN.md).
    - Run `deno task dev`.
 4. **Claude memory doesn't travel** (it is stored per machine). Its contents are in §1 of this file, which CLAUDE.md links to.
 
-## 6. Next step
+## 6. Where things stand
 
-**Phase 0 — Foundations** (PLAN.md §16), started only when the owner says go.
+- **Phases 0–10 are built.** Each has a status note in PLAN.md §16 (verified behavior, deviations, known limits); they await the owner's review.
+- **Phase 11 (domains)** is deferred until the owner decides.
+- **Phase 12 backlog:**
+  - Done: agent self-update.
+  - Skipped because they need the owner's decision or consent: everything else.
+- **Owner decisions recorded during the build:**
+  - Shells are governed by RBAC.
+  - Workspace variables come from the workspace owner at deploy time.
+  - No audit logs for now.
+  - Volume backups are skipped for now.
+  - S3 credentials live in storage connections.
+  - Managed servers are not built without explicit consent.
+- **Open items for the owner:**
+  - Verification emails: thunder-core doesn't configure Better Auth's `emailVerification`, so no verification email is sent. The fix belongs in the plugin.
+  - Alert channels: confirm that email (needs real SMTP settings) and Slack (needs a workspace webhook) arrive.
+  - Capacity: the "fits N more" ±1 check needs a week of real use.
+  - Test database: tests and dev share the database in the single `.env`.

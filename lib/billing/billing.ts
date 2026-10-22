@@ -3,6 +3,9 @@ import { Response } from "@/core/http/response.ts";
 import { Logger } from "@/core/utils/logger.ts";
 import { isDuplicateKeyError, mongodb } from "@/database.ts";
 import { Wallet } from "@/plugins/Huruf-Tech/thunder-core/lib/wallet.ts";
+import { Mailer } from "@/plugins/Huruf-Tech/thunder-core/lib/mailer.ts";
+import { tenantModel } from "@/plugins/Huruf-Tech/thunder-core/schemas/tenant.ts";
+import { userModel } from "@/plugins/Huruf-Tech/thunder-core/schemas/user.ts";
 import { readNumberSetting, readTextSetting } from "@/lib/core/settings.ts";
 import type {
   Entitlements,
@@ -34,6 +37,28 @@ const monthly = (plan: Pick<TPlan, "price">) =>
 
 const isInsufficient = (error: unknown) =>
   error instanceof Error && /balance/i.test(error.message);
+
+/** Emails the workspace owner that the plan couldn't renew (PLAN §22.3). */
+async function notifyPastDue(tenant: ObjectId, plan: WithId<TPlan>) {
+  const doc = await tenantModel.findOne({ _id: tenant }, {
+    projection: { name: 1, createdBy: 1 },
+  });
+  const owner = doc &&
+    await userModel.findOne({ _id: doc.createdBy }, {
+      projection: { email: 1 },
+    });
+  if (!owner?.email) return;
+  await Mailer.send({
+    to: owner.email,
+    subject: `${doc!.name}: your ${plan.name} plan couldn't renew`,
+    text:
+      `We couldn't renew the ${plan.name} plan of ${
+        doc!.name
+      }: the wallet doesn't have enough ${plan.price.currency.toUpperCase()}.\n\n` +
+      `The workspace is on Free until it renews; nothing is deleted and your apps keep running. ` +
+      `We try again every hour. Add funds or pick a plan on the Plan & usage page.`,
+  });
+}
 
 /**
  * Every charge goes through here (PLAN §22.3): a wallet transfer and its
@@ -304,15 +329,20 @@ export class BillingService {
       if (
         isInsufficient(error) || (error as Error).message?.includes("Payments")
       ) {
-        // ponytail: the owner sees pastDue on the Plan page; email them once alerts can target billing.
-        await subscriptionModel.updateOne(guard, {
-          $set: {
-            status: "pastDue",
-            nextRenewalAttemptAt: new Date(now.getTime() + RETRY_MS),
-            lastError: String((error as Error).message).slice(0, 300),
-            updatedAt: now,
-          },
-        });
+        const pastDue = {
+          status: "pastDue" as const,
+          nextRenewalAttemptAt: new Date(now.getTime() + RETRY_MS),
+          lastError: String((error as Error).message).slice(0, 300),
+          updatedAt: now,
+        };
+        // Only the attempt that turns it past due tells the owner; retries stay quiet.
+        const { modifiedCount } = await subscriptionModel.updateOne(
+          { ...guard, status: "active" },
+          { $set: pastDue },
+        );
+        if (modifiedCount) {
+          notifyPastDue(tenant, plan).catch((e) => log(`notice: ${e}`));
+        } else await subscriptionModel.updateOne(guard, { $set: pastDue });
       } else if (
         !isDuplicateKeyError(error) &&
         (error as Error).message !== "Renewed meanwhile"

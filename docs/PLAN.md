@@ -1046,7 +1046,8 @@ Each phase ends with a **review checkpoint** (demo + code review + approval). Ph
   - **UI:**
     - Configuration → Plan & usage: usage bars, the current period, past-due and over-limit banners, plan cards (private plans marked "For you"), a confirm dialog, history;
     - Admin → Plans and Admin → Billing.
-  - **Not done:** wallet top-up (decided separately). The past-due notice is a banner only; no email yet.
+  - **Past due:** a banner on the Plan page, plus one email to the workspace owner when the renewal first fails (hourly retries stay quiet).
+  - **Not done:** wallet top-up (decided separately).
 
 ### Phase 11 — Domains and public ingress (deferred, starts when you decide)
 - Cloudflare integration: Tunnel and/or Load Balancer modes, hostnames per project, health-check alignment.

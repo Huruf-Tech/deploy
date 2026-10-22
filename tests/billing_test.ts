@@ -6,6 +6,7 @@ import { mongodb } from "@/database.ts";
 import { billing, entitlements } from "@/lib/services.ts";
 import { Wallet } from "@/plugins/Huruf-Tech/thunder-core/lib/wallet.ts";
 import { Env } from "@/core/utils/env.ts";
+import { Mailer } from "@/plugins/Huruf-Tech/thunder-core/lib/mailer.ts";
 import { $plan, planModel } from "@/schemas/billing/plan.ts";
 import { subscriptionModel } from "@/schemas/billing/subscription.ts";
 import { subscriptionPeriodModel } from "@/schemas/billing/subscriptionPeriod.ts";
@@ -46,6 +47,8 @@ Deno.test({
     };
 
     // `.env` wins over the `envs` collection, so set it on the loaded config.
+    const mails: { to: string; subject?: string }[] = [];
+    Mailer.onSendMail = (mail) => void mails.push(mail);
     const config = Env.getAll<Record<string, string>>();
     const previous = config.PLATFORM_TENANT;
     config.PLATFORM_TENANT = platform.tenantId.toHexString();
@@ -174,6 +177,13 @@ Deno.test({
           const page = (await call("GET", "/billing/api")).json;
           assertEquals(page.subscription.status, "pastDue");
           assertMatch(page.subscription.lastError, /balance/i);
+        // The owner hears about it once (sent in the background).
+        for (let i = 0; i < 20 && !mails.length; i++) {
+          await new Promise((r) => setTimeout(r, 50));
+        }
+        assertEquals(mails.length, 1);
+        assertMatch(mails[0].subject!, /couldn't renew/);
+        assertEquals(mails[0].to, session.email);
         },
       );
 
@@ -255,6 +265,7 @@ Deno.test({
       );
     } finally {
       config.PLATFORM_TENANT = previous;
+      Mailer.onSendMail = undefined;
       await Promise.all([
         planModel.deleteMany({ _id: { $in: plans } }),
         ...["subscriptions", "subscriptionPeriods", "servers", "serverLeases"]
