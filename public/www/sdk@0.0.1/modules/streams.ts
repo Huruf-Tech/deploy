@@ -20,6 +20,13 @@ export type openLogs$body = {
 export type openLogs$return = {
     session: string;
 };
+export type openBuild$body = {
+    server?: string;
+    deployment: string;
+};
+export type openBuild$return = {
+    session: string;
+};
 export type openMetrics$body = {
     server?: string;
 };
@@ -86,6 +93,8 @@ export const streamsModule = (sdk: typeof BaseSDK) => {
     const type = {} as unknown as {
         openLogs$body: openLogs$body,
         openLogs$return: openLogs$return,
+        openBuild$body: openBuild$body,
+        openBuild$return: openBuild$return,
         openMetrics$body: openMetrics$body,
         openMetrics$return: openMetrics$return,
         openExec$body: openExec$body,
@@ -114,6 +123,34 @@ export const streamsModule = (sdk: typeof BaseSDK) => {
 
             const method = "post";
             const toPath = compile("streams/api/logs");
+            const requestPayload = {
+                method,
+                url: toPath(data?.params),
+                params: data?.query,
+                data: data?.body,
+                signal: data?.signal,
+                ...(data?.axiosConfig
+                ? sdk.resolveAxiosConfig(data.axiosConfig)
+                : undefined),
+            };
+
+            sdk.log("Sending Request:", requestPayload);
+
+            const res = await sdk._axios!.request(requestPayload);
+
+            return res;
+        }, data);
+    },
+        openBuild(data: {
+        params?: undefined,
+        query?: undefined,
+        body: openBuild$body,
+    } & TRequestOptions<openBuild$return>) {
+        return sdk.resolveAxiosResponse(async () => {
+            sdk.checkPermission("streams", "openBuild");
+
+            const method = "post";
+            const toPath = compile("streams/api/build");
             const requestPayload = {
                 method,
                 url: toPath(data?.params),
@@ -331,6 +368,7 @@ export const streamsModule = (sdk: typeof BaseSDK) => {
     } as const;
 
     (methods.openLogs as any).__scope = "streams";
+    (methods.openBuild as any).__scope = "streams";
     (methods.openMetrics as any).__scope = "streams";
     (methods.openExec as any).__scope = "streams";
     (methods.openTerminal as any).__scope = "streams";

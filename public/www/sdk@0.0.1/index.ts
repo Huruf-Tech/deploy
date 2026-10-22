@@ -6,6 +6,8 @@
 
 import { BaseSDK } from "./base.ts";
 
+import { projectGroupsModule } from "./modules/projectGroups.ts";
+import { projectsModule } from "./modules/projects.ts";
 import { gitIntegrationsModule } from "./modules/gitIntegrations.ts";
 import { githubHooksModule } from "./modules/githubHooks.ts";
 import { templatesModule } from "./modules/templates.ts";
@@ -13,6 +15,7 @@ import { variablesModule } from "./modules/variables.ts";
 import { homeModule } from "./modules/home.ts";
 import { indexModule } from "./modules/index.ts";
 import { agentsModule } from "./modules/agents.ts";
+import { registriesModule } from "./modules/registries.ts";
 import { serversModule } from "./modules/servers.ts";
 import { streamsModule } from "./modules/streams.ts";
 import { wellKnownModule } from "./modules/.well-known.ts";
@@ -38,6 +41,8 @@ import { essentialsEntry } from "./plugins/essentials/entry.ts";
 export class ThunderSDK extends BaseSDK {
     protected static _actionsList?: string[];
     protected static _moduleNames = [
+        "projectGroups",
+        "projects",
         "gitIntegrations",
         "githubHooks",
         "templates",
@@ -45,6 +50,7 @@ export class ThunderSDK extends BaseSDK {
         "home",
         "index",
         "agents",
+        "registries",
         "servers",
         "streams",
         "wellKnown",
@@ -66,6 +72,8 @@ export class ThunderSDK extends BaseSDK {
         "wallets",
     ];
     
+    static projectGroups = projectGroupsModule(this);
+    static projects = projectsModule(this);
     static gitIntegrations = gitIntegrationsModule(this);
     static githubHooks = githubHooksModule(this);
     static templates = templatesModule(this);
@@ -73,6 +81,7 @@ export class ThunderSDK extends BaseSDK {
     static home = homeModule(this);
     static index = indexModule(this);
     static agents = agentsModule(this);
+    static registries = registriesModule(this);
     static servers = serversModule(this);
     static streams = streamsModule(this);
     static wellKnown = wellKnownModule(this);

@@ -386,10 +386,7 @@ export function ListPage({ group, name }: IListPageProps) {
   const selectedRows = table.getFilteredSelectedRowModel().rows
 
   const canShowActionBar = React.useMemo(
-    () =>
-      [module.del, module.update].some(
-        (fn) => ThunderSDK.isPermitted(fn)
-      ),
+    () => [module.del, module.update].some((fn) => ThunderSDK.isPermitted(fn)),
     [module]
   )
 
@@ -525,14 +522,11 @@ export function ListPage({ group, name }: IListPageProps) {
                         </DropdownMenu>
                       ) : null}
                       {ListAction && <ListAction />}
-                      {allowForm &&
-                        ThunderSDK.isPermitted(
-                          module.create
-                        ) && (
-                          <Button onClick={() => navigate("form")}>
-                            {t("Create")}
-                          </Button>
-                        )}
+                      {allowForm && ThunderSDK.isPermitted(module.create) && (
+                        <Button onClick={() => navigate("form")}>
+                          {t("Create")}
+                        </Button>
+                      )}
                       {!!Cards && (
                         <ToggleGroup
                           value={view}
@@ -547,10 +541,16 @@ export function ListPage({ group, name }: IListPageProps) {
                             }
                           }}
                         >
-                          <ToggleGroupItem value="cards" aria-label="Cards view">
+                          <ToggleGroupItem
+                            value="cards"
+                            aria-label="Cards view"
+                          >
                             <IconLayoutGrid className="size-4" />
                           </ToggleGroupItem>
-                          <ToggleGroupItem value="table" aria-label="Table view">
+                          <ToggleGroupItem
+                            value="table"
+                            aria-label="Table view"
+                          >
                             <IconTable className="size-4" />
                           </ToggleGroupItem>
                         </ToggleGroup>
@@ -686,9 +686,7 @@ export function ListPage({ group, name }: IListPageProps) {
                     //! threw past the success toast and the cache refresh, so the
                     //! list kept showing rows that were already gone.
                     const results = await Promise.allSettled(
-                      ids.map((id: string) =>
-                        module.del({ params: { id } })
-                      )
+                      ids.map((id: string) => module.del({ params: { id } }))
                     )
 
                     const failed = results.filter(

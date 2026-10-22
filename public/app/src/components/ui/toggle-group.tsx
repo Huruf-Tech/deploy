@@ -2,7 +2,10 @@ import * as React from "react"
 
 import { cn } from "@/lib/utils"
 
-interface ToggleGroupProps extends Omit<React.ComponentProps<"div">, "onChange"> {
+interface ToggleGroupProps extends Omit<
+  React.ComponentProps<"div">,
+  "onChange"
+> {
   value?: string
   onValueChange?: (value: string) => void
 }

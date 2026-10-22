@@ -1,7 +1,9 @@
 import type { TRequestOptions } from "../types.js";
 import type { BaseSDK } from "../base.js";
 export type list$query = {
-    scope: "global" | "tenant";
+    scope: "global" | "tenant" | "project";
+    /** Required for the project scope */
+    project?: string | undefined;
 };
 export type list$return = {
     isSecret: boolean;
@@ -19,7 +21,9 @@ export type create$body = {
     kind?: "env" | "file";
     stage?: "build" | "runtime" | "both";
     description?: string | undefined;
-    scope: "global" | "tenant";
+    scope: "global" | "tenant" | "project";
+    /** Required for the project scope */
+    project?: string | undefined;
     key: string;
     value: string;
 };
@@ -34,26 +38,34 @@ export type update$body = {
     kind?: ("env" | "file") | undefined;
     stage?: ("build" | "runtime" | "both") | undefined;
     description?: string | undefined;
-    scope: "global" | "tenant";
+    scope: "global" | "tenant" | "project";
+    /** Required for the project scope */
+    project?: string | undefined;
     value?: string | undefined;
 };
 export type del$params = {
     id?: string;
 };
 export type del$query = {
-    scope: "global" | "tenant";
+    scope: "global" | "tenant" | "project";
+    /** Required for the project scope */
+    project?: string | undefined;
 };
 export type reveal$params = {
     id?: string;
 };
 export type reveal$body = {
-    scope: "global" | "tenant";
+    scope: "global" | "tenant" | "project";
+    /** Required for the project scope */
+    project?: string | undefined;
 };
 export type reveal$return = {
     value: string;
 };
 export type resolve$query = {
     stage?: ("build" | "runtime") | undefined;
+    /** A project's slug: include its variables (they win) */
+    project?: string | undefined;
 };
 export type resolve$return = {
     env: Record<string, string>;

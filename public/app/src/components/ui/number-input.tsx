@@ -3,13 +3,18 @@ import { Input as InputPrimitive } from "@base-ui/react/input"
 
 import { cn } from "@/lib/utils"
 
-function Input({ className, type, onWheel, ...props }: React.ComponentProps<"input">) {
+function Input({
+  className,
+  type,
+  onWheel,
+  ...props
+}: React.ComponentProps<"input">) {
   const handleWheel = (e: React.WheelEvent<HTMLInputElement>) => {
     if (type === "number") {
-      e.currentTarget.blur();
+      e.currentTarget.blur()
     }
-    onWheel?.(e);
-  };
+    onWheel?.(e)
+  }
 
   return (
     <InputPrimitive

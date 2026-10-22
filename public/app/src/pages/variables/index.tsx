@@ -73,7 +73,7 @@ function SecretValue({
     try {
       const revealed = await ThunderSDK.variables.reveal({
         params: { id: variable._id },
-        body: { scope },
+        body: scope,
       })
       setValue(revealed.value)
     } catch (e) {
@@ -122,7 +122,7 @@ function DeleteDialog({
     try {
       await ThunderSDK.variables.del({
         params: { id: variable._id },
-        query: { scope },
+        query: scope,
       })
       toast.success(t("Variable deleted"))
       onDeleted()
@@ -157,15 +157,15 @@ function DeleteDialog({
   )
 }
 
-function VariableTable({ scope }: { scope: TScope }) {
+export function VariableTable({ scope }: { scope: TScope }) {
   const { t } = useTranslation()
   const [editing, setEditing] = React.useState<TVariable | "new" | null>(null)
   const [deleting, setDeleting] = React.useState<TVariable>()
 
   const request = ThunderSDK.useCaching(
-    ["variables", scope],
+    ["variables", scope.scope, scope.project ?? ""],
     async ({ signal }) =>
-      await ThunderSDK.variables.list({ signal, query: { scope } })
+      await ThunderSDK.variables.list({ signal, query: scope })
   )
   const { data, isLoading } = use(request)
   const reload = () => request.invalidate()
@@ -184,7 +184,7 @@ function VariableTable({ scope }: { scope: TScope }) {
 
   return (
     <div className="flex flex-col gap-4">
-      {isLoading ? (
+      {isLoading && !data ? (
         <Skeleton className="h-48 rounded-4xl" />
       ) : !data?.length ? (
         <Empty className="border">
@@ -194,9 +194,13 @@ function VariableTable({ scope }: { scope: TScope }) {
             </EmptyMedia>
             <EmptyTitle>{t("No variables yet")}</EmptyTitle>
             <EmptyDescription>
-              {scope === "tenant"
-                ? t("Shared by everyone in this workspace and its apps.")
-                : t("Yours alone. Every workspace you own uses them.")}
+              {scope.scope === "project"
+                ? t(
+                    "Only this project gets them; they override workspace variables."
+                  )
+                : scope.scope === "tenant"
+                  ? t("Shared by everyone in this workspace and its apps.")
+                  : t("Yours alone. Every workspace you own uses them.")}
             </EmptyDescription>
           </EmptyHeader>
           <EmptyContent>{add}</EmptyContent>
@@ -378,10 +382,10 @@ export default function VariablesPage() {
           <TabsTrigger value="global">{t("My account")}</TabsTrigger>
         </TabsList>
         <TabsContent value="tenant" className="pt-2">
-          <VariableTable scope="tenant" />
+          <VariableTable scope={{ scope: "tenant" }} />
         </TabsContent>
         <TabsContent value="global" className="pt-2">
-          <VariableTable scope="global" />
+          <VariableTable scope={{ scope: "global" }} />
         </TabsContent>
       </Tabs>
 

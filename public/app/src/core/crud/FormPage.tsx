@@ -135,8 +135,7 @@ export function FormPage({ name }: IFormPageProps) {
   //! A module can expose create/update with no schema behind it, so `fields` can
   //! legitimately come back empty (B-02). The root must also be an object: a
   //! root-level array yields unnamed fields that cannot be registered (G-09).
-  const hasFields =
-    fields[0]?.type === "object" && !!fields[0]?.fields?.length
+  const hasFields = fields[0]?.type === "object" && !!fields[0]?.fields?.length
   const onSubmit: SubmitHandler<any> = async (body) => {
     try {
       if (isEditMode) {
@@ -233,7 +232,9 @@ export function FormPage({ name }: IFormPageProps) {
                     <Button
                       type="submit"
                       disabled={
-                        methods.formState.isSubmitting || isFormLoading || !hasFields
+                        methods.formState.isSubmitting ||
+                        isFormLoading ||
+                        !hasFields
                       }
                     >
                       {t("Submit")}

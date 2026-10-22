@@ -1,29 +1,29 @@
-"use client";
+"use client"
 // beui.dev/components/blocks/wallet-card
 
-import {IconEye , IconEyeOff } from "@tabler/icons-react";
-import React, { useState } from "react";
-import { ActionSwapText } from "./action-swap.tsx";
+import { IconEye, IconEyeOff } from "@tabler/icons-react"
+import React, { useState } from "react"
+import { ActionSwapText } from "./action-swap.tsx"
 // import { CurrencySwitcher } from "./currency-switcher";
- import { WalletActions } from "./actions.tsx";
-import { TransactionHistory } from "./transaction-history.tsx";
-import { BalanceDelta } from "./balance-delta.tsx";
-import { SendForm } from "./forms/transfer-form.tsx";
-import { ReceiveForm } from "./forms/receive-form.tsx";
-import { Refresher } from "@/components/refresher";
-import { Container } from "@/core/custom/Container";
-import { use } from "@/core/hooks/use";
-import { getWallets } from "@/core/endpoints/wallet";
-import { Skeleton } from "@/components/ui/skeleton";
-import { cn } from "@/lib/utils";
+import { WalletActions } from "./actions.tsx"
+import { TransactionHistory } from "./transaction-history.tsx"
+import { BalanceDelta } from "./balance-delta.tsx"
+import { SendForm } from "./forms/transfer-form.tsx"
+import { ReceiveForm } from "./forms/receive-form.tsx"
+import { Refresher } from "@/components/refresher"
+import { Container } from "@/core/custom/Container"
+import { use } from "@/core/hooks/use"
+import { getWallets } from "@/core/endpoints/wallet"
+import { Skeleton } from "@/components/ui/skeleton"
+import { cn } from "@/lib/utils"
 import { useTranslation } from "react-i18next"
-import { ThunderSDK } from "thunder-sdk";
-import { defaultCurrency } from "@/core/lib/constants";
+import { ThunderSDK } from "thunder-sdk"
+import { defaultCurrency } from "@/core/lib/constants"
 
 // Unicode bidi isolate marks — تمنع المتصفح من قلب ترتيب الأرقام/الحروف
 // اللاتينية لما تكون جوه container اتجاهه rtl (Arabic UI).
-const LRI = "\u2066"; // Left-to-Right Isolate
-const PDI = "\u2069"; // Pop Directional Isolate
+const LRI = "\u2066" // Left-to-Right Isolate
+const PDI = "\u2069" // Pop Directional Isolate
 
 // لو حابب تزيد عملات زيادة، زيدها هنا.
 const CURRENCY_LABELS_AR: Record<string, string> = {
@@ -31,14 +31,14 @@ const CURRENCY_LABELS_AR: Record<string, string> = {
   USD: "$",
   EUR: "€",
   GBP: "£",
-};
+}
 
 function getCurrencyLabel(currency: string, lang: string) {
-  const code = currency.toUpperCase();
+  const code = currency.toUpperCase()
   if (lang?.startsWith("ar")) {
-    return CURRENCY_LABELS_AR[code] ?? code;
+    return CURRENCY_LABELS_AR[code] ?? code
   }
-  return code;
+  return code
 }
 
 // يرجع الرقم بس (مع الإشارة والفواصل) معزول كـ LTR — بدون العملة، عشان
@@ -47,8 +47,8 @@ function formatNumberOnly(amount: number) {
   const numberStr = amount.toLocaleString(undefined, {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
-  });
-  return `${LRI}${numberStr}${PDI}`;
+  })
+  return `${LRI}${numberStr}${PDI}`
 }
 
 /**
@@ -59,51 +59,50 @@ function formatNumberOnly(amount: number) {
  * to the consumer.
  */
 export function Wallet() {
-  const [balanceHidden, setBalanceHidden] = useState(false);
-  const [sendOpen, setSendOpen] = useState(false);
-  const [receiveOpen, setReceiveOpen] = useState(false);
-  const [isMounting, setIsMounting] = React.useState(true);
+  const [balanceHidden, setBalanceHidden] = useState(false)
+  const [sendOpen, setSendOpen] = useState(false)
+  const [receiveOpen, setReceiveOpen] = useState(false)
+  const [isMounting, setIsMounting] = React.useState(true)
   const { t, i18n } = useTranslation()
-  const walletRequest = React.useMemo(() => getWallets(), []);
-  const { data: walletData, isLoading, refetch } = use(walletRequest);
+  const walletRequest = React.useMemo(() => getWallets(), [])
+  const { data: walletData, isLoading, refetch } = use(walletRequest)
 
   const wallet = (walletData?.results ?? [])[0] as
-    | { balance: number; previousBalance: number; currency: string }
-    | undefined;
+    { balance: number; previousBalance: number; currency: string } | undefined
 
-  const balance = (wallet?.balance ?? 0) / 100;
-  const previousBalance = (wallet?.previousBalance ?? 0) / 100;
-  const defaultChange = balance - previousBalance;
+  const balance = (wallet?.balance ?? 0) / 100
+  const previousBalance = (wallet?.previousBalance ?? 0) / 100
+  const defaultChange = balance - previousBalance
 
   const currencyLabel = getCurrencyLabel(
     wallet?.currency ?? defaultCurrency,
-    i18n.language,
-  );
-  const shownAmount = formatNumberOnly(balance);
-  const maskedBalance = "*".repeat(5);
+    i18n.language
+  )
+  const shownAmount = formatNumberOnly(balance)
+  const maskedBalance = "*".repeat(5)
   const amountClassName = cn(
     "text-3xl font-semibold",
     !isMounting && !balanceHidden && balance < 0
       ? "text-red-600 dark:text-red-400"
-      : "text-foreground",
-  );
+      : "text-foreground"
+  )
 
   React.useEffect(() => {
-    const timer = setTimeout(() => setIsMounting(false), 50);
+    const timer = setTimeout(() => setIsMounting(false), 50)
 
-    return () => clearTimeout(timer);
-  }, []);
+    return () => clearTimeout(timer)
+  }, [])
 
   function onReceive(): void {
-    setReceiveOpen(true);
+    setReceiveOpen(true)
   }
 
   function onSend(): void {
-    setSendOpen(true);
+    setSendOpen(true)
   }
 
   function onDeposit(): void {
-    throw new Error("Function not implemented.");
+    throw new Error("Function not implemented.")
   }
   // function onSwap(): void {
   //   throw new Error("Function not implemented.");
@@ -113,7 +112,11 @@ export function Wallet() {
   // }
 
   return (
-    <Refresher onRefresh={async () => { await refetch(); }}>
+    <Refresher
+      onRefresh={async () => {
+        await refetch()
+      }}
+    >
       <div className="flex h-full min-h-0 flex-1 flex-col overflow-y-auto mask-y-from-98%">
         <Container className="relative flex w-full flex-col gap-3">
           {/* relative anchor so the switcher + search panels span the whole row */}
@@ -133,7 +136,7 @@ export function Wallet() {
                 onClick={() => setBalanceHidden((h) => !h)}
                 aria-label={balanceHidden ? "Show balance" : "Hide balance"}
                 aria-pressed={balanceHidden}
-                className="text-muted-foreground outline-none transition-colors hover:text-foreground"
+                className="text-muted-foreground transition-colors outline-none hover:text-foreground"
               >
                 {balanceHidden ? (
                   <IconEyeOff className="h-3.5 w-3.5" />
@@ -157,11 +160,19 @@ export function Wallet() {
                   <>
                     <div dir="ltr" style={{ unicodeBidi: "isolate" }}>
                       <ActionSwapText
-                        value={isMounting ? "" : (balanceHidden ? "hidden" : shownAmount)}
+                        value={
+                          isMounting
+                            ? ""
+                            : balanceHidden
+                              ? "hidden"
+                              : shownAmount
+                        }
                         animation="cascade"
                         className={amountClassName}
                       >
-                        {isMounting || balanceHidden ? maskedBalance : shownAmount}
+                        {isMounting || balanceHidden
+                          ? maskedBalance
+                          : shownAmount}
                       </ActionSwapText>
                     </div>
                     {!isMounting && !balanceHidden && (
@@ -175,11 +186,19 @@ export function Wallet() {
                     )}
                     <div dir="ltr" style={{ unicodeBidi: "isolate" }}>
                       <ActionSwapText
-                        value={isMounting ? "" : (balanceHidden ? "hidden" : shownAmount)}
+                        value={
+                          isMounting
+                            ? ""
+                            : balanceHidden
+                              ? "hidden"
+                              : shownAmount
+                        }
                         animation="cascade"
                         className={amountClassName}
                       >
-                        {isMounting || balanceHidden ? maskedBalance : shownAmount}
+                        {isMounting || balanceHidden
+                          ? maskedBalance
+                          : shownAmount}
                       </ActionSwapText>
                     </div>
                   </>
@@ -189,19 +208,20 @@ export function Wallet() {
 
             {balanceHidden ? (
               <div className="mt-2 flex h-7 items-center justify-center">
-                <span className="translate-y-0.75 text-sm font-semibold text-muted-foreground leading-none tracking-[0.3em]">
-                
-                </span>
+                <span className="translate-y-0.75 text-sm leading-none font-semibold tracking-[0.3em] text-muted-foreground"></span>
               </div>
             ) : isLoading ? (
               <div className="mt-2 flex h-7 items-center justify-center">
                 <Skeleton className="h-5 w-24" />
               </div>
             ) : (
-              <BalanceDelta balance={balance} initialChange={defaultChange !== 0 ? defaultChange : undefined} />
+              <BalanceDelta
+                balance={balance}
+                initialChange={defaultChange !== 0 ? defaultChange : undefined}
+              />
             )}
           </div>
-          
+
           {ThunderSDK.isPermitted(ThunderSDK.wallets.transfer) && (
             <div className="mt-8">
               <WalletActions
@@ -211,7 +231,7 @@ export function Wallet() {
                 // onSwap={onSwap}
                 // onBuy={onBuy}
               />
-            </div>  
+            </div>
           )}
 
           <div className="mt-6">
@@ -230,5 +250,5 @@ export function Wallet() {
         />
       </div>
     </Refresher>
-  );
+  )
 }

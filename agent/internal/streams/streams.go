@@ -114,6 +114,8 @@ func (m *Manager) run(ctx context.Context, p protocol.StreamOpenPayload, out *ch
 	}
 }
 
+const buildLogGrace = 30 * time.Second
+
 // followBuild sends a build log from the start, then what is appended, and
 // ends once the build has finished and everything is sent.
 func (m *Manager) followBuild(ctx context.Context, deployment string, out *chunker) error {
@@ -123,10 +125,14 @@ func (m *Manager) followBuild(ctx context.Context, deployment string, out *chunk
 	path := m.Builds.LogPath(deployment)
 	var offset int64
 	buf := make([]byte, 32*1024)
+	// The build command may arrive after the stream, in the same poll: wait for it.
+	missingSince := time.Now()
 	for {
 		running := m.Builds.Running(deployment)
 		f, err := os.Open(path)
-		if err != nil && !running {
+		if err == nil || running {
+			missingSince = time.Now()
+		} else if time.Since(missingSince) > buildLogGrace {
 			return errors.New("this server has no build log for that deployment")
 		}
 		read := 0
@@ -144,8 +150,8 @@ func (m *Manager) followBuild(ctx context.Context, deployment string, out *chunk
 			}
 			f.Close()
 		}
-		if !running && read == 0 {
-			return nil
+		if err == nil && !running && read == 0 {
+			return nil // finished, and everything is sent
 		}
 		select {
 		case <-ctx.Done():

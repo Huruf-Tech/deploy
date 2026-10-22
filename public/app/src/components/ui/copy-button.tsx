@@ -1,9 +1,9 @@
-"use client";
+"use client"
 
-import { IconCheck , IconCopy  } from "@tabler/icons-react";
-import { useState } from "react";
-import { ActionSwapIcon } from "@/core/pages/wallet/action-swap";
-import { cn } from "@/lib/utils";
+import { IconCheck, IconCopy } from "@tabler/icons-react"
+import { useState } from "react"
+import { ActionSwapIcon } from "@/core/pages/wallet/action-swap"
+import { cn } from "@/lib/utils"
 
 /**
  * Copies `value` to the clipboard and swaps the copy icon for a check via the
@@ -14,32 +14,32 @@ export function CopyButton({
   value,
   className,
 }: {
-  value: string;
-  className?: string;
+  value: string
+  className?: string
 }) {
-  const [copied, setCopied] = useState(false);
+  const [copied, setCopied] = useState(false)
 
   const copy = async () => {
     try {
-      await navigator.clipboard.writeText(value);
+      await navigator.clipboard.writeText(value)
     } catch {
       // clipboard may be unavailable (insecure context) — swap anyway
     }
-    setCopied(true);
-    window.setTimeout(() => setCopied(false), 1400);
-  };
+    setCopied(true)
+    window.setTimeout(() => setCopied(false), 1400)
+  }
 
   return (
     <button
       type="button"
       aria-label={copied ? "Copied" : "Copy address"}
       onClick={(e) => {
-        e.stopPropagation();
-        copy();
+        e.stopPropagation()
+        copy()
       }}
       className={cn(
-        "inline-flex h-4 w-5 shrink-0 items-center justify-center rounded-lg text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground",
-        className,
+        "inline-flex h-4 w-5 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors outline-none hover:bg-muted hover:text-foreground",
+        className
       )}
     >
       <ActionSwapIcon
@@ -54,5 +54,5 @@ export function CopyButton({
         )}
       </ActionSwapIcon>
     </button>
-  );
+  )
 }

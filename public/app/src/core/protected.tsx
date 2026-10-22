@@ -182,7 +182,7 @@ function ProtectedWithSession({ children }: { children: React.ReactNode }) {
               "/auth?redirect=" + (import.meta.env.BASE_URL || "/")
           }}
         >
-            {t("Sign In")}
+          {t("Sign In")}
         </Button>
       </LoadingScreen>
     )

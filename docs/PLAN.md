@@ -933,6 +933,25 @@ Each phase ends with a **review checkpoint** (demo + code review + approval). Ph
   - A Thunder app and a React app deploy on push to 2 servers with zero failed requests, under both strategies.
   - The second build is visibly faster, and clearing the cache forces a clean install.
   - Rollback needs no rebuild.
+- **Status (done, pending review):**
+  - **Agent:** `build.run` (clone in a throwaway `alpine/git` container, BuildKit build, optional push; build-stage variables only as the `huruf-env` secret; the log stays on the builder and streams on demand), a reconciler (rolling / all at once / stop-first per server; a release that never becomes healthy leaves the old one serving), Caddy routes through its admin API (`/load`, retries on another replica), an embedded DNS server for `<project>.internal`, image cleanup keeping kept releases, the spec persisted for reboots, self-healing every `AGENT_RECONCILE_INTERVAL_MS`. Payloads with secrets are sealed (X25519 → HKDF → AES-GCM; Go and TS interop-tested).
+  - **Control plane:** projects (GitHub, generic Git with deploy keys for SSH URLs, image, one-click template services), releases with encrypted specs (variables snapshotted), deployments (queued, superseded, one active per project by a unique partial index), builds per server or once through a registry, desired state precomputed and sealed per server and read once per poll when newer, the rollout state machine driven by `workload.status` events, auto-revert, deadlines checked on reads, rollback without rebuild, clear build cache, deploy on push, placement fit checks, project variables (with `${{other-project.KEY}}` references), registries.
+  - **UI:** projects list, the new-project wizard (source → build → servers), the project page (deploy / without cache, deployments with a live build log per builder, releases with rollback, logs and shells per container, project variables, settings and danger zone), registries.
+  - **Verified on two real servers** (Docker-in-Docker VMs, installed through the SSH wizard), with a load loop counting failed requests:
+    - Thunder app: rolling 2,632 requests / 0 failed; all at once 1,640 / 0 failed.
+    - React (Vite) app: rolling 2,973 / 0 failed; all at once 1,960 / 0 failed; build-stage `VITE_*` variables reach the bundle; SPA routes fall back to `index.html`.
+    - Second build: Thunder 36 s → 3 s, React 28 s → 6 s. After "clear build cache", `npm ci` runs from scratch (27 s) with a new cache id.
+    - Rollback to release 1: no build, 940 requests / 0 failed.
+    - A release that crashes on start fails the deploy ("crashes on start", with its output) while the old release keeps serving (3,392 / 0 failed).
+    - Registry mode: one build pushed to a password-protected registry, the other server pulled it.
+    - One-click Postgres: healthy through its compose `healthcheck`, a named volume, reachable as `db.internal` from another project.
+    - Agent restart keeps workloads; a deleted container is recreated within one reconcile interval.
+  - **Deploy on push** is verified against a fake GitHub (`tests/github_test.ts`); a local control plane can't receive GitHub webhooks, so a real push needs a public `BASE_URL`.
+  - **Deviations from the plan:**
+    - Compose files are parsed on the control plane with `@std/yaml` (not `compose-go` on the agent): no new Go dependency, and unsupported keys fail before anything reaches a server. Compose services must use images; `build:` in compose isn't supported. Compose from a repository needs a GitHub source.
+    - Generic Git: the builder resolves the branch, so the commit is known after the build.
+    - Per-server builds don't pin the first builder's base-image digest yet.
+    - One build at a time per server.
 
 ### Phase 7 — Private network
 - Optional WireGuard mesh (keys via desired state, reachability probe and matrix), routed container subnets, cross-server DNS.

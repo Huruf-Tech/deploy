@@ -3,9 +3,9 @@
  * Source: https://usehooks-ts.com/react-hook/use-debounce-callback
  */
 
-import { useEffect, useMemo, useRef } from 'react'
-import { debounce } from '../lib/debounce'
-import { useUnmount } from './use-unmount'
+import { useEffect, useMemo, useRef } from "react"
+import { debounce } from "../lib/debounce"
+import { useUnmount } from "./use-unmount"
 
 type DebounceOptions = {
   leading?: boolean
@@ -27,7 +27,7 @@ export type DebouncedState<T extends (...args: any) => ReturnType<T>> = ((
 export function useDebounceCallback<T extends (...args: any) => ReturnType<T>>(
   func: T,
   delay = 500,
-  options?: DebounceOptions,
+  options?: DebounceOptions
 ): DebouncedState<T> {
   const debouncedFunc = useRef<ReturnType<typeof debounce>>(null)
 

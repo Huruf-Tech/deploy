@@ -65,12 +65,9 @@ export interface BreadcrumbProps {
  */
 export function setBreadcrumbTitle(title: string | null) {
   if (typeof window !== "undefined") {
-    window.dispatchEvent(
-      new CustomEvent("breadcrumb-title", { detail: title })
-    )
+    window.dispatchEvent(new CustomEvent("breadcrumb-title", { detail: title }))
   }
 }
-
 
 /**
  * Hook to set custom text or dynamic value in the breadcrumb from page components.
@@ -98,7 +95,6 @@ export function useBreadcrumbTitle(title?: string | null) {
 
 /** @deprecated Alias of `useBreadcrumbTitle`, kept for backwards compatibility. */
 export const useBreadcrumb = useBreadcrumbTitle
-
 
 export function Breadcrumb({
   className,
@@ -158,7 +154,7 @@ export function Breadcrumb({
     <_Breadcrumb
       className={
         className ??
-        "min-w-0 max-w-full overflow-x-auto no-scrollbar scroll-mask-x-from-90%"
+        "no-scrollbar max-w-full min-w-0 overflow-x-auto scroll-mask-x-from-90%"
       }
     >
       <BreadcrumbList className="flex-nowrap whitespace-nowrap">

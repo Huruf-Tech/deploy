@@ -12,11 +12,19 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { cn } from "@/lib/utils"
 import { useTranslation } from "react-i18next"
 import { Container } from "@/core/custom/Container"
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion"
 import { ThunderSDK } from "thunder-sdk"
 import { use } from "@/core/hooks/use"
 import { toast } from "sonner"
-import { fetchNotifications, markNotificationAsRead } from "@/core/endpoints/notification"
+import {
+  fetchNotifications,
+  markNotificationAsRead,
+} from "@/core/endpoints/notification"
 import type { TNotification } from "@/core/types"
 import { SkeletonRepeater } from "@/core/custom/SkeletonRepeater"
 import { getDateGroup, timeAgo } from "@/core/lib/utils"
@@ -30,7 +38,7 @@ function NotificationCardSkeleton() {
     <Card className="overflow-hidden border-l-[3px] border-l-muted-foreground/20 py-0 shadow-none">
       <CardContent className="flex w-full items-center gap-3 px-3 py-3">
         <Skeleton className="size-9 shrink-0 rounded-full sm:size-10" />
-        <div className="min-w-0 flex-1 flex flex-col gap-2">
+        <div className="flex min-w-0 flex-1 flex-col gap-2">
           <Skeleton className="h-3 w-28 rounded sm:w-40" />
           <Skeleton className="h-2.5 w-40 rounded sm:w-56" />
         </div>
@@ -121,10 +129,10 @@ export default function Notifications() {
   const totalCount = filteredNotifications.length
 
   const paginated = React.useMemo(
-    () => filteredNotifications.slice(page * pageSize, page * pageSize + pageSize),
+    () =>
+      filteredNotifications.slice(page * pageSize, page * pageSize + pageSize),
     [filteredNotifications, page, pageSize]
   )
-
 
   const grouped = React.useMemo(() => {
     const groups: Record<string, TNotification[]> = {}
@@ -140,13 +148,15 @@ export default function Notifications() {
     return Object.entries(groups)
   }, [paginated])
 
-  {/*
+  {
+    /*
     const markAllRead = () =>
       setNotifications((prev) => prev.map((n) => ({ ...n, read: true })))
-  */}
+  */
+  }
 
   const markRead = async (id: string) => {
-    if (!tenant || !userId) return;
+    if (!tenant || !userId) return
 
     setNotifications((prev) =>
       prev.map((n) => (n._id === id ? { ...n, read: true } : n))
@@ -161,7 +171,7 @@ export default function Notifications() {
 
   return (
     <div className="flex h-full min-h-0 flex-1 flex-col overflow-y-auto mask-y-from-98%">
-      <Container className="relative flex flex-col gap-4 max-w-3xl">
+      <Container className="relative flex max-w-3xl flex-col gap-4">
         {/* Header */}
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3">
@@ -207,13 +217,13 @@ export default function Notifications() {
               <TabsTrigger
                 key={tab.value}
                 value={tab.value}
-                className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-transparent! px-3 py-1.5 text-xs font-medium text-muted-foreground transition-all data-active:border-border data-active:bg-foreground data-active:text-background data-active:hover:text-white data-active:shadow-sm"
+                className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-transparent! px-3 py-1.5 text-xs font-medium text-muted-foreground transition-all data-active:border-border data-active:bg-foreground data-active:text-background data-active:shadow-sm data-active:hover:text-white"
               >
                 {tab.label}
                 {"count" in tab && tab.count! > 0 && (
                   <Badge
                     variant="default"
-                    className="size-3 rounded-full text-xs p-2.5"
+                    className="size-3 rounded-full p-2.5 text-xs"
                   >
                     {tab.count}
                   </Badge>
@@ -266,73 +276,77 @@ export default function Notifications() {
         )}
 
         {/* Grouped notifications */}
-        {!loading && !error && grouped.map(([date, items]) => (
-          <div key={date} className="flex flex-col gap-2">
-            <div className="flex items-center gap-3">
-              <h2 className="shrink-0 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                {t(date)}
-              </h2>
-              <Separator className="flex-1" />
-            </div>
+        {!loading &&
+          !error &&
+          grouped.map(([date, items]) => (
+            <div key={date} className="flex flex-col gap-2">
+              <div className="flex items-center gap-3">
+                <h2 className="shrink-0 text-xs font-semibold tracking-wider text-muted-foreground uppercase">
+                  {t(date)}
+                </h2>
+                <Separator className="flex-1" />
+              </div>
 
-            <div className="flex flex-col gap-3">
-              {items.map((n) => {
-                return (
-                  <Card
-                    key={n._id}
-                    className={cn(
-                      "overflow-hidden border-l-[3px] py-0 shadow-none transition-all duration-150 hover:shadow-sm",
-                      !n.read && "bg-primary/3"
-                    )}
-                  >
-                    <Accordion
-                      onValueChange={(value) => value && !n.read && markRead(n._id)}
+              <div className="flex flex-col gap-3">
+                {items.map((n) => {
+                  return (
+                    <Card
+                      key={n._id}
+                      className={cn(
+                        "overflow-hidden border-l-[3px] py-0 shadow-none transition-all duration-150 hover:shadow-sm",
+                        !n.read && "bg-primary/3"
+                      )}
                     >
-                      <AccordionItem value={n._id} className="border-none">
-                        <AccordionTrigger className="group w-full px-3 py-3 hover:no-underline">
-                          <CardContent className="flex w-full items-center gap-3 p-0">
-                            <span
-                              className={cn(
-                                "flex size-9 shrink-0 items-center justify-center rounded-full sm:size-10 bg-muted text-muted-foreground"
-                              )}
-                            >
-                              <IconInfoCircle className="size-4 sm:size-5" />
-                            </span>
-
-                            <div className="min-w-0 flex-1 text-left">
-                              <div className="flex items-center gap-2">
-                                <p
-                                  className={cn(
-                                    "truncate text-xs sm:text-sm",
-                                    !n.read
-                                      ? "font-semibold text-foreground"
-                                      : "font-medium text-foreground/80"
-                                  )}
-                                >
-                                  {t(n.data.title)}
-                                </p>
-                                {!n.read && (
-                                  <span className="size-1.5 shrink-0 rounded-full bg-primary" />
+                      <Accordion
+                        onValueChange={(value) =>
+                          value && !n.read && markRead(n._id)
+                        }
+                      >
+                        <AccordionItem value={n._id} className="border-none">
+                          <AccordionTrigger className="group w-full px-3 py-3 hover:no-underline">
+                            <CardContent className="flex w-full items-center gap-3 p-0">
+                              <span
+                                className={cn(
+                                  "flex size-9 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground sm:size-10"
                                 )}
+                              >
+                                <IconInfoCircle className="size-4 sm:size-5" />
+                              </span>
+
+                              <div className="min-w-0 flex-1 text-left">
+                                <div className="flex items-center gap-2">
+                                  <p
+                                    className={cn(
+                                      "truncate text-xs sm:text-sm",
+                                      !n.read
+                                        ? "font-semibold text-foreground"
+                                        : "font-medium text-foreground/80"
+                                    )}
+                                  >
+                                    {t(n.data.title)}
+                                  </p>
+                                  {!n.read && (
+                                    <span className="size-1.5 shrink-0 rounded-full bg-primary" />
+                                  )}
+                                </div>
+                                <p className="mt-0.5 max-w-48 truncate text-xs text-muted-foreground sm:max-w-72 lg:max-w-full">
+                                  {n.data.body}
+                                </p>
                               </div>
-                              <p className="mt-0.5 truncate text-xs max-w-48 sm:max-w-72 lg:max-w-full text-muted-foreground">
+
+                              <small className="flex h-full shrink-0 items-center self-stretch pr-2 text-muted-foreground">
+                                {n.createdAt}
+                              </small>
+                            </CardContent>
+                          </AccordionTrigger>
+
+                          <AccordionContent className="px-3 pb-3">
+                            <div className="ml-12 rounded-lg border border-border/60 bg-muted/40 p-3 sm:ml-13">
+                              <p className="text-xs leading-relaxed text-foreground/80">
                                 {n.data.body}
                               </p>
-                            </div>
 
-                            <small className="flex shrink-0 items-center self-stretch pr-2 text-muted-foreground h-full">
-                              {n.createdAt}
-                            </small>
-                          </CardContent>
-                        </AccordionTrigger>
-
-                        <AccordionContent className="px-3 pb-3">
-                          <div className="ml-12 rounded-lg border border-border/60 bg-muted/40 p-3 sm:ml-13">
-                            <p className="text-xs leading-relaxed text-foreground/80">
-                              {n.data.body}
-                            </p>
-
-                            {/* <div className="mt-3 flex flex-wrap items-center gap-2">
+                              {/* <div className="mt-3 flex flex-wrap items-center gap-2">
                               {n.data.actions?.map((action, i) => (
                                 <Button
                                   key={i}
@@ -355,16 +369,16 @@ export default function Notifications() {
                                 </Button>
                               ))}
                             </div> */}
-                          </div>
-                        </AccordionContent>
-                      </AccordionItem>
-                    </Accordion>
-                  </Card>
-                )
-              })}
+                            </div>
+                          </AccordionContent>
+                        </AccordionItem>
+                      </Accordion>
+                    </Card>
+                  )
+                })}
+              </div>
             </div>
-          </div>
-        ))}
+          ))}
 
         {/* Pagination */}
         {!loading && !error && totalCount > pageSize && (

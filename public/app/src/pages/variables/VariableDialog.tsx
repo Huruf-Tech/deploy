@@ -31,7 +31,11 @@ import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 import { errorMessage } from "@/lib/utils"
 
-export type TScope = "global" | "tenant"
+/** Which variables: the account's, the workspace's, or one project's. */
+export type TScope = {
+  scope: "global" | "tenant" | "project"
+  project?: string
+}
 export type TVariable = Awaited<
   ReturnType<typeof ThunderSDK.variables.list>
 >[number]
@@ -85,11 +89,11 @@ export function VariableDialog({
       if (variable) {
         await ThunderSDK.variables.update({
           params: { id: variable._id },
-          body: { scope, ...settings, ...(keepsSecret ? {} : { value }) },
+          body: { ...scope, ...settings, ...(keepsSecret ? {} : { value }) },
         })
       } else {
         await ThunderSDK.variables.create({
-          body: { scope, key, value, ...settings },
+          body: { ...scope, key, value, ...settings },
         })
       }
       toast.success(variable ? t("Variable saved") : t("Variable added"))

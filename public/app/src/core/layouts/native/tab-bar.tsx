@@ -43,7 +43,9 @@ function Slot({
       )}
 
       <span className="relative flex items-center justify-center">
-        <Icon className={cn("size-[22px] shrink-0", active && "stroke-[2.2]")} />
+        <Icon
+          className={cn("size-[22px] shrink-0", active && "stroke-[2.2]")}
+        />
         {ActionButton && <ActionButton />}
       </span>
 
@@ -103,7 +105,7 @@ export function TabBar({ className }: { className?: string }) {
         //! The bright edge is light catching the top of the material, which is
         //! why it is white rather than `--border` -- and why it is dimmer in
         //! dark mode, where there is less light to catch.
-        "glass rounded-[1.75rem] border border-white/50 shadow-lg shadow-black/5",
+        "rounded-[1.75rem] border border-white/50 glass shadow-lg shadow-black/5",
         "dark:border-white/10 dark:shadow-black/40",
         className
       )}
@@ -125,11 +127,7 @@ export function TabBar({ className }: { className?: string }) {
                   : "text-muted-foreground hover:text-foreground"
               )}
             >
-              <Slot
-                item={item}
-                active={active}
-                flat={!!prefersReducedMotion}
-              />
+              <Slot item={item} active={active} flat={!!prefersReducedMotion} />
             </Link>
           )
         })}

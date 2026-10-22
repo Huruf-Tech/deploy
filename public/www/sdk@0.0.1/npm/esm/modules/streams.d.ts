@@ -10,6 +10,13 @@ export type openLogs$body = {
 export type openLogs$return = {
     session: string;
 };
+export type openBuild$body = {
+    server?: string;
+    deployment: string;
+};
+export type openBuild$return = {
+    session: string;
+};
 export type openMetrics$body = {
     server?: string;
 };
@@ -75,6 +82,8 @@ export declare const streamsModule: (sdk: typeof BaseSDK) => {
     readonly type: {
         openLogs$body: openLogs$body;
         openLogs$return: openLogs$return;
+        openBuild$body: openBuild$body;
+        openBuild$return: openBuild$return;
         openMetrics$body: openMetrics$body;
         openMetrics$return: openMetrics$return;
         openExec$body: openExec$body;
@@ -100,6 +109,17 @@ export declare const streamsModule: (sdk: typeof BaseSDK) => {
         then: <TResult1 = openLogs$return, TResult2 = never>(onfulfilled?: ((value: openLogs$return) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
         catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<openLogs$return | TResult>;
         finally: (onfinally?: (() => void) | null | undefined) => Promise<openLogs$return>;
+    };
+    readonly openBuild: (data: {
+        params?: undefined;
+        query?: undefined;
+        body: openBuild$body;
+    } & TRequestOptions<openBuild$return>) => {
+        readonly raw: Promise<import("axios").AxiosResponse<openBuild$return, any, {}, any>>;
+        readonly data: Promise<openBuild$return>;
+        then: <TResult1 = openBuild$return, TResult2 = never>(onfulfilled?: ((value: openBuild$return) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+        catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<openBuild$return | TResult>;
+        finally: (onfinally?: (() => void) | null | undefined) => Promise<openBuild$return>;
     };
     readonly openMetrics: (data: {
         params?: undefined;

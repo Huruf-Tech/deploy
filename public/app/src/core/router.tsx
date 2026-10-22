@@ -38,8 +38,7 @@ const moduleNames = Array.from(
   new Set([
     ...ThunderSDK.getModuleNames(),
     ...Object.keys(overrideRoutes).filter(
-      (name) =>
-        !ThunderSDK.hasGroup(name) && !BUILTIN_ROUTE_KEYS.includes(name),
+      (name) => !ThunderSDK.hasGroup(name) && !BUILTIN_ROUTE_KEYS.includes(name)
     ),
   ])
 )

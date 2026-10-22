@@ -34,6 +34,8 @@ export type hello$return = {
         jitterPercent: number;
         summaryIntervalMs: number;
         maxBackoffMs: number;
+        /** How often the agent re-checks its workloads against the desired state (self-healing) */
+        reconcileIntervalMs: number;
     };
     server: string;
     status: "pending" | "active" | "rejected";
@@ -59,7 +61,7 @@ export type poll$return = {
     configVersion: string;
     commands: {
         seq: number;
-        type: "ping" | "docker.ensure" | "stream.open" | "stream.close";
+        type: "ping" | "docker.ensure" | "stream.open" | "stream.close" | "build.run" | "server.prune";
         payload: Record<string, unknown>;
     }[];
     /** New terminal input per session, after the cursors in `streams` */
@@ -69,6 +71,12 @@ export type poll$return = {
         cols?: number | undefined;
         rows?: number | undefined;
     }[]> | undefined;
+    /** Only when the version is newer than appliedVersion */
+    desired?: {
+        version: number;
+        /** The DesiredSpec as JSON, sealed to this agent */
+        sealed: string;
+    } | undefined;
 };
 export type config$return = {
     version: string;
@@ -81,6 +89,8 @@ export type config$return = {
         jitterPercent: number;
         summaryIntervalMs: number;
         maxBackoffMs: number;
+        /** How often the agent re-checks its workloads against the desired state (self-healing) */
+        reconcileIntervalMs: number;
     };
 };
 export type events$body = {
@@ -102,6 +112,18 @@ export type events$body = {
             data: string;
             /** The stream ended (exec finished) */
             done?: boolean | undefined;
+            error?: string | undefined;
+        };
+    } | {
+        id: string;
+        type: "workload.status";
+        data: {
+            /** Desired-state version being applied */
+            version: number;
+            project: string;
+            workload: string;
+            release: number;
+            state: "starting" | "healthy" | "failed";
             error?: string | undefined;
         };
     })[];

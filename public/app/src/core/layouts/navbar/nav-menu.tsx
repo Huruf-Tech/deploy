@@ -53,7 +53,7 @@ export function NavMenu({ name, items, onChange }: INavMenuProps) {
         {name && <SidebarGroupLabel>{t(name)}</SidebarGroupLabel>}
         <SidebarMenu>
           {items?.map((item, idx) => {
-            const ButtonComponent = item.button;
+            const ButtonComponent = item.button
             return item.items?.length ? (
               <Collapsible
                 key={item.title + idx}
@@ -80,14 +80,14 @@ export function NavMenu({ name, items, onChange }: INavMenuProps) {
                   <CollapsibleContent>
                     <SidebarMenuSub>
                       {item.items?.map((subItem, subIdx) => {
-                        const SubButtonComponent = subItem.button;
+                        const SubButtonComponent = subItem.button
                         return (
                           <SidebarMenuSubItem key={subItem.title + subIdx}>
                             <SidebarMenuSubButton
                               render={
                                 <Button
                                   variant="ghost"
-                                  className="justify-start relative"
+                                  className="relative justify-start"
                                   onClick={() => {
                                     if (isMobile) setOpenMobile(false)
                                     onChange?.(subItem.path || "#")
@@ -113,7 +113,7 @@ export function NavMenu({ name, items, onChange }: INavMenuProps) {
                   render={
                     <Button
                       variant="ghost"
-                      className="justify-start relative"
+                      className="relative justify-start"
                       onClick={() => {
                         if (isMobile) setOpenMobile(false)
                         onChange?.(item.path || "#")

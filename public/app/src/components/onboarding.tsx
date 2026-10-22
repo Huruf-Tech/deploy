@@ -153,10 +153,7 @@ export function Onboarding() {
                   <p className="text-sm opacity-90">{t(screen.description)}</p>
 
                   {current + 1 === Screens.length ? (
-                    <Button
-                      className="mt-2 w-full"
-                      onClick={dismiss}
-                    >
+                    <Button className="mt-2 w-full" onClick={dismiss}>
                       {t("Get Started")}
                     </Button>
                   ) : (

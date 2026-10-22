@@ -8,6 +8,8 @@ var _a;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ThunderSDK = void 0;
 const base_js_1 = require("./base.js");
+const projectGroups_js_1 = require("./modules/projectGroups.js");
+const projects_js_1 = require("./modules/projects.js");
 const gitIntegrations_js_1 = require("./modules/gitIntegrations.js");
 const githubHooks_js_1 = require("./modules/githubHooks.js");
 const templates_js_1 = require("./modules/templates.js");
@@ -15,6 +17,7 @@ const variables_js_1 = require("./modules/variables.js");
 const home_js_1 = require("./modules/home.js");
 const index_js_1 = require("./modules/index.js");
 const agents_js_1 = require("./modules/agents.js");
+const registries_js_1 = require("./modules/registries.js");
 const servers_js_1 = require("./modules/servers.js");
 const streams_js_1 = require("./modules/streams.js");
 const _well_known_js_1 = require("./modules/.well-known.js");
@@ -110,6 +113,8 @@ Object.defineProperty(ThunderSDK, "_moduleNames", {
     configurable: true,
     writable: true,
     value: [
+        "projectGroups",
+        "projects",
         "gitIntegrations",
         "githubHooks",
         "templates",
@@ -117,6 +122,7 @@ Object.defineProperty(ThunderSDK, "_moduleNames", {
         "home",
         "index",
         "agents",
+        "registries",
         "servers",
         "streams",
         "wellKnown",
@@ -137,6 +143,18 @@ Object.defineProperty(ThunderSDK, "_moduleNames", {
         "walletLedgers",
         "wallets",
     ]
+});
+Object.defineProperty(ThunderSDK, "projectGroups", {
+    enumerable: true,
+    configurable: true,
+    writable: true,
+    value: (0, projectGroups_js_1.projectGroupsModule)(_a)
+});
+Object.defineProperty(ThunderSDK, "projects", {
+    enumerable: true,
+    configurable: true,
+    writable: true,
+    value: (0, projects_js_1.projectsModule)(_a)
 });
 Object.defineProperty(ThunderSDK, "gitIntegrations", {
     enumerable: true,
@@ -179,6 +197,12 @@ Object.defineProperty(ThunderSDK, "agents", {
     configurable: true,
     writable: true,
     value: (0, agents_js_1.agentsModule)(_a)
+});
+Object.defineProperty(ThunderSDK, "registries", {
+    enumerable: true,
+    configurable: true,
+    writable: true,
+    value: (0, registries_js_1.registriesModule)(_a)
 });
 Object.defineProperty(ThunderSDK, "servers", {
     enumerable: true,

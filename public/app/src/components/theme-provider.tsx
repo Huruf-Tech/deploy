@@ -83,15 +83,17 @@ export function ThemeProvider({
     return defaultTheme
   })
 
-  const [resolvedTheme, setResolvedTheme] = React.useState<ResolvedTheme>(() => {
-    const storedTheme = localStorage.getItem(storageKey)
+  const [resolvedTheme, setResolvedTheme] = React.useState<ResolvedTheme>(
+    () => {
+      const storedTheme = localStorage.getItem(storageKey)
 
-    if (isTheme(storedTheme)) {
-      return resolveTheme(storedTheme)
+      if (isTheme(storedTheme)) {
+        return resolveTheme(storedTheme)
+      }
+
+      return resolveTheme(defaultTheme)
     }
-
-    return resolveTheme(defaultTheme)
-  })
+  )
 
   const applyTheme = React.useCallback(
     (nextTheme: Theme) => {

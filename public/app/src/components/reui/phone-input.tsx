@@ -90,10 +90,8 @@ function InputComponent({
     <Input
       className={cn(
         "ring-none! rounded-s-none outline-none! focus:z-1",
-        variant === "sm" &&
-          "h-7",
-        variant === "lg" &&
-          "h-9",
+        variant === "sm" && "h-7",
+        variant === "lg" && "h-9",
         className
       )}
       {...props}
@@ -142,7 +140,7 @@ function CountrySelect({
             variant="outline"
             size={variant}
             className={cn(
-              "rounded-s-3xl rounded-e-none flex gap-1 border-e-0 px-2.5 py-0 leading-none hover:bg-transparent focus:z-10 data-pressed:bg-transparent",
+              "flex gap-1 rounded-s-3xl rounded-e-none border-e-0 px-2.5 py-0 leading-none hover:bg-transparent focus:z-10 data-pressed:bg-transparent",
               disabled && "opacity-50"
             )}
             disabled={disabled}
@@ -168,7 +166,7 @@ function CountrySelect({
           value={searchValue}
           onChange={(e) => setSearchValue(e.target.value)}
           showTrigger={false}
-          className="border-input focus-visible:border-border rounded-none border-0 px-0 py-2.5 shadow-none ring-0! outline-none! focus-visible:ring-0 focus-visible:ring-offset-0"
+          className="rounded-none border-0 border-input px-0 py-2.5 shadow-none ring-0! outline-none! focus-visible:border-border focus-visible:ring-0 focus-visible:ring-offset-0"
         />
         <ComboboxSeparator />
         <ComboboxEmpty className="px-4 py-2.5 text-sm">
@@ -190,7 +188,7 @@ function CountrySelect({
                         countryName={item.label}
                       />
                       <span className="flex-1 text-sm">{item.label}</span>
-                      <span className="text-foreground/50 text-sm">
+                      <span className="text-sm text-foreground/50">
                         {`+${BasePhoneInput.getCountryCallingCode(item.value)}`}
                       </span>
                     </ComboboxItem>

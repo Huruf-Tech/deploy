@@ -178,7 +178,10 @@ export function FilterValueDateDisplay({ filter }: { filter?: TValue }) {
    */
   const formatted = (() => {
     try {
-      if (value instanceof Date || (Array.isArray(value) && value.length === 1)) {
+      if (
+        value instanceof Date ||
+        (Array.isArray(value) && value.length === 1)
+      ) {
         return format(value instanceof Date ? value : value[0], "MMM d, yyyy")
       }
 

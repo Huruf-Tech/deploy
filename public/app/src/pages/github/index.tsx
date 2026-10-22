@@ -418,7 +418,7 @@ export default function GitHubPage() {
         {!!data?.length && connect}
       </div>
 
-      {isLoading ? (
+      {isLoading && !data ? (
         <Skeleton className="h-48 rounded-4xl" />
       ) : !data?.length ? (
         <Empty className="border">

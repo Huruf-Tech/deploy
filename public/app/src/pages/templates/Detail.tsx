@@ -51,7 +51,7 @@ import { CloneDialog, TemplateIcon } from "./shared"
 
 type TDetail = Awaited<ReturnType<typeof ThunderSDK.templates.get>>
 type TContent = TDetail["content"]
-type TInput = TContent["inputs"][number]
+export type TInput = TContent["inputs"][number]
 
 const Code = ({ children }: { children: string }) => (
   <div className="relative rounded-2xl bg-muted/50">
@@ -176,7 +176,8 @@ function SourceEditor({
   )
 }
 
-function InputField({
+/** One template input as a form field (also used by the project wizard). */
+export function InputField({
   input,
   value,
   onChange,
@@ -388,7 +389,7 @@ export default function TemplateDetail() {
         query: version ? { version } : {},
       })
   )
-  const { data, isLoading } = use(request)
+  const { data } = use(request)
   const versions = ThunderSDK.useCaching(
     ["templates", id, "versions"],
     async ({ signal }) =>
@@ -397,7 +398,7 @@ export default function TemplateDetail() {
   const { data: history } = use(versions)
   useBreadcrumbTitle(data?.template.name)
 
-  if (isLoading || !data) {
+  if (!data) {
     return (
       <Container className="flex flex-col gap-4 py-4">
         <Skeleton className="h-16 rounded-3xl" />

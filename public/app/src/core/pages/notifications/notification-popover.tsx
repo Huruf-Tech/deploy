@@ -177,7 +177,11 @@ export function NotificationPopover({ userId }: NotificationPopoverProps) {
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger
         render={
-          <Button variant="outline" size="icon-sm" aria-label={t("Notifications")}>
+          <Button
+            variant="outline"
+            size="icon-sm"
+            aria-label={t("Notifications")}
+          >
             <IconBell className="size-4" />
             {unreadCount > 0 && (
               <span className="absolute -inset-e-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-semibold text-destructive-foreground">

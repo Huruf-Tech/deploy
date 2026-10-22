@@ -65,6 +65,7 @@ export default new Router("/api", function projects(router) {
       kind: z.enum(["app", "service"]),
       status: $status,
       source: z.string().describe("Short description, e.g. acme/shop@main"),
+      sourceType: z.enum(["github", "git", "image", "template"]),
       servers: z.number(),
       publicPort: z.number().optional(),
       release: z.number().optional(),
@@ -128,6 +129,7 @@ export default new Router("/api", function projects(router) {
               : p.source.type === "image"
               ? p.source.image
               : "template",
+            sourceType: p.source.type,
             servers: p.servers.length,
             publicPort: p.publicPort,
             release: releases.find((r) => r._id.equals(p.activeRelease!))
@@ -192,7 +194,11 @@ export default new Router("/api", function projects(router) {
         z.union([z.string(), z.number(), z.boolean()]),
       ),
       runtime: $projectRuntime,
-      servers: z.array(z.object({ _id: z.string(), name: z.string() })),
+      servers: z.array(z.object({
+        _id: z.string(),
+        name: z.string(),
+        publicIp: z.string().optional(),
+      })),
       placedOn: z.array(z.string()),
       replicasPerServer: z.number(),
       publicPort: z.number().optional(),
@@ -229,10 +235,13 @@ export default new Router("/api", function projects(router) {
             { projection: { number: 1, commit: 1, services: 1 } },
           )
           : null;
-        const serverNames = await names([
-          ...project.servers,
-          ...project.placedOn,
-        ]);
+        const serverDocs = await serverModel.find(
+          { _id: { $in: [...project.servers, ...project.placedOn] } },
+          { projection: { name: 1, "inventory.publicIp": 1 } },
+        ).toArray();
+        const serverNames = new Map(
+          serverDocs.map((s) => [s._id.toHexString(), s.name]),
+        );
 
         // Container names follow the agent's scheme: huruf-<workload>-<release>-<replica>.
         const containers = !release
@@ -260,10 +269,16 @@ export default new Router("/api", function projects(router) {
           };
         return Response.json({
           ...rest,
-          servers: project.servers.map((s) => ({
-            _id: s,
-            name: serverNames.get(s.toHexString()) ?? "Removed server",
-          })),
+          servers: project.servers.map((s) => {
+            const doc = serverDocs.find((d) => d._id.equals(s));
+            return {
+              _id: s,
+              name: doc?.name ?? "Removed server",
+              ...(doc?.inventory.publicIp
+                ? { publicIp: doc.inventory.publicIp }
+                : {}),
+            };
+          }),
           ...(release
             ? {
               release: {

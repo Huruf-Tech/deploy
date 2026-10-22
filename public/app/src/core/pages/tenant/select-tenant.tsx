@@ -46,7 +46,6 @@ import {
 } from "@/components/ui/select"
 import { cn } from "@/lib/utils"
 
-
 // delay controls
 const TENANT_LIST_REVEAL_START_DELAY_SECONDS = 0.08
 const TENANT_ITEM_REVEAL_STAGGER_SECONDS = 0.08
@@ -146,7 +145,9 @@ export function SelectTenant() {
                 <img src={Logo} alt="Logo" className="h-5 w-auto shrink-0" />
               </div>
               <CardTitle>{t("Select Tenant")}</CardTitle>
-              <CardDescription>{t("Choose a tenant to proceed")}</CardDescription>
+              <CardDescription>
+                {t("Choose a tenant to proceed")}
+              </CardDescription>
             </div>
 
             <div className="flex w-full items-center justify-end">
@@ -181,7 +182,7 @@ export function SelectTenant() {
                         className={cn(
                           "cursor-pointer transition-colors",
                           isFirst ? "rounded-b-lg" : "",
-                          isLast ? "rounded-t-lg" : "",
+                          isLast ? "rounded-t-lg" : ""
                         )}
                         onClick={() => navigate(`/${tenant._id}`)}
                       >
@@ -211,7 +212,9 @@ export function SelectTenant() {
                             variant={"link"}
                             onClick={(e) => {
                               e.stopPropagation()
-                              const authUrl = getAuthUrl(`/?tab=members&tenant=${tenant._id}`)
+                              const authUrl = getAuthUrl(
+                                `/?tab=members&tenant=${tenant._id}`
+                              )
 
                               window.location.href = authUrl.toString()
                             }}
@@ -260,7 +263,10 @@ export function SelectTenant() {
                                   { label: t("Edit"), value: "edit" },
                                   { label: t("Delete"), value: "delete" },
                                 ].map((item) => (
-                                  <SelectItem key={item.value} value={item.value}>
+                                  <SelectItem
+                                    key={item.value}
+                                    value={item.value}
+                                  >
                                     {item.label}
                                   </SelectItem>
                                 ))}
@@ -277,7 +283,9 @@ export function SelectTenant() {
           </CardContent>
           <CardFooter className="text-center">
             <small className="text-muted-foreground">
-              {t("Tenant selection is required so that you can access the appropriate resources and settings.")}
+              {t(
+                "Tenant selection is required so that you can access the appropriate resources and settings."
+              )}
             </small>
           </CardFooter>
         </Card>
@@ -350,4 +358,3 @@ function CardSkeleton() {
     </Card>
   )
 }
-

@@ -1,22 +1,22 @@
 /* eslint-disable react-refresh/only-export-components */
-import React from "react";
-import { createBrowserRouter } from "react-router";
-import { Toaster } from "sonner";
-import { useTheme } from "@/components/theme-provider";
+import React from "react"
+import { createBrowserRouter } from "react-router"
+import { Toaster } from "sonner"
+import { useTheme } from "@/components/theme-provider"
 
 import {
   coreLayouts,
   type TCoreLayoutName,
   type TLayoutComponent,
   type TLayoutLoader,
-} from "@/core/layouts/registry";
-import { layouts as customLayouts } from "@/overrides/layouts";
+} from "@/core/layouts/registry"
+import { layouts as customLayouts } from "@/overrides/layouts"
 
 export interface ILayoutContext {
-  router: ReturnType<typeof createBrowserRouter>;
+  router: ReturnType<typeof createBrowserRouter>
 }
 
-const LayoutContext = React.createContext<ILayoutContext | null>(null);
+const LayoutContext = React.createContext<ILayoutContext | null>(null)
 
 export interface ILayoutProps {
   /**
@@ -24,22 +24,22 @@ export interface ILayoutProps {
    * the lazy load entirely. Use it when the choice is made in code; register in
    * `src/overrides/layouts.ts` instead when it should follow the env var.
    */
-  layout?: TLayoutComponent;
-  router: ReturnType<typeof createBrowserRouter>;
-  children: React.ReactNode;
+  layout?: TLayoutComponent
+  router: ReturnType<typeof createBrowserRouter>
+  children: React.ReactNode
 }
 
 /** Used when `VITE_APP_LAYOUT` is unset, or names a layout nobody registered. */
-const DEFAULT_LAYOUT: TCoreLayoutName = "navbar";
+const DEFAULT_LAYOUT: TCoreLayoutName = "navbar"
 
 function resolveLayout(): TLayoutLoader {
-  const name = import.meta.env.VITE_APP_LAYOUT || DEFAULT_LAYOUT;
+  const name = import.meta.env.VITE_APP_LAYOUT || DEFAULT_LAYOUT
 
   //! The project's registry is consulted first, so a layout can take over a
   //! built-in name rather than having to be called something else everywhere.
-  const loader = customLayouts[name] ?? coreLayouts[name as TCoreLayoutName];
+  const loader = customLayouts[name] ?? coreLayouts[name as TCoreLayoutName]
 
-  if (loader) return loader;
+  if (loader) return loader
 
   //! A typo in an env var should not be a white screen, and it should not be
   //! silence either -- the app comes up on the default layout and says why.
@@ -51,10 +51,10 @@ function resolveLayout(): TLayoutLoader {
         Object.keys(customLayouts).join(", ") || "none"
       }.`,
       `Falling back to "${DEFAULT_LAYOUT}".`,
-    ].join(" "),
-  );
+    ].join(" ")
+  )
 
-  return coreLayouts[DEFAULT_LAYOUT];
+  return coreLayouts[DEFAULT_LAYOUT]
 }
 
 //! `React.lazy` holds the factory until the component first renders, so passing
@@ -62,23 +62,23 @@ function resolveLayout(): TLayoutLoader {
 //! module scope because a lazy component created during render is a new
 //! component type on every render, which would remount the entire app.
 const ConfiguredLayout = React.lazy(async () => {
-  const loaded = await resolveLayout()();
-  const Layout = loaded.Layout ?? loaded.default;
+  const loaded = await resolveLayout()()
+  const Layout = loaded.Layout ?? loaded.default
 
   if (!Layout) {
     throw new Error(
       "[thunder-ui] A registered layout module exported neither `Layout` nor a " +
-        "default export. See src/overrides/layouts.ts.",
-    );
+        "default export. See src/overrides/layouts.ts."
+    )
   }
 
-  return { default: Layout };
-});
+  return { default: Layout }
+})
 
 export function LayoutProvider({ children, layout, router }: ILayoutProps) {
-  const { resolvedTheme } = useTheme();
+  const { resolvedTheme } = useTheme()
 
-  const Layout = layout ?? ConfiguredLayout;
+  const Layout = layout ?? ConfiguredLayout
 
   return (
     <LayoutContext.Provider value={{ router }}>
@@ -106,15 +106,15 @@ export function LayoutProvider({ children, layout, router }: ILayoutProps) {
         }}
       />
     </LayoutContext.Provider>
-  );
+  )
 }
 
 export const useLayout = () => {
-  const context = React.useContext(LayoutContext);
+  const context = React.useContext(LayoutContext)
 
   if (!context) {
-    throw new Error("useLayout must be used within a LayoutProvider");
+    throw new Error("useLayout must be used within a LayoutProvider")
   }
 
-  return context;
-};
+  return context
+}

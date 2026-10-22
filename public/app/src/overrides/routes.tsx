@@ -1,7 +1,10 @@
 import { Outlet } from "react-router"
 import {
+  IconBox,
   IconBraces,
   IconBrandGithub,
+  IconFolders,
+  IconRocket,
   IconTemplate,
   IconLock,
   IconShieldCheck,
@@ -16,6 +19,10 @@ import Variables from "@/pages/variables"
 import GitHub from "@/pages/github"
 import Templates from "@/pages/templates"
 import TemplateDetail from "@/pages/templates/Detail"
+import Projects from "@/pages/projects"
+import NewProject from "@/pages/projects/NewProject"
+import ProjectDetail from "@/pages/projects/Detail"
+import Registries from "@/pages/registries"
 
 /** `users` is root-only, so it doubles as the admin check for the Admin group. */
 const isAdmin = () => ThunderSDK.isPermitted("users", "get")
@@ -51,7 +58,7 @@ export const routes: TRoutesOverride = {
   wallets: { merge: true, display: false },
   walletLedgers: { merge: true, display: false },
 
-  servers: { merge: true, name: "Servers" },
+  servers: { merge: true, name: "Servers", priority: 0 },
 
   // A custom page: the backend router is not a createCRUD, so nothing is generated.
   variables: {
@@ -61,6 +68,37 @@ export const routes: TRoutesOverride = {
     icon: IconBraces,
     Component: Variables,
     display: () => ThunderSDK.isPermitted("variables", "list"),
+  },
+
+  // PLAN §15.2 Applications group.
+  projects: {
+    name: "Projects",
+    path: "projects",
+    group: "Applications",
+    icon: IconRocket,
+    priority: 0,
+    display: () => ThunderSDK.isPermitted("projects", "list"),
+    Component: () => <Outlet />,
+    children: [
+      { index: true, display: false, Component: Projects },
+      { path: "new", display: false, Component: NewProject },
+      { path: ":id", display: false, Component: ProjectDetail },
+    ],
+  },
+  projectGroups: {
+    merge: true,
+    name: "Groups",
+    icon: IconFolders,
+    priority: 1,
+  },
+  registries: {
+    name: "Registries",
+    path: "registries",
+    group: "Infrastructure",
+    icon: IconBox,
+    priority: 1,
+    display: () => ThunderSDK.isPermitted("registries", "list"),
+    Component: Registries,
   },
 
   // Custom pages (PLAN §15.2 Build group); GitHub redirects back to build/gitIntegrations.
@@ -87,6 +125,7 @@ export const routes: TRoutesOverride = {
   // GitHub's callbacks; nothing to show in the dashboard.
   githubHooks: { display: false },
 
+  Applications: { merge: true, priority: 5 },
   Infrastructure: { merge: true, priority: 10 },
   Build: { merge: true, priority: 15 },
   Configuration: { merge: true, priority: 20 },
