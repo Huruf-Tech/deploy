@@ -188,9 +188,11 @@ func ensureNetwork(ctx context.Context, p Payload) (note string, err error) {
 	return "", nil
 }
 
-// ensureWireGuardTools installs `wg` (the kernel module ships with Linux 5.6+).
+// ensureWireGuardTools installs `wg` and `ip` (the kernel module ships with Linux 5.6+).
 func ensureWireGuardTools(ctx context.Context) string {
-	if _, err := exec.LookPath("wg"); err == nil {
+	_, wgErr := exec.LookPath("wg")
+	_, ipErr := exec.LookPath("ip")
+	if wgErr == nil && ipErr == nil {
 		return ""
 	}
 	if _, err := exec.LookPath("apt-get"); err != nil {
@@ -198,7 +200,7 @@ func ensureWireGuardTools(ctx context.Context) string {
 	}
 	install, cancel := context.WithTimeout(ctx, 5*time.Minute)
 	defer cancel()
-	if _, err := run(install, "sh", "-c", "DEBIAN_FRONTEND=noninteractive apt-get install -y wireguard-tools || (apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y wireguard-tools)"); err != nil {
+	if _, err := run(install, "sh", "-c", "DEBIAN_FRONTEND=noninteractive apt-get install -y wireguard-tools iproute2 || (apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y wireguard-tools iproute2)"); err != nil {
 		return "Installing wireguard-tools failed: " + err.Error()
 	}
 	return "wireguard-tools installed"

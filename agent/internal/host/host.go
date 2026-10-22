@@ -4,6 +4,7 @@ package host
 import (
 	"bufio"
 	"context"
+	"net"
 	"os"
 	"os/exec"
 	"runtime"
@@ -27,9 +28,22 @@ func Inventory(agentVersion string) protocol.Inventory {
 		CpuCores:      int64(runtime.NumCPU()),
 		Memory:        mem["MemTotal"],
 		Disk:          total,
+		PrivateIp:     privateIP(),
 		DockerVersion: dockerVersion(),
 		AgentVersion:  agentVersion,
 	}
+}
+
+// privateIP is the address of the interface holding the default route: a UDP
+// "dial" picks it without sending anything. Mesh peers on the same network
+// reach the server there (PLAN §8.2).
+func privateIP() string {
+	conn, err := net.Dial("udp", "192.0.2.1:9")
+	if err != nil {
+		return ""
+	}
+	defer conn.Close()
+	return conn.LocalAddr().(*net.UDPAddr).IP.String()
 }
 
 // Sampler computes CPU usage between consecutive calls from /proc/stat.

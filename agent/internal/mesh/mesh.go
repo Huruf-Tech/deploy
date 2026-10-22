@@ -42,6 +42,7 @@ type Mesh struct {
 	Emit func(protocol.MeshStatusEvent)
 
 	mu       sync.Mutex
+	last     *protocol.DesiredSpec // retried while it fails
 	spec     *protocol.MeshSpec
 	registry *protocol.DesiredSpecRegistry
 	reported map[string]bool
@@ -84,7 +85,7 @@ func (m *Mesh) privateKey() ([]byte, error) {
 // mesh tears the interface down.
 func (m *Mesh) Apply(ctx context.Context, spec protocol.DesiredSpec) error {
 	m.mu.Lock()
-	m.spec, m.registry = spec.Mesh, spec.Registry
+	m.last, m.spec, m.registry = &spec, spec.Mesh, spec.Registry
 	m.mu.Unlock()
 
 	err := m.applyMesh(ctx, spec.Mesh)
@@ -261,6 +262,14 @@ func (m *Mesh) Run(ctx context.Context, interval func() time.Duration) {
 		case <-ctx.Done():
 			return
 		case <-time.After(interval()):
+			m.mu.Lock()
+			retry := m.lastErr != "" && m.last != nil
+			last := m.last
+			m.mu.Unlock()
+			if retry {
+				_ = m.Apply(ctx, *last) // e.g. wireguard-tools arrived with host setup
+				continue
+			}
 			m.report(false)
 		}
 	}
@@ -326,7 +335,9 @@ func latestHandshakes(ctx context.Context) map[string]time.Time {
 	return result
 }
 
-// PeerAddresses are the mesh IPs of the peers (DNS asks them for .internal names).
+// PeerAddresses are the mesh IPs of reachable peers (DNS asks them for
+// .internal names). Unreachable ones are skipped, so they cost lookups no
+// timeout; until the first report, every peer is tried.
 func (m *Mesh) PeerAddresses() []string {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -335,7 +346,9 @@ func (m *Mesh) PeerAddresses() []string {
 	}
 	ips := make([]string, 0, len(m.spec.Peers))
 	for _, peer := range m.spec.Peers {
-		ips = append(ips, peer.MeshIp)
+		if reachable, known := m.reported[peer.Server]; !known || reachable {
+			ips = append(ips, peer.MeshIp)
+		}
 	}
 	return ips
 }

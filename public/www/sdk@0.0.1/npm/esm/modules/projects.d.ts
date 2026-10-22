@@ -83,6 +83,7 @@ export type create$body = {
     }[];
     deployStrategy?: ("rolling" | "allAtOnce" | "stopFirst") | undefined;
     autoDeploy?: boolean;
+    needsPrivateNetwork?: boolean;
     distribution?: "auto" | "perServer" | "registry";
     registry?: string | undefined;
     /** Required for rolling or all-at-once with local volumes (PLAN §10) */
@@ -178,6 +179,9 @@ export type get$return = {
     deployKeyPublic?: string | undefined;
     /** The pasted compose file */
     compose?: string | undefined;
+    needsPrivateNetwork?: boolean | undefined;
+    /** Servers that can't reach the projects this one uses */
+    networkWarnings: string[];
     release?: {
         _id: string;
         number: number;
@@ -218,6 +222,7 @@ export type update$body = {
     publicPort?: (number | null) | undefined;
     deployStrategy?: ("rolling" | "allAtOnce" | "stopFirst") | undefined;
     autoDeploy?: boolean | undefined;
+    needsPrivateNetwork?: boolean | undefined;
     distribution?: ("auto" | "perServer" | "registry") | undefined;
     registry?: (string | null) | undefined;
     branch?: string | undefined;

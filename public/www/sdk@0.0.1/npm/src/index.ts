@@ -15,6 +15,7 @@ import { variablesModule } from "./modules/variables.js";
 import { homeModule } from "./modules/home.js";
 import { indexModule } from "./modules/index.js";
 import { agentsModule } from "./modules/agents.js";
+import { networksModule } from "./modules/networks.js";
 import { registriesModule } from "./modules/registries.js";
 import { serversModule } from "./modules/servers.js";
 import { streamsModule } from "./modules/streams.js";
@@ -50,6 +51,7 @@ export class ThunderSDK extends BaseSDK {
         "home",
         "index",
         "agents",
+        "networks",
         "registries",
         "servers",
         "streams",
@@ -81,6 +83,7 @@ export class ThunderSDK extends BaseSDK {
     static home = homeModule(this);
     static index = indexModule(this);
     static agents = agentsModule(this);
+    static networks = networksModule(this);
     static registries = registriesModule(this);
     static servers = serversModule(this);
     static streams = streamsModule(this);

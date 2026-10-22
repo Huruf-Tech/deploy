@@ -4,6 +4,7 @@ import { useLocation, useNavigate, useParams } from "react-router"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
 import {
+  IconAlertTriangle,
   IconChevronDown,
   IconExternalLink,
   IconFileText,
@@ -15,6 +16,7 @@ import {
 import { Page } from "@/components/page"
 import { use } from "@/core/hooks/use"
 import { useBreadcrumbTitle } from "@/core/layouts/shared/breadcrumb"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { ButtonGroup } from "@/components/ui/button-group"
@@ -287,6 +289,9 @@ function Settings({
     project.runtime.memLimitMb ? String(project.runtime.memLimitMb) : ""
   )
   const [compose, setCompose] = React.useState(project.compose ?? "")
+  const [needsNetwork, setNeedsNetwork] = React.useState(
+    !!project.needsPrivateNetwork
+  )
   const [busy, setBusy] = React.useState(false)
   const [deleting, setDeleting] = React.useState(false)
   const [confirm, setConfirm] = React.useState("")
@@ -304,6 +309,7 @@ function Settings({
           deployStrategy: strategy,
           acknowledgeVolumeRisk: strategy !== project.deployStrategy,
           autoDeploy,
+          needsPrivateNetwork: needsNetwork,
           ...(project.compose !== undefined && compose !== project.compose
             ? { compose }
             : {}),
@@ -491,6 +497,17 @@ function Settings({
             />
           </Field>
         </div>
+
+        <Field orientation="horizontal">
+          <FieldLabel htmlFor="s-network">
+            {t("Talks to projects on other servers")}
+          </FieldLabel>
+          <Switch
+            id="s-network"
+            checked={needsNetwork}
+            onCheckedChange={setNeedsNetwork}
+          />
+        </Field>
 
         {project.source.type === "compose" && (
           <Field>
@@ -713,6 +730,19 @@ export default function ProjectDetail() {
         </TabsList>
 
         <TabsContent value="overview" className="flex flex-col gap-6 pt-4">
+          {project.networkWarnings.length > 0 && (
+            <Alert variant="destructive">
+              <IconAlertTriangle />
+              <AlertTitle>{t("Can't reach what it uses")}</AlertTitle>
+              <AlertDescription>
+                <ul className="list-disc ps-4">
+                  {project.networkWarnings.map((w) => (
+                    <li key={w}>{w}</li>
+                  ))}
+                </ul>
+              </AlertDescription>
+            </Alert>
+          )}
           <div className="grid gap-4 md:grid-cols-3">
             <Card>
               <CardHeader>

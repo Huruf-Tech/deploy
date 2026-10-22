@@ -136,6 +136,15 @@ export type events$body = {
             state: "starting" | "healthy" | "failed";
             error?: string | undefined;
         };
+    } | {
+        id: string;
+        type: "mesh.status";
+        data: {
+            publicKey: string;
+            /** server -> reachable (a WireGuard handshake in the last 3 minutes) */
+            peers: Record<string, boolean>;
+            error?: string | undefined;
+        };
     })[];
 };
 export type events$return = {

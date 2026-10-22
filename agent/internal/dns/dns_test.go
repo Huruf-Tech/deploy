@@ -57,8 +57,10 @@ func TestUnknownInternalNamesAreNXDOMAIN(t *testing.T) {
 	if rcode := resp[3] & 0x0f; rcode != 3 {
 		t.Fatalf("rcode = %d, want NXDOMAIN", rcode)
 	}
-	if resp := s.Answer(query("shop.internal", typeAAAA)); binary.BigEndian.Uint16(resp[6:8]) != 0 || resp[3]&0x0f != 0 {
-		t.Fatal("AAAA for a known name should be an empty NOERROR")
+	for _, name := range []string{"shop.internal", "db.internal"} {
+		if resp := s.Answer(query(name, typeAAAA)); binary.BigEndian.Uint16(resp[6:8]) != 0 || resp[3]&0x0f != 0 {
+			t.Fatalf("AAAA for %s should be an empty NOERROR (it may live on a peer)", name)
+		}
 	}
 }
 

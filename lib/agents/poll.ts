@@ -21,6 +21,7 @@ import type {
 import { ingestChunks, pendingTerminalInput } from "@/lib/agents/streams.ts";
 import { onBuildResult, onWorkloadStatus } from "@/lib/deploy/deployments.ts";
 import { recordMeshStatus } from "@/lib/network/network.ts";
+import { refreshSpecs } from "@/lib/deploy/specs.ts";
 import { serverSpecModel } from "@/schemas/infrastructure/serverSpec.ts";
 
 const COMMAND_BATCH = 50;
@@ -247,6 +248,8 @@ const ingestCommandResults = async (
     const event = fresh.find((e) => e.data.seq === seq)!;
     if (type === "docker.ensure") {
       await recordHostSetup(identity.server, event.data);
+      // A prepared host gets its spec, private network included (PLAN §8.2).
+      if (event.data.ok) await refreshSpecs([identity.server]);
     } else await onBuildResult(identity.server, seq, event.data);
   }
 

@@ -10,6 +10,7 @@ import { prepareHost, resumeHostSetup } from "@/lib/agents/commands.ts";
 import { serverModel } from "@/schemas/infrastructure/server.ts";
 import { serverLeaseModel } from "@/schemas/infrastructure/serverLease.ts";
 import { bootstrapSessionModel } from "@/schemas/infrastructure/bootstrapSession.ts";
+import { isPublicAddress } from "@/lib/agents/addresses.ts";
 import { createHash, SupportedHashAlg } from "@/core/utils/hash.ts";
 import { tenantModel } from "@/plugins/Huruf-Tech/thunder-core/schemas/tenant.ts";
 import type { THelloResponse, TInventory } from "@/schemas/protocol/agent.ts";
@@ -40,9 +41,15 @@ export const registerAgent = async (
   fingerprint: string,
   clientIp: string | null,
 ): Promise<THelloResponse> => {
+  // The address the agent connects from is how peers on the internet reach
+  // it (the mesh endpoint, PLAN §8.2), when it's public.
+  const inventory =
+    !hello.inventory.publicIp && clientIp && isPublicAddress(clientIp)
+      ? { ...hello.inventory, publicIp: clientIp }
+      : hello.inventory;
   const existing = await serverModel.findOneAndUpdate(
     { "identity.fingerprint": fingerprint },
-    { $set: { inventory: hello.inventory } },
+    { $set: { inventory } },
     {
       projection: {
         tenant: 1,
@@ -100,7 +107,12 @@ export const registerAgent = async (
   const joined = hello.joinToken &&
     await claimJoinToken(hello.joinToken, tenant._id);
   if (joined) {
-    return await registerJoinedAgent(hello, fingerprint, tenant._id, joined);
+    return await registerJoinedAgent(
+      { ...hello, inventory },
+      fingerprint,
+      tenant._id,
+      joined,
+    );
   }
 
   const now = new Date();
@@ -131,7 +143,7 @@ export const registerAgent = async (
       pairingExpiresAt,
       installMethod: "manual",
       provider: { kind: "byo" },
-      inventory: hello.inventory,
+      inventory,
       createdAt: now,
     });
     forgetAgent(fingerprint);

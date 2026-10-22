@@ -1,5 +1,5 @@
 import { assertEquals } from "@std/assert";
-import { isPublicAddress } from "@/lib/agents/bootstrap.ts";
+import { isPublicAddress } from "@/lib/agents/addresses.ts";
 
 Deno.test("isPublicAddress blocks internal targets for the SSH wizard (SSRF)", () => {
   const blocked = [

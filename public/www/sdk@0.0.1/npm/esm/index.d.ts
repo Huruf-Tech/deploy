@@ -694,6 +694,47 @@ export declare class ThunderSDK extends BaseSDK {
             finally: (onfinally?: (() => void) | null | undefined) => Promise<import("./modules/agents.js").events$return>;
         };
     };
+    static networks: {
+        readonly type: {
+            get$return: import("./modules/networks.js").get$return;
+            updateMember$params: import("./modules/networks.js").updateMember$params;
+            updateMember$body: import("./modules/networks.js").updateMember$body;
+            setPrimary$body: import("./modules/networks.js").setPrimary$body;
+        };
+        readonly get: (data?: {
+            params?: undefined;
+            query?: undefined;
+            body?: undefined;
+        } & import("./types.js").TRequestOptions<import("./modules/networks.js").get$return>) => {
+            readonly raw: Promise<import("axios").AxiosResponse<import("./modules/networks.js").get$return, any, {}, any>>;
+            readonly data: Promise<import("./modules/networks.js").get$return>;
+            then: <TResult1 = import("./modules/networks.js").get$return, TResult2 = never>(onfulfilled?: ((value: import("./modules/networks.js").get$return) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+            catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<import("./modules/networks.js").get$return | TResult>;
+            finally: (onfinally?: (() => void) | null | undefined) => Promise<import("./modules/networks.js").get$return>;
+        };
+        readonly updateMember: (data: {
+            params: import("./modules/networks.js").updateMember$params;
+            query?: undefined;
+            body: import("./modules/networks.js").updateMember$body;
+        } & import("./types.js").TRequestOptions<unknown>) => {
+            readonly raw: Promise<import("axios").AxiosResponse<unknown, any, {}, any>>;
+            readonly data: Promise<unknown>;
+            then: <TResult1 = unknown, TResult2 = never>(onfulfilled?: ((value: unknown) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+            catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<unknown>;
+            finally: (onfinally?: (() => void) | null | undefined) => Promise<unknown>;
+        };
+        readonly setPrimary: (data: {
+            params?: undefined;
+            query?: undefined;
+            body: import("./modules/networks.js").setPrimary$body;
+        } & import("./types.js").TRequestOptions<unknown>) => {
+            readonly raw: Promise<import("axios").AxiosResponse<unknown, any, {}, any>>;
+            readonly data: Promise<unknown>;
+            then: <TResult1 = unknown, TResult2 = never>(onfulfilled?: ((value: unknown) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+            catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<unknown>;
+            finally: (onfinally?: (() => void) | null | undefined) => Promise<unknown>;
+        };
+    };
     static registries: {
         readonly type: {
             list$return: import("./modules/registries.js").list$return;

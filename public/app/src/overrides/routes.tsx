@@ -4,6 +4,7 @@ import {
   IconBraces,
   IconBrandGithub,
   IconFolders,
+  IconNetwork,
   IconRocket,
   IconTemplate,
   IconLock,
@@ -23,6 +24,7 @@ import Projects from "@/pages/projects"
 import NewProject from "@/pages/projects/NewProject"
 import ProjectDetail from "@/pages/projects/Detail"
 import Registries from "@/pages/registries"
+import Network from "@/pages/network"
 
 /** `users` is root-only, so it doubles as the admin check for the Admin group. */
 const isAdmin = () => ThunderSDK.isPermitted("users", "get")
@@ -91,12 +93,21 @@ export const routes: TRoutesOverride = {
     icon: IconFolders,
     priority: 1,
   },
+  networks: {
+    name: "Private network",
+    path: "network",
+    group: "Infrastructure",
+    icon: IconNetwork,
+    priority: 1,
+    display: () => ThunderSDK.isPermitted("networks", "get"),
+    Component: Network,
+  },
   registries: {
     name: "Registries",
     path: "registries",
     group: "Infrastructure",
     icon: IconBox,
-    priority: 1,
+    priority: 2,
     display: () => ThunderSDK.isPermitted("registries", "list"),
     Component: Registries,
   },

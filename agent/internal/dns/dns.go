@@ -114,8 +114,11 @@ func (s *Server) answer(query []byte, localOnly bool) []byte {
 	// Header: same id, response + recursion available, copy RD.
 	resp := append([]byte(nil), query[:end]...)
 	flags := uint16(0x8080) | binary.BigEndian.Uint16(query[2:4])&0x0100
-	if len(ips) == 0 {
-		flags |= 3 // NXDOMAIN
+	// NXDOMAIN only for A lookups with no answer: other types (AAAA) get an
+	// empty NOERROR, since the name may exist on a peer, and musl gives up on
+	// a name entirely when any of its lookups says it doesn't exist.
+	if len(ips) == 0 && qtype == typeA {
+		flags |= 3
 	}
 	binary.BigEndian.PutUint16(resp[2:4], flags)
 	binary.BigEndian.PutUint16(resp[6:8], 0)   // answers

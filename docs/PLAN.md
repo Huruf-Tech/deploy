@@ -962,6 +962,14 @@ Each phase ends with a **review checkpoint** (demo + code review + approval). Ph
   - An app on server A reaches `db.internal` on server B.
   - A NAT'd server keeps running its apps and is shown as not mesh-reachable.
   - A 3-server deploy builds once through the built-in registry.
+- **Status (done, pending review):**
+  - **Addresses:** each server gets an index in its tenant's network on first host setup: mesh address `10.209.0.N`, container subnet `10.210.N.0/24` (the project network is created with it), so container IPs are unique in the tenant and routable. At most 254 servers per tenant; indexes aren't reused.
+  - **Agent:** a WireGuard interface (`wg`/`ip`, installed by host setup with `wireguard-tools iproute2`), a peer and route per server (allowed IPs: its mesh address and container subnet, keepalive 25 s), Docker's forwarding filter opened for the mesh (`DOCKER-USER`, and `trusted_host_interfaces=wg0` on the project network for Docker 28's routed-traffic filter), reachability from handshakes (fresh within 3 min), retried setup, and the built-in registry (`registry:2`, bound to the primary's mesh address, basic auth hashed with the edge's `caddy hash-password`).
+  - **DNS:** `<project>.internal` returns this server's replicas plus those of reachable peers, asked over the mesh (peers answer from their own records only); unreachable peers aren't asked. AAAA for `.internal` is an empty NOERROR (musl gives up on a name otherwise).
+  - **Endpoints:** a server's public address is the source address of its `hello` when public, else the private address the agent reports, else an override set on the page.
+  - **Control plane:** peers and the registry in each server's spec (refreshed when a key arrives or settings change), the reachability matrix, the built-in registry used when no external registry is connected and every target reaches the primary, and per-project warnings from `${{slug.KEY}}` / `slug.internal` in its variables and the `needsPrivateNetwork` flag.
+  - **UI:** Infrastructure → Private network (servers, endpoints, membership, registry host, matrix); warnings on the project page; the flag in project settings.
+  - **Verified on three servers** (Docker-in-Docker VMs over the SSH wizard): the app on A resolved `db.internal` to Postgres on B and ran a query over the mesh; with WireGuard firewalled between B and C, the matrix showed B↔C unreachable within 3 minutes while both kept serving and lookups stayed instant; a 3-server deploy built once on C, pushed to the registry on A, and A and B pulled it.
 
 ### Phase 8 — Production features and capacity insights
 - Agent-local autoscaling, alert rules, channels and delivery (metric alerts, offline, deploy failed).

@@ -14,6 +14,7 @@ import { variablesModule } from "./modules/variables.js";
 import { homeModule } from "./modules/home.js";
 import { indexModule } from "./modules/index.js";
 import { agentsModule } from "./modules/agents.js";
+import { networksModule } from "./modules/networks.js";
 import { registriesModule } from "./modules/registries.js";
 import { serversModule } from "./modules/servers.js";
 import { streamsModule } from "./modules/streams.js";
@@ -118,6 +119,7 @@ Object.defineProperty(ThunderSDK, "_moduleNames", {
         "home",
         "index",
         "agents",
+        "networks",
         "registries",
         "servers",
         "streams",
@@ -193,6 +195,12 @@ Object.defineProperty(ThunderSDK, "agents", {
     configurable: true,
     writable: true,
     value: agentsModule(_a)
+});
+Object.defineProperty(ThunderSDK, "networks", {
+    enumerable: true,
+    configurable: true,
+    writable: true,
+    value: networksModule(_a)
 });
 Object.defineProperty(ThunderSDK, "registries", {
     enumerable: true,

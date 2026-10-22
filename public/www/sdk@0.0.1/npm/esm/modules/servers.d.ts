@@ -63,6 +63,15 @@ export type get$return = {
             error?: string | undefined;
             updatedAt: Date;
         } | undefined;
+        mesh?: {
+            index: number;
+            enabled: boolean;
+            publicKey?: string | undefined;
+            endpoint?: string | undefined;
+            peers?: Record<string, boolean> | undefined;
+            error?: string | undefined;
+            reportedAt?: Date | undefined;
+        } | undefined;
         acceptedBy?: string | undefined;
         acceptedAt?: Date | undefined;
         createdAt: Date;
