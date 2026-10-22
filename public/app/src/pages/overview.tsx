@@ -15,7 +15,6 @@ import { use } from "@/core/hooks/use"
 import { getLocalPath } from "@/core/lib/utils"
 import { Page } from "@/components/page"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -184,7 +183,10 @@ export default function Overview() {
             (p) => (p.template?._id ?? `project:${p._id}`) === c.key
           ).length,
         }))
-        .sort((a, b) => b.n - a.n)
+        .sort(
+          (a, b) =>
+            Number(b.c.samples > 0) - Number(a.c.samples > 0) || b.n - a.n
+        )
         .slice(0, 3)
         .map(({ c }) => c)
     : []
@@ -213,7 +215,7 @@ export default function Overview() {
       c,
       pool: perServer.reduce((s, f) => s + f.fits, 0),
       largest: Math.max(0, ...perServer.map((f) => f.fits)),
-      cpuOvercommitted: perServer.some((f) => f.cpuOvercommitted),
+      cpuFits: perServer.reduce((s, f) => s + Math.min(f.cpuFits, 10_000), 0),
     }
   })
 
@@ -378,7 +380,7 @@ export default function Overview() {
             </p>
           ) : (
             <ul className="flex flex-col gap-2 text-sm">
-              {fitTable.map(({ c, pool, largest, cpuOvercommitted }) => (
+              {fitTable.map(({ c, pool, largest, cpuFits }) => (
                 <li
                   key={c.key}
                   className="flex flex-wrap items-baseline gap-x-2"
@@ -394,8 +396,12 @@ export default function Overview() {
                       {t("largest server fits {{n}}", { n: largest })})
                     </span>
                   </span>
-                  {cpuOvercommitted && (
-                    <Badge variant="outline">{t("CPU overcommitted")}</Badge>
+                  {cpuFits < pool && (
+                    <span className="text-xs text-muted-foreground">
+                      {t("(CPU alone allows ≈ {{n}}; more overcommits it)", {
+                        n: cpuFits,
+                      })}
+                    </span>
                   )}
                 </li>
               ))}

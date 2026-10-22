@@ -118,7 +118,9 @@ export default function AlertHistory() {
                         ? t("sent")
                         : e.delivery.status === "failed"
                           ? t("failed")
-                          : t("sending")}
+                          : e.delivery.attempts
+                            ? t("retrying")
+                            : t("sending")}
                     </Badge>
                   </TableCell>
                 </TableRow>

@@ -980,6 +980,27 @@ Each phase ends with a **review checkpoint** (demo + code review + approval). Ph
   - Offline, deploy-failed and CPU alerts arrive by email and Slack with resolve notices.
   - After a week of running sample Node apps on 3 servers, "fits N more" is within ±1 of what actually fits when tested.
   - The forecast flags a deliberately leaking test app.
+- **Status (done, pending review):**
+  - **Agent monitor:** every `AGENT_MONITOR_INTERVAL_MS` (15 s) it reads `docker stats` and the host, then:
+    - evaluates the metric rules in its spec (CPU, memory, disk, room; per server, or per project replica against its limit, else its reservation) and sends `alert.fired` / `alert.resolved` once the condition has held for `forSec`; firing state survives restarts;
+    - autoscales: proportional to the average of the last 4 samples, 10% tolerance, within min..max, at most once per cooldown, never during a rollout; changes go to the reconciler (`Scale`) and out as `autoscale.changed`;
+    - rolls usage into hourly buckets (p95/peak per replica and for the host, 7 days) and daily peaks (`CAPACITY_RETENTION_DAYS`, 90), stored in `capacity.json` next to the state.
+  - **Capacity report:** a `capacity` stream answers with one JSON chunk (footprints for 24 h and 7 d, disk from `docker system df -v`, daily peaks, headroom). The dashboard asks the online servers (3 at a time) and keeps the answers in the browser only.
+  - **Control plane:** alert rules (server or project, one or all) with email (workspace members only), Slack and webhook channels (https, public addresses only, URLs encrypted and shown masked). Episodes (`alertEvents`) are deduped by a unique open key. The outbox claims one notice at a time with a lease and retries failed channels with backoff (8 attempts, delivered channels skipped). It runs in the background of dashboard requests and event ingestion, never on polls. `agentOffline` comes from the sweep and waits out its grace (`ALERT_AGENT_OFFLINE_GRACE_SEC`, 20 s); a server back sooner drops it silently. `deployFailed` comes from `fail()` and resolves on the next successful deploy. Removing or disabling a rule closes its episodes quietly.
+  - **Fit:** placement reserves for the autoscale max. Autoscaling is refused for projects with local volumes.
+  - **UI:**
+    - the Overview is the pool dashboard: capacity, reserved and p95 use; "fits ≈ N more" per app class (median p95 per template, never below the reservation; CPU-only limit shown); a per-server table; a linear forecast; growing apps; recommendations; open alerts;
+    - Monitoring → Alert rules and Alert history;
+    - project autoscale settings, with the latest count per server;
+    - the wizard shows the room left after the new project.
+  - **Verified on two servers:**
+    - a CPU-burning app scaled 1 → 3 (its max) within a minute, then 3 → 2 → 1 after it went idle;
+    - the CPU rule fired on both servers and resolved when load stopped;
+    - stopping B's agent fired "B is down" after the grace, which resolved when it came back;
+    - a crashing app raised "Deploy failed";
+    - capacity reports answered in about 0.5–1 s.
+    - Email arrival is covered by the automated test (the dev `.env` points SMTP at a placeholder host, so the VM run showed the outbox retrying). Slack needs a real workspace webhook.
+  - **Not checked yet:** "fits N more within ±1 after a week" needs a week of real running. The forecast's leak detection is tested with a synthetic 10-day series (`tests/capacity_test.ts`).
 
 ### Phase 9 — Storage and one-click services
 - S3 volumes (rclone), volume backups and restore, one-click service templates with generated secrets and default backups.

@@ -250,7 +250,8 @@ func (d *Docker) WaitHealthy(ctx context.Context, c reconcile.Container, rel pro
 		}
 		// The restart policy hides crashes: a restart while waiting means it can't start.
 		if restarts >= 0 && list[0].RestartCount > restarts {
-			return fmt.Errorf("crashes on start (exit code %d): %s", state.ExitCode, d.tail(ctx, c.ID))
+			// Running again after the restart, so its exit code already reads 0.
+			return fmt.Errorf("crashes on start (restarted %d times): %s", list[0].RestartCount, d.tail(ctx, c.ID))
 		}
 		restarts = list[0].RestartCount
 		last = probe(ctx, list[0], c.IP, rel)

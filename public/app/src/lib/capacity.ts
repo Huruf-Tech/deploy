@@ -86,6 +86,8 @@ export function fitsIn(room: TRoom, fp: TClassFootprint) {
   const cpu = per(room.cpu, fp.cpu)
   return {
     fits: Number.isFinite(fits) ? fits : 0,
+    /** How many CPU alone allows; below `fits` means overcommitting CPU. */
+    cpuFits: cpu,
     cpuOvercommitted: cpu < fits,
   }
 }
