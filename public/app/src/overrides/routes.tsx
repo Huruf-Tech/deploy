@@ -1,5 +1,8 @@
+import { Outlet } from "react-router"
 import {
   IconBraces,
+  IconBrandGithub,
+  IconTemplate,
   IconLock,
   IconShieldCheck,
   IconUserShield,
@@ -10,6 +13,9 @@ import type { TRoutesOverride } from "@/core/types"
 import { regroup } from "@/lib/regroup"
 import Overview from "@/pages/overview"
 import Variables from "@/pages/variables"
+import GitHub from "@/pages/github"
+import Templates from "@/pages/templates"
+import TemplateDetail from "@/pages/templates/Detail"
 
 /** `users` is root-only, so it doubles as the admin check for the Admin group. */
 const isAdmin = () => ThunderSDK.isPermitted("users", "get")
@@ -57,7 +63,32 @@ export const routes: TRoutesOverride = {
     display: () => ThunderSDK.isPermitted("variables", "list"),
   },
 
+  // Custom pages (PLAN §15.2 Build group); GitHub redirects back to build/gitIntegrations.
+  templates: {
+    name: "Templates",
+    path: "templates",
+    group: "Build",
+    icon: IconTemplate,
+    display: () => ThunderSDK.isPermitted("templates", "list"),
+    Component: () => <Outlet />,
+    children: [
+      { index: true, display: false, Component: Templates },
+      { path: ":id", display: false, Component: TemplateDetail },
+    ],
+  },
+  gitIntegrations: {
+    name: "GitHub",
+    path: "gitIntegrations",
+    group: "Build",
+    icon: IconBrandGithub,
+    display: () => ThunderSDK.isPermitted("gitIntegrations", "list"),
+    Component: GitHub,
+  },
+  // GitHub's callbacks; nothing to show in the dashboard.
+  githubHooks: { display: false },
+
   Infrastructure: { merge: true, priority: 10 },
+  Build: { merge: true, priority: 15 },
   Configuration: { merge: true, priority: 20 },
   Admin: { merge: true, priority: 90 },
 }

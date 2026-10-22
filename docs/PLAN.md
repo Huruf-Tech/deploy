@@ -909,6 +909,15 @@ Each phase ends with a **review checkpoint** (demo + code review + approval). Ph
 - Manifest flow (user or org), installations, repo/branch browsing, share toggle, webhook with signature verification.
 - Templates: CRUD, scopes, versions, clone, inputs, rendering preview, seed system templates.
 - **Done when:** GitHub is connected in ≤ 3 clicks, private repos are listed, and the Thunder template is cloned and edited into a tenant template.
+- **Status (done, pending review):**
+  - **GitHub App (manifest flow):** "Connect GitHub" (user or org) posts the manifest; GitHub's "Create" and "Install" are the other two clicks. The redirects (`githubHooks`, open to guests) are authorized by a signed 1-hour `state`, not the session: browsers coming back from github.com don't carry the tenant header, and in production the Strict cookie isn't sent either. App credentials (private key, client secret, webhook secret) are encrypted with the tenant's data key, bound to the integration id.
+  - **Installations:** recorded on the install redirect, kept in sync by `installation` webhooks, and refreshable from the dashboard. A local control plane can't receive webhooks, so the manifest disables them when `BASE_URL` is local.
+  - **Repos and branches:** listed with installation tokens minted from the App JWT (RS256 via `node:crypto`, which reads GitHub's PKCS#1 key) and cached for 50 minutes.
+  - **Share toggle and removal:** owner only. Removing forgets the App here; the user deletes it on GitHub (linked).
+  - **Webhooks:** `POST /githubHooks/api/webhook/:integration`, HMAC-SHA256 verified with that integration's secret. `push` is accepted and ignored until deploy on push (Phase 6c).
+  - **Templates:** system (seeded from `scripts/data/systemTemplates.ts` by setup; a new version only when content changes) and tenant. Every save is an immutable version. Clone keeps `clonedFrom`. Rendering uses Handlebars without HTML escaping and in strict mode; templates see `inputs.*` and `build.cacheKey`; empty `generate: password` inputs are generated. Quota `templates`.
+  - **Not yet:** an admin UI for system templates (`systemTemplates`; they are edited as data for now), a form-based inputs editor (JSON for now), and the "projects pin this template" delete guard (Phase 6).
+  - **Verified:** `tests/github_test.ts` runs the three-step connect against a fake GitHub that checks the App JWT signature, lists a private repo, and checks webhook signatures; `tests/templates_test.ts` renders all ten seeds and clones and edits Thunder. In the browser: clone Thunder, edit, save v2, preview.
 
 ### Phase 6 — Deployments (split for review)
 - **6a — Single-server build and deploy:** project wizard (GitHub + template), releases, desired state and reconciler, `build.run` with cache, rolling switch via Caddy, public port, deployment status and live build logs, "deploy without cache", "clear build cache".
