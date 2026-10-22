@@ -22,7 +22,7 @@ export default new Router("/api", function streams(router) {
   const $container = z.string().min(1).max(128).regex(/^[\w.-]+$/);
 
   const open = (
-    kind: "logs" | "metrics" | "exec" | "terminal",
+    kind: "logs" | "metrics" | "exec" | "terminal" | "build",
     $body: z.ZodObject,
   ) => ({
     shape: () => ({ body: $body, return: $opened }),
@@ -52,6 +52,17 @@ export default new Router("/api", function streams(router) {
         since: z.string().regex(/^\d+[smh]$/).optional().describe(
           "e.g. 10m",
         ),
+      }),
+    );
+  });
+
+  // A build log, from the server that built it (it stays there, PLAN §3.5).
+  router.post("/build", function openBuild() {
+    return open(
+      "build",
+      z.object({
+        server: $objectId,
+        deployment: z.string().regex(/^[a-f0-9]{24}$/),
       }),
     );
   });

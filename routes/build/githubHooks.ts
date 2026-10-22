@@ -10,6 +10,7 @@ import {
   dashboardUrl,
   handleWebhook,
 } from "@/lib/github/integrations.ts";
+import { deployOnPush } from "@/lib/deploy/deployments.ts";
 
 /**
  * What GitHub calls: the App-creation and install redirects, and webhooks.
@@ -42,12 +43,13 @@ export default new Router("/api", function githubHooks(router) {
 
     return async (req) => {
       const { id } = $params.parse(paramsAsJson(req));
-      await handleWebhook(
+      const result = await handleWebhook(
         id,
         req.headers.get("x-github-event"),
         req.headers.get("x-hub-signature-256"),
         await req.text(),
       );
+      if (result?.push) await deployOnPush(id, result.tenant, result.push);
       return new Response(null, { status: 204 });
     };
   });

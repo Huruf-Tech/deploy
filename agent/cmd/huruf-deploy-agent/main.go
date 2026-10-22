@@ -12,15 +12,24 @@ import (
 	"flag"
 	"fmt"
 	"log/slog"
+	"net"
 	"os"
 	"os/signal"
+	"path/filepath"
+	"sync/atomic"
 	"syscall"
+	"time"
 
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/agent"
+	"github.com/Huruf-Tech/huruf-deploy/agent/internal/build"
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/commands"
+	"github.com/Huruf-Tech/huruf-deploy/agent/internal/dns"
+	"github.com/Huruf-Tech/huruf-deploy/agent/internal/docker"
+	"github.com/Huruf-Tech/huruf-deploy/agent/internal/edge"
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/identity"
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/metrics"
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/protocol"
+	"github.com/Huruf-Tech/huruf-deploy/agent/internal/reconcile"
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/state"
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/streams"
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/transport"
@@ -28,6 +37,14 @@ import (
 
 // Set at build time: -ldflags "-X main.version=1.2.3".
 var version = "dev"
+
+const (
+	// The project network docker.ensure creates (PLAN D35).
+	projectNetwork = "huruf-internal"
+	caddyAdmin     = "http://127.0.0.1:2019"
+	// tmpfs on every systemd host: `file` variables never touch the disk.
+	secretsDir = "/run/huruf-deploy/secrets"
+)
 
 func main() {
 	url := flag.String("url", os.Getenv("HURUF_DEPLOY_URL"), "control plane base URL")
@@ -66,18 +83,40 @@ func main() {
 
 	history := &metrics.Recorder{}
 	go history.Run(ctx)
-	streamManager := &streams.Manager{History: history}
+	builder := &build.Builder{Dir: filepath.Join(*stateDir, "builds")}
+	streamManager := &streams.Manager{History: history, Builds: builder}
+
+	names := &dns.Server{Log: log}
+	var dnsAddr atomic.Value
+	dnsAddr.Store("")
+	go serveDNS(ctx, names, &dnsAddr, log)
+
+	reconciler := &reconcile.Reconciler{
+		Runtime: &docker.Docker{
+			SecretsDir: secretsDir,
+			DNS:        func() string { return dnsAddr.Load().(string) },
+			Log:        log,
+		},
+		Router: &edge.Caddy{Admin: caddyAdmin},
+		Names:  names,
+		Log:    log,
+	}
 
 	a := &agent.Agent{
-		Tenant:    *tenant,
-		JoinToken: *joinToken,
-		Version:   version,
-		Identity:  id,
-		Client:    transport.New(*url, id),
-		Store:     store,
-		Commands:  commands.Default(ctx, streamManager),
-		Streams:   streamManager,
-		Log:       log,
+		Tenant:     *tenant,
+		JoinToken:  *joinToken,
+		Version:    version,
+		Identity:   id,
+		Client:     transport.New(*url, id),
+		Store:      store,
+		Commands:   commands.Default(ctx, streamManager, builder, id.Open),
+		Streams:    streamManager,
+		Reconciler: reconciler,
+		Log:        log,
+	}
+	reconciler.Emit = func(event protocol.WorkloadStatusEvent) {
+		a.Enqueue(event)
+		a.Wake() // rollouts advance on these: send now
 	}
 	streamManager.Emit = func(event protocol.StreamChunkEvent, urgent bool) {
 		a.Enqueue(event)
@@ -88,5 +127,26 @@ func main() {
 	if err := a.Run(ctx); err != nil {
 		log.Error("agent stopped", "error", err)
 		os.Exit(1)
+	}
+}
+
+// serveDNS answers .internal names on the project network's gateway, once
+// host setup has created the network. Containers started before that use
+// Docker's resolver only, and get .internal on their next restart.
+func serveDNS(ctx context.Context, names *dns.Server, addr *atomic.Value, log *slog.Logger) {
+	for ctx.Err() == nil {
+		if gateway, err := docker.Gateway(ctx, projectNetwork); err == nil && gateway != "" {
+			listen := net.JoinHostPort(gateway, "53")
+			addr.Store(gateway)
+			log.Info("serving .internal names", "address", listen)
+			if err := names.Serve(ctx, listen); err != nil {
+				log.Warn(".internal DNS stopped; retrying", "error", err)
+			}
+			addr.Store("")
+		}
+		select {
+		case <-ctx.Done():
+		case <-time.After(15 * time.Second):
+		}
 	}
 }

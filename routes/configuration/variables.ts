@@ -1,5 +1,6 @@
 import z from "zod";
 import { Router } from "@/core/http/router.ts";
+import { Response } from "@/core/http/response.ts";
 import { bodyAsJson, paramsAsJson, queryAsJson } from "@/core/http/utils.ts";
 import { $objectId } from "@/core/utils/createCRUD.ts";
 import { withTenant } from "@/plugins/Huruf-Tech/thunder-core/utils/withTenant.ts";
@@ -10,8 +11,10 @@ import {
   resolveVariables,
   revealVariable,
   type TVariableOwner,
+  type TViewer,
   updateVariable,
 } from "@/lib/variables/variables.ts";
+import { projectIn } from "@/lib/deploy/projects.ts";
 import {
   $variableKey,
   $variableScope,
@@ -27,20 +30,29 @@ import {
  */
 export default new Router("/api", function variables(router) {
   const $params = z.object({ id: $objectId });
-  const $scoped = z.object({ scope: $variableScope });
+  const $scoped = z.object({
+    scope: $variableScope,
+    project: $objectId.optional().describe("Required for the project scope"),
+  });
+  type TScoped = z.output<typeof $scoped>;
 
-  const context = async (req: Request, scope: "global" | "tenant") => {
+  const context = async (req: Request, { scope, project }: TScoped) => {
     const { user, tenant } = await withTenant(req);
     // A workspace resolves with its owner's account variables, whoever asks
     // (owner's decision); members override them with project variables.
-    const viewer = {
+    const viewer: TViewer = {
       user: scope === "global" ? user._id : tenant.createdBy,
       tenant: tenant._id,
     };
-    const owner: TVariableOwner = scope === "global"
-      ? { scope, user: viewer.user }
-      : { scope, tenant: viewer.tenant };
-    return { viewer, owner };
+    let owner: TVariableOwner;
+    if (scope === "global") owner = { scope, user: user._id };
+    else if (scope === "tenant") owner = { scope, tenant: tenant._id };
+    else {
+      if (!project) throw Response.badRequest("project is required");
+      viewer.project = await projectIn(tenant._id, project);
+      owner = { scope, tenant: tenant._id, project: viewer.project };
+    }
+    return { viewer, owner, by: user._id };
   };
 
   router.get("/", function list() {
@@ -56,8 +68,7 @@ export default new Router("/api", function variables(router) {
     return {
       shape: () => ({ query: $scoped, return: $return }),
       handler: async (req) => {
-        const { scope } = $scoped.parse(queryAsJson(req));
-        const { owner } = await context(req, scope);
+        const { owner } = await context(req, $scoped.parse(queryAsJson(req)));
         return Response.json(
           (await listVariables(owner)).map((v) => ({
             _id: v._id,
@@ -76,8 +87,7 @@ export default new Router("/api", function variables(router) {
   });
 
   router.post("/", function create() {
-    const $body = $variableSettings.extend({
-      scope: $variableScope,
+    const $body = $variableSettings.extend($scoped.shape).extend({
       key: $variableKey,
       value: $variableValue,
     });
@@ -86,11 +96,11 @@ export default new Router("/api", function variables(router) {
     return {
       shape: () => ({ body: $body, return: $return }),
       handler: async (req) => {
-        const { scope, key, value, ...settings } = $body.parse(
+        const { scope, project, key, value, ...settings } = $body.parse(
           await bodyAsJson(req),
         );
         const _id = await createVariable({
-          ...await context(req, scope),
+          ...await context(req, { scope, project }),
           key,
           value,
           settings,
@@ -101,8 +111,7 @@ export default new Router("/api", function variables(router) {
   });
 
   router.patch("/:id", function update() {
-    const $body = $variableSettingsUpdate.extend({
-      scope: $variableScope,
+    const $body = $variableSettingsUpdate.extend($scoped.shape).extend({
       value: $variableValue.optional(),
     });
 
@@ -110,11 +119,11 @@ export default new Router("/api", function variables(router) {
       shape: () => ({ params: $params, body: $body }),
       handler: async (req) => {
         const { id } = $params.parse(paramsAsJson(req));
-        const { scope, value, ...settings } = $body.parse(
+        const { scope, project, value, ...settings } = $body.parse(
           await bodyAsJson(req),
         );
         await updateVariable({
-          ...await context(req, scope),
+          ...await context(req, { scope, project }),
           id,
           value,
           settings,
@@ -129,8 +138,8 @@ export default new Router("/api", function variables(router) {
       shape: () => ({ params: $params, query: $scoped }),
       handler: async (req) => {
         const { id } = $params.parse(paramsAsJson(req));
-        const { scope } = $scoped.parse(queryAsJson(req));
-        await deleteVariable((await context(req, scope)).owner, id);
+        const { owner } = await context(req, $scoped.parse(queryAsJson(req)));
+        await deleteVariable(owner, id);
         return Response.json({ ok: true });
       },
     };
@@ -143,17 +152,23 @@ export default new Router("/api", function variables(router) {
       shape: () => ({ params: $params, body: $scoped, return: $return }),
       handler: async (req) => {
         const { id } = $params.parse(paramsAsJson(req));
-        const { scope } = $scoped.parse(await bodyAsJson(req));
-        return Response.json({
-          value: await revealVariable((await context(req, scope)).owner, id),
-        });
+        const { owner } = await context(
+          req,
+          $scoped.parse(await bodyAsJson(req)),
+        );
+        return Response.json({ value: await revealVariable(owner, id) });
       },
     };
   });
 
   // For scripts and CI: `X-Api-Key` + `X-TENANT-ID` (PLAN §12).
   router.get("/resolve", function resolve() {
-    const $query = z.object({ stage: z.enum(["build", "runtime"]).optional() });
+    const $query = z.object({
+      stage: z.enum(["build", "runtime"]).optional(),
+      project: z.string().max(40).optional().describe(
+        "A project's slug: include its variables (they win)",
+      ),
+    });
     const $return = z.object({
       env: z.record(z.string(), z.string()),
       files: z.record(z.string(), z.string()),
@@ -162,8 +177,9 @@ export default new Router("/api", function variables(router) {
     return {
       shape: () => ({ query: $query, return: $return }),
       handler: async (req) => {
-        const { stage } = $query.parse(queryAsJson(req));
-        const { viewer } = await context(req, "tenant");
+        const { stage, project } = $query.parse(queryAsJson(req));
+        const { viewer } = await context(req, { scope: "tenant" });
+        if (project) viewer.project = await projectIn(viewer.tenant, project);
         return Response.json(await resolveVariables(viewer, stage));
       },
     };

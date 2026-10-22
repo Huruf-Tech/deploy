@@ -16,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Huruf-Tech/huruf-deploy/agent/internal/build"
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/commands"
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/identity"
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/protocol"
@@ -101,7 +102,7 @@ func TestAgentLoop(t *testing.T) {
 		Identity: id,
 		Client:   transport.New(server.URL, id),
 		Store:    store,
-		Commands: commands.Default(context.Background(), &streams.Manager{}),
+		Commands: commands.Default(context.Background(), &streams.Manager{}, &build.Builder{Dir: t.TempDir()}, id.Open),
 		Log:      slog.New(slog.NewTextHandler(io.Discard, nil)),
 	}
 

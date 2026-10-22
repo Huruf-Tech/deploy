@@ -2,8 +2,7 @@ import z from "zod";
 import { mongodb } from "@/database.ts";
 import { $objectId } from "@/core/utils/createCRUD.ts";
 
-/** Project scope arrives with projects (Phase 6). */
-export const $variableScope = z.enum(["global", "tenant"]);
+export const $variableScope = z.enum(["global", "tenant", "project"]);
 
 const $isSecret = z.boolean();
 /** `file` is mounted read-only at /run/secrets/<KEY>. */
@@ -40,6 +39,7 @@ export const $variable = $variableSettings.extend({
   /** Owner of a global variable. */
   user: $objectId.meta({ ref: "users" }).optional(),
   tenant: $objectId.meta({ ref: "tenants" }).optional(),
+  project: $objectId.meta({ ref: "projects" }).optional(),
   key: $variableKey,
   /** AES-256-GCM, bound to the owner and this document's _id (PLAN §12). */
   valueEnc: z.string(),

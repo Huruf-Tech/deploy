@@ -150,13 +150,20 @@
               "type": "integer",
               "minimum": -9007199254740991,
               "maximum": 9007199254740991
+            },
+            "reconcileIntervalMs": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991,
+              "description": "How often the agent re-checks its workloads against the desired state (self-healing)"
             }
           },
           "required": [
             "poll",
             "jitterPercent",
             "summaryIntervalMs",
-            "maxBackoffMs"
+            "maxBackoffMs",
+            "reconcileIntervalMs"
           ],
           "additionalProperties": false
         },
@@ -242,13 +249,20 @@
               "type": "integer",
               "minimum": -9007199254740991,
               "maximum": 9007199254740991
+            },
+            "reconcileIntervalMs": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991,
+              "description": "How often the agent re-checks its workloads against the desired state (self-healing)"
             }
           },
           "required": [
             "poll",
             "jitterPercent",
             "summaryIntervalMs",
-            "maxBackoffMs"
+            "maxBackoffMs",
+            "reconcileIntervalMs"
           ],
           "additionalProperties": false
         }
@@ -346,7 +360,9 @@
                   "ping",
                   "docker.ensure",
                   "stream.open",
-                  "stream.close"
+                  "stream.close",
+                  "build.run",
+                  "server.prune"
                 ]
               },
               "payload": {
@@ -403,6 +419,26 @@
               "additionalProperties": false
             }
           }
+        },
+        "desired": {
+          "description": "Only when the version is newer than appliedVersion",
+          "type": "object",
+          "properties": {
+            "version": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            "sealed": {
+              "type": "string",
+              "description": "The DesiredSpec as JSON, sealed to this agent"
+            }
+          },
+          "required": [
+            "version",
+            "sealed"
+          ],
+          "additionalProperties": false
         }
       },
       "required": [
@@ -574,7 +610,8 @@
             "logs",
             "metrics",
             "exec",
-            "terminal"
+            "terminal",
+            "build"
           ]
         },
         "params": {
@@ -809,6 +846,66 @@
                   "type",
                   "data"
                 ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64
+                  },
+                  "type": {
+                    "type": "string",
+                    "const": "workload.status"
+                  },
+                  "data": {
+                    "type": "object",
+                    "properties": {
+                      "version": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991,
+                        "description": "Desired-state version being applied"
+                      },
+                      "project": {
+                        "type": "string"
+                      },
+                      "workload": {
+                        "type": "string"
+                      },
+                      "release": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      "state": {
+                        "type": "string",
+                        "enum": [
+                          "starting",
+                          "healthy",
+                          "failed"
+                        ]
+                      },
+                      "error": {
+                        "type": "string",
+                        "maxLength": 500
+                      }
+                    },
+                    "required": [
+                      "version",
+                      "project",
+                      "workload",
+                      "release",
+                      "state"
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "type",
+                  "data"
+                ]
               }
             ]
           }
@@ -816,6 +913,426 @@
       },
       "required": [
         "events"
+      ]
+    },
+    "SealedPayload": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "sealed": {
+          "type": "string",
+          "description": "lib/agents/sealing.ts format; the agent opens it"
+        }
+      },
+      "required": [
+        "sealed"
+      ],
+      "additionalProperties": false
+    },
+    "BuildRunPayload": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "deployment": {
+          "type": "string"
+        },
+        "project": {
+          "type": "string"
+        },
+        "release": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "repo": {
+          "type": "object",
+          "properties": {
+            "url": {
+              "type": "string"
+            },
+            "token": {
+              "description": "HTTPS token (GitHub installation token)",
+              "type": "string"
+            },
+            "sshKey": {
+              "description": "Deploy key for generic Git over SSH",
+              "type": "string"
+            },
+            "ref": {
+              "type": "string",
+              "description": "Commit SHA, or a branch the builder resolves"
+            }
+          },
+          "required": [
+            "url",
+            "ref"
+          ],
+          "additionalProperties": false
+        },
+        "rootDir": {
+          "type": "string",
+          "description": "Build context inside the repo"
+        },
+        "dockerfile": {
+          "description": "Rendered template; otherwise dockerfilePath inside the repo",
+          "type": "string"
+        },
+        "dockerfilePath": {
+          "type": "string"
+        },
+        "image": {
+          "type": "string",
+          "description": "Local tag to build"
+        },
+        "labels": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "buildEnv": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Build-stage variables, mounted as the `huruf-env` BuildKit secret (shell `export` lines)"
+        },
+        "noCache": {
+          "type": "boolean"
+        },
+        "timeoutSec": {
+          "type": "integer",
+          "minimum": 60,
+          "maximum": 9007199254740991
+        },
+        "gitImage": {
+          "type": "string",
+          "description": "Image that runs git, so hosts need no git"
+        },
+        "push": {
+          "description": "Registry modes: push the built image here",
+          "type": "object",
+          "properties": {
+            "image": {
+              "type": "string"
+            },
+            "registry": {
+              "type": "string"
+            },
+            "username": {
+              "type": "string"
+            },
+            "password": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "image",
+            "registry",
+            "username",
+            "password"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "deployment",
+        "project",
+        "release",
+        "repo",
+        "rootDir",
+        "image",
+        "labels",
+        "buildEnv",
+        "noCache",
+        "timeoutSec",
+        "gitImage"
+      ],
+      "additionalProperties": false
+    },
+    "DesiredSpec": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "version": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "network": {
+          "type": "string"
+        },
+        "drainMs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "Wait after removing a container from routing, before stopping it"
+        },
+        "workloads": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "project": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string",
+                "pattern": "^[a-z0-9][a-z0-9-]*$",
+                "description": "Container name prefix and status key, unique on the server"
+              },
+              "dnsNames": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "e.g. shop.internal"
+              },
+              "strategy": {
+                "type": "string",
+                "enum": [
+                  "rolling",
+                  "allAtOnce",
+                  "stopFirst"
+                ]
+              },
+              "publicPort": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 65535
+              },
+              "releases": {
+                "maxItems": 2,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "release": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 9007199254740991
+                    },
+                    "image": {
+                      "type": "string"
+                    },
+                    "routed": {
+                      "type": "boolean",
+                      "description": "Receives traffic (public port and .internal DNS) once healthy"
+                    },
+                    "replicas": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 50
+                    },
+                    "env": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      },
+                      "additionalProperties": {
+                        "type": "string"
+                      }
+                    },
+                    "files": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      },
+                      "additionalProperties": {
+                        "type": "string"
+                      },
+                      "description": "Mounted read-only at /run/secrets/<KEY>, from tmpfs"
+                    },
+                    "command": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "port": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 65535
+                    },
+                    "healthcheck": {
+                      "type": "object",
+                      "properties": {
+                        "path": {
+                          "description": "HTTP GET on the port; any status below 500 counts as up. Without a path, a TCP connect",
+                          "type": "string"
+                        },
+                        "command": {
+                          "description": "A shell command run inside the container (compose `healthcheck`); healthy once it passes",
+                          "type": "string",
+                          "maxLength": 1000
+                        },
+                        "timeoutSec": {
+                          "type": "integer",
+                          "minimum": 5,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "timeoutSec"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "cpus": {
+                      "type": "number",
+                      "exclusiveMinimum": 0
+                    },
+                    "memoryMb": {
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "volumes": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "mountPath": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "mountPath"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "pull": {
+                      "description": "Pull the image from this registry when it isn't local",
+                      "type": "object",
+                      "properties": {
+                        "registry": {
+                          "type": "string"
+                        },
+                        "username": {
+                          "type": "string"
+                        },
+                        "password": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "registry",
+                        "username",
+                        "password"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "release",
+                    "image",
+                    "routed",
+                    "replicas",
+                    "env",
+                    "files",
+                    "healthcheck",
+                    "volumes"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": [
+              "project",
+              "name",
+              "dnsNames",
+              "strategy",
+              "releases"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "keepImages": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Built images to keep for rollbacks; older huruf/* images are removed"
+        }
+      },
+      "required": [
+        "version",
+        "network",
+        "drainMs",
+        "workloads",
+        "keepImages"
+      ],
+      "additionalProperties": false
+    },
+    "WorkloadStatusEvent": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "type": {
+          "type": "string",
+          "const": "workload.status"
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "version": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991,
+              "description": "Desired-state version being applied"
+            },
+            "project": {
+              "type": "string"
+            },
+            "workload": {
+              "type": "string"
+            },
+            "release": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            "state": {
+              "type": "string",
+              "enum": [
+                "starting",
+                "healthy",
+                "failed"
+              ]
+            },
+            "error": {
+              "type": "string",
+              "maxLength": 500
+            }
+          },
+          "required": [
+            "version",
+            "project",
+            "workload",
+            "release",
+            "state"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "type",
+        "data"
       ]
     }
   }

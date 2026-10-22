@@ -19,6 +19,8 @@ import type {
   TPollRequest,
 } from "@/schemas/protocol/agent.ts";
 import { ingestChunks, pendingTerminalInput } from "@/lib/agents/streams.ts";
+import { onBuildResult, onWorkloadStatus } from "@/lib/deploy/deployments.ts";
+import { serverSpecModel } from "@/schemas/infrastructure/serverSpec.ts";
 
 const COMMAND_BATCH = 50;
 const EVENT_TTL_MS = 60 * 60_000;
@@ -91,6 +93,7 @@ export const pollAgent = async (
         deliveredSeq: 1,
         fastPollUntil: 1,
         terminalUntil: 1,
+        desiredVersion: 1,
       },
     },
   );
@@ -102,7 +105,8 @@ export const pollAgent = async (
     });
   }
 
-  const [commands, , , , , streamInput] = await Promise.all([
+  const applied = request.appliedVersion ?? 0;
+  const [commands, , , , , streamInput, desired] = await Promise.all([
     lease.commandSeq > cursor
       ? agentCommandModel
         .find({ server: identity.server, seq: { $gt: cursor } }, {
@@ -129,6 +133,12 @@ export const pollAgent = async (
     offlineSweep.tickRandom(),
     // Only an agent with an open terminal sends cursors: idle polls skip this.
     request.streams && pendingTerminalInput(identity.server, request.streams),
+    // A newer desired state: one read of the precomputed, sealed spec (PLAN §4.4).
+    (lease.desiredVersion ?? 0) > applied &&
+    serverSpecModel.findOne(
+      { _id: identity.server, version: { $gt: applied } },
+      { projection: { _id: 0, version: 1, sealed: 1 } },
+    ),
   ]);
 
   return {
@@ -136,12 +146,14 @@ export const pollAgent = async (
     body: {
       nextPollMs: lease.terminalUntil && lease.terminalUntil > now
         ? config.poll.terminalMs
-        : commands.length || (lease.fastPollUntil && lease.fastPollUntil > now)
+        : commands.length || desired ||
+            (lease.fastPollUntil && lease.fastPollUntil > now)
         ? config.poll.activeMs
         : config.poll.idleMs,
       configVersion,
       commands,
       ...(streamInput ? { streamInput } : {}),
+      ...(desired ? { desired } : {}),
     },
   };
 };
@@ -222,17 +234,19 @@ const ingestCommandResults = async (
     { ordered: false },
   );
 
-  // Host setup results also update the server, for the dashboard.
-  const setups = await agentCommandModel
+  // Host setup and build results drive more than the command record.
+  const typed = await agentCommandModel
     .find({
       server: identity.server,
       seq: { $in: fresh.map((event) => event.data.seq) },
-      type: "docker.ensure",
-    }, { projection: { seq: 1 } })
+      type: { $in: ["docker.ensure", "build.run"] },
+    }, { projection: { seq: 1, type: 1 } })
     .toArray();
-  for (const { seq } of setups) {
+  for (const { seq, type } of typed) {
     const event = fresh.find((e) => e.data.seq === seq)!;
-    await recordHostSetup(identity.server, event.data);
+    if (type === "docker.ensure") {
+      await recordHostSetup(identity.server, event.data);
+    } else await onBuildResult(identity.server, seq, event.data);
   }
 
   return fresh.length;
@@ -245,10 +259,18 @@ export const ingestEvents = async (
 ) => {
   const results = events.filter((e) => e.type === "command.result");
   const chunks = events.filter((e) => e.type === "stream.chunk");
+  const statuses = events.filter((e) => e.type === "workload.status");
 
   const [applied, streams] = await Promise.all([
     results.length ? ingestCommandResults(identity, results) : 0,
     ingestChunks(identity, chunks),
   ]);
-  return { applied: applied + streams.applied, close: streams.close };
+  // Rollouts advance on these; each step is a conditional update, so retries are harmless.
+  for (const status of statuses) {
+    await onWorkloadStatus(identity.server, status.data);
+  }
+  return {
+    applied: applied + streams.applied + statuses.length,
+    close: streams.close,
+  };
 };

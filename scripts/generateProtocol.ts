@@ -36,6 +36,10 @@ const MESSAGES: Array<[string, z.ZodType, "input" | "output"]> = [
   ["StreamClosePayload", protocol.$streamClosePayload, "output"],
   ["MetricsSample", protocol.$metricsSample, "input"],
   ["EventsRequest", protocol.$eventsRequest, "input"],
+  ["SealedPayload", protocol.$sealedPayload, "output"],
+  ["BuildRunPayload", protocol.$buildRunPayload, "output"],
+  ["DesiredSpec", protocol.$desiredSpec, "output"],
+  ["WorkloadStatusEvent", protocol.$workloadStatusEvent, "input"],
 ];
 
 const schemas = Object.fromEntries(
@@ -55,6 +59,10 @@ const SHARED: Array<[string, z.ZodType]> = [
   ["ResourceSummary", protocol.$resourceSummary],
   ["Command", protocol.$command],
   ["TerminalInput", protocol.$terminalInput],
+  ["Workload", protocol.$workload],
+  ["WorkloadRelease", protocol.$workloadRelease],
+  ["Healthcheck", protocol.$healthcheck],
+  ["RegistryAuth", protocol.$registryAuth],
 ];
 const shape = (schema: TJsonSchema) =>
   JSON.stringify(

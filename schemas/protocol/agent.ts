@@ -59,6 +59,9 @@ export const $agentConfig = z.object({
   jitterPercent: z.number().min(0).max(50),
   summaryIntervalMs: z.number().int(),
   maxBackoffMs: z.number().int(),
+  reconcileIntervalMs: z.number().int().describe(
+    "How often the agent re-checks its workloads against the desired state (self-healing)",
+  ),
 });
 
 export const $agentConfigResponse = z.object({
@@ -79,9 +82,24 @@ export const $commandType = z.enum([
   "docker.ensure",
   "stream.open",
   "stream.close",
+  "build.run",
+  "server.prune",
 ]);
 
-export const $streamKind = z.enum(["logs", "metrics", "exec", "terminal"]);
+export const $streamKind = z.enum([
+  "logs",
+  "metrics",
+  "exec",
+  "terminal",
+  "build",
+]);
+
+/** Payloads with secrets travel sealed to the agent's X25519 key (PLAN §4.2). */
+export const $sealedPayload = z.object({
+  sealed: z.string().describe(
+    "lib/agents/sealing.ts format; the agent opens it",
+  ),
+});
 
 /** Browser → terminal: keystrokes, or a resize. Ordered by `seq` per session. */
 export const $terminalInput = z.object({
@@ -138,6 +156,105 @@ export const $hostCheck = z.object({
   detail: z.string(),
 });
 
+/** `build.run` (PLAN §9.3), always sealed: it carries the repo token and build variables. */
+export const $buildRunPayload = z.object({
+  deployment: z.string(),
+  project: z.string(),
+  release: z.number().int().min(1),
+  repo: z.object({
+    url: z.string(),
+    token: z.string().optional().describe(
+      "HTTPS token (GitHub installation token)",
+    ),
+    sshKey: z.string().optional().describe(
+      "Deploy key for generic Git over SSH",
+    ),
+    ref: z.string().describe("Commit SHA, or a branch the builder resolves"),
+  }),
+  rootDir: z.string().describe("Build context inside the repo"),
+  dockerfile: z.string().optional().describe(
+    "Rendered template; otherwise dockerfilePath inside the repo",
+  ),
+  dockerfilePath: z.string().optional(),
+  image: z.string().describe("Local tag to build"),
+  labels: z.record(z.string(), z.string()),
+  buildEnv: z.record(z.string(), z.string()).describe(
+    "Build-stage variables, mounted as the `huruf-env` BuildKit secret (shell `export` lines)",
+  ),
+  noCache: z.boolean(),
+  timeoutSec: z.number().int().min(60),
+  gitImage: z.string().describe("Image that runs git, so hosts need no git"),
+  push: z.object({
+    image: z.string(),
+    registry: z.string(),
+    username: z.string(),
+    password: z.string(),
+  }).optional().describe("Registry modes: push the built image here"),
+});
+
+export const $registryAuth = z.object({
+  registry: z.string(),
+  username: z.string(),
+  password: z.string(),
+});
+
+export const $healthcheck = z.object({
+  path: z.string().optional().describe(
+    "HTTP GET on the port; any status below 500 counts as up. Without a path, a TCP connect",
+  ),
+  command: z.string().max(1_000).optional().describe(
+    "A shell command run inside the container (compose `healthcheck`); healthy once it passes",
+  ),
+  timeoutSec: z.number().int().min(5),
+});
+
+/** One release of a workload on this server. During a rollout a workload has two. */
+export const $workloadRelease = z.object({
+  release: z.number().int().min(1),
+  image: z.string(),
+  routed: z.boolean().describe(
+    "Receives traffic (public port and .internal DNS) once healthy",
+  ),
+  replicas: z.number().int().min(0).max(50),
+  env: z.record(z.string(), z.string()),
+  files: z.record(z.string(), z.string()).describe(
+    "Mounted read-only at /run/secrets/<KEY>, from tmpfs",
+  ),
+  command: z.array(z.string()).optional(),
+  port: z.number().int().min(1).max(65_535).optional(),
+  healthcheck: $healthcheck,
+  cpus: z.number().positive().optional(),
+  memoryMb: z.number().int().positive().optional(),
+  volumes: z.array(z.object({ name: z.string(), mountPath: z.string() })),
+  pull: $registryAuth.optional().describe(
+    "Pull the image from this registry when it isn't local",
+  ),
+});
+
+export const $workload = z.object({
+  project: z.string(),
+  name: z.string().regex(/^[a-z0-9][a-z0-9-]*$/).describe(
+    "Container name prefix and status key, unique on the server",
+  ),
+  dnsNames: z.array(z.string()).describe("e.g. shop.internal"),
+  strategy: z.enum(["rolling", "allAtOnce", "stopFirst"]),
+  publicPort: z.number().int().min(1).max(65_535).optional(),
+  releases: z.array($workloadRelease).max(2),
+});
+
+/** Everything this server should run (PLAN §4.4). Precomputed and sealed when it changes. */
+export const $desiredSpec = z.object({
+  version: z.number().int().min(1),
+  network: z.string(),
+  drainMs: z.number().int().min(0).describe(
+    "Wait after removing a container from routing, before stopping it",
+  ),
+  workloads: z.array($workload),
+  keepImages: z.array(z.string()).describe(
+    "Built images to keep for rollbacks; older huruf/* images are removed",
+  ),
+});
+
 export const $command = z.object({
   seq: z.number().int().min(1),
   type: $commandType,
@@ -162,6 +279,12 @@ export const $pollResponse = z.object({
   commands: z.array($command),
   streamInput: z.record(z.string(), z.array($terminalInput)).optional()
     .describe("New terminal input per session, after the cursors in `streams`"),
+  desired: z.object({
+    version: z.number().int(),
+    sealed: z.string().describe(
+      "The DesiredSpec as JSON, sealed to this agent",
+    ),
+  }).optional().describe("Only when the version is newer than appliedVersion"),
 });
 
 /** Returned with 403 when the server cannot poll; agents stop on `rejected`. */
@@ -194,9 +317,24 @@ export const $streamChunkEvent = z.object({
   }),
 });
 
+/** Progress of one workload release after a spec was applied (PLAN §10). */
+export const $workloadStatusEvent = z.object({
+  id: z.string().min(1).max(64),
+  type: z.literal("workload.status"),
+  data: z.object({
+    version: z.number().int().describe("Desired-state version being applied"),
+    project: z.string(),
+    workload: z.string(),
+    release: z.number().int(),
+    state: z.enum(["starting", "healthy", "failed"]),
+    error: z.string().max(500).optional(),
+  }),
+});
+
 export const $agentEvent = z.discriminatedUnion("type", [
   $commandResultEvent,
   $streamChunkEvent,
+  $workloadStatusEvent,
 ]);
 
 export const $eventsRequest = z.object({
@@ -218,3 +356,7 @@ export type TPollRequest = z.input<typeof $pollRequest>;
 export type TPollResponse = z.output<typeof $pollResponse>;
 export type TCommand = z.output<typeof $command>;
 export type TAgentEvent = z.output<typeof $agentEvent>;
+export type TBuildRunPayload = z.output<typeof $buildRunPayload>;
+export type TDesiredSpec = z.output<typeof $desiredSpec>;
+export type TWorkload = z.output<typeof $workload>;
+export type TWorkloadRelease = z.output<typeof $workloadRelease>;

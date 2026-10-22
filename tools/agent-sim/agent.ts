@@ -1,11 +1,14 @@
 import { encodeBase64Url } from "@std/encoding/base64url";
 import { canonicalRequest, fingerprintOf, sign } from "@/lib/agents/signing.ts";
+import { openSealed } from "@/lib/agents/sealing.ts";
 import {
   AGENT_HEADERS,
   PROTOCOL_VERSION,
   type TAgentConfig,
   type TAgentEvent,
+  type TBuildRunPayload,
   type TCommand,
+  type TDesiredSpec,
   type THelloResponse,
 } from "@/schemas/protocol/agent.ts";
 
@@ -22,6 +25,8 @@ type TState = {
   signPrivateKey: JsonWebKey;
   signPublicKey: string;
   boxPublicKey: string;
+  /** Opens sealed specs and build payloads (older state files lack it). */
+  boxPrivateKey?: JsonWebKey;
   commandCursor: number;
   /** Completed command seqs, bounded (PLAN §20.4: last 10k). */
   done: number[];
@@ -44,6 +49,7 @@ export const createState = async (hostname: string): Promise<TState> => {
     signPrivateKey: await crypto.subtle.exportKey("jwk", signKeys.privateKey),
     signPublicKey: await exportRaw(signKeys.publicKey),
     boxPublicKey: await exportRaw(boxKeys.publicKey),
+    boxPrivateKey: await crypto.subtle.exportKey("jwk", boxKeys.privateKey),
     commandCursor: 0,
     done: [],
   };
@@ -100,6 +106,18 @@ export class SimAgent {
   /** Decided by the control plane; set by hello, refreshed on version change. */
   config?: TAgentConfig;
   configVersion?: string;
+  /** The last desired state received, opened. */
+  spec?: TDesiredSpec;
+  /** Builds received, opened (tests inspect tokens and Dockerfiles). */
+  readonly builds: TBuildRunPayload[] = [];
+  /**
+   * How a workload release turns out once applied; healthy by default. Tests
+   * set it to fail releases. `null` stays silent (a server that never answers).
+   */
+  outcome: (workload: string, release: number) => "healthy" | "failed" | null =
+    () => "healthy";
+  /** How a build turns out; tests make some fail. */
+  buildOutcome: (payload: TBuildRunPayload) => string | null = () => null;
 
   constructor(
     readonly state: TState,
@@ -111,6 +129,20 @@ export class SimAgent {
       onStateChange?: (state: TState) => void | Promise<void>;
     },
   ) {}
+
+  private boxKey?: CryptoKey;
+
+  /** Opens a value the control plane sealed to this simulated agent. */
+  async open(sealed: string) {
+    this.boxKey ??= await crypto.subtle.importKey(
+      "jwk",
+      this.state.boxPrivateKey!,
+      { name: "X25519" },
+      false,
+      ["deriveBits"],
+    );
+    return await openSealed(this.boxKey, this.state.boxPublicKey, sealed);
+  }
 
   private async request(path: string, payload: unknown) {
     this.privateKey ??= await crypto.subtle.importKey(
@@ -186,7 +218,7 @@ export class SimAgent {
   async poll(opts: { cursor?: number; summary?: boolean } = {}) {
     const response = await this.request("/agents/api/poll", {
       commandCursor: opts.cursor ?? this.state.commandCursor,
-      appliedVersion: 0,
+      appliedVersion: this.spec?.version ?? 0,
       summary: opts.summary
         ? {
           cpu: Math.round(Math.random() * 30) / 100,
@@ -222,6 +254,10 @@ export class SimAgent {
 
       this.executed.push(command.seq);
       this.state.done = [...this.state.done, command.seq].slice(-10_000);
+      if (command.type === "build.run") {
+        events.push(await this.build(command));
+        continue;
+      }
       events.push({
         id: `cmd-${command.seq}`,
         type: "command.result",
@@ -248,10 +284,70 @@ export class SimAgent {
       }
     }
 
+    const desired = response.json.desired as
+      | { version: number; sealed: string }
+      | undefined;
+    if (desired && desired.version > (this.spec?.version ?? 0)) {
+      this.spec = JSON.parse(await this.open(desired.sealed)) as TDesiredSpec;
+      events.push(...this.statuses(this.spec));
+    }
+
     if (commands.length) await this.opts.onStateChange?.(this.state);
     if (events.length) await this.sendEvents(events);
 
     return response;
+  }
+
+  /** A simulated build: the image "exists" as soon as the command arrives. */
+  private async build(command: TCommand): Promise<TAgentEvent> {
+    const payload = JSON.parse(
+      await this.open(String(command.payload.sealed)),
+    ) as TBuildRunPayload;
+    this.builds.push(payload);
+    const error = this.buildOutcome(payload);
+    const sha = /^[0-9a-f]{40}$/.test(payload.repo.ref)
+      ? payload.repo.ref
+      : "0123456789abcdef0123456789abcdef01234567";
+    return {
+      id: `cmd-${command.seq}`,
+      type: "command.result",
+      data: error ? { seq: command.seq, ok: false, error } : {
+        seq: command.seq,
+        ok: true,
+        result: {
+          image: payload.image,
+          imageId: `sha256:${sha}`,
+          commit: sha,
+          message: "Simulated commit",
+          author: "Sim",
+          durationMs: 1_000,
+        },
+      },
+    };
+  }
+
+  /** What a reconciler would report once every workload release is up. */
+  private statuses(spec: TDesiredSpec): TAgentEvent[] {
+    return spec.workloads.flatMap((w) =>
+      w.releases.flatMap((r): TAgentEvent[] => {
+        const state = this.outcome(w.name, r.release);
+        if (!state) return [];
+        return [{
+          id: `ws-${spec.version}-${w.name}-${r.release}-${state}`,
+          type: "workload.status",
+          data: {
+            version: spec.version,
+            project: w.project,
+            workload: w.name,
+            release: r.release,
+            state,
+            ...(state === "failed"
+              ? { error: "simulated health check failure" }
+              : {}),
+          },
+        }];
+      })
+    );
   }
 
   /** A simulated terminal echoes its input, once per seq, like a shell would. */

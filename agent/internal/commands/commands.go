@@ -7,8 +7,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os/exec"
+	"strings"
 	"time"
 
+	"github.com/Huruf-Tech/huruf-deploy/agent/internal/build"
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/dockerhost"
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/protocol"
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/streams"
@@ -47,9 +50,24 @@ func handle[T any](fn func(context.Context, T) (map[string]any, error)) Handler 
 	}
 }
 
+// sealed wraps a handler whose payload arrives sealed to this agent (PLAN §4.2).
+func sealed[T any](open func(string) ([]byte, error), fn func(context.Context, T) (map[string]any, error)) Handler {
+	return handle(func(ctx context.Context, p protocol.SealedPayload) (map[string]any, error) {
+		plain, err := open(p.Sealed)
+		if err != nil {
+			return nil, fmt.Errorf("cannot open the payload: %w", err)
+		}
+		var value T
+		if err := json.Unmarshal(plain, &value); err != nil {
+			return nil, fmt.Errorf("invalid payload: %w", err)
+		}
+		return fn(ctx, value)
+	})
+}
+
 // Default is the agent's command set. `ctx` outlives single commands, so
 // streams keep running after their `stream.open` command has finished.
-func Default(ctx context.Context, s *streams.Manager) Registry {
+func Default(ctx context.Context, s *streams.Manager, builder *build.Builder, open func(string) ([]byte, error)) Registry {
 	return Registry{
 		"ping": func(context.Context, map[string]any) (map[string]any, error) {
 			return map[string]any{"pong": time.Now().UnixMilli()}, nil
@@ -64,5 +82,23 @@ func Default(ctx context.Context, s *streams.Manager) Registry {
 			s.Close(p.Session)
 			return map[string]any{"closed": true}, nil
 		}),
+		"build.run": sealed(open, builder.Run),
+		// Build cache older than 3 days and dangling images; release images
+		// are kept by the reconciler's own cleanup (PLAN §9.2).
+		"server.prune": func(ctx context.Context, _ map[string]any) (map[string]any, error) {
+			result := map[string]any{}
+			for name, args := range map[string][]string{
+				"buildCache": {"builder", "prune", "-f", "--filter", "until=72h"},
+				"images":     {"image", "prune", "-f"},
+			} {
+				out, err := exec.CommandContext(ctx, "docker", args...).CombinedOutput()
+				if err != nil {
+					return result, fmt.Errorf("docker %s: %w: %s", args[0], err, strings.TrimSpace(string(out)))
+				}
+				lines := strings.Split(strings.TrimSpace(string(out)), "\n")
+				result[name] = lines[len(lines)-1] // "Total reclaimed space: …"
+			}
+			return result, nil
+		},
 	}
 }

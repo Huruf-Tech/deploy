@@ -23,6 +23,10 @@ export const syncDeployAccessControl = async () => {
     "streams.input",
     "streams.read",
     "streams.close",
+    "streams.openBuild",
+    "projects",
+    "projectGroups",
+    "registries",
   ]);
   // Older setups granted every stream handler through `deploy`.
   await ACManager.denyFromPolicy("deploy", ["streams"]);

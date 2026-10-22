@@ -43,3 +43,22 @@ func TestLoadOrCreatePersists(t *testing.T) {
 		t.Fatal("identity changed between runs")
 	}
 }
+
+// A vector sealed by lib/agents/sealing.ts (`deno run -A tests/sealing_test.ts`).
+func TestOpenReadsWhatTheControlPlaneSealed(t *testing.T) {
+	seed := make([]byte, 32)
+	for i := range seed {
+		seed[i] = byte(i + 1)
+	}
+	id := FromSeed(seed)
+	if got := id.BoxPublicKey(); got != "B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw" {
+		t.Fatalf("box public key = %s", got)
+	}
+	plain, err := id.Open("s1.y-Rk7yXPSuRoBWI1s2hCjOV1DMPqO4UoixBbUTQaNW3uzUmh62ucEYn5qIEjdbqDymANQ3suXDYYPEdMVY7oT4BUH4JjWn7ibty6Z6QPFbiGyUMu9NXr")
+	if err != nil || string(plain) != "sealed by the control plane" {
+		t.Fatalf("Open = %q, %v", plain, err)
+	}
+	if _, err := FromSeed(make([]byte, 32)).Open("s1.y-Rk7yXPSuRoBWI1s2hCjOV1DMPqO4UoixBbUTQaNW3uzUmh62ucEYn5qIEjdbqDymANQ3suXDYYPEdMVY7oT4BUH4JjWn7ibty6Z6QPFbiGyUMu9NXr"); err == nil {
+		t.Fatal("another key opened it")
+	}
+}

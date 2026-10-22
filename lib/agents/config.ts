@@ -15,6 +15,7 @@ export const AGENT_CONFIG_DEFAULTS = {
   AGENT_POLL_JITTER_PERCENT: 20,
   AGENT_SUMMARY_INTERVAL_MS: 60_000,
   AGENT_MAX_BACKOFF_MS: 60_000,
+  AGENT_RECONCILE_INTERVAL_MS: 30_000,
 };
 
 const setting = (key: keyof typeof AGENT_CONFIG_DEFAULTS) =>
@@ -35,6 +36,10 @@ export const getAgentConfig = cache(async () => {
     ),
     summaryIntervalMs: await setting("AGENT_SUMMARY_INTERVAL_MS"),
     maxBackoffMs: await setting("AGENT_MAX_BACKOFF_MS"),
+    reconcileIntervalMs: Math.max(
+      5_000,
+      await setting("AGENT_RECONCILE_INTERVAL_MS"),
+    ),
   };
 
   return {

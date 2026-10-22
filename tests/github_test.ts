@@ -1,7 +1,12 @@
 import { assert, assertEquals, assertMatch } from "@std/assert";
 import { createVerify, generateKeyPairSync } from "node:crypto";
+import { ObjectId } from "mongodb";
+import handler from "@/serve.base.ts";
+import { mongodb } from "@/database.ts";
 import { githubApi } from "@/lib/services.ts";
+import { acceptServer } from "@/lib/agents/servers.ts";
 import { gitIntegrationModel } from "@/schemas/build/gitIntegration.ts";
+import { createState, SimAgent } from "@/tools/agent-sim/agent.ts";
 import { testSession } from "./_session.ts";
 
 // Fake GitHub: the App's credentials, its installation, and one private repo.
@@ -107,7 +112,9 @@ Deno.test({
   sanitizeResources: false,
   fn: async (t) => {
     githubApi.baseUrl = `http://localhost:${fakeGitHub.addr.port}`;
-    const { call, tenant, tenantId, cleanup } = await testSession("github");
+    const { call, tenant, tenantId, user, cleanup } = await testSession(
+      "github",
+    );
     let integration = "";
 
     try {
@@ -203,6 +210,97 @@ Deno.test({
           `/gitIntegrations/api/${integration}/installations/7/repositories`,
         );
         assertEquals(other.status, 404);
+      });
+
+      await t.step("a push deploys the projects on that branch", async () => {
+        const agent = new SimAgent(await createState("github-push"), {
+          baseUrl: "http://localhost",
+          tenant,
+          send: (req) => Promise.resolve(handler(req)),
+        });
+        const { json: hello } = await agent.hello();
+        await acceptServer({
+          server: new ObjectId(hello.server),
+          tenant: tenantId,
+          user: { _id: user, emailVerified: true },
+          pairingCode: hello.pairingCode!,
+        });
+        const { json: templates } = await call("GET", "/templates/api");
+        const created = await call("POST", "/projects/api", {
+          name: "Shop",
+          slug: "shop",
+          source: {
+            type: "github",
+            gitIntegration: integration,
+            installation: 42,
+            repo: "acme/shop",
+            branch: "main",
+          },
+          template: {
+            template: templates.find((x: { slug: string }) =>
+              x.slug === "thunder"
+            )._id,
+          },
+          servers: [hello.server],
+        });
+        assertEquals(created.status, 200, JSON.stringify(created.json));
+
+        const sha = "a".repeat(40);
+        const push = (ref: string) =>
+          JSON.stringify({
+            ref,
+            after: sha,
+            repository: { full_name: "acme/shop" },
+            head_commit: {
+              message: "Fix checkout\n\nDetails",
+              author: { name: "Ada" },
+            },
+          });
+        const path = `/githubHooks/api/webhook/${integration}`;
+        for (const ref of ["refs/heads/other", "refs/heads/main"]) {
+          const body = push(ref);
+          const res = await handlerPost(path, body, {
+            "x-github-event": "push",
+            "x-hub-signature-256": await sign(APP.webhook_secret, body),
+          });
+          assertEquals(res.status, 204);
+        }
+
+        const { json: deployments } = await call(
+          "GET",
+          `/projects/api/${created.json._id}/deployments`,
+        );
+        assertEquals(deployments.length, 1, "only the pushed branch deploys");
+        assertEquals(deployments[0].trigger, "push");
+        assertEquals(deployments[0].commit, {
+          sha,
+          message: "Fix checkout",
+          author: "Ada",
+        });
+
+        await new Promise((r) => setTimeout(r, 120));
+        await agent.poll();
+        const build = agent.builds.at(-1)!;
+        assertEquals(build.repo, {
+          url: `${githubApi.cloneBaseUrl}/acme/shop.git`,
+          token: "ghs_installation",
+          ref: sha,
+        });
+
+        await mongodb.db().collection("serverLeases").deleteMany({
+          tenant: tenantId,
+        });
+        for (
+          const name of [
+            "projects",
+            "releases",
+            "deployments",
+            "servers",
+            "agentCommands",
+          ]
+        ) {
+          await mongodb.db().collection(name).deleteMany({ tenant: tenantId });
+        }
       });
 
       await t.step("no plaintext credentials in MongoDB", async () => {

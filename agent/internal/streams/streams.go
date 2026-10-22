@@ -33,6 +33,11 @@ type Manager struct {
 	// Emit queues a chunk event; urgent ones (terminal output) are sent right away.
 	Emit    func(event protocol.StreamChunkEvent, urgent bool)
 	History *metrics.Recorder
+	// Builds locates build logs for `build` streams; may be nil.
+	Builds interface {
+		LogPath(deployment string) string
+		Running(deployment string) bool
+	}
 
 	mu        sync.Mutex
 	sessions  map[string]context.CancelFunc
@@ -102,8 +107,51 @@ func (m *Manager) run(ctx context.Context, p protocol.StreamOpenPayload, out *ch
 		return m.terminal(ctx, p, out)
 	case "metrics":
 		return m.metrics(ctx, out)
+	case "build":
+		return m.followBuild(ctx, text("deployment"), out)
 	default:
 		return fmt.Errorf("unsupported stream kind %q", p.Kind)
+	}
+}
+
+// followBuild sends a build log from the start, then what is appended, and
+// ends once the build has finished and everything is sent.
+func (m *Manager) followBuild(ctx context.Context, deployment string, out *chunker) error {
+	if m.Builds == nil {
+		return errors.New("builds are not available")
+	}
+	path := m.Builds.LogPath(deployment)
+	var offset int64
+	buf := make([]byte, 32*1024)
+	for {
+		running := m.Builds.Running(deployment)
+		f, err := os.Open(path)
+		if err != nil && !running {
+			return errors.New("this server has no build log for that deployment")
+		}
+		read := 0
+		if err == nil {
+			for {
+				n, err := f.ReadAt(buf, offset)
+				if n > 0 {
+					out.write(buf[:n])
+					offset += int64(n)
+					read += n
+				}
+				if err != nil {
+					break
+				}
+			}
+			f.Close()
+		}
+		if !running && read == 0 {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(500 * time.Millisecond):
+		}
 	}
 }
 

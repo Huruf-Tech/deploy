@@ -5,17 +5,20 @@ package agent
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"math/rand/v2"
 	"net/http"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/commands"
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/host"
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/identity"
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/protocol"
+	"github.com/Huruf-Tech/huruf-deploy/agent/internal/reconcile"
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/state"
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/transport"
 )
@@ -39,7 +42,9 @@ type Agent struct {
 	Commands  commands.Registry
 	// Stops streams the control plane reports as unwatched; may be nil.
 	Streams Streams
-	Log     *slog.Logger
+	// Applies the desired state; may be nil (tests).
+	Reconciler *reconcile.Reconciler
+	Log        *slog.Logger
 
 	config        *protocol.AgentConfig
 	configVersion string
@@ -47,7 +52,8 @@ type Agent struct {
 	lastStatus    string
 	lastSummary   time.Time
 	sampler       host.Sampler
-	mu            sync.Mutex // guards events: commands finish on their own goroutines
+	reconcileMs   atomic.Int64 // read by the reconciler's goroutine
+	mu            sync.Mutex   // guards events: commands finish on their own goroutines
 	wake          chan struct{}
 	events        []any
 }
@@ -59,6 +65,15 @@ func (a *Agent) Run(ctx context.Context) error {
 	sending, stopSending := context.WithCancel(context.Background())
 	sent := make(chan struct{})
 	go func() { a.sendLoop(sending); close(sent) }()
+	if a.Reconciler != nil {
+		// Workloads come back after a restart without waiting for the control plane.
+		if version, sealed := a.Store.Spec(); version > 0 {
+			if err := a.applyDesired(ctx, version, sealed); err != nil {
+				a.Log.Warn("stored desired state is unreadable; waiting for a new one", "error", err)
+			}
+		}
+		go a.Reconciler.Run(ctx, func() time.Duration { return a.reconcileInterval() })
+	}
 	defer func() {
 		stopSending()
 		<-sent
@@ -95,7 +110,8 @@ func (a *Agent) step(ctx context.Context) (wait time.Duration, stop bool, err er
 		}
 	}
 
-	request := protocol.PollRequest{CommandCursor: a.Store.Cursor()}
+	applied, _ := a.Store.Spec()
+	request := protocol.PollRequest{CommandCursor: a.Store.Cursor(), AppliedVersion: &applied}
 	if a.Streams != nil {
 		request.Streams = a.Streams.InputCursors() // nil (omitted) unless a terminal is open
 	}
@@ -125,6 +141,11 @@ func (a *Agent) step(ctx context.Context) (wait time.Duration, stop bool, err er
 			a.lastSummary = time.Now()
 		}
 		a.setStatus("active", "online")
+		if d := response.Desired; d != nil && d.Version > applied {
+			if err := a.applyDesired(ctx, d.Version, d.Sealed); err != nil {
+				a.Log.Error("cannot apply the desired state", "version", d.Version, "error", err)
+			}
+		}
 		if a.Streams != nil {
 			for session, items := range response.StreamInput {
 				a.Streams.Input(session, items)
@@ -148,6 +169,36 @@ func (a *Agent) step(ctx context.Context) (wait time.Duration, stop bool, err er
 	return a.jitter(time.Duration(response.NextPollMs) * time.Millisecond), false, nil
 }
 
+// applyDesired opens a sealed spec, persists it, and hands it to the reconciler.
+// It is stored only once readable, so a bad one is fetched again.
+func (a *Agent) applyDesired(ctx context.Context, version int64, sealed string) error {
+	plain, err := a.Identity.Open(sealed)
+	if err != nil {
+		return err
+	}
+	var spec protocol.DesiredSpec
+	if err := json.Unmarshal(plain, &spec); err != nil {
+		return err
+	}
+	if err := a.Store.SaveSpec(version, sealed); err != nil {
+		return err
+	}
+	a.Log.Info("applying desired state", "version", version, "workloads", len(spec.Workloads))
+	if a.Reconciler != nil {
+		a.Reconciler.Apply(ctx, spec)
+	}
+	return nil
+}
+
+// reconcileInterval comes from the control plane's config; until the first
+// hello answers, the stored spec is re-checked at the agent's retry cap.
+func (a *Agent) reconcileInterval() time.Duration {
+	if ms := a.reconcileMs.Load(); ms > 0 {
+		return time.Duration(ms) * time.Millisecond
+	}
+	return unreachableRetryCap
+}
+
 func (a *Agent) hello(ctx context.Context) error {
 	var response protocol.HelloResponse
 	_, err := a.Client.Post(ctx, "/agents/api/hello", protocol.HelloRequest{
@@ -162,6 +213,7 @@ func (a *Agent) hello(ctx context.Context) error {
 	}
 
 	a.config, a.configVersion, a.registered = &response.Config, response.Version, true
+	a.reconcileMs.Store(response.Config.ReconcileIntervalMs)
 	if response.Status == "pending" {
 		// The locally computed code, never the one from the network (PLAN §4.2).
 		a.Log.Info("waiting for approval: enter this pairing code in the dashboard",
@@ -176,6 +228,7 @@ func (a *Agent) refreshConfig(ctx context.Context) error {
 		return err
 	}
 	a.config, a.configVersion = &response.Config, response.Version
+	a.reconcileMs.Store(response.Config.ReconcileIntervalMs)
 	a.Log.Info("config updated", "version", response.Version, "idlePollMs", response.Config.Poll.IdleMs)
 	return nil
 }

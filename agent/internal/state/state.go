@@ -1,6 +1,8 @@
 // Package state persists what the agent must not forget across restarts: the
-// command cursor (what it has durably received) and recently completed command
-// seqs (so a re-delivered command never runs twice).
+// command cursor (what it has durably received), recently completed command
+// seqs (so a re-delivered command never runs twice), and the last desired
+// state, still sealed, so workloads come back after a reboot without the
+// control plane.
 package state
 
 import (
@@ -21,6 +23,8 @@ type Store struct {
 	data struct {
 		CommandCursor int64   `json:"commandCursor"`
 		Done          []int64 `json:"done"`
+		SpecVersion   int64   `json:"specVersion"`
+		Spec          string  `json:"spec"` // sealed DesiredSpec
 	}
 }
 
@@ -58,7 +62,25 @@ func (s *Store) Received(cursor int64, done ...int64) error {
 	if len(s.data.Done) > maxDone {
 		s.data.Done = s.data.Done[len(s.data.Done)-maxDone:]
 	}
+	return s.save()
+}
 
+// Spec is the last desired state received, still sealed (version 0 when none).
+func (s *Store) Spec() (int64, string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.data.SpecVersion, s.data.Spec
+}
+
+func (s *Store) SaveSpec(version int64, sealed string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.data.SpecVersion, s.data.Spec = version, sealed
+	return s.save()
+}
+
+// save writes atomically; the caller holds the lock.
+func (s *Store) save() error {
 	raw, err := json.Marshal(s.data)
 	if err != nil {
 		return err

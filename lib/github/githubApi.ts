@@ -32,6 +32,8 @@ export function appJwt(appId: number, privateKeyPem: string) {
 export class GitHubApi {
   /** Overridden by tests to point at a fake GitHub. */
   baseUrl = "https://api.github.com";
+  /** Where builders clone from; tests point it at a local git server. */
+  cloneBaseUrl = "https://github.com";
 
   async call<T>(
     path: string,

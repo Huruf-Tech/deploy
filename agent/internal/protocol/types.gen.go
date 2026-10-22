@@ -77,6 +77,9 @@ type AgentConfig struct {
 	SummaryIntervalMs int64 `json:"summaryIntervalMs"`
 
 	MaxBackoffMs int64 `json:"maxBackoffMs"`
+
+	// How often the agent re-checks its workloads against the desired state (self-healing)
+	ReconcileIntervalMs int64 `json:"reconcileIntervalMs"`
 }
 
 type AgentConfigPoll struct {
@@ -123,12 +126,15 @@ type PollResponse struct {
 
 	// New terminal input per session, after the cursors in `streams`
 	StreamInput map[string][]TerminalInput `json:"streamInput,omitempty"`
+
+	// Only when the version is newer than appliedVersion
+	Desired *PollResponseDesired `json:"desired,omitempty"`
 }
 
 type Command struct {
 	Seq int64 `json:"seq"`
 
-	// One of: ping, docker.ensure, stream.open, stream.close
+	// One of: ping, docker.ensure, stream.open, stream.close, build.run, server.prune
 	Type string `json:"type"`
 
 	Payload map[string]any `json:"payload"`
@@ -142,6 +148,13 @@ type TerminalInput struct {
 	Cols *int64 `json:"cols,omitempty"`
 
 	Rows *int64 `json:"rows,omitempty"`
+}
+
+type PollResponseDesired struct {
+	Version int64 `json:"version"`
+
+	// The DesiredSpec as JSON, sealed to this agent
+	Sealed string `json:"sealed"`
 }
 
 type PollRefusal struct {
@@ -204,7 +217,7 @@ type EventsResponse struct {
 type StreamOpenPayload struct {
 	Session string `json:"session"`
 
-	// One of: logs, metrics, exec, terminal
+	// One of: logs, metrics, exec, terminal, build
 	Kind string `json:"kind"`
 
 	Params map[string]any `json:"params"`
@@ -259,4 +272,179 @@ type MetricsSampleContainersItem struct {
 
 type EventsRequest struct {
 	Events []any `json:"events"`
+}
+
+type SealedPayload struct {
+	// lib/agents/sealing.ts format; the agent opens it
+	Sealed string `json:"sealed"`
+}
+
+type BuildRunPayload struct {
+	Deployment string `json:"deployment"`
+
+	Project string `json:"project"`
+
+	Release int64 `json:"release"`
+
+	Repo BuildRunPayloadRepo `json:"repo"`
+
+	// Build context inside the repo
+	RootDir string `json:"rootDir"`
+
+	// Rendered template; otherwise dockerfilePath inside the repo
+	Dockerfile string `json:"dockerfile,omitempty"`
+
+	DockerfilePath string `json:"dockerfilePath,omitempty"`
+
+	// Local tag to build
+	Image string `json:"image"`
+
+	Labels map[string]string `json:"labels"`
+
+	// Build-stage variables, mounted as the `huruf-env` BuildKit secret (shell `export` lines)
+	BuildEnv map[string]string `json:"buildEnv"`
+
+	NoCache bool `json:"noCache"`
+
+	TimeoutSec int64 `json:"timeoutSec"`
+
+	// Image that runs git, so hosts need no git
+	GitImage string `json:"gitImage"`
+
+	// Registry modes: push the built image here
+	Push *BuildRunPayloadPush `json:"push,omitempty"`
+}
+
+type BuildRunPayloadRepo struct {
+	Url string `json:"url"`
+
+	// HTTPS token (GitHub installation token)
+	Token string `json:"token,omitempty"`
+
+	// Deploy key for generic Git over SSH
+	SshKey string `json:"sshKey,omitempty"`
+
+	// Commit SHA, or a branch the builder resolves
+	Ref string `json:"ref"`
+}
+
+type BuildRunPayloadPush struct {
+	Image string `json:"image"`
+
+	Registry string `json:"registry"`
+
+	Username string `json:"username"`
+
+	Password string `json:"password"`
+}
+
+type DesiredSpec struct {
+	Version int64 `json:"version"`
+
+	Network string `json:"network"`
+
+	// Wait after removing a container from routing, before stopping it
+	DrainMs int64 `json:"drainMs"`
+
+	Workloads []Workload `json:"workloads"`
+
+	// Built images to keep for rollbacks; older huruf/* images are removed
+	KeepImages []string `json:"keepImages"`
+}
+
+type Workload struct {
+	Project string `json:"project"`
+
+	// Container name prefix and status key, unique on the server
+	Name string `json:"name"`
+
+	// e.g. shop.internal
+	DnsNames []string `json:"dnsNames"`
+
+	// One of: rolling, allAtOnce, stopFirst
+	Strategy string `json:"strategy"`
+
+	PublicPort *int64 `json:"publicPort,omitempty"`
+
+	Releases []WorkloadRelease `json:"releases"`
+}
+
+type WorkloadRelease struct {
+	Release int64 `json:"release"`
+
+	Image string `json:"image"`
+
+	// Receives traffic (public port and .internal DNS) once healthy
+	Routed bool `json:"routed"`
+
+	Replicas int64 `json:"replicas"`
+
+	Env map[string]string `json:"env"`
+
+	// Mounted read-only at /run/secrets/<KEY>, from tmpfs
+	Files map[string]string `json:"files"`
+
+	Command []string `json:"command,omitempty"`
+
+	Port *int64 `json:"port,omitempty"`
+
+	Healthcheck Healthcheck `json:"healthcheck"`
+
+	Cpus *float64 `json:"cpus,omitempty"`
+
+	MemoryMb *int64 `json:"memoryMb,omitempty"`
+
+	Volumes []WorkloadReleaseVolumesItem `json:"volumes"`
+
+	// Pull the image from this registry when it isn't local
+	Pull *RegistryAuth `json:"pull,omitempty"`
+}
+
+type Healthcheck struct {
+	// HTTP GET on the port; any status below 500 counts as up. Without a path, a TCP connect
+	Path string `json:"path,omitempty"`
+
+	// A shell command run inside the container (compose `healthcheck`); healthy once it passes
+	Command string `json:"command,omitempty"`
+
+	TimeoutSec int64 `json:"timeoutSec"`
+}
+
+type WorkloadReleaseVolumesItem struct {
+	Name string `json:"name"`
+
+	MountPath string `json:"mountPath"`
+}
+
+type RegistryAuth struct {
+	Registry string `json:"registry"`
+
+	Username string `json:"username"`
+
+	Password string `json:"password"`
+}
+
+type WorkloadStatusEvent struct {
+	Id string `json:"id"`
+
+	// Always "workload.status"
+	Type string `json:"type"`
+
+	Data WorkloadStatusEventData `json:"data"`
+}
+
+type WorkloadStatusEventData struct {
+	// Desired-state version being applied
+	Version int64 `json:"version"`
+
+	Project string `json:"project"`
+
+	Workload string `json:"workload"`
+
+	Release int64 `json:"release"`
+
+	// One of: starting, healthy, failed
+	State string `json:"state"`
+
+	Error string `json:"error,omitempty"`
 }

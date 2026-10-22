@@ -471,10 +471,18 @@ const webhookKey = async (id: ObjectId) => {
 const fromHex = (hex: string) =>
   Uint8Array.from(hex.match(/../g) ?? [], (b) => parseInt(b, 16));
 
+export type TPushEvent = {
+  ref?: string;
+  after?: string;
+  deleted?: boolean;
+  repository?: { full_name?: string };
+  head_commit?: { message?: string; author?: { name?: string } } | null;
+};
+
 /**
  * GitHub webhook (PLAN §17): HMAC-SHA256 verified with this integration's own
- * secret (constant-time via WebCrypto). Keeps installations in sync; `push`
- * starts deploys in Phase 6.
+ * secret (constant-time via WebCrypto). Keeps installations in sync and
+ * returns `push` events for the caller to deploy.
  */
 export async function handleWebhook(
   id: ObjectId,
@@ -494,6 +502,15 @@ export async function handleWebhook(
     )
   ) throw Response.unauthorized("Invalid signature");
 
+  if (event === "push") {
+    // Deploys start in the route (lib/deploy), so this module stays below it.
+    const integration = await gitIntegrationModel.findOne({ _id: id }, {
+      projection: { tenant: 1 },
+    });
+    return integration
+      ? { push: JSON.parse(body) as TPushEvent, tenant: integration.tenant }
+      : undefined;
+  }
   if (event !== "installation") return;
 
   const payload = JSON.parse(body) as {
@@ -523,3 +540,63 @@ export async function handleWebhook(
     },
   ]);
 }
+
+/** An integration by id within the tenant, for deploys (push deploys have no user). */
+export async function integrationInTenant(id: ObjectId, tenant: ObjectId) {
+  const doc = await gitIntegrationModel.findOne(
+    { _id: id, tenant },
+    { projection: { _id: 1, tenant: 1, installations: 1 } },
+  );
+  if (!doc) {
+    throw Response.notFound("The project's GitHub connection was removed");
+  }
+  return doc;
+}
+
+/** A branch's (or SHA's) head commit. */
+export async function resolveCommit(
+  doc: TIntegrationRef & Pick<TGitIntegration, "installations">,
+  installation: number,
+  repo: string,
+  ref: string,
+) {
+  assertInstallation(doc, installation);
+  const { data } = await githubApi.call<{
+    sha: string;
+    commit: { message: string; author: { name: string } | null };
+  }>(`/repos/${repo}/commits/${encodeURIComponent(ref)}`, {
+    auth: await installationToken(doc, installation),
+  });
+  return {
+    sha: data.sha,
+    message: data.commit.message.split("\n")[0].slice(0, 300),
+    author: data.commit.author?.name,
+  };
+}
+
+/** One file of the repo at a commit (compose sources). */
+export async function readRepoFile(
+  doc: TIntegrationRef & Pick<TGitIntegration, "installations">,
+  installation: number,
+  repo: string,
+  sha: string,
+  path: string,
+) {
+  assertInstallation(doc, installation);
+  const clean = path.replace(/^\.?\//, "");
+  const { data } = await githubApi.call<{ content: string; encoding: string }>(
+    `/repos/${repo}/contents/${
+      clean.split("/").map(encodeURIComponent).join("/")
+    }?ref=${sha}`,
+    { auth: await installationToken(doc, installation) },
+  );
+  return new TextDecoder().decode(
+    Uint8Array.from(
+      atob(data.content.replace(/\s/g, "")),
+      (c) => c.charCodeAt(0),
+    ),
+  );
+}
+
+export const cloneUrl = (repo: string) =>
+  `${githubApi.cloneBaseUrl}/${repo}.git`;

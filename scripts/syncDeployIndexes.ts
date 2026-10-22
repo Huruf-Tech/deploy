@@ -17,6 +17,15 @@ import {
   templateModel,
   templateVersionModel,
 } from "@/schemas/build/template.ts";
+import {
+  projectGroupModel,
+  projectModel,
+} from "@/schemas/applications/project.ts";
+import {
+  deploymentModel,
+  releaseModel,
+} from "@/schemas/applications/deployment.ts";
+import { registryModel } from "@/schemas/infrastructure/serverSpec.ts";
 import { bootstrapSessionModel } from "@/schemas/infrastructure/bootstrapSession.ts";
 import {
   streamChunkModel,
@@ -154,6 +163,49 @@ export const syncDeployIndexes = async () => {
       { template: 1, version: -1 },
       { name: "uniqueVersion", unique: true },
     ),
+
+    projectModel.createIndex(
+      { tenant: 1, slug: 1 },
+      { name: "uniqueSlug", unique: true },
+    ),
+    // Spec computation: the projects placed on (or moving to) a server.
+    projectModel.createIndex({ placedOn: 1 }, { name: "placedOn" }),
+    projectModel.createIndex({ servers: 1 }, { name: "servers" }),
+    // Push deploys look projects up by their GitHub source.
+    projectModel.createIndex(
+      { "source.gitIntegration": 1, "source.repo": 1, "source.branch": 1 },
+      {
+        name: "githubSource",
+        partialFilterExpression: { "source.type": "github" },
+      },
+    ),
+    projectGroupModel.createIndex({ tenant: 1 }, { name: "tenant" }),
+    releaseModel.createIndex(
+      { project: 1, number: -1 },
+      { name: "uniqueNumber", unique: true },
+    ),
+    deploymentModel.createIndex(
+      { project: 1, createdAt: -1 },
+      { name: "projectHistory" },
+    ),
+    // One building-or-deploying deployment per project (PLAN §9.3).
+    deploymentModel.createIndex(
+      { project: 1 },
+      {
+        name: "oneActive",
+        unique: true,
+        partialFilterExpression: { active: true },
+      },
+    ),
+    deploymentModel.createIndex(
+      { servers: 1, status: 1 },
+      { name: "serverRollouts" },
+    ),
+    deploymentModel.createIndex(
+      { "builds.server": 1, "builds.seq": 1 },
+      { name: "builds", partialFilterExpression: { status: "building" } },
+    ),
+    registryModel.createIndex({ tenant: 1, name: 1 }, { name: "tenantName" }),
   ]);
 
   // The offline sweep claims these slots; they must exist (PLAN §3.4).

@@ -4,8 +4,11 @@
 package identity
 
 import (
+	"crypto/aes"
+	"crypto/cipher"
 	"crypto/ecdh"
 	"crypto/ed25519"
+	"crypto/hkdf"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base32"
@@ -122,4 +125,42 @@ func (i *Identity) SignRequest(method, path string, timestamp time.Time, body []
 		"\n",
 	)
 	return ts, b64.EncodeToString(ed25519.Sign(i.sign, []byte(canonical)))
+}
+
+const sealInfo = "huruf-deploy seal v1"
+
+// Open decrypts a value the control plane sealed to this agent's X25519 key
+// (PLAN §4.2): `s1.` + base64url(ephemeral public key ‖ nonce ‖ ciphertext),
+// X25519 → HKDF-SHA256 → AES-256-GCM. Mirrors lib/agents/sealing.ts.
+func (i *Identity) Open(sealed string) ([]byte, error) {
+	encoded, ok := strings.CutPrefix(sealed, "s1.")
+	if !ok {
+		return nil, errors.New("unknown sealed format")
+	}
+	raw, err := b64.DecodeString(encoded)
+	if err != nil || len(raw) < 32+12+16 {
+		return nil, errors.New("malformed sealed value")
+	}
+	ephemeral, err := ecdh.X25519().NewPublicKey(raw[:32])
+	if err != nil {
+		return nil, err
+	}
+	shared, err := i.box.ECDH(ephemeral)
+	if err != nil {
+		return nil, err
+	}
+	salt := append(append([]byte{}, raw[:32]...), i.box.PublicKey().Bytes()...)
+	key, err := hkdf.Key(sha256.New, shared, salt, sealInfo, 32)
+	if err != nil {
+		return nil, err
+	}
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return nil, err
+	}
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return nil, err
+	}
+	return gcm.Open(nil, raw[32:44], raw[44:], nil)
 }
