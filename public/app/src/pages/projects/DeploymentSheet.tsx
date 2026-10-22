@@ -66,11 +66,8 @@ function BuildLog({
     [server, deployment]
   )
   const onChunk = React.useCallback((chunk: TStreamChunk) => {
-    // eslint-disable-next-line no-control-regex
     setText((current) =>
-      (current + chunk.data.replace(/\u001b\[[0-9;?]*[ -/]*[@-~]/g, "")).slice(
-        -500_000
-      )
+      (current + chunk.data.replace(ANSI, "")).slice(-500_000)
     )
   }, [])
   const { status, error } = useStream(open, onChunk, 1_000, false)
@@ -106,6 +103,10 @@ function BuildLog({
     </div>
   )
 }
+
+/** Terminal colors and cursor codes in build output. */
+// eslint-disable-next-line no-control-regex
+const ANSI = /\u001b\[[0-9;?]*[ -/]*[@-~]/g
 
 export function DeploymentSheet({
   deployment,
