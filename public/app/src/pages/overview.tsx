@@ -8,6 +8,11 @@ import {
   IconBellPlus,
   IconBraces,
   IconBulb,
+  IconLock,
+  IconReceipt2,
+  IconShieldCheck,
+  IconUserShield,
+  IconVariable,
   IconCpu,
   IconDatabase,
   IconMailExclamation,
@@ -275,73 +280,24 @@ function Stat({
   )
 }
 
-/** Shortcuts to what people do most; each shown only with the permission for it. */
-function QuickActions() {
-  const { t } = useTranslation()
-  const actions: {
-    hue: THue
-    icon: React.ComponentType<{ className?: string }>
-    label: string
-    hint: string
-    to: string
-    allowed: boolean
-  }[] = [
-    {
-      hue: "orange",
-      icon: IconRocket,
-      label: t("New project"),
-      hint: t("Deploy from GitHub, an image or a template"),
-      to: "applications/projects/new",
-      allowed: ThunderSDK.isPermitted("projects", "create"),
-    },
-    {
-      hue: "sky",
-      icon: IconServerBolt,
-      label: t("Add a server"),
-      hint: t("Install the agent over SSH"),
-      to: "infrastructure/servers",
-      allowed: ThunderSDK.isPermitted("servers", "create"),
-    },
-    {
-      hue: "rose",
-      icon: IconBellPlus,
-      label: t("Alert rules"),
-      hint: t("Email, Slack or webhook"),
-      to: "monitoring/alertRules",
-      allowed: ThunderSDK.isPermitted("alertRules", "list"),
-    },
-    {
-      hue: "violet",
-      icon: IconBraces,
-      label: t("Variables"),
-      hint: t("Secrets and settings"),
-      to: "configuration/variables",
-      allowed: ThunderSDK.isPermitted("variables", "list"),
-    },
-    {
-      hue: "emerald",
-      icon: IconNetwork,
-      label: t("Private network"),
-      hint: t("Servers reaching each other"),
-      to: "infrastructure/network",
-      allowed: ThunderSDK.isPermitted("networks", "get"),
-    },
-    {
-      hue: "amber",
-      icon: IconTemplate,
-      label: t("Templates"),
-      hint: t("One-click services and builds"),
-      to: "build/templates",
-      allowed: ThunderSDK.isPermitted("templates", "list"),
-    },
-  ]
-  const shown = actions.filter((a) => a.allowed)
+type TShortcut = {
+  hue: THue
+  icon: React.ComponentType<{ className?: string }>
+  label: string
+  hint: string
+  to: string
+  allowed: boolean
+}
+
+/** A row of link cards; only the ones the user may open are shown. */
+function Shortcuts({ title, items }: { title: string; items: TShortcut[] }) {
+  const shown = items.filter((a) => a.allowed)
   if (!shown.length) return null
 
   return (
-    <nav aria-label={t("Quick actions")}>
+    <nav aria-label={title}>
       <h2 className="mb-2 text-sm font-medium text-muted-foreground">
-        {t("Quick actions")}
+        {title}
       </h2>
       <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         {shown.map((a) => (
@@ -361,6 +317,119 @@ function QuickActions() {
         ))}
       </ul>
     </nav>
+  )
+}
+
+/** Shortcuts to what people do most; each shown only with the permission for it. */
+function QuickActions() {
+  const { t } = useTranslation()
+  return (
+    <Shortcuts
+      title={t("Quick actions")}
+      items={[
+        {
+          hue: "orange",
+          icon: IconRocket,
+          label: t("New project"),
+          hint: t("Deploy from GitHub, an image or a template"),
+          to: "applications/projects/new",
+          allowed: ThunderSDK.isPermitted("projects", "create"),
+        },
+        {
+          hue: "sky",
+          icon: IconServerBolt,
+          label: t("Add a server"),
+          hint: t("Install the agent over SSH"),
+          to: "infrastructure/servers",
+          allowed: ThunderSDK.isPermitted("servers", "create"),
+        },
+        {
+          hue: "rose",
+          icon: IconBellPlus,
+          label: t("Alert rules"),
+          hint: t("Email, Slack or webhook"),
+          to: "monitoring/alertRules",
+          allowed: ThunderSDK.isPermitted("alertRules", "list"),
+        },
+        {
+          hue: "violet",
+          icon: IconBraces,
+          label: t("Variables"),
+          hint: t("Secrets and settings"),
+          to: "configuration/variables",
+          allowed: ThunderSDK.isPermitted("variables", "list"),
+        },
+        {
+          hue: "emerald",
+          icon: IconNetwork,
+          label: t("Private network"),
+          hint: t("Servers reaching each other"),
+          to: "infrastructure/network",
+          allowed: ThunderSDK.isPermitted("networks", "get"),
+        },
+        {
+          hue: "amber",
+          icon: IconTemplate,
+          label: t("Templates"),
+          hint: t("One-click services and builds"),
+          to: "build/templates",
+          allowed: ThunderSDK.isPermitted("templates", "list"),
+        },
+      ]}
+    />
+  )
+}
+
+/** The platform's admin pages, for admins only (`users` is admin-only). */
+function AdminShortcuts() {
+  const { t } = useTranslation()
+  if (!ThunderSDK.isPermitted("users", "get")) return null
+  return (
+    <Shortcuts
+      title={t("Administration")}
+      items={[
+        {
+          hue: "amber",
+          icon: IconReceipt2,
+          label: t("Plans"),
+          hint: t("Prices, quotas and private plans"),
+          to: "admin/plans",
+          allowed: ThunderSDK.isPermitted("plans", "get"),
+        },
+        {
+          hue: "violet",
+          icon: IconShieldCheck,
+          label: t("Roles"),
+          hint: t("What each role may do"),
+          to: "admin/accessControl",
+          allowed: ThunderSDK.isPermitted("accessControl", "get"),
+        },
+        {
+          hue: "sky",
+          icon: IconLock,
+          label: t("Policies"),
+          hint: t("Permission sets roles combine"),
+          to: "admin/accessControlPolicies",
+          allowed: ThunderSDK.isPermitted("accessControlPolicies", "get"),
+        },
+        {
+          hue: "emerald",
+          icon: IconVariable,
+          label: t("Envs"),
+          hint: t("Platform settings and limits"),
+          to: "admin/envs",
+          allowed: ThunderSDK.isPermitted("envs", "get"),
+        },
+        {
+          hue: "rose",
+          icon: IconUserShield,
+          label: t("Users"),
+          hint: t("Accounts across workspaces"),
+          to: "admin/users",
+          allowed: ThunderSDK.isPermitted("users", "get"),
+        },
+      ]}
+    />
   )
 }
 
@@ -474,6 +543,7 @@ export default function Overview() {
           </EmptyContent>
         </Empty>
         <QuickActions />
+        <AdminShortcuts />
       </Page>
     )
   }
@@ -692,6 +762,7 @@ export default function Overview() {
       )}
 
       <QuickActions />
+      <AdminShortcuts />
 
       {!servers ? (
         <Skeleton className="h-40 rounded-3xl" />
