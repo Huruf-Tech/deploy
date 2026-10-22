@@ -48,6 +48,10 @@ type Agent struct {
 	Network interface {
 		Apply(ctx context.Context, spec protocol.DesiredSpec) error
 	}
+	// Evaluates alert rules and autoscaling from the spec; may be nil.
+	Monitor interface {
+		SetSpec(spec protocol.DesiredSpec)
+	}
 	Log *slog.Logger
 
 	config        *protocol.AgentConfig
@@ -57,7 +61,9 @@ type Agent struct {
 	lastSummary   time.Time
 	sampler       host.Sampler
 	reconcileMs   atomic.Int64 // read by the reconciler's goroutine
-	mu            sync.Mutex   // guards events: commands finish on their own goroutines
+	monitorMs     atomic.Int64
+	capacity      atomic.Pointer[protocol.AgentConfigCapacity]
+	mu            sync.Mutex // guards events: commands finish on their own goroutines
 	wake          chan struct{}
 	events        []any
 }
@@ -199,10 +205,36 @@ func (a *Agent) applyDesired(ctx context.Context, version int64, sealed string) 
 		// Errors are reported in mesh.status; workloads still run locally.
 		_ = a.Network.Apply(ctx, spec)
 	}
+	if a.Monitor != nil {
+		a.Monitor.SetSpec(spec)
+	}
 	if a.Reconciler != nil {
 		a.Reconciler.Apply(ctx, spec)
 	}
 	return nil
+}
+
+// MonitorInterval and CapacityConfig come from the control plane's config,
+// with the same fallback as ReconcileInterval before the first hello.
+func (a *Agent) MonitorInterval() time.Duration {
+	if ms := a.monitorMs.Load(); ms > 0 {
+		return time.Duration(ms) * time.Millisecond
+	}
+	return unreachableRetryCap
+}
+
+func (a *Agent) CapacityConfig() protocol.AgentConfigCapacity {
+	if c := a.capacity.Load(); c != nil {
+		return *c
+	}
+	return protocol.AgentConfigCapacity{HeadroomPercent: 15, RetentionDays: 90}
+}
+
+func (a *Agent) setConfig(config protocol.AgentConfig, version string) {
+	a.config, a.configVersion = &config, version
+	a.reconcileMs.Store(config.ReconcileIntervalMs)
+	a.monitorMs.Store(config.MonitorIntervalMs)
+	a.capacity.Store(&config.Capacity)
 }
 
 // ReconcileInterval comes from the control plane's config; until the first
@@ -233,8 +265,8 @@ func (a *Agent) hello(ctx context.Context) error {
 	} else if changed {
 		a.Log.Info("registered as a new server; starting over", "server", response.Server)
 	}
-	a.config, a.configVersion, a.registered = &response.Config, response.Version, true
-	a.reconcileMs.Store(response.Config.ReconcileIntervalMs)
+	a.setConfig(response.Config, response.Version)
+	a.registered = true
 	if response.Status == "pending" {
 		// The locally computed code, never the one from the network (PLAN §4.2).
 		a.Log.Info("waiting for approval: enter this pairing code in the dashboard",
@@ -248,8 +280,7 @@ func (a *Agent) refreshConfig(ctx context.Context) error {
 	if _, err := a.Client.Post(ctx, "/agents/api/config", struct{}{}, &response); err != nil {
 		return err
 	}
-	a.config, a.configVersion = &response.Config, response.Version
-	a.reconcileMs.Store(response.Config.ReconcileIntervalMs)
+	a.setConfig(response.Config, response.Version)
 	a.Log.Info("config updated", "version", response.Version, "idlePollMs", response.Config.Poll.IdleMs)
 	return nil
 }

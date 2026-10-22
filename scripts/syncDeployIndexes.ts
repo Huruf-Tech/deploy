@@ -1,4 +1,5 @@
 import { planModel } from "@/schemas/billing/plan.ts";
+import { alertEventModel, alertRuleModel } from "@/schemas/monitoring/alert.ts";
 import { subscriptionPeriodModel } from "@/schemas/billing/subscriptionPeriod.ts";
 import { keyringModel } from "@/schemas/crypto/keyring.ts";
 import { rateCounterModel } from "@/schemas/limits/rateCounter.ts";
@@ -207,6 +208,35 @@ export const syncDeployIndexes = async () => {
       { name: "builds", partialFilterExpression: { status: "building" } },
     ),
     registryModel.createIndex({ tenant: 1, name: 1 }, { name: "tenantName" }),
+    alertRuleModel.createIndex({ tenant: 1, metric: 1 }, {
+      name: "tenantMetric",
+    }),
+    // One open episode per rule and subject: repeats are deduped (PLAN §13).
+    alertEventModel.createIndex({ key: 1 }, {
+      name: "uniqueOpen",
+      unique: true,
+      partialFilterExpression: { open: true },
+    }),
+    alertEventModel.createIndex({ tenant: 1, firedAt: -1 }, {
+      name: "history",
+    }),
+    alertEventModel.createIndex({ server: 1, metric: 1 }, {
+      name: "server",
+      partialFilterExpression: { open: true },
+    }),
+    alertEventModel.createIndex({ project: 1, metric: 1 }, {
+      name: "project",
+      partialFilterExpression: { open: true },
+    }),
+    alertEventModel.createIndex({ rule: 1 }, {
+      name: "rule",
+      partialFilterExpression: { open: true },
+    }),
+    // The outbox: only pending notices are indexed (PLAN §20.2).
+    alertEventModel.createIndex({ "delivery.nextAttemptAt": 1 }, {
+      name: "outbox",
+      partialFilterExpression: { "delivery.status": "pending" },
+    }),
     // ensureMeshIndex upserts one per tenant.
     networkModel.createIndex({ tenant: 1 }, {
       name: "uniqueTenant",

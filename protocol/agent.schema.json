@@ -156,6 +156,34 @@
               "minimum": -9007199254740991,
               "maximum": 9007199254740991,
               "description": "How often the agent re-checks its workloads against the desired state (self-healing)"
+            },
+            "monitorIntervalMs": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991,
+              "description": "How often the agent samples usage for alerts, autoscaling and footprints"
+            },
+            "capacity": {
+              "type": "object",
+              "properties": {
+                "headroomPercent": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 90,
+                  "description": "Kept free for the OS, agent and proxy when computing room (PLAN §7.1)"
+                },
+                "retentionDays": {
+                  "type": "integer",
+                  "minimum": 7,
+                  "maximum": 366,
+                  "description": "Daily peaks kept on the agent"
+                }
+              },
+              "required": [
+                "headroomPercent",
+                "retentionDays"
+              ],
+              "additionalProperties": false
             }
           },
           "required": [
@@ -163,7 +191,9 @@
             "jitterPercent",
             "summaryIntervalMs",
             "maxBackoffMs",
-            "reconcileIntervalMs"
+            "reconcileIntervalMs",
+            "monitorIntervalMs",
+            "capacity"
           ],
           "additionalProperties": false
         },
@@ -255,6 +285,34 @@
               "minimum": -9007199254740991,
               "maximum": 9007199254740991,
               "description": "How often the agent re-checks its workloads against the desired state (self-healing)"
+            },
+            "monitorIntervalMs": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991,
+              "description": "How often the agent samples usage for alerts, autoscaling and footprints"
+            },
+            "capacity": {
+              "type": "object",
+              "properties": {
+                "headroomPercent": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 90,
+                  "description": "Kept free for the OS, agent and proxy when computing room (PLAN §7.1)"
+                },
+                "retentionDays": {
+                  "type": "integer",
+                  "minimum": 7,
+                  "maximum": 366,
+                  "description": "Daily peaks kept on the agent"
+                }
+              },
+              "required": [
+                "headroomPercent",
+                "retentionDays"
+              ],
+              "additionalProperties": false
             }
           },
           "required": [
@@ -262,7 +320,9 @@
             "jitterPercent",
             "summaryIntervalMs",
             "maxBackoffMs",
-            "reconcileIntervalMs"
+            "reconcileIntervalMs",
+            "monitorIntervalMs",
+            "capacity"
           ],
           "additionalProperties": false
         }
@@ -615,7 +675,8 @@
             "metrics",
             "exec",
             "terminal",
-            "build"
+            "build",
+            "capacity"
           ]
         },
         "params": {
@@ -948,6 +1009,101 @@
                     "required": [
                       "publicKey",
                       "peers"
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "type",
+                  "data"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64
+                  },
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "alert.fired",
+                      "alert.resolved"
+                    ]
+                  },
+                  "data": {
+                    "type": "object",
+                    "properties": {
+                      "rule": {
+                        "type": "string"
+                      },
+                      "value": {
+                        "type": "number"
+                      },
+                      "firedAt": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991,
+                        "description": "Unix ms; identifies the episode"
+                      }
+                    },
+                    "required": [
+                      "rule",
+                      "value",
+                      "firedAt"
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "type",
+                  "data"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64
+                  },
+                  "type": {
+                    "type": "string",
+                    "const": "autoscale.changed"
+                  },
+                  "data": {
+                    "type": "object",
+                    "properties": {
+                      "project": {
+                        "type": "string"
+                      },
+                      "workload": {
+                        "type": "string"
+                      },
+                      "from": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      "to": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      "reason": {
+                        "type": "string",
+                        "maxLength": 200
+                      }
+                    },
+                    "required": [
+                      "project",
+                      "workload",
+                      "from",
+                      "to",
+                      "reason"
                     ]
                   }
                 },
@@ -1295,6 +1451,83 @@
                   ],
                   "additionalProperties": false
                 }
+              },
+              "reserve": {
+                "type": "object",
+                "properties": {
+                  "cpu": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "memMb": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  }
+                },
+                "required": [
+                  "cpu",
+                  "memMb"
+                ],
+                "additionalProperties": false,
+                "description": "Reserved per replica; with limits, the base for autoscale targets and the capacity room"
+              },
+              "base": {
+                "type": "object",
+                "properties": {
+                  "cpu": {
+                    "type": "number",
+                    "exclusiveMinimum": 0
+                  },
+                  "memMb": {
+                    "type": "number",
+                    "exclusiveMinimum": 0
+                  }
+                },
+                "required": [
+                  "cpu",
+                  "memMb"
+                ],
+                "additionalProperties": false,
+                "description": "Per-replica limit, else reservation: 100% for usage percents"
+              },
+              "autoscale": {
+                "type": "object",
+                "properties": {
+                  "min": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 50
+                  },
+                  "max": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 50
+                  },
+                  "cpuPercent": {
+                    "description": "Target average CPU per replica, as a percent of `base.cpu`",
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 100
+                  },
+                  "memPercent": {
+                    "description": "Target average memory per replica, as a percent of `base.memMb`",
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 100
+                  },
+                  "cooldownSec": {
+                    "type": "integer",
+                    "minimum": 10,
+                    "maximum": 9007199254740991
+                  }
+                },
+                "required": [
+                  "min",
+                  "max",
+                  "cooldownSec"
+                ],
+                "additionalProperties": false
               }
             },
             "required": [
@@ -1302,7 +1535,9 @@
               "name",
               "dnsNames",
               "strategy",
-              "releases"
+              "releases",
+              "reserve",
+              "base"
             ],
             "additionalProperties": false
           }
@@ -1371,6 +1606,47 @@
           ],
           "additionalProperties": false
         },
+        "alerts": {
+          "default": [],
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "rule": {
+                "type": "string"
+              },
+              "metric": {
+                "type": "string",
+                "enum": [
+                  "cpu",
+                  "memory",
+                  "disk",
+                  "room"
+                ]
+              },
+              "project": {
+                "description": "Project rules average its replicas here; server rules use the host",
+                "type": "string"
+              },
+              "threshold": {
+                "type": "number",
+                "description": "Percent for cpu/memory/disk (above fires); MiB of memory room for room (below fires)"
+              },
+              "forSec": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": [
+              "rule",
+              "metric",
+              "threshold",
+              "forSec"
+            ],
+            "additionalProperties": false
+          }
+        },
         "registry": {
           "description": "Run the tenant's built-in registry here (primary server)",
           "type": "object",
@@ -1404,7 +1680,8 @@
         "network",
         "drainMs",
         "workloads",
-        "keepImages"
+        "keepImages",
+        "alerts"
       ],
       "additionalProperties": false
     },
@@ -1514,6 +1791,333 @@
         "id",
         "type",
         "data"
+      ]
+    },
+    "AlertEvent": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "alert.fired",
+            "alert.resolved"
+          ]
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "rule": {
+              "type": "string"
+            },
+            "value": {
+              "type": "number"
+            },
+            "firedAt": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991,
+              "description": "Unix ms; identifies the episode"
+            }
+          },
+          "required": [
+            "rule",
+            "value",
+            "firedAt"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "type",
+        "data"
+      ]
+    },
+    "AutoscaleEvent": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "type": {
+          "type": "string",
+          "const": "autoscale.changed"
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "project": {
+              "type": "string"
+            },
+            "workload": {
+              "type": "string"
+            },
+            "from": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            "to": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            "reason": {
+              "type": "string",
+              "maxLength": 200
+            }
+          },
+          "required": [
+            "project",
+            "workload",
+            "from",
+            "to",
+            "reason"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "type",
+        "data"
+      ]
+    },
+    "CapacityReport": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "at": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "host": {
+          "type": "object",
+          "properties": {
+            "cpuCores": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            "memTotal": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            "diskTotal": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            "day": {
+              "description": "Host usage over the last 24 h",
+              "type": "object",
+              "properties": {
+                "cpuP95": {
+                  "type": "number"
+                },
+                "cpuPeak": {
+                  "type": "number"
+                },
+                "memP95": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "memPeak": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "diskPeak": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                }
+              },
+              "required": [
+                "cpuP95",
+                "cpuPeak",
+                "memP95",
+                "memPeak",
+                "diskPeak"
+              ]
+            }
+          },
+          "required": [
+            "cpuCores",
+            "memTotal",
+            "diskTotal"
+          ]
+        },
+        "workloads": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "project": {
+                "type": "string"
+              },
+              "workload": {
+                "type": "string"
+              },
+              "replicas": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "maxReplicas": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991,
+                "description": "Autoscale max, else replicas"
+              },
+              "reserve": {
+                "type": "object",
+                "properties": {
+                  "cpu": {
+                    "type": "number"
+                  },
+                  "memMb": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  }
+                },
+                "required": [
+                  "cpu",
+                  "memMb"
+                ]
+              },
+              "disk": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991,
+                "description": "Image plus volumes, bytes"
+              },
+              "day": {
+                "type": "object",
+                "properties": {
+                  "cpuP95": {
+                    "type": "number"
+                  },
+                  "cpuPeak": {
+                    "type": "number"
+                  },
+                  "memP95": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  "memPeak": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  }
+                },
+                "required": [
+                  "cpuP95",
+                  "cpuPeak",
+                  "memP95",
+                  "memPeak"
+                ]
+              },
+              "week": {
+                "type": "object",
+                "properties": {
+                  "cpuP95": {
+                    "type": "number"
+                  },
+                  "cpuPeak": {
+                    "type": "number"
+                  },
+                  "memP95": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  "memPeak": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  }
+                },
+                "required": [
+                  "cpuP95",
+                  "cpuPeak",
+                  "memP95",
+                  "memPeak"
+                ]
+              }
+            },
+            "required": [
+              "project",
+              "workload",
+              "replicas",
+              "maxReplicas",
+              "reserve",
+              "disk"
+            ]
+          }
+        },
+        "daily": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "day": {
+                "type": "string",
+                "description": "YYYY-MM-DD, UTC"
+              },
+              "memPeak": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "cpuP95": {
+                "type": "number"
+              },
+              "diskPeak": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "workloads": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                },
+                "additionalProperties": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "description": "workload -> memory peak per replica"
+              }
+            },
+            "required": [
+              "day",
+              "memPeak",
+              "cpuP95",
+              "diskPeak",
+              "workloads"
+            ]
+          }
+        }
+      },
+      "required": [
+        "at",
+        "host",
+        "workloads",
+        "daily"
       ]
     }
   }

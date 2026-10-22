@@ -17,8 +17,8 @@ func TestParseBytes(t *testing.T) {
 		"garbage": 0,
 	}
 	for text, want := range cases {
-		if got := parseBytes(text); got != want {
-			t.Errorf("parseBytes(%q) = %d, want %d", text, got, want)
+		if got := ParseBytes(text); got != want {
+			t.Errorf("ParseBytes(%q) = %d, want %d", text, got, want)
 		}
 	}
 }

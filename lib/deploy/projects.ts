@@ -125,7 +125,12 @@ async function assertFits(opts: {
         ...(opts.except ? { _id: { $ne: opts.except } } : {}),
       },
       {
-        projection: { servers: 1, runtime: 1, replicasPerServer: 1 },
+        projection: {
+          servers: 1,
+          runtime: 1,
+          replicasPerServer: 1,
+          autoscale: 1,
+        },
         limit: 1_000,
       },
     ).toArray(),
@@ -139,11 +144,11 @@ async function assertFits(opts: {
       p.servers.some((s) => s.equals(server._id))
     );
     const cpuUsed = here.reduce(
-      (sum, p) => sum + p.runtime.cpuReserve * p.replicasPerServer,
+      (sum, p) => sum + p.runtime.cpuReserve * reservedReplicas(p),
       0,
     );
     const memUsed = here.reduce(
-      (sum, p) => sum + p.runtime.memReserveMb * p.replicasPerServer,
+      (sum, p) => sum + p.runtime.memReserveMb * reservedReplicas(p),
       0,
     );
     const cpuFree = server.inventory.cpuCores - cpuUsed;
@@ -334,11 +339,12 @@ export async function createProject(opts: {
     servers: input.servers,
     port: input.publicPort,
   });
+  assertAutoscale(input.autoscale, hasVolumes);
   await assertFits({
     tenant,
     servers: input.servers,
-    cpu: parsedRuntime.cpuReserve * input.replicasPerServer,
-    memMb: parsedRuntime.memReserveMb * input.replicasPerServer,
+    cpu: parsedRuntime.cpuReserve * reservedReplicas(input),
+    memMb: parsedRuntime.memReserveMb * reservedReplicas(input),
   });
 
   let deployKey: { publicKey: string; privateKey: string } | undefined;
@@ -376,6 +382,7 @@ export async function createProject(opts: {
       servers: input.servers,
       placedOn: [],
       replicasPerServer: input.replicasPerServer,
+      ...(input.autoscale ? { autoscale: input.autoscale } : {}),
       ...(input.publicPort ? { publicPort: input.publicPort } : {}),
       volumes: input.volumes,
       deployStrategy: strategy,
@@ -448,25 +455,31 @@ export async function updateProject(opts: {
     ? undefined
     : patch.publicPort ?? project.publicPort;
   const strategy = patch.deployStrategy ?? project.deployStrategy;
+  const autoscale = patch.autoscale === null
+    ? undefined
+    : patch.autoscale ?? project.autoscale;
 
   await assertRegistry(tenant, patch.registry);
   if (patch.compose && project.source.type === "compose") {
     await checkCompose(patch.compose, id);
   }
+  const hasVolumes = project.volumes.length > 0 ||
+    await hasComposeVolumes(project, patch.compose);
   assertVolumeRules({
-    hasVolumes: project.volumes.length > 0 ||
-      await hasComposeVolumes(project, patch.compose),
+    hasVolumes,
     servers,
     strategy,
     acknowledged: patch.acknowledgeVolumeRisk ??
       project.deployStrategy === strategy,
   });
   await assertPortFree({ tenant, servers, port: publicPort, except: id });
+  assertAutoscale(autoscale, hasVolumes);
+  const reserved = reservedReplicas({ replicasPerServer: replicas, autoscale });
   await assertFits({
     tenant,
     servers,
-    cpu: runtime.cpuReserve * replicas,
-    memMb: runtime.memReserveMb * replicas,
+    cpu: runtime.cpuReserve * reserved,
+    memMb: runtime.memReserveMb * reserved,
     except: id,
   });
 
@@ -483,6 +496,8 @@ export async function updateProject(opts: {
   else if (patch.group) $set.group = patch.group;
   if (publicPort) $set.publicPort = publicPort;
   else $unset.publicPort = "";
+  if (autoscale) $set.autoscale = autoscale;
+  else $unset.autoscale = $unset.autoscaled = "";
   if (patch.autoDeploy !== undefined) $set.autoDeploy = patch.autoDeploy;
   if (patch.needsPrivateNetwork !== undefined) {
     $set.needsPrivateNetwork = patch.needsPrivateNetwork;
@@ -517,6 +532,22 @@ export async function updateProject(opts: {
     redeploy: !sameServers(servers, project.placedOn) &&
       project.placedOn.length > 0,
   };
+}
+
+/** Placement reserves for the worst case: autoscale max (PLAN §7.1). */
+export const reservedReplicas = (
+  p: Pick<TProject, "replicasPerServer" | "autoscale">,
+) => p.autoscale?.max ?? p.replicasPerServer;
+
+function assertAutoscale(
+  autoscale: TProject["autoscale"],
+  hasVolumes: boolean,
+) {
+  if (autoscale && hasVolumes) {
+    throw Response.badRequest(
+      "Projects with local volumes can't autoscale: their replicas would share the volume",
+    );
+  }
 }
 
 const sameServers = (a: ObjectId[], b: ObjectId[]) =>
@@ -590,6 +621,7 @@ export async function placement(tenant: ObjectId) {
         servers: 1,
         runtime: 1,
         replicasPerServer: 1,
+        autoscale: 1,
         publicPort: 1,
       },
       limit: 2_000,
@@ -604,11 +636,11 @@ export async function placement(tenant: ObjectId) {
       p.servers.some((s) => s.equals(server._id))
     );
     const cpuReserved = here.reduce(
-      (s, p) => s + p.runtime.cpuReserve * p.replicasPerServer,
+      (s, p) => s + p.runtime.cpuReserve * reservedReplicas(p),
       0,
     );
     const memReservedMb = here.reduce(
-      (s, p) => s + p.runtime.memReserveMb * p.replicasPerServer,
+      (s, p) => s + p.runtime.memReserveMb * reservedReplicas(p),
       0,
     );
     const lease = leases.find((l) => l._id.equals(server._id));

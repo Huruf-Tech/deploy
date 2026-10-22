@@ -1003,6 +1003,7 @@ Each phase ends with a **review checkpoint** (demo + code review + approval). Ph
 - Cloudflare integration: Tunnel and/or Load Balancer modes, hostnames per project, health-check alignment.
 
 ### Phase 12 — Backlog (after MVP)
+- Ability to upgrade already installed agent along with its deps
 - Long-poll/streamed responses for near-instant streams
 - Standby servers and auto-placement
 - Mesh relay for NAT'd servers
@@ -1011,9 +1012,9 @@ Each phase ends with a **review checkpoint** (demo + code review + approval). Ph
 - Proration on upgrade
 - AWS ECR registry (token refresh)
 - GitHub Actions as builder
-- GitLab/Bitbucket
-- PR preview deployments
-- macOS agent
+- GitLab/Bitbucket (consent needed)
+- PR preview deployments (consent needed)
+- macOS agent (consent needed)
 - More roles
 - Managed servers on our AWS account (D42, §24), only with the owner's explicit consent
 

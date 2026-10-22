@@ -86,6 +86,8 @@ type Reconciler struct {
 	running  chan struct{}
 	routing  map[string]routing // workload name → what it serves now
 	reported map[string]string  // workload/release → last reported state
+	scaled   map[string]int     // workload name → replicas chosen by the autoscaler
+	again    bool               // a pass was asked for while one was running
 	lastGC   time.Time
 }
 
@@ -103,8 +105,48 @@ type routing struct {
 func (r *Reconciler) Apply(ctx context.Context, spec protocol.DesiredSpec) {
 	r.mu.Lock()
 	r.spec = &spec
+	for name := range r.scaled {
+		if !slices.ContainsFunc(spec.Workloads, func(w protocol.Workload) bool { return w.Name == name && w.Autoscale != nil }) {
+			delete(r.scaled, name)
+		}
+	}
 	r.mu.Unlock()
 	r.start(ctx, true)
+}
+
+// Replicas is how many replicas per release the workload runs now: the
+// autoscaler's choice within its bounds, else the spec's count.
+func (r *Reconciler) Replicas(w protocol.Workload) int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.replicas(w)
+}
+
+func (r *Reconciler) replicas(w protocol.Workload) int {
+	n := 0
+	if len(w.Releases) > 0 {
+		n = int(w.Releases[len(w.Releases)-1].Replicas)
+	}
+	if a := w.Autoscale; a != nil {
+		if scaled, ok := r.scaled[w.Name]; ok {
+			n = scaled
+		}
+		n = min(max(n, int(a.Min)), int(a.Max))
+	}
+	return n
+}
+
+// Scale sets an autoscaled workload's replicas and converges soon: right
+// away, or once the running pass ends.
+func (r *Reconciler) Scale(ctx context.Context, workload string, n int) {
+	r.mu.Lock()
+	if r.scaled == nil {
+		r.scaled = map[string]int{}
+	}
+	r.scaled[workload] = n
+	r.again = r.running != nil
+	r.mu.Unlock()
+	r.start(ctx, false)
 }
 
 // Run re-applies the current spec every interval, recreating anything that
@@ -147,11 +189,15 @@ func (r *Reconciler) start(ctx context.Context, restart bool) {
 		defer func() {
 			cancel()
 			r.mu.Lock()
+			again := r.again && r.running == done
 			if r.running == done {
-				r.running = nil
+				r.running, r.again = nil, false
 			}
 			r.mu.Unlock()
 			close(done)
+			if again && ctx.Err() == nil {
+				r.start(ctx, false)
+			}
 		}()
 		if err := r.pass(passCtx, *spec); err != nil && passCtx.Err() == nil {
 			r.Log.Warn("reconcile failed; retrying on the next pass", "error", err)
@@ -230,6 +276,12 @@ func (r *Reconciler) pass(ctx context.Context, spec protocol.DesiredSpec) error 
 // containers running, it replaces them with the workload's strategy;
 // otherwise (first deploy, all-at-once phases, scaling) it converges directly.
 func (r *Reconciler) workload(ctx context.Context, spec protocol.DesiredSpec, w protocol.Workload, existing []Container) {
+	// Autoscaling changes the count of a settled workload; rollouts keep the spec's.
+	if w.Autoscale != nil && len(w.Releases) == 1 {
+		rel := w.Releases[0]
+		rel.Replicas = int64(r.Replicas(w))
+		w.Releases = []protocol.WorkloadRelease{rel}
+	}
 	wanted := map[int64]protocol.WorkloadRelease{}
 	for _, rel := range w.Releases {
 		wanted[rel.Release] = rel

@@ -38,6 +38,10 @@ type Manager struct {
 		LogPath(deployment string) string
 		Running(deployment string) bool
 	}
+	// Capacity answers `capacity` streams (PLAN §7.1); may be nil.
+	Capacity interface {
+		Report(ctx context.Context) protocol.CapacityReport
+	}
 
 	mu        sync.Mutex
 	sessions  map[string]context.CancelFunc
@@ -109,6 +113,12 @@ func (m *Manager) run(ctx context.Context, p protocol.StreamOpenPayload, out *ch
 		return m.metrics(ctx, out)
 	case "build":
 		return m.followBuild(ctx, text("deployment"), out)
+	case "capacity":
+		if m.Capacity == nil {
+			return errors.New("capacity reports aren't available")
+		}
+		out.json(m.Capacity.Report(ctx))
+		return nil
 	default:
 		return fmt.Errorf("unsupported stream kind %q", p.Kind)
 	}

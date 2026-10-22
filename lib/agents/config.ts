@@ -16,6 +16,9 @@ export const AGENT_CONFIG_DEFAULTS = {
   AGENT_SUMMARY_INTERVAL_MS: 60_000,
   AGENT_MAX_BACKOFF_MS: 60_000,
   AGENT_RECONCILE_INTERVAL_MS: 30_000,
+  AGENT_MONITOR_INTERVAL_MS: 15_000,
+  CAPACITY_HEADROOM_PERCENT: 15,
+  CAPACITY_RETENTION_DAYS: 90,
 };
 
 const setting = (key: keyof typeof AGENT_CONFIG_DEFAULTS) =>
@@ -40,6 +43,20 @@ export const getAgentConfig = cache(async () => {
       5_000,
       await setting("AGENT_RECONCILE_INTERVAL_MS"),
     ),
+    monitorIntervalMs: Math.max(
+      5_000,
+      await setting("AGENT_MONITOR_INTERVAL_MS"),
+    ),
+    capacity: {
+      headroomPercent: Math.min(
+        90,
+        Math.max(0, await setting("CAPACITY_HEADROOM_PERCENT")),
+      ),
+      retentionDays: Math.min(
+        366,
+        Math.max(7, await setting("CAPACITY_RETENTION_DAYS")),
+      ),
+    },
   };
 
   return {

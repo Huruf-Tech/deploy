@@ -62,6 +62,17 @@ export const $agentConfig = z.object({
   reconcileIntervalMs: z.number().int().describe(
     "How often the agent re-checks its workloads against the desired state (self-healing)",
   ),
+  monitorIntervalMs: z.number().int().describe(
+    "How often the agent samples usage for alerts, autoscaling and footprints",
+  ),
+  capacity: z.object({
+    headroomPercent: z.number().min(0).max(90).describe(
+      "Kept free for the OS, agent and proxy when computing room (PLAN §7.1)",
+    ),
+    retentionDays: z.number().int().min(7).max(366).describe(
+      "Daily peaks kept on the agent",
+    ),
+  }),
 });
 
 export const $agentConfigResponse = z.object({
@@ -92,6 +103,7 @@ export const $streamKind = z.enum([
   "exec",
   "terminal",
   "build",
+  "capacity",
 ]);
 
 /** Payloads with secrets travel sealed to the agent's X25519 key (PLAN §4.2). */
@@ -237,6 +249,19 @@ export const $workloadRelease = z.object({
   ),
 });
 
+/** Agent-local autoscaling (PLAN §10): replicas per server within min..max. */
+export const $autoscale = z.object({
+  min: z.number().int().min(1).max(50),
+  max: z.number().int().min(1).max(50),
+  cpuPercent: z.number().int().min(1).max(100).optional().describe(
+    "Target average CPU per replica, as a percent of `base.cpu`",
+  ),
+  memPercent: z.number().int().min(1).max(100).optional().describe(
+    "Target average memory per replica, as a percent of `base.memMb`",
+  ),
+  cooldownSec: z.number().int().min(10),
+});
+
 export const $workload = z.object({
   project: z.string(),
   name: z.string().regex(/^[a-z0-9][a-z0-9-]*$/).describe(
@@ -246,6 +271,28 @@ export const $workload = z.object({
   strategy: z.enum(["rolling", "allAtOnce", "stopFirst"]),
   publicPort: z.number().int().min(1).max(65_535).optional(),
   releases: z.array($workloadRelease).max(2),
+  reserve: z.object({
+    cpu: z.number().min(0),
+    memMb: z.number().int().min(0),
+  }).describe(
+    "Reserved per replica; with limits, the base for autoscale targets and the capacity room",
+  ),
+  base: z.object({ cpu: z.number().positive(), memMb: z.number().positive() })
+    .describe("Per-replica limit, else reservation: 100% for usage percents"),
+  autoscale: $autoscale.optional(),
+});
+
+/** A metric alert rule evaluated on the agent (PLAN §13). */
+export const $alertSpec = z.object({
+  rule: z.string(),
+  metric: z.enum(["cpu", "memory", "disk", "room"]),
+  project: z.string().optional().describe(
+    "Project rules average its replicas here; server rules use the host",
+  ),
+  threshold: z.number().describe(
+    "Percent for cpu/memory/disk (above fires); MiB of memory room for room (below fires)",
+  ),
+  forSec: z.number().int().min(0),
 });
 
 /** WireGuard peers (PLAN §8.2): mesh address plus container subnet each. */
@@ -280,6 +327,7 @@ export const $desiredSpec = z.object({
   mesh: $meshSpec.optional().describe(
     "The private network (PLAN §8.2); absent means this server isn't in it",
   ),
+  alerts: z.array($alertSpec).default([]),
   registry: z.object({
     listen: z.string().describe("Mesh address and port, e.g. 10.209.0.1:5000"),
     username: z.string(),
@@ -384,12 +432,77 @@ export const $meshStatusEvent = z.object({
   }),
 });
 
+/** A metric rule started or stopped breaching for its `forSec` (PLAN §13). */
+export const $alertEvent = z.object({
+  id: z.string().min(1).max(64),
+  type: z.enum(["alert.fired", "alert.resolved"]),
+  data: z.object({
+    rule: z.string(),
+    value: z.number(),
+    firedAt: z.number().int().describe("Unix ms; identifies the episode"),
+  }),
+});
+
+/** The agent changed a workload's replicas (PLAN §10). */
+export const $autoscaleEvent = z.object({
+  id: z.string().min(1).max(64),
+  type: z.literal("autoscale.changed"),
+  data: z.object({
+    project: z.string(),
+    workload: z.string(),
+    from: z.number().int(),
+    to: z.number().int(),
+    reason: z.string().max(200),
+  }),
+});
+
 export const $agentEvent = z.discriminatedUnion("type", [
   $commandResultEvent,
   $streamChunkEvent,
   $workloadStatusEvent,
   $meshStatusEvent,
+  $alertEvent,
+  $autoscaleEvent,
 ]);
+
+/** Usage rollup of one workload's replicas (PLAN §7.1); cores and bytes per replica. */
+export const $footprint = z.object({
+  cpuP95: z.number(),
+  cpuPeak: z.number(),
+  memP95: z.number().int(),
+  memPeak: z.number().int(),
+});
+
+/** The `capacity` stream's single chunk: footprints and trends, kept on the agent. */
+export const $capacityReport = z.object({
+  at: z.number().int(),
+  host: z.object({
+    cpuCores: z.number().int(),
+    memTotal: z.number().int(),
+    diskTotal: z.number().int(),
+    day: $footprint.extend({ diskPeak: z.number().int() }).optional()
+      .describe("Host usage over the last 24 h"),
+  }),
+  workloads: z.array(z.object({
+    project: z.string(),
+    workload: z.string(),
+    replicas: z.number().int(),
+    maxReplicas: z.number().int().describe("Autoscale max, else replicas"),
+    reserve: z.object({ cpu: z.number(), memMb: z.number().int() }),
+    disk: z.number().int().describe("Image plus volumes, bytes"),
+    day: $footprint.optional(),
+    week: $footprint.optional(),
+  })),
+  daily: z.array(z.object({
+    day: z.string().describe("YYYY-MM-DD, UTC"),
+    memPeak: z.number().int(),
+    cpuP95: z.number(),
+    diskPeak: z.number().int(),
+    workloads: z.record(z.string(), z.number().int()).describe(
+      "workload -> memory peak per replica",
+    ),
+  })),
+});
 
 export const $eventsRequest = z.object({
   events: z.array($agentEvent).min(1).max(64),
@@ -415,3 +528,5 @@ export type TDesiredSpec = z.output<typeof $desiredSpec>;
 export type TWorkload = z.output<typeof $workload>;
 export type TWorkloadRelease = z.output<typeof $workloadRelease>;
 export type TMeshSpec = z.output<typeof $meshSpec>;
+export type TAlertSpec = z.output<typeof $alertSpec>;
+export type TCapacityReport = z.output<typeof $capacityReport>;

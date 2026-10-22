@@ -80,6 +80,11 @@ type AgentConfig struct {
 
 	// How often the agent re-checks its workloads against the desired state (self-healing)
 	ReconcileIntervalMs int64 `json:"reconcileIntervalMs"`
+
+	// How often the agent samples usage for alerts, autoscaling and footprints
+	MonitorIntervalMs int64 `json:"monitorIntervalMs"`
+
+	Capacity AgentConfigCapacity `json:"capacity"`
 }
 
 type AgentConfigPoll struct {
@@ -88,6 +93,14 @@ type AgentConfigPoll struct {
 	ActiveMs int64 `json:"activeMs"`
 
 	TerminalMs int64 `json:"terminalMs"`
+}
+
+type AgentConfigCapacity struct {
+	// Kept free for the OS, agent and proxy when computing room (PLAN §7.1)
+	HeadroomPercent float64 `json:"headroomPercent"`
+
+	// Daily peaks kept on the agent
+	RetentionDays int64 `json:"retentionDays"`
 }
 
 type AgentConfigResponse struct {
@@ -220,7 +233,7 @@ type EventsResponse struct {
 type StreamOpenPayload struct {
 	Session string `json:"session"`
 
-	// One of: logs, metrics, exec, terminal, build
+	// One of: logs, metrics, exec, terminal, build, capacity
 	Kind string `json:"kind"`
 
 	Params map[string]any `json:"params"`
@@ -357,6 +370,8 @@ type DesiredSpec struct {
 	// The private network (PLAN §8.2); absent means this server isn't in it
 	Mesh *MeshSpec `json:"mesh,omitempty"`
 
+	Alerts []AlertSpec `json:"alerts"`
+
 	// Run the tenant's built-in registry here (primary server)
 	Registry *DesiredSpecRegistry `json:"registry,omitempty"`
 }
@@ -376,6 +391,14 @@ type Workload struct {
 	PublicPort *int64 `json:"publicPort,omitempty"`
 
 	Releases []WorkloadRelease `json:"releases"`
+
+	// Reserved per replica; with limits, the base for autoscale targets and the capacity room
+	Reserve WorkloadReserve `json:"reserve"`
+
+	// Per-replica limit, else reservation: 100% for usage percents
+	Base WorkloadBase `json:"base"`
+
+	Autoscale *Autoscale `json:"autoscale,omitempty"`
 }
 
 type WorkloadRelease struct {
@@ -433,6 +456,32 @@ type RegistryAuth struct {
 	Password string `json:"password"`
 }
 
+type WorkloadReserve struct {
+	Cpu float64 `json:"cpu"`
+
+	MemMb int64 `json:"memMb"`
+}
+
+type WorkloadBase struct {
+	Cpu float64 `json:"cpu"`
+
+	MemMb float64 `json:"memMb"`
+}
+
+type Autoscale struct {
+	Min int64 `json:"min"`
+
+	Max int64 `json:"max"`
+
+	// Target average CPU per replica, as a percent of `base.cpu`
+	CpuPercent *int64 `json:"cpuPercent,omitempty"`
+
+	// Target average memory per replica, as a percent of `base.memMb`
+	MemPercent *int64 `json:"memPercent,omitempty"`
+
+	CooldownSec int64 `json:"cooldownSec"`
+}
+
 type MeshSpec struct {
 	// This server's mesh address with prefix, e.g. 10.209.0.3/16
 	Address string `json:"address"`
@@ -456,6 +505,21 @@ type MeshSpecPeersItem struct {
 	MeshIp string `json:"meshIp"`
 
 	Subnet string `json:"subnet"`
+}
+
+type AlertSpec struct {
+	Rule string `json:"rule"`
+
+	// One of: cpu, memory, disk, room
+	Metric string `json:"metric"`
+
+	// Project rules average its replicas here; server rules use the host
+	Project string `json:"project,omitempty"`
+
+	// Percent for cpu/memory/disk (above fires); MiB of memory room for room (below fires)
+	Threshold float64 `json:"threshold"`
+
+	ForSec int64 `json:"forSec"`
 }
 
 type DesiredSpecRegistry struct {
@@ -511,4 +575,126 @@ type MeshStatusEventData struct {
 	Peers map[string]bool `json:"peers"`
 
 	Error string `json:"error,omitempty"`
+}
+
+type AlertEvent struct {
+	Id string `json:"id"`
+
+	// One of: alert.fired, alert.resolved
+	Type string `json:"type"`
+
+	Data AlertEventData `json:"data"`
+}
+
+type AlertEventData struct {
+	Rule string `json:"rule"`
+
+	Value float64 `json:"value"`
+
+	// Unix ms; identifies the episode
+	FiredAt int64 `json:"firedAt"`
+}
+
+type AutoscaleEvent struct {
+	Id string `json:"id"`
+
+	// Always "autoscale.changed"
+	Type string `json:"type"`
+
+	Data AutoscaleEventData `json:"data"`
+}
+
+type AutoscaleEventData struct {
+	Project string `json:"project"`
+
+	Workload string `json:"workload"`
+
+	From int64 `json:"from"`
+
+	To int64 `json:"to"`
+
+	Reason string `json:"reason"`
+}
+
+type CapacityReport struct {
+	At int64 `json:"at"`
+
+	Host CapacityReportHost `json:"host"`
+
+	Workloads []CapacityReportWorkloadsItem `json:"workloads"`
+
+	Daily []CapacityReportDailyItem `json:"daily"`
+}
+
+type CapacityReportHost struct {
+	CpuCores int64 `json:"cpuCores"`
+
+	MemTotal int64 `json:"memTotal"`
+
+	DiskTotal int64 `json:"diskTotal"`
+
+	// Host usage over the last 24 h
+	Day *CapacityReportHostDay `json:"day,omitempty"`
+}
+
+type CapacityReportHostDay struct {
+	CpuP95 float64 `json:"cpuP95"`
+
+	CpuPeak float64 `json:"cpuPeak"`
+
+	MemP95 int64 `json:"memP95"`
+
+	MemPeak int64 `json:"memPeak"`
+
+	DiskPeak int64 `json:"diskPeak"`
+}
+
+type CapacityReportWorkloadsItem struct {
+	Project string `json:"project"`
+
+	Workload string `json:"workload"`
+
+	Replicas int64 `json:"replicas"`
+
+	// Autoscale max, else replicas
+	MaxReplicas int64 `json:"maxReplicas"`
+
+	Reserve CapacityReportWorkloadsItemReserve `json:"reserve"`
+
+	// Image plus volumes, bytes
+	Disk int64 `json:"disk"`
+
+	Day *Footprint `json:"day,omitempty"`
+
+	Week *Footprint `json:"week,omitempty"`
+}
+
+type CapacityReportWorkloadsItemReserve struct {
+	Cpu float64 `json:"cpu"`
+
+	MemMb int64 `json:"memMb"`
+}
+
+type Footprint struct {
+	CpuP95 float64 `json:"cpuP95"`
+
+	CpuPeak float64 `json:"cpuPeak"`
+
+	MemP95 int64 `json:"memP95"`
+
+	MemPeak int64 `json:"memPeak"`
+}
+
+type CapacityReportDailyItem struct {
+	// YYYY-MM-DD, UTC
+	Day string `json:"day"`
+
+	MemPeak int64 `json:"memPeak"`
+
+	CpuP95 float64 `json:"cpuP95"`
+
+	DiskPeak int64 `json:"diskPeak"`
+
+	// workload -> memory peak per replica
+	Workloads map[string]int64 `json:"workloads"`
 }

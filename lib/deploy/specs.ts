@@ -15,12 +15,14 @@ import {
   type TServiceSpec,
 } from "@/schemas/applications/deployment.ts";
 import { serverModel } from "@/schemas/infrastructure/server.ts";
+import { AGENT_METRICS, alertRuleModel } from "@/schemas/monitoring/alert.ts";
 import { serverLeaseModel } from "@/schemas/infrastructure/serverLease.ts";
 import {
   registryModel,
   serverSpecModel,
 } from "@/schemas/infrastructure/serverSpec.ts";
 import type {
+  TAlertSpec,
   TDesiredSpec,
   TWorkload,
   TWorkloadRelease,
@@ -178,6 +180,30 @@ export async function computeSpec(
         ...(project.publicPort && service === primary
           ? { publicPort: project.publicPort }
           : {}),
+        reserve: {
+          cpu: project.runtime.cpuReserve,
+          memMb: project.runtime.memReserveMb,
+        },
+        base: {
+          cpu: project.runtime.cpuLimit || project.runtime.cpuReserve || 1,
+          memMb: project.runtime.memLimitMb || project.runtime.memReserveMb ||
+            512,
+        },
+        ...(project.autoscale
+          ? {
+            autoscale: {
+              min: project.autoscale.min,
+              max: project.autoscale.max,
+              ...(project.autoscale.cpuPercent
+                ? { cpuPercent: project.autoscale.cpuPercent }
+                : {}),
+              ...(project.autoscale.memPercent
+                ? { memPercent: project.autoscale.memPercent }
+                : {}),
+              cooldownSec: project.autoscale.cooldownSec,
+            },
+          }
+          : {}),
         releases: entries.flatMap(({ release, routed }): TWorkloadRelease[] => {
           const spec = specs.get(release._id.toHexString())!.find((s) =>
             s.name === service.name
@@ -236,8 +262,50 @@ export async function computeSpec(
     drainMs: await readNumberSetting("AGENT_DRAIN_MS", 3_000),
     workloads: workloads.sort((a, b) => a.name.localeCompare(b.name)),
     keepImages: [...new Set(kept.map((r) => r.image!))].sort(),
+    alerts: serverDoc
+      ? await alertSpecsFor(serverDoc, [
+        ...new Set(workloads.map((w) => w.project)),
+      ])
+      : [],
     ...(serverDoc ? await meshSpecFor(serverDoc) : {}),
   };
+}
+
+/**
+ * Metric rules this server's agent evaluates (PLAN §13). A project rule for
+ * every project is expanded per project here, as `rule:project`.
+ */
+async function alertSpecsFor(
+  server: WithId<{ tenant: ObjectId }>,
+  projects: string[],
+): Promise<TAlertSpec[]> {
+  const rules = await alertRuleModel.find({
+    tenant: server.tenant,
+    enabled: true,
+    metric: { $in: [...AGENT_METRICS] },
+  }, { limit: 200 }).toArray();
+  return rules.flatMap((rule): TAlertSpec[] => {
+    const base = {
+      metric: rule.metric as TAlertSpec["metric"],
+      threshold: rule.threshold,
+      forSec: rule.forSec,
+    };
+    const id = rule._id.toHexString();
+    if (rule.target.kind === "server") {
+      return !rule.target.ref || rule.target.ref.equals(server._id)
+        ? [{ rule: id, ...base }]
+        : [];
+    }
+    if (rule.target.ref) {
+      const project = rule.target.ref.toHexString();
+      return projects.includes(project) ? [{ rule: id, project, ...base }] : [];
+    }
+    return projects.map((project) => ({
+      rule: `${id}:${project}`,
+      project,
+      ...base,
+    }));
+  }).sort((a, b) => a.rule.localeCompare(b.rule));
 }
 
 /**

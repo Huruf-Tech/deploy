@@ -22,7 +22,7 @@ export default new Router("/api", function streams(router) {
   const $container = z.string().min(1).max(128).regex(/^[\w.-]+$/);
 
   const open = (
-    kind: "logs" | "metrics" | "exec" | "terminal" | "build",
+    kind: "logs" | "metrics" | "exec" | "terminal" | "build" | "capacity",
     $body: z.ZodObject,
   ) => ({
     shape: () => ({ body: $body, return: $opened }),
@@ -69,6 +69,11 @@ export default new Router("/api", function streams(router) {
 
   router.post("/metrics", function openMetrics() {
     return open("metrics", z.object({ server: $objectId }));
+  });
+
+  // Footprints and daily peaks (PLAN §7.1): one chunk of `CapacityReport` JSON.
+  router.post("/capacity", function openCapacity() {
+    return open("capacity", z.object({ server: $objectId }));
   });
 
   router.post("/exec", function openExec() {

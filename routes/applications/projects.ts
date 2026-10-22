@@ -23,6 +23,7 @@ import {
 } from "@/lib/deploy/deployments.ts";
 import {
   $deployStrategy,
+  $projectAutoscale,
   $projectInput,
   $projectRuntime,
   $projectSource,
@@ -205,6 +206,13 @@ export default new Router("/api", function projects(router) {
       })),
       placedOn: z.array(z.string()),
       replicasPerServer: z.number(),
+      autoscale: $projectAutoscale.optional(),
+      autoscaled: z.array(z.object({
+        server: z.string(),
+        replicas: z.number(),
+        reason: z.string(),
+        at: z.string(),
+      })).optional().describe("The autoscaler's latest change per server"),
       publicPort: z.number().optional(),
       volumes: z.array($projectVolume),
       deployStrategy: $deployStrategy,

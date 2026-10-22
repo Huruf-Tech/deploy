@@ -283,3 +283,33 @@ func TestSelfHealingRecreatesMissingReplicas(t *testing.T) {
 		t.Fatalf("running = %v", got)
 	}
 }
+
+func TestAutoscaledReplicasStayWithinBounds(t *testing.T) {
+	h := newHarness()
+	spec := protocol.DesiredSpec{Version: 1, Network: "huruf-internal", Workloads: []protocol.Workload{{
+		Project: "p1", Name: "shop", Strategy: "rolling",
+		Releases:  []protocol.WorkloadRelease{release(1, true, "app:1")},
+		Autoscale: &protocol.Autoscale{Min: 1, Max: 3, CooldownSec: 60},
+	}}}
+	h.r.Apply(context.Background(), spec)
+	h.r.Wait()
+	if got := len(h.runtime.running("shop")); got != 2 {
+		t.Fatalf("starts at the spec's count: %d", got)
+	}
+
+	h.r.Scale(context.Background(), "shop", 3)
+	h.r.Wait()
+	if got := len(h.runtime.running("shop")); got != 3 {
+		t.Fatalf("scaled up: %d", got)
+	}
+	h.r.Scale(context.Background(), "shop", 9)
+	h.r.Wait()
+	if got := h.r.Replicas(spec.Workloads[0]); got != 3 {
+		t.Fatalf("capped at max: %d", got)
+	}
+	h.r.Scale(context.Background(), "shop", 1)
+	h.r.Wait()
+	if got := len(h.runtime.running("shop")); got != 1 {
+		t.Fatalf("scaled down: %d", got)
+	}
+}

@@ -21,6 +21,12 @@ import type {
 import { ingestChunks, pendingTerminalInput } from "@/lib/agents/streams.ts";
 import { onBuildResult, onWorkloadStatus } from "@/lib/deploy/deployments.ts";
 import { recordMeshStatus } from "@/lib/network/network.ts";
+import {
+  deliverInBackground,
+  onAgentAlert,
+  onAutoscale,
+  onServerBack,
+} from "@/lib/monitoring/alerts.ts";
 import { refreshSpecs } from "@/lib/deploy/specs.ts";
 import { serverSpecModel } from "@/schemas/infrastructure/serverSpec.ts";
 
@@ -91,6 +97,7 @@ export const pollAgent = async (
       writeConcern: { w: 1, journal: false },
       projection: {
         shard: 1,
+        offline: 1,
         commandSeq: 1,
         deliveredSeq: 1,
         fastPollUntil: 1,
@@ -106,6 +113,9 @@ export const pollAgent = async (
       configVersion,
     });
   }
+
+  // Back from offline: resolve its agentOffline alerts (rare, so off the idle path).
+  if (lease.offline) await onServerBack(identity.server);
 
   const applied = request.appliedVersion ?? 0;
   const [commands, , , , , streamInput, desired] = await Promise.all([
@@ -267,6 +277,11 @@ export const ingestEvents = async (
   const chunks = events.filter((e) => e.type === "stream.chunk");
   const statuses = events.filter((e) => e.type === "workload.status");
   const mesh = events.filter((e) => e.type === "mesh.status");
+  const alerts = events.filter((e): e is Extract<
+    TAgentEvent,
+    { type: "alert.fired" | "alert.resolved" }
+  > => e.type === "alert.fired" || e.type === "alert.resolved");
+  const scaled = events.filter((e) => e.type === "autoscale.changed");
 
   const [applied, streams] = await Promise.all([
     results.length ? ingestCommandResults(identity, results) : 0,
@@ -278,8 +293,13 @@ export const ingestEvents = async (
   }
   // Only the latest matters.
   if (mesh.length) await recordMeshStatus(identity.server, mesh.at(-1)!.data);
+  for (const alert of alerts) await onAgentAlert(identity.server, alert);
+  for (const event of scaled) await onAutoscale(identity.server, event.data);
+  // Event ingestion carries the alert outbox too (PLAN §3.4), never polls.
+  deliverInBackground();
   return {
-    applied: applied + streams.applied + statuses.length + mesh.length,
+    applied: applied + streams.applied + statuses.length + mesh.length +
+      alerts.length + scaled.length,
     close: streams.close,
   };
 };

@@ -16,6 +16,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -29,6 +30,7 @@ import (
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/identity"
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/mesh"
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/metrics"
+	"github.com/Huruf-Tech/huruf-deploy/agent/internal/monitor"
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/protocol"
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/reconcile"
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/state"
@@ -94,15 +96,16 @@ func main() {
 	go serveDNS(ctx, names, &dnsAddr, log)
 	go serveMeshDNS(ctx, names, network, log)
 
+	dockerRuntime := &docker.Docker{
+		SecretsDir: secretsDir,
+		DNS:        func() string { return dnsAddr.Load().(string) },
+		Log:        log,
+	}
 	reconciler := &reconcile.Reconciler{
-		Runtime: &docker.Docker{
-			SecretsDir: secretsDir,
-			DNS:        func() string { return dnsAddr.Load().(string) },
-			Log:        log,
-		},
-		Router: &edge.Caddy{Admin: caddyAdmin},
-		Names:  names,
-		Log:    log,
+		Runtime: dockerRuntime,
+		Router:  &edge.Caddy{Admin: caddyAdmin},
+		Names:   names,
+		Log:     log,
 	}
 
 	a := &agent.Agent{
@@ -118,6 +121,25 @@ func main() {
 		Network:    network,
 		Log:        log,
 	}
+	var hostSampler metrics.Sampler
+	usage := &monitor.Monitor{
+		List:     dockerRuntime.List,
+		Stats:    metrics.Stats,
+		Host:     hostSampler.Sample,
+		Disk:     metrics.DiskUsage,
+		Cores:    runtime.NumCPU(),
+		Scaler:   reconciler,
+		Emit:     func(event any) { a.Enqueue(event); a.Wake() },
+		Interval: a.MonitorInterval,
+		Config:   a.CapacityConfig,
+		Path:     filepath.Join(*stateDir, "capacity.json"),
+		Log:      log,
+		Now:      time.Now,
+	}
+	usage.Load()
+	a.Monitor = usage
+	streamManager.Capacity = usage
+	go usage.Run(ctx)
 	network.Emit = func(event protocol.MeshStatusEvent) {
 		a.Enqueue(event)
 		a.Wake()

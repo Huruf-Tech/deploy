@@ -30,6 +30,7 @@ import { serverModel } from "@/schemas/infrastructure/server.ts";
 import { serverLeaseModel } from "@/schemas/infrastructure/serverLease.ts";
 import { registryModel } from "@/schemas/infrastructure/serverSpec.ts";
 import { tenantModel } from "@/plugins/Huruf-Tech/thunder-core/schemas/tenant.ts";
+import { onDeployFailed, onDeploySucceeded } from "@/lib/monitoring/alerts.ts";
 import type { TBuildRunPayload } from "@/schemas/protocol/agent.ts";
 import { keyring } from "@/lib/services.ts";
 
@@ -778,6 +779,7 @@ async function complete(id: ObjectId) {
     await pruneReleases(deployment.project, before.tenant, deployment.release!);
   }
   log.info(`Deployment ${id} is healthy`);
+  await onDeploySucceeded(deployment.project);
   await startNext(deployment.project);
 }
 
@@ -818,6 +820,7 @@ export async function fail(id: ObjectId, error: string) {
   );
   if (!deployment) return;
   log.warn(`Deployment ${id} failed: ${error}`);
+  await onDeployFailed(deployment, error);
 
   if (deployment.rollout) await refreshSpecs(deployment.servers);
   const project = await projectModel.findOne({ _id: deployment.project }, {

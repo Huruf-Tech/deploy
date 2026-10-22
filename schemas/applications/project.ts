@@ -63,6 +63,20 @@ export const $projectVolume = z.object({
 
 export const $deployStrategy = z.enum(["rolling", "allAtOnce", "stopFirst"]);
 
+/** Agent-local autoscaling (PLAN §10): replicas per server within min..max. */
+export const $projectAutoscale = z.object({
+  min: z.number().int().min(1).max(20),
+  max: z.number().int().min(1).max(20),
+  cpuPercent: z.number().int().min(10).max(100).optional().describe(
+    "Target CPU per replica, as a percent of its CPU limit (else reservation)",
+  ),
+  memPercent: z.number().int().min(10).max(100).optional().describe(
+    "Target memory per replica, as a percent of its memory limit (else reservation)",
+  ),
+  cooldownSec: z.number().int().min(30).max(3_600).default(120),
+}).refine((a) => a.min <= a.max, "min must not exceed max")
+  .refine((a) => a.cpuPercent || a.memPercent, "Set a CPU or memory target");
+
 export const $project = z.object({
   tenant: $objectId.meta({ ref: "tenants" }),
   group: $objectId.meta({ ref: "projectGroups" }).optional(),
@@ -87,6 +101,14 @@ export const $project = z.object({
   /** Where the active release runs now; becomes `servers` when a deploy completes. */
   placedOn: z.array($objectId.meta({ ref: "servers" })).default([]),
   replicasPerServer: z.number().int().min(0).max(20).default(1),
+  autoscale: $projectAutoscale.optional(),
+  /** Latest autoscaler change per server, as reported by its agent. */
+  autoscaled: z.array(z.object({
+    server: $objectId.meta({ ref: "servers" }),
+    replicas: z.number().int(),
+    reason: z.string(),
+    at: z.date(),
+  })).optional(),
   publicPort: z.number().int().min(1).max(65_535).optional(),
   volumes: z.array($projectVolume).max(10).default([]),
   deployStrategy: $deployStrategy,
@@ -146,6 +168,7 @@ export const $projectInput = z.object({
   runtime: $projectRuntime.partial().optional(),
   servers: $project.shape.servers,
   replicasPerServer: z.number().int().min(0).max(20).default(1),
+  autoscale: $projectAutoscale.optional(),
   publicPort: $project.shape.publicPort,
   volumes: z.array($projectVolume).max(10).default([]),
   deployStrategy: $deployStrategy.optional(),
@@ -164,6 +187,7 @@ export const $projectUpdate = z.object({
   runtime: $projectRuntime.partial(),
   servers: $project.shape.servers,
   replicasPerServer: z.number().int().min(0).max(20),
+  autoscale: $projectAutoscale.nullable(),
   publicPort: z.number().int().min(1).max(65_535).nullable(),
   deployStrategy: $deployStrategy,
   autoDeploy: z.boolean(),

@@ -94,22 +94,63 @@ func (r *Recorder) History() []protocol.MetricsSample {
 	return append(append([]protocol.MetricsSample{}, r.samples[r.next:]...), r.samples[:r.next]...)
 }
 
+// Usage is one container's current CPU (cores) and memory (bytes).
+type Usage struct {
+	Cpu float64
+	Mem int64
+}
+
+// Stats reads every running container's usage by name (`docker stats`, ~2 s);
+// nil when Docker is absent.
+func Stats(ctx context.Context) map[string]Usage {
+	out, err := exec.CommandContext(ctx, "docker", "stats", "--no-stream", "--format", "{{json .}}").Output()
+	if err != nil {
+		return nil
+	}
+	usage := map[string]Usage{}
+	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		var s struct{ Name, CPUPerc, MemUsage string }
+		if json.Unmarshal([]byte(line), &s) != nil {
+			continue
+		}
+		percent, _ := strconv.ParseFloat(strings.TrimSuffix(s.CPUPerc, "%"), 64)
+		used, _, _ := strings.Cut(s.MemUsage, " / ")
+		usage[s.Name] = Usage{Cpu: percent / 100, Mem: ParseBytes(used)}
+	}
+	return usage
+}
+
+// DiskUsage reads image sizes (by repo:tag) and volume sizes (by name) from
+// `docker system df -v`; slow on big hosts, so only for capacity reports.
+func DiskUsage(ctx context.Context) (images, volumes map[string]int64) {
+	out, err := exec.CommandContext(ctx, "docker", "system", "df", "-v", "--format", "{{json .}}").Output()
+	if err != nil {
+		return nil, nil
+	}
+	var df struct {
+		Images  []struct{ Repository, Tag, Size string }
+		Volumes []struct{ Name, Size string }
+	}
+	if json.Unmarshal(out, &df) != nil {
+		return nil, nil
+	}
+	images, volumes = map[string]int64{}, map[string]int64{}
+	for _, i := range df.Images {
+		images[i.Repository+":"+i.Tag] = ParseBytes(i.Size)
+	}
+	for _, v := range df.Volumes {
+		volumes[v.Name] = ParseBytes(v.Size)
+	}
+	return images, volumes
+}
+
 // Containers reads per-container usage from Docker; nil when Docker is absent.
 func Containers(ctx context.Context) []protocol.MetricsSampleContainersItem {
 	ps, err := exec.CommandContext(ctx, "docker", "ps", "-a", "--format", "{{json .}}").Output()
 	if err != nil {
 		return nil
 	}
-	stats, _ := exec.CommandContext(ctx, "docker", "stats", "--no-stream", "--format", "{{json .}}").Output()
-
-	type stat struct{ Name, CPUPerc, MemUsage string }
-	usage := map[string]stat{}
-	for _, line := range strings.Split(strings.TrimSpace(string(stats)), "\n") {
-		var s stat
-		if json.Unmarshal([]byte(line), &s) == nil {
-			usage[s.Name] = s
-		}
-	}
+	usage := Stats(ctx)
 
 	cores := float64(runtime.NumCPU())
 	var items []protocol.MetricsSampleContainersItem
@@ -118,23 +159,21 @@ func Containers(ctx context.Context) []protocol.MetricsSampleContainersItem {
 		if json.Unmarshal([]byte(line), &c) != nil {
 			continue
 		}
-		s := usage[c.Names]
-		percent, _ := strconv.ParseFloat(strings.TrimSuffix(s.CPUPerc, "%"), 64)
-		used, _, _ := strings.Cut(s.MemUsage, " / ")
+		u := usage[c.Names]
 		items = append(items, protocol.MetricsSampleContainersItem{
 			Id:    c.ID,
 			Name:  c.Names,
 			Image: c.Image,
 			State: c.State,
-			Cpu:   percent / 100 / cores,
-			Mem:   parseBytes(used),
+			Cpu:   u.Cpu / cores,
+			Mem:   u.Mem,
 		})
 	}
 	return items
 }
 
-// parseBytes reads Docker's human sizes such as "12.5MiB" or "1.2GB".
-func parseBytes(text string) int64 {
+// ParseBytes reads Docker's human sizes such as "12.5MiB" or "1.2GB".
+func ParseBytes(text string) int64 {
 	text = strings.TrimSpace(text)
 	units := []struct {
 		suffix string
