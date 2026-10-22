@@ -28,6 +28,7 @@ export const syncDeployAccessControl = async () => {
     "projects",
     "projectGroups",
     "registries",
+    "storages",
     "networks",
     "alertRules",
     "alertEvents",

@@ -39,6 +39,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton"
 import { getLocalPath } from "@/core/lib/utils"
 import { useCapacity } from "@/hooks/use-capacity"
+import { type TVolume, VolumesEditor } from "./VolumesEditor"
 import { classFootprints, fitsIn, roomOf } from "@/lib/capacity"
 import { cn, errorMessage } from "@/lib/utils"
 import { InputField } from "@/pages/templates/Detail"
@@ -352,6 +353,7 @@ export default function NewProject() {
   const [slugEdited, setSlugEdited] = React.useState(false)
   const [servers, setServers] = React.useState<string[]>([])
   const [replicas, setReplicas] = React.useState(1)
+  const [volumes, setVolumes] = React.useState<TVolume[]>([])
   const [port, setPort] = React.useState("")
   const [publicPort, setPublicPort] = React.useState("")
   const [healthPath, setHealthPath] = React.useState("")
@@ -434,6 +436,10 @@ export default function NewProject() {
 
   const fromRepo = kind === "github" || kind === "git"
   const usesTemplate = kind === "template" || (fromRepo && mode === "template")
+  const composeLike =
+    kind === "template" ||
+    kind === "compose" ||
+    (fromRepo && mode === "compose")
   const needCpu = 0.1 * replicas
   const needMem = 128 * replicas
   const reports = (capacity.data ?? []).flatMap((r) =>
@@ -519,7 +525,8 @@ export default function NewProject() {
           servers,
           replicasPerServer: replicas,
           ...(publicPort ? { publicPort: Number(publicPort) } : {}),
-          volumes: [],
+          // Compose files and one-click services declare their own volumes.
+          volumes: composeLike ? [] : volumes,
           autoDeploy: true,
           distribution: "auto",
         },
@@ -907,6 +914,10 @@ export default function NewProject() {
               </div>
             )}
           </FieldSet>
+
+          {!composeLike && (
+            <VolumesEditor slug={slug} value={volumes} onChange={setVolumes} />
+          )}
 
           <div className="grid gap-4 sm:grid-cols-4">
             <Field>

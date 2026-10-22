@@ -1005,6 +1005,14 @@ Each phase ends with a **review checkpoint** (demo + code review + approval). Ph
 ### Phase 9 — Storage and one-click services
 - S3 volumes (rclone), volume backups and restore, one-click service templates with generated secrets and default backups.
 - **Done when:** a one-click Postgres is reached by an app via `postgres.internal`, backed up to S3, and restored.
+- **Status (done, pending review):**
+  - **Scope set by the owner:** backups and restore are skipped for now. S3 credentials live in storage connections.
+  - **Storage connections:** Infrastructure → Storage. Provider (AWS, Cloudflare R2, MinIO, other), endpoint, region, bucket and access key, with the secret encrypted. Replacing keys refreshes the specs of the servers that mount it; a connection in use can't be deleted.
+  - **Volumes:** local on the server by default, or a folder of a connected bucket (`<slug>/<volume>` unless set). Only local volumes pin a project to one server and default to stop-first. S3 volumes work across servers, replicas and autoscaling; the UI says they aren't for databases. Volume changes apply on the next deploy. Releases keep only the connection reference; credentials are resolved into the sealed spec.
+  - **Agent:** installs the rclone volume plugin (`rclone/docker-volume-rclone:<arch>`, alias `rclone`) on first use. Credentials go into the plugin's own `rclone.conf` as a named remote, never onto a command line. Volume names carry a hash of the settings and mount options, so changes make a new volume. Writes upload 1 s after close; listings refresh every 10 s.
+  - **UI:** the Storage page, and a volumes editor in the new-project wizard and project settings (hidden for compose and one-click services, which declare their own).
+  - **Verified on two servers** against an S3 server: 4 replicas (2 per server) wrote to one bucket folder and each listed the others' files. A client app on B ran queries against a one-click Postgres on A through `postgres.internal`, its password referenced as `${{postgres.PASSWORD}}`.
+  - **Known limits:** servers need FUSE (`/dev/fuse`) for the plugin. Volumes from old settings stay on the server unused, and their remotes stay in `rclone.conf`.
 
 ### Phase 10 — Plans, subscriptions and billing
 - Plans CRUD (public/private) and admin screens.

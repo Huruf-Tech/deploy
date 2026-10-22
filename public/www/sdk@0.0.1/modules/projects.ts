@@ -108,6 +108,10 @@ export type create$body = {
     volumes?: {
         name: string;
         mountPath: string;
+        /** S3 storage connection; the volume is local when absent */
+        storage?: string | undefined;
+        /** Folder in the bucket; <project-slug>/<volume> when empty */
+        path?: string | undefined;
     }[];
     deployStrategy?: ("rolling" | "allAtOnce" | "stopFirst") | undefined;
     autoDeploy?: boolean;
@@ -215,6 +219,10 @@ export type get$return = {
     volumes: {
         name: string;
         mountPath: string;
+        /** S3 storage connection; the volume is local when absent */
+        storage?: string | undefined;
+        /** Folder in the bucket; <project-slug>/<volume> when empty */
+        path?: string | undefined;
     }[];
     deployStrategy: "rolling" | "allAtOnce" | "stopFirst";
     autoDeploy: boolean;
@@ -282,10 +290,18 @@ export type update$body = {
     templateVersion?: number | undefined;
     inputs?: Record<string, string | number | boolean> | undefined;
     compose?: string | undefined;
+    volumes?: {
+        name: string;
+        mountPath: string;
+        /** S3 storage connection; the volume is local when absent */
+        storage?: string | undefined;
+        /** Folder in the bucket; <project-slug>/<volume> when empty */
+        path?: string | undefined;
+    }[] | undefined;
     acknowledgeVolumeRisk?: boolean | undefined;
 };
 export type update$return = {
-    /** Servers changed: deploy to move it */
+    /** Servers or volumes changed: deploy to apply them */
     redeploy: boolean;
 };
 export type del$params = {

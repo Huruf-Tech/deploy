@@ -243,7 +243,23 @@ export const $workloadRelease = z.object({
   healthcheck: $healthcheck,
   cpus: z.number().positive().optional(),
   memoryMb: z.number().int().positive().optional(),
-  volumes: z.array(z.object({ name: z.string(), mountPath: z.string() })),
+  volumes: z.array(z.object({
+    name: z.string(),
+    mountPath: z.string(),
+    s3: z.object({
+      provider: z.string().describe(
+        "rclone's s3-provider, e.g. AWS, Cloudflare, Minio, Other",
+      ),
+      endpoint: z.string().optional(),
+      region: z.string(),
+      bucket: z.string(),
+      path: z.string(),
+      accessKeyId: z.string(),
+      secretAccessKey: z.string(),
+    }).optional().describe(
+      "Mount a bucket folder through the rclone volume plugin instead of a local volume",
+    ),
+  })),
   pull: $registryAuth.optional().describe(
     "Pull the image from this registry when it isn't local",
   ),

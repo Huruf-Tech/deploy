@@ -18,6 +18,7 @@ import { agentsModule } from "./modules/agents.ts";
 import { networksModule } from "./modules/networks.ts";
 import { registriesModule } from "./modules/registries.ts";
 import { serversModule } from "./modules/servers.ts";
+import { storagesModule } from "./modules/storages.ts";
 import { streamsModule } from "./modules/streams.ts";
 import { alertEventsModule } from "./modules/alertEvents.ts";
 import { alertRulesModule } from "./modules/alertRules.ts";
@@ -56,6 +57,7 @@ export class ThunderSDK extends BaseSDK {
         "networks",
         "registries",
         "servers",
+        "storages",
         "streams",
         "alertEvents",
         "alertRules",
@@ -90,6 +92,7 @@ export class ThunderSDK extends BaseSDK {
     static networks = networksModule(this);
     static registries = registriesModule(this);
     static servers = serversModule(this);
+    static storages = storagesModule(this);
     static streams = streamsModule(this);
     static alertEvents = alertEventsModule(this);
     static alertRules = alertRulesModule(this);

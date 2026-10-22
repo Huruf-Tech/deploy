@@ -61,6 +61,7 @@ import { errorMessage } from "@/lib/utils"
 import { LogsSheet } from "@/pages/servers/LogsSheet"
 import { VariableTable } from "@/pages/variables"
 import { DeploymentSheet } from "./DeploymentSheet"
+import { type TVolume, VolumesEditor } from "./VolumesEditor"
 import {
   ago,
   DeploymentStatus,
@@ -266,6 +267,7 @@ function Settings({
     project.servers.map((s) => s._id)
   )
   const [replicas, setReplicas] = React.useState(project.replicasPerServer)
+  const [volumes, setVolumes] = React.useState<TVolume[]>(project.volumes)
   const [autoscale, setAutoscale] = React.useState(!!project.autoscale)
   const [scaleMin, setScaleMin] = React.useState(
     String(project.autoscale?.min ?? 1)
@@ -321,6 +323,9 @@ function Settings({
         body: {
           servers,
           replicasPerServer: replicas,
+          ...(JSON.stringify(volumes) !== JSON.stringify(project.volumes)
+            ? { volumes }
+            : {}),
           autoscale: autoscale
             ? {
                 min: Number(scaleMin),
@@ -349,7 +354,7 @@ function Settings({
       })
       toast.success(
         redeploy
-          ? t("Saved. Deploy to move it to the new servers.")
+          ? t("Saved. Deploy to apply the new servers or volumes.")
           : t("Saved")
       )
       onSaved()
@@ -417,6 +422,14 @@ function Settings({
             )}
           </FieldDescription>
         </FieldSet>
+
+        {project.build.mode !== "compose" && (
+          <VolumesEditor
+            slug={project.slug}
+            value={volumes}
+            onChange={setVolumes}
+          />
+        )}
 
         <FieldSet>
           <Field orientation="horizontal">

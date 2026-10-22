@@ -358,6 +358,9 @@ async function serviceSpecs(project: TProjectDoc, opts: {
   const appVolumes = project.volumes.map((v) => ({
     name: `huruf-${project._id}-${v.name}`,
     mountPath: v.mountPath,
+    ...(v.storage
+      ? { storage: v.storage, path: v.path || `${project.slug}/${v.name}` }
+      : {}),
   }));
   const app = (image: string): TServiceSpec => ({
     name: "app",

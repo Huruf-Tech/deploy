@@ -1,4 +1,4 @@
-import type { ObjectId, WithId } from "mongodb";
+import { ObjectId, type WithId } from "mongodb";
 import { createHashSync, SupportedHashAlg } from "@/core/utils/hash.ts";
 import { isDuplicateKeyError } from "@/database.ts";
 import { keyring } from "@/lib/services.ts";
@@ -15,6 +15,7 @@ import {
   type TServiceSpec,
 } from "@/schemas/applications/deployment.ts";
 import { serverModel } from "@/schemas/infrastructure/server.ts";
+import { storageModel } from "@/schemas/infrastructure/storage.ts";
 import { AGENT_METRICS, alertRuleModel } from "@/schemas/monitoring/alert.ts";
 import { serverLeaseModel } from "@/schemas/infrastructure/serverLease.ts";
 import {
@@ -27,6 +28,14 @@ import type {
   TWorkload,
   TWorkloadRelease,
 } from "@/schemas/protocol/agent.ts";
+
+/** rclone's names for each provider (its `s3-provider` option). */
+const S3_PROVIDERS = {
+  aws: "AWS",
+  cloudflare: "Cloudflare",
+  minio: "Minio",
+  other: "Other",
+} as const;
 
 /** Release specs carry variables: encrypted with the tenant key, bound to the release. */
 export const sealReleaseSpec = (
@@ -145,6 +154,36 @@ export async function computeSpec(
     ),
   );
 
+  // S3 volumes (PLAN §11): credentials go into the sealed spec, never the release.
+  const storageIds = [
+    ...new Set(
+      [...specs.values()].flat().flatMap((s) =>
+        s.volumes.flatMap((v) => v.storage ? [String(v.storage)] : [])
+      ),
+    ),
+  ];
+  const storages = new Map(
+    await Promise.all(
+      (await storageModel.find({
+        _id: { $in: storageIds.map((id) => new ObjectId(id)) },
+        ...(serverDoc ? { tenant: serverDoc.tenant } : {}),
+      }).toArray()).map(async (s) =>
+        [s._id.toHexString(), {
+          provider: S3_PROVIDERS[s.provider],
+          ...(s.endpoint ? { endpoint: s.endpoint } : {}),
+          region: s.region,
+          bucket: s.bucket,
+          accessKeyId: s.accessKeyId,
+          secretAccessKey: await keyring.decrypt(
+            { kind: "tenant", ref: s.tenant },
+            s.secretEnc,
+            `storage:${s._id}`,
+          ),
+        }] as const
+      ),
+    ),
+  );
+
   // Built-in registry pulls (PLAN §8.4), over the mesh.
   const builtin = serverDoc && releases.some((r) => r.builtinRegistry)
     ? await builtinRegistry(serverDoc.tenant)
@@ -243,7 +282,16 @@ export async function computeSpec(
             ...(project.runtime.memLimitMb
               ? { memoryMb: project.runtime.memLimitMb }
               : {}),
-            volumes: spec.volumes,
+            volumes: spec.volumes.flatMap(
+              ({ name, mountPath, storage, path }) => {
+                if (!storage) return [{ name, mountPath }];
+                const s3 = storages.get(String(storage));
+                // A deleted connection leaves the volume out rather than local.
+                return s3
+                  ? [{ name, mountPath, s3: { ...s3, path: path! } }]
+                  : [];
+              },
+            ),
             ...(pull ? { pull } : {}),
           }];
         }),

@@ -1408,6 +1408,43 @@
                           },
                           "mountPath": {
                             "type": "string"
+                          },
+                          "s3": {
+                            "description": "Mount a bucket folder through the rclone volume plugin instead of a local volume",
+                            "type": "object",
+                            "properties": {
+                              "provider": {
+                                "type": "string",
+                                "description": "rclone's s3-provider, e.g. AWS, Cloudflare, Minio, Other"
+                              },
+                              "endpoint": {
+                                "type": "string"
+                              },
+                              "region": {
+                                "type": "string"
+                              },
+                              "bucket": {
+                                "type": "string"
+                              },
+                              "path": {
+                                "type": "string"
+                              },
+                              "accessKeyId": {
+                                "type": "string"
+                              },
+                              "secretAccessKey": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "provider",
+                              "region",
+                              "bucket",
+                              "path",
+                              "accessKeyId",
+                              "secretAccessKey"
+                            ],
+                            "additionalProperties": false
                           }
                         },
                         "required": [

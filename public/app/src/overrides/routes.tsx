@@ -2,6 +2,7 @@ import { Outlet } from "react-router"
 import {
   IconBell,
   IconBox,
+  IconBucket,
   IconHistory,
   IconBraces,
   IconBrandGithub,
@@ -26,6 +27,7 @@ import Projects from "@/pages/projects"
 import NewProject from "@/pages/projects/NewProject"
 import ProjectDetail from "@/pages/projects/Detail"
 import Registries from "@/pages/registries"
+import Storage from "@/pages/storage"
 import Network from "@/pages/network"
 import AlertRules from "@/pages/alerts"
 import AlertHistory from "@/pages/alerts/History"
@@ -114,6 +116,16 @@ export const routes: TRoutesOverride = {
     priority: 2,
     display: () => ThunderSDK.isPermitted("registries", "list"),
     Component: Registries,
+  },
+
+  storages: {
+    name: "Storage",
+    path: "storage",
+    group: "Infrastructure",
+    icon: IconBucket,
+    priority: 3,
+    display: () => ThunderSDK.isPermitted("storages", "list"),
+    Component: Storage,
   },
 
   // Custom pages (PLAN §15.2 Build group); GitHub redirects back to build/gitIntegrations.

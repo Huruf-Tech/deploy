@@ -4,6 +4,7 @@ package docker
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -14,9 +15,11 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/protocol"
@@ -35,6 +38,9 @@ type Docker struct {
 	// DNS returns the resolver containers use for .internal names ("" = Docker's default).
 	DNS func() string
 	Log *slog.Logger
+
+	rcloneMu    sync.Mutex
+	rcloneReady bool
 }
 
 var _ reconcile.Runtime = (*Docker)(nil)
@@ -132,7 +138,14 @@ func (d *Docker) Start(ctx context.Context, spec reconcile.ContainerSpec) (recon
 		args = append(args, "--memory", fmt.Sprintf("%dm", *rel.MemoryMb))
 	}
 	for _, v := range rel.Volumes {
-		args = append(args, "-v", v.Name+":"+v.MountPath)
+		name := v.Name
+		if v.S3 != nil {
+			var err error
+			if name, err = d.ensureS3Volume(ctx, v); err != nil {
+				return reconcile.Container{}, fmt.Errorf("volume %s: %w", v.Name, err)
+			}
+		}
+		args = append(args, "-v", name+":"+v.MountPath)
 	}
 	if hc := rel.Healthcheck.Command; hc != "" {
 		args = append(args, "--health-cmd", hc, "--health-interval", "5s",
@@ -368,4 +381,88 @@ func firstArg(args []string) string {
 		return ""
 	}
 	return args[0]
+}
+
+// The rclone volume plugin keeps its config and cache here (PLAN §11).
+const rcloneDir = "/var/lib/docker-plugins/rclone"
+
+// Mount options, part of the volume name's hash. Writes upload 1 s after a
+// file closes; listings refresh every 10 s, so other servers' files show soon.
+var rcloneOptions = []string{
+	"-o", "allow-other=true", "-o", "vfs-cache-mode=writes",
+	"-o", "vfs-write-back=1s", "-o", "dir-cache-time=10s",
+}
+
+// ensureS3Volume mounts a bucket folder through the rclone plugin. The name
+// carries a hash of the settings, so changed settings make a new volume.
+// Credentials go into the plugin's own config file, never onto a command line.
+func (d *Docker) ensureS3Volume(ctx context.Context, v protocol.WorkloadReleaseVolumesItem) (string, error) {
+	settings, _ := json.Marshal(struct {
+		S3      *protocol.WorkloadReleaseVolumesItemS3
+		Options []string
+	}{v.S3, rcloneOptions})
+	name := fmt.Sprintf("%s-s3-%x", v.Name, sha256.Sum256(settings))[:len(v.Name)+12]
+	if _, err := run(ctx, nil, "docker", "volume", "inspect", name); err == nil {
+		return name, nil
+	}
+	if err := d.ensureRclone(ctx); err != nil {
+		return "", err
+	}
+	if err := addRemote(name, v.S3); err != nil {
+		return "", err
+	}
+	args := append([]string{"volume", "create", "-d", "rclone", "--name", name,
+		"-o", "remote=" + name + ":" + strings.Trim(v.S3.Bucket+"/"+v.S3.Path, "/")}, rcloneOptions...)
+	_, err := run(ctx, nil, "docker", args...)
+	return name, err
+}
+
+// ensureRclone installs the rclone volume plugin on first use.
+func (d *Docker) ensureRclone(ctx context.Context) error {
+	d.rcloneMu.Lock()
+	defer d.rcloneMu.Unlock()
+	if d.rcloneReady {
+		return nil
+	}
+	for _, dir := range []string{"config", "cache"} {
+		if err := os.MkdirAll(filepath.Join(rcloneDir, dir), 0o700); err != nil {
+			return err
+		}
+	}
+	if _, err := run(ctx, nil, "docker", "plugin", "inspect", "rclone"); err != nil {
+		d.Log.Info("installing the rclone volume plugin")
+		if _, err := run(ctx, nil, "docker", "plugin", "install", "rclone/docker-volume-rclone:"+runtime.GOARCH,
+			"args=-v", "--alias", "rclone", "--grant-all-permissions"); err != nil {
+			return fmt.Errorf("installing the rclone volume plugin (needs FUSE on the server): %w", err)
+		}
+	} else {
+		_, _ = run(ctx, nil, "docker", "plugin", "enable", "rclone") // already enabled is fine
+	}
+	d.rcloneReady = true
+	return nil
+}
+
+// addRemote appends an rclone remote once; names are unique per settings.
+// ponytail: remotes of removed volumes stay in the file; prune them if it ever grows large.
+func addRemote(name string, s *protocol.WorkloadReleaseVolumesItemS3) error {
+	path := filepath.Join(rcloneDir, "config", "rclone.conf")
+	current, err := os.ReadFile(path)
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	if strings.Contains(string(current), "["+name+"]") {
+		return nil
+	}
+	section := fmt.Sprintf("\n[%s]\ntype = s3\nprovider = %s\naccess_key_id = %s\nsecret_access_key = %s\nregion = %s\n",
+		name, s.Provider, s.AccessKeyId, s.SecretAccessKey, s.Region)
+	if s.Endpoint != "" {
+		section += "endpoint = " + s.Endpoint + "\n"
+	}
+	file, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	_, err = file.WriteString(section)
+	return err
 }

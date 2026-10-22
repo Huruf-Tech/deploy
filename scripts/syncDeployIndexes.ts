@@ -1,3 +1,4 @@
+import { storageModel } from "@/schemas/infrastructure/storage.ts";
 import { planModel } from "@/schemas/billing/plan.ts";
 import { alertEventModel, alertRuleModel } from "@/schemas/monitoring/alert.ts";
 import { subscriptionPeriodModel } from "@/schemas/billing/subscriptionPeriod.ts";
@@ -208,6 +209,12 @@ export const syncDeployIndexes = async () => {
       { name: "builds", partialFilterExpression: { status: "building" } },
     ),
     registryModel.createIndex({ tenant: 1, name: 1 }, { name: "tenantName" }),
+    storageModel.createIndex({ tenant: 1, name: 1 }, { name: "tenantName" }),
+    // Projects mounting a storage connection (update and delete checks).
+    projectModel.createIndex({ "volumes.storage": 1 }, {
+      name: "volumeStorage",
+      partialFilterExpression: { "volumes.storage": { $exists: true } },
+    }),
     alertRuleModel.createIndex({ tenant: 1, metric: 1 }, {
       name: "tenantMetric",
     }),

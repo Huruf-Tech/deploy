@@ -945,6 +945,60 @@ export declare class ThunderSDK extends BaseSDK {
             finally: (onfinally?: (() => void) | null | undefined) => Promise<import("./modules/servers.js").liveness$return>;
         };
     };
+    static storages: {
+        readonly type: {
+            list$return: import("./modules/storages.js").list$return;
+            create$body: import("./modules/storages.js").create$body;
+            create$return: import("./modules/storages.js").create$return;
+            update$params: import("./modules/storages.js").update$params;
+            update$body: import("./modules/storages.js").update$body;
+            del$params: import("./modules/storages.js").del$params;
+        };
+        readonly list: (data?: {
+            params?: undefined;
+            query?: undefined;
+            body?: undefined;
+        } & import("./types.js").TRequestOptions<import("./modules/storages.js").list$return>) => {
+            readonly raw: Promise<import("axios").AxiosResponse<import("./modules/storages.js").list$return, any, {}, any>>;
+            readonly data: Promise<import("./modules/storages.js").list$return>;
+            then: <TResult1 = import("./modules/storages.js").list$return, TResult2 = never>(onfulfilled?: ((value: import("./modules/storages.js").list$return) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+            catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<import("./modules/storages.js").list$return | TResult>;
+            finally: (onfinally?: (() => void) | null | undefined) => Promise<import("./modules/storages.js").list$return>;
+        };
+        readonly create: (data: {
+            params?: undefined;
+            query?: undefined;
+            body: import("./modules/storages.js").create$body;
+        } & import("./types.js").TRequestOptions<import("./modules/storages.js").create$return>) => {
+            readonly raw: Promise<import("axios").AxiosResponse<import("./modules/storages.js").create$return, any, {}, any>>;
+            readonly data: Promise<import("./modules/storages.js").create$return>;
+            then: <TResult1 = import("./modules/storages.js").create$return, TResult2 = never>(onfulfilled?: ((value: import("./modules/storages.js").create$return) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+            catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<import("./modules/storages.js").create$return | TResult>;
+            finally: (onfinally?: (() => void) | null | undefined) => Promise<import("./modules/storages.js").create$return>;
+        };
+        readonly update: (data: {
+            params: import("./modules/storages.js").update$params;
+            query?: undefined;
+            body: import("./modules/storages.js").update$body;
+        } & import("./types.js").TRequestOptions<unknown>) => {
+            readonly raw: Promise<import("axios").AxiosResponse<unknown, any, {}, any>>;
+            readonly data: Promise<unknown>;
+            then: <TResult1 = unknown, TResult2 = never>(onfulfilled?: ((value: unknown) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+            catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<unknown>;
+            finally: (onfinally?: (() => void) | null | undefined) => Promise<unknown>;
+        };
+        readonly del: (data: {
+            params: import("./modules/storages.js").del$params;
+            query?: undefined;
+            body?: undefined;
+        } & import("./types.js").TRequestOptions<unknown>) => {
+            readonly raw: Promise<import("axios").AxiosResponse<unknown, any, {}, any>>;
+            readonly data: Promise<unknown>;
+            then: <TResult1 = unknown, TResult2 = never>(onfulfilled?: ((value: unknown) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+            catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<unknown>;
+            finally: (onfinally?: (() => void) | null | undefined) => Promise<unknown>;
+        };
+    };
     static streams: {
         readonly type: {
             openLogs$body: import("./modules/streams.js").openLogs$body;

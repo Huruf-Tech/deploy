@@ -56,10 +56,23 @@ export const $projectRuntime = z.object({
   healthTimeoutSec: z.number().int().min(10).max(1_800).default(120),
 });
 
+/** A local Docker volume, or a path in an S3 bucket when `storage` is set (PLAN §11). */
 export const $projectVolume = z.object({
   name: z.string().regex(/^[a-z0-9][a-z0-9-]{0,40}$/),
   mountPath: z.string().regex(/^\/[^:]*$/).max(200),
+  storage: $objectId.meta({ ref: "storages" }).optional().describe(
+    "S3 storage connection; the volume is local when absent",
+  ),
+  path: z.string().regex(/^[\w.\/-]*$/).max(200)
+    .refine((p) => !p.split("/").includes(".."), "No `..` in the path")
+    .optional().describe(
+      "Folder in the bucket; <project-slug>/<volume> when empty",
+    ),
 });
+
+/** Local volumes pin a project to one server; S3 ones don't. */
+export const hasLocalVolumes = (volumes: { storage?: unknown }[]) =>
+  volumes.some((v) => !v.storage);
 
 export const $deployStrategy = z.enum(["rolling", "allAtOnce", "stopFirst"]);
 
@@ -198,6 +211,7 @@ export const $projectUpdate = z.object({
   templateVersion: z.number().int().min(1),
   inputs: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])),
   compose: z.string().min(1).max(100_000),
+  volumes: z.array($projectVolume).max(10),
   acknowledgeVolumeRisk: z.boolean(),
 }).partial();
 

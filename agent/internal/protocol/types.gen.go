@@ -446,6 +446,26 @@ type WorkloadReleaseVolumesItem struct {
 	Name string `json:"name"`
 
 	MountPath string `json:"mountPath"`
+
+	// Mount a bucket folder through the rclone volume plugin instead of a local volume
+	S3 *WorkloadReleaseVolumesItemS3 `json:"s3,omitempty"`
+}
+
+type WorkloadReleaseVolumesItemS3 struct {
+	// rclone's s3-provider, e.g. AWS, Cloudflare, Minio, Other
+	Provider string `json:"provider"`
+
+	Endpoint string `json:"endpoint,omitempty"`
+
+	Region string `json:"region"`
+
+	Bucket string `json:"bucket"`
+
+	Path string `json:"path"`
+
+	AccessKeyId string `json:"accessKeyId"`
+
+	SecretAccessKey string `json:"secretAccessKey"`
 }
 
 type RegistryAuth struct {

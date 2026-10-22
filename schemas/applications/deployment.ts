@@ -19,7 +19,12 @@ export const $serviceSpec = z.object({
   port: z.number().int().optional(),
   healthcheckPath: z.string().optional(),
   healthcheckCommand: z.string().optional(),
-  volumes: z.array(z.object({ name: z.string(), mountPath: z.string() })),
+  volumes: z.array(z.object({
+    name: z.string(),
+    mountPath: z.string(),
+    storage: $objectId.optional().describe("S3 storage connection"),
+    path: z.string().optional().describe("Folder in the bucket"),
+  })),
 });
 
 /**

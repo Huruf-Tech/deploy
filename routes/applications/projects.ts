@@ -361,7 +361,9 @@ export default new Router("/api", function projects(router) {
 
   router.patch("/:id", function update() {
     const $return = z.object({
-      redeploy: z.boolean().describe("Servers changed: deploy to move it"),
+      redeploy: z.boolean().describe(
+        "Servers or volumes changed: deploy to apply them",
+      ),
     });
 
     return {

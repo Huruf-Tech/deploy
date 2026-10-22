@@ -20,8 +20,10 @@ import {
   deleteProjectVariables,
 } from "@/lib/variables/variables.ts";
 import { refreshSpecs } from "@/lib/deploy/specs.ts";
+import { storageModel } from "@/schemas/infrastructure/storage.ts";
 import {
   $projectRuntime,
+  hasLocalVolumes,
   projectModel,
   type TProject,
   type TProjectInput,
@@ -206,6 +208,27 @@ function assertVolumeRules(opts: {
   }
 }
 
+/** Volumes have unique names and mount paths, and S3 ones use this tenant's storage. */
+async function assertVolumes(tenant: ObjectId, volumes: TProject["volumes"]) {
+  const unique = (key: "name" | "mountPath") =>
+    new Set(volumes.map((v) => v[key])).size === volumes.length;
+  if (!unique("name") || !unique("mountPath")) {
+    throw Response.badRequest("Each volume needs its own name and mount path");
+  }
+  const ids = [
+    ...new Set(volumes.flatMap((v) => v.storage ? [String(v.storage)] : [])),
+  ];
+  if (
+    ids.length &&
+    await storageModel.countDocuments({
+        _id: { $in: ids.map((id) => new ObjectId(id)) },
+        tenant,
+      }) !== ids.length
+  ) {
+    throw Response.badRequest("Storage connection not found");
+  }
+}
+
 async function assertRegistry(tenant: ObjectId, registry?: ObjectId | null) {
   if (
     registry &&
@@ -318,7 +341,8 @@ export async function createProject(opts: {
     );
   }
 
-  const hasVolumes = input.volumes.length > 0 || composeVolumes;
+  await assertVolumes(tenant, input.volumes);
+  const hasVolumes = hasLocalVolumes(input.volumes) || composeVolumes;
   const strategy = input.deployStrategy ??
     (hasVolumes ? "stopFirst" : "rolling");
   assertVolumeRules({
@@ -463,7 +487,9 @@ export async function updateProject(opts: {
   if (patch.compose && project.source.type === "compose") {
     await checkCompose(patch.compose, id);
   }
-  const hasVolumes = project.volumes.length > 0 ||
+  const volumes = patch.volumes ?? project.volumes;
+  await assertVolumes(tenant, volumes);
+  const hasVolumes = hasLocalVolumes(volumes) ||
     await hasComposeVolumes(project, patch.compose);
   assertVolumeRules({
     hasVolumes,
@@ -498,6 +524,7 @@ export async function updateProject(opts: {
   else $unset.publicPort = "";
   if (autoscale) $set.autoscale = autoscale;
   else $unset.autoscale = $unset.autoscaled = "";
+  if (patch.volumes) $set.volumes = patch.volumes;
   if (patch.autoDeploy !== undefined) $set.autoDeploy = patch.autoDeploy;
   if (patch.needsPrivateNetwork !== undefined) {
     $set.needsPrivateNetwork = patch.needsPrivateNetwork;
@@ -529,8 +556,11 @@ export async function updateProject(opts: {
   // Replicas, limits and the public port apply now; code and servers on the next deploy.
   await refreshSpecs(project.placedOn);
   return {
-    redeploy: !sameServers(servers, project.placedOn) &&
-      project.placedOn.length > 0,
+    // Servers and volumes are part of a release: they change on the next deploy.
+    redeploy: project.placedOn.length > 0 &&
+      (!sameServers(servers, project.placedOn) ||
+        (!!patch.volumes &&
+          JSON.stringify(patch.volumes) !== JSON.stringify(project.volumes))),
   };
 }
 
