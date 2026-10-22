@@ -39,6 +39,18 @@ export const $server = $serverUpdate.extend({
     error: z.string().optional(),
     updatedAt: z.date(),
   }).optional(),
+  /** Private network membership (PLAN §8.2). */
+  mesh: z.object({
+    index: z.number().int().min(1),
+    enabled: z.boolean().default(true),
+    publicKey: z.string().optional(),
+    /** host:port override when the public/private IP isn't how peers reach it. */
+    endpoint: z.string().optional(),
+    /** Reachability from this server: peer id → recent WireGuard handshake. */
+    peers: z.record(z.string(), z.boolean()).optional(),
+    error: z.string().optional(),
+    reportedAt: z.date().optional(),
+  }).optional(),
   acceptedBy: $objectId.meta({ ref: "users" }).optional(),
   acceptedAt: z.date().optional(),
   createdAt: z.date(),

@@ -91,6 +91,8 @@ export const $project = z.object({
   volumes: z.array($projectVolume).max(10).default([]),
   deployStrategy: $deployStrategy,
   autoDeploy: z.boolean().default(true),
+  /** Reaches projects on other servers: warn when the mesh can't connect them (PLAN §8.2). */
+  needsPrivateNetwork: z.boolean().default(false),
   distribution: z.enum(["auto", "perServer", "registry"]).default("auto"),
   registry: $objectId.meta({ ref: "registries" }).optional(),
   /** Generic Git over SSH: the private half of the deploy key, encrypted. */
@@ -148,6 +150,7 @@ export const $projectInput = z.object({
   volumes: z.array($projectVolume).max(10).default([]),
   deployStrategy: $deployStrategy.optional(),
   autoDeploy: z.boolean().default(true),
+  needsPrivateNetwork: z.boolean().default(false),
   distribution: $project.shape.distribution,
   registry: $objectId.optional(),
   acknowledgeVolumeRisk: z.boolean().optional().describe(
@@ -164,6 +167,7 @@ export const $projectUpdate = z.object({
   publicPort: z.number().int().min(1).max(65_535).nullable(),
   deployStrategy: $deployStrategy,
   autoDeploy: z.boolean(),
+  needsPrivateNetwork: z.boolean(),
   distribution: $project.shape.distribution,
   registry: $objectId.nullable(),
   branch: z.string().min(1).max(255),

@@ -5,6 +5,8 @@ import { safetyLimit } from "@/lib/limits/safety.ts";
 import { serverModel } from "@/schemas/infrastructure/server.ts";
 import { serverLeaseModel } from "@/schemas/infrastructure/serverLease.ts";
 import { agentCommandModel } from "@/schemas/infrastructure/agentCommand.ts";
+import { ensureMeshIndex } from "@/lib/network/mesh.ts";
+import { MESH_CIDR, subnetOf } from "@/schemas/infrastructure/network.ts";
 import type { $commandType, $hostCheck } from "@/schemas/protocol/agent.ts";
 import type z from "zod";
 
@@ -67,6 +69,8 @@ export const prepareHost = async (
   await serverModel.updateOne({ _id: server }, {
     $set: { setup: { status: "pending", updatedAt: new Date() } },
   });
+  // The tenant-unique subnet makes container IPs routable over the mesh (PLAN §8.2).
+  const index = await ensureMeshIndex(server, tenant);
 
   return await issueCommand({
     server,
@@ -78,6 +82,7 @@ export const prepareHost = async (
       logMaxFile: await readNumberSetting("AGENT_CONTAINER_LOG_MAX_FILE", 5),
       edgeImage: await readTextSetting("AGENT_EDGE_IMAGE", "caddy:2-alpine"),
       network: PROJECT_NETWORK,
+      ...(index ? { subnet: subnetOf(index), meshCidr: MESH_CIDR } : {}),
     },
   });
 };

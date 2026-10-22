@@ -3,6 +3,7 @@ import type { ObjectId } from "mongodb";
 import { Router } from "@/core/http/router.ts";
 import { bodyAsJson, paramsAsJson, queryAsJson } from "@/core/http/utils.ts";
 import { $objectId } from "@/core/utils/createCRUD.ts";
+import { networkWarnings } from "@/lib/network/network.ts";
 import { Response } from "@/core/http/response.ts";
 import { withTenant } from "@/plugins/Huruf-Tech/thunder-core/utils/withTenant.ts";
 import {
@@ -212,6 +213,10 @@ export default new Router("/api", function projects(router) {
       registry: z.string().optional(),
       deployKeyPublic: z.string().optional(),
       compose: z.string().optional().describe("The pasted compose file"),
+      needsPrivateNetwork: z.boolean().optional(),
+      networkWarnings: z.array(z.string()).describe(
+        "Servers that can't reach the projects this one uses",
+      ),
       release: z.object({
         _id: z.string(),
         number: z.number(),
@@ -278,6 +283,7 @@ export default new Router("/api", function projects(router) {
           ...(project.source.type === "compose"
             ? { compose: await openCompose(project) }
             : {}),
+          networkWarnings: await networkWarnings(tenant._id, project._id),
           ...rest,
           servers: project.servers.map((s) => {
             const doc = serverDocs.find((d) => d._id.equals(s));

@@ -35,6 +35,8 @@ export const $release = z.object({
     "Registry copy, in registry mode",
   ),
   registry: $objectId.meta({ ref: "registries" }).optional(),
+  /** Pushed to the tenant's built-in registry (on the primary server, over the mesh). */
+  builtinRegistry: z.boolean().optional(),
   /** The builders that have the image locally (per-server builds). */
   builtOn: z.array($objectId.meta({ ref: "servers" })).default([]),
   commit: $commit.optional(),
@@ -64,7 +66,8 @@ export const $deployment = z.object({
   releaseNumber: z.number().int().optional(),
   trigger: z.enum(["manual", "push", "rollback"]),
   strategy: $deployStrategy,
-  distribution: z.enum(["local", "perServer", "registry"]).optional(),
+  distribution: z.enum(["local", "perServer", "registry", "builtin"])
+    .optional(),
   status: z.enum([
     "queued",
     "building",

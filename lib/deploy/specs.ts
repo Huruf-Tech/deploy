@@ -5,6 +5,7 @@ import { keyring } from "@/lib/services.ts";
 import { readNumberSetting } from "@/lib/core/settings.ts";
 import { sealTo } from "@/lib/agents/sealing.ts";
 import { PROJECT_NETWORK } from "@/lib/agents/commands.ts";
+import { builtinRegistry, meshSpecFor } from "@/lib/network/mesh.ts";
 import { projectModel } from "@/schemas/applications/project.ts";
 import {
   deploymentModel,
@@ -88,6 +89,7 @@ function entriesFor(
 export async function computeSpec(
   server: ObjectId,
 ): Promise<Omit<TDesiredSpec, "version">> {
+  const serverDoc = await serverModel.findOne({ _id: server });
   const deployments = await deploymentModel.find(
     { servers: server, status: "deploying" },
     {
@@ -141,6 +143,11 @@ export async function computeSpec(
     ),
   );
 
+  // Built-in registry pulls (PLAN §8.4), over the mesh.
+  const builtin = serverDoc && releases.some((r) => r.builtinRegistry)
+    ? await builtinRegistry(serverDoc.tenant)
+    : undefined;
+
   const workloads: TWorkload[] = [];
   for (const project of projects) {
     const deployment = deployments.find((d) => d.project.equals(project._id));
@@ -177,7 +184,15 @@ export async function computeSpec(
           );
           if (!spec) return [];
           const local = has(release.builtOn, server) || !release.pushedImage;
-          const pull = !local && release.registry
+          const pull = local
+            ? undefined
+            : release.builtinRegistry && builtin
+            ? {
+              registry: builtin.host,
+              username: builtin.username,
+              password: builtin.password,
+            }
+            : release.registry
             ? registries.get(release.registry.toHexString())
             : undefined;
           return [{
@@ -221,6 +236,7 @@ export async function computeSpec(
     drainMs: await readNumberSetting("AGENT_DRAIN_MS", 3_000),
     workloads: workloads.sort((a, b) => a.name.localeCompare(b.name)),
     keepImages: [...new Set(kept.map((r) => r.image!))].sort(),
+    ...(serverDoc ? await meshSpecFor(serverDoc) : {}),
   };
 }
 

@@ -27,6 +27,7 @@ export const syncDeployAccessControl = async () => {
     "projects",
     "projectGroups",
     "registries",
+    "networks",
   ]);
   // Older setups granted every stream handler through `deploy`.
   await ACManager.denyFromPolicy("deploy", ["streams"]);

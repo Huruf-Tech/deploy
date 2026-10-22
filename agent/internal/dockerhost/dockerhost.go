@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -31,7 +32,13 @@ type Payload struct {
 	LogMaxFile int    `json:"logMaxFile"`
 	EdgeImage  string `json:"edgeImage"`
 	Network    string `json:"network"`
+	Subnet     string `json:"subnet,omitempty"`
+	MeshCidr   string `json:"meshCidr,omitempty"`
 }
+
+// The mesh interface; traffic from it may reach containers directly (Docker 28+
+// otherwise drops routed traffic to unpublished container ports).
+const meshInterface = "wg0"
 
 type Check struct {
 	Name   string `json:"name"`
@@ -62,10 +69,18 @@ func Ensure(ctx context.Context, p Payload) (map[string]any, error) {
 		notes = append(notes, "Docker installed")
 	}
 
+	if p.MeshCidr != "" {
+		if note := ensureWireGuardTools(ctx); note != "" {
+			notes = append(notes, note)
+		}
+	}
+
 	existing, err := os.ReadFile(daemonConfigPath)
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return result(), err
 	}
+	// With live-restore already on, restarting Docker keeps containers running.
+	liveRestore := bytes.Contains(existing, []byte(`"live-restore": true`))
 	merged, changed, err := MergeDaemonConfig(existing, p)
 	if err != nil {
 		return result(), fmt.Errorf("%s is not valid JSON: %w", daemonConfigPath, err)
@@ -85,7 +100,7 @@ func Ensure(ctx context.Context, p Payload) (map[string]any, error) {
 	if changed {
 		// Restarting Docker stops containers that were started without live-restore,
 		// so a busy host gets the new settings on its next Docker restart instead.
-		if out, _ := run(ctx, "docker", "ps", "-q"); strings.TrimSpace(out) == "" {
+		if out, _ := run(ctx, "docker", "ps", "-q"); liveRestore || strings.TrimSpace(out) == "" {
 			if _, err := run(ctx, "systemctl", "restart", "docker"); err != nil {
 				return result(), fmt.Errorf("restarting Docker: %w", err)
 			}
@@ -97,10 +112,10 @@ func Ensure(ctx context.Context, p Payload) (map[string]any, error) {
 		return result(), err
 	}
 
-	if _, err := run(ctx, "docker", "network", "inspect", p.Network); err != nil {
-		if _, err := run(ctx, "docker", "network", "create", "--label", labelPrefix+"managed=true", p.Network); err != nil {
-			return result(), fmt.Errorf("creating network %s: %w", p.Network, err)
-		}
+	if note, err := ensureNetwork(ctx, p); err != nil {
+		return result(), err
+	} else if note != "" {
+		notes = append(notes, note)
 	}
 
 	if err := ensureEdge(ctx, p.EdgeImage); err != nil {
@@ -123,6 +138,13 @@ func MergeDaemonConfig(existing []byte, p Payload) (merged []byte, changed bool,
 	config["log-opts"] = map[string]any{"max-size": p.LogMaxSize, "max-file": strconv.Itoa(p.LogMaxFile)}
 	// Containers keep running while the Docker daemon restarts or upgrades.
 	config["live-restore"] = true
+	// The built-in registry speaks plain HTTP over the WireGuard-encrypted mesh.
+	if p.MeshCidr != "" {
+		registries, _ := config["insecure-registries"].([]any)
+		if !slices.Contains(registries, any(p.MeshCidr)) {
+			config["insecure-registries"] = append(registries, p.MeshCidr)
+		}
+	}
 
 	after, _ := json.Marshal(config)
 	if bytes.Equal(before, after) {
@@ -130,6 +152,56 @@ func MergeDaemonConfig(existing []byte, p Payload) (merged []byte, changed bool,
 	}
 	merged, err = json.MarshalIndent(config, "", "  ")
 	return append(merged, '\n'), true, err
+}
+
+// ensureNetwork creates the project network with the tenant-unique subnet.
+// One with another subnet is recreated while empty; otherwise it's reported,
+// since moving running containers would interrupt them.
+func ensureNetwork(ctx context.Context, p Payload) (note string, err error) {
+	out, inspectErr := run(ctx, "docker", "network", "inspect", "-f",
+		`{{range .IPAM.Config}}{{.Subnet}}{{end}} {{len .Containers}}`, p.Network)
+	if inspectErr == nil {
+		fields := strings.Fields(out)
+		if p.Subnet == "" || (len(fields) == 2 && fields[0] == p.Subnet) {
+			return "", nil
+		}
+		if len(fields) == 2 && fields[1] != "0" {
+			return fmt.Sprintf("The project network uses %s, not %s; it moves once its containers are gone", fields[0], p.Subnet), nil
+		}
+		if _, err := run(ctx, "docker", "network", "rm", p.Network); err != nil {
+			return "", fmt.Errorf("replacing network %s: %w", p.Network, err)
+		}
+	}
+
+	args := []string{"network", "create", "--label", labelPrefix + "managed=true"}
+	if p.Subnet != "" {
+		args = append(args, "--subnet", p.Subnet)
+	}
+	withMesh := append(slices.Clone(args), "-o", "com.docker.network.bridge.trusted_host_interfaces="+meshInterface, p.Network)
+	if _, err := run(ctx, "docker", withMesh...); err == nil {
+		return "", nil
+	}
+	// Docker before 28 has no such option, and no filter for it to lift.
+	if _, err := run(ctx, "docker", append(args, p.Network)...); err != nil {
+		return "", fmt.Errorf("creating network %s: %w", p.Network, err)
+	}
+	return "", nil
+}
+
+// ensureWireGuardTools installs `wg` (the kernel module ships with Linux 5.6+).
+func ensureWireGuardTools(ctx context.Context) string {
+	if _, err := exec.LookPath("wg"); err == nil {
+		return ""
+	}
+	if _, err := exec.LookPath("apt-get"); err != nil {
+		return "Install wireguard-tools to join the private network"
+	}
+	install, cancel := context.WithTimeout(ctx, 5*time.Minute)
+	defer cancel()
+	if _, err := run(install, "sh", "-c", "DEBIAN_FRONTEND=noninteractive apt-get install -y wireguard-tools || (apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y wireguard-tools)"); err != nil {
+		return "Installing wireguard-tools failed: " + err.Error()
+	}
+	return "wireguard-tools installed"
 }
 
 // ensureEdge keeps the Caddy edge proxy running. It starts with no sites; the

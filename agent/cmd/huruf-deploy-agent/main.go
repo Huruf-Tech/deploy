@@ -27,6 +27,7 @@ import (
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/docker"
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/edge"
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/identity"
+	"github.com/Huruf-Tech/huruf-deploy/agent/internal/mesh"
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/metrics"
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/protocol"
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/reconcile"
@@ -86,10 +87,12 @@ func main() {
 	builder := &build.Builder{Dir: filepath.Join(*stateDir, "builds")}
 	streamManager := &streams.Manager{History: history, Builds: builder}
 
-	names := &dns.Server{Log: log}
+	network := &mesh.Mesh{Dir: *stateDir, Log: log}
+	names := &dns.Server{Log: log, Peers: network.PeerAddresses}
 	var dnsAddr atomic.Value
 	dnsAddr.Store("")
 	go serveDNS(ctx, names, &dnsAddr, log)
+	go serveMeshDNS(ctx, names, network, log)
 
 	reconciler := &reconcile.Reconciler{
 		Runtime: &docker.Docker{
@@ -112,8 +115,14 @@ func main() {
 		Commands:   commands.Default(ctx, streamManager, builder, id.Open),
 		Streams:    streamManager,
 		Reconciler: reconciler,
+		Network:    network,
 		Log:        log,
 	}
+	network.Emit = func(event protocol.MeshStatusEvent) {
+		a.Enqueue(event)
+		a.Wake()
+	}
+	go network.Run(ctx, a.ReconcileInterval)
 	reconciler.Emit = func(event protocol.WorkloadStatusEvent) {
 		a.Enqueue(event)
 		a.Wake() // rollouts advance on these: send now
@@ -147,6 +156,22 @@ func serveDNS(ctx context.Context, names *dns.Server, addr *atomic.Value, log *s
 		select {
 		case <-ctx.Done():
 		case <-time.After(15 * time.Second):
+		}
+	}
+}
+
+// serveMeshDNS answers peers' .internal queries on this server's mesh address
+// (local records only), while the server is in the private network.
+func serveMeshDNS(ctx context.Context, names *dns.Server, network *mesh.Mesh, log *slog.Logger) {
+	for ctx.Err() == nil {
+		if address := network.Address(); address != "" {
+			if err := names.Serve(ctx, net.JoinHostPort(address, "53"), true); err != nil && ctx.Err() == nil {
+				log.Warn("mesh DNS stopped; retrying", "error", err)
+			}
+		}
+		select {
+		case <-ctx.Done():
+		case <-time.After(10 * time.Second):
 		}
 	}
 }

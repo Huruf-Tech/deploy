@@ -17,6 +17,7 @@ import { defaultRef, sourceOf, type TCommit } from "@/lib/deploy/sources.ts";
 import { refreshSpecs, sealReleaseSpec } from "@/lib/deploy/specs.ts";
 import { isSecretInput, openCompose, toEnvKey } from "@/lib/deploy/projects.ts";
 import { forStage, resolveVariableSet } from "@/lib/variables/variables.ts";
+import { builtinRegistry, meshServers, reachable } from "@/lib/network/mesh.ts";
 import { projectModel, type TProject } from "@/schemas/applications/project.ts";
 import {
   deploymentModel,
@@ -231,20 +232,49 @@ async function start(deployment: TDeploymentDoc) {
   }
 
   // Image distribution (PLAN §8.4).
+  // Image distribution (PLAN §8.4): external registry, else the built-in one
+  // when every target reaches the primary over the mesh, else build everywhere.
   const registry = await registryFor(project);
-  const distribution = deployment.servers.length === 1 && !registry
-    ? "local"
-    : registry
+  const builtin = !registry && deployment.servers.length > 1 &&
+      project.distribution !== "perServer"
+    ? await builtinFor(project.tenant, deployment.servers)
+    : undefined;
+  const distribution = registry
     ? "registry"
+    : builtin
+    ? "builtin"
+    : deployment.servers.length === 1
+    ? "local"
     : "perServer";
-  const builders = distribution === "registry"
+  const builders = registry || builtin
     ? [await pickBuilder(deployment.servers)]
     : deployment.servers;
+  const name = tag.slice("huruf/".length);
+  let push: TBuildRunPayload["push"];
   if (registry) {
     release.registry = registry._id;
     release.pushedImage = registry.kind === "dockerhub"
-      ? `docker.io/${registry.namespace}/${tag.slice("huruf/".length)}`
-      : `${registry.namespace}/${tag.slice("huruf/".length)}`;
+      ? `docker.io/${registry.namespace}/${name}`
+      : `${registry.namespace}/${name}`;
+    push = {
+      image: release.pushedImage,
+      registry: registry.kind === "dockerhub" ? "docker.io" : registry.url!,
+      username: registry.username,
+      password: await keyring.decrypt(
+        { kind: "tenant", ref: registry.tenant },
+        registry.secretEnc,
+        `registry:${registry._id}`,
+      ),
+    };
+  } else if (builtin) {
+    release.builtinRegistry = true;
+    release.pushedImage = `${builtin.host}/${name}`;
+    push = {
+      image: release.pushedImage,
+      registry: builtin.host,
+      username: builtin.username,
+      password: builtin.password,
+    };
   }
   await releaseModel.insertOne({ _id: releaseId, ...release });
 
@@ -276,20 +306,7 @@ async function start(deployment: TDeploymentDoc) {
     noCache,
     timeoutSec,
     gitImage: await readTextSetting("AGENT_GIT_IMAGE", "alpine/git:latest"),
-    ...(registry && release.pushedImage
-      ? {
-        push: {
-          image: release.pushedImage,
-          registry: registry.kind === "dockerhub" ? "docker.io" : registry.url!,
-          username: registry.username,
-          password: await keyring.decrypt(
-            { kind: "tenant", ref: registry.tenant },
-            registry.secretEnc,
-            `registry:${registry._id}`,
-          ),
-        },
-      }
-      : {}),
+    ...(push ? { push } : {}),
   };
 
   const boxKeys = await serverModel.find(
@@ -451,6 +468,18 @@ async function registryFor(project: TProjectDoc) {
     );
   }
   return registry ?? undefined;
+}
+
+/** The built-in registry, if every target can reach the primary over the mesh. */
+async function builtinFor(tenant: ObjectId, targets: ObjectId[]) {
+  const servers = await meshServers(tenant);
+  const registry = await builtinRegistry(tenant, servers);
+  if (!registry) return undefined;
+  const all = targets.every((t) => {
+    const server = servers.find((s) => s._id.equals(t));
+    return !!server && reachable(server, registry.primary);
+  });
+  return all ? registry : undefined;
 }
 
 /** The least loaded online target, preferring servers labelled builder=true (PLAN §8.4). */

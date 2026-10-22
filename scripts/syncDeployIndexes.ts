@@ -26,6 +26,7 @@ import {
   releaseModel,
 } from "@/schemas/applications/deployment.ts";
 import { registryModel } from "@/schemas/infrastructure/serverSpec.ts";
+import { networkModel } from "@/schemas/infrastructure/network.ts";
 import { bootstrapSessionModel } from "@/schemas/infrastructure/bootstrapSession.ts";
 import {
   streamChunkModel,
@@ -206,6 +207,11 @@ export const syncDeployIndexes = async () => {
       { name: "builds", partialFilterExpression: { status: "building" } },
     ),
     registryModel.createIndex({ tenant: 1, name: 1 }, { name: "tenantName" }),
+    // ensureMeshIndex upserts one per tenant.
+    networkModel.createIndex({ tenant: 1 }, {
+      name: "uniqueTenant",
+      unique: true,
+    }),
   ]);
 
   // The offline sweep claims these slots; they must exist (PLAN §3.4).

@@ -40,6 +40,7 @@ const MESSAGES: Array<[string, z.ZodType, "input" | "output"]> = [
   ["BuildRunPayload", protocol.$buildRunPayload, "output"],
   ["DesiredSpec", protocol.$desiredSpec, "output"],
   ["WorkloadStatusEvent", protocol.$workloadStatusEvent, "input"],
+  ["MeshStatusEvent", protocol.$meshStatusEvent, "input"],
 ];
 
 const schemas = Object.fromEntries(
@@ -63,6 +64,7 @@ const SHARED: Array<[string, z.ZodType]> = [
   ["WorkloadRelease", protocol.$workloadRelease],
   ["Healthcheck", protocol.$healthcheck],
   ["RegistryAuth", protocol.$registryAuth],
+  ["MeshSpec", protocol.$meshSpec],
 ];
 const shape = (schema: TJsonSchema) =>
   JSON.stringify(

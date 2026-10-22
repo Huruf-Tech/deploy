@@ -373,6 +373,20 @@ export class SimAgent {
     return events;
   }
 
+  /** A WireGuard public key for this simulated server (any 32 bytes, base64). */
+  readonly meshKey = btoa(
+    String.fromCharCode(...crypto.getRandomValues(new Uint8Array(32))),
+  );
+
+  /** Reports `mesh.status`: which peers this server has a handshake with. */
+  reportMesh(peers: Record<string, boolean> = {}) {
+    return this.sendEvents([{
+      id: `mesh-${crypto.randomUUID()}`,
+      type: "mesh.status",
+      data: { publicKey: this.meshKey, peers },
+    }]);
+  }
+
   sendEvents(events: TAgentEvent[]) {
     return this.request("/agents/api/events", { events });
   }

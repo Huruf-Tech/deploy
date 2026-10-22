@@ -20,6 +20,7 @@ import type {
 } from "@/schemas/protocol/agent.ts";
 import { ingestChunks, pendingTerminalInput } from "@/lib/agents/streams.ts";
 import { onBuildResult, onWorkloadStatus } from "@/lib/deploy/deployments.ts";
+import { recordMeshStatus } from "@/lib/network/network.ts";
 import { serverSpecModel } from "@/schemas/infrastructure/serverSpec.ts";
 
 const COMMAND_BATCH = 50;
@@ -260,6 +261,7 @@ export const ingestEvents = async (
   const results = events.filter((e) => e.type === "command.result");
   const chunks = events.filter((e) => e.type === "stream.chunk");
   const statuses = events.filter((e) => e.type === "workload.status");
+  const mesh = events.filter((e) => e.type === "mesh.status");
 
   const [applied, streams] = await Promise.all([
     results.length ? ingestCommandResults(identity, results) : 0,
@@ -269,8 +271,10 @@ export const ingestEvents = async (
   for (const status of statuses) {
     await onWorkloadStatus(identity.server, status.data);
   }
+  // Only the latest matters.
+  if (mesh.length) await recordMeshStatus(identity.server, mesh.at(-1)!.data);
   return {
-    applied: applied + streams.applied + statuses.length,
+    applied: applied + streams.applied + statuses.length + mesh.length,
     close: streams.close,
   };
 };

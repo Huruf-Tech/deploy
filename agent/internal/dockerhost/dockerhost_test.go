@@ -2,6 +2,7 @@ package dockerhost
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 )
 
@@ -37,5 +38,19 @@ func TestMergeDaemonConfigIsIdempotent(t *testing.T) {
 func TestMergeDaemonConfigRejectsInvalidJSON(t *testing.T) {
 	if _, _, err := MergeDaemonConfig([]byte("{not json"), payload); err == nil {
 		t.Fatal("want an error for invalid JSON")
+	}
+}
+
+func TestMeshRegistryIsTrustedOnce(t *testing.T) {
+	p := Payload{LogMaxSize: "10m", LogMaxFile: 5, MeshCidr: "10.209.0.0/16"}
+	merged, changed, err := MergeDaemonConfig([]byte(`{"insecure-registries":["registry.local:5000"]}`), p)
+	if err != nil || !changed {
+		t.Fatalf("changed=%v err=%v", changed, err)
+	}
+	if !strings.Contains(string(merged), `"registry.local:5000"`) || !strings.Contains(string(merged), `"10.209.0.0/16"`) {
+		t.Fatalf("merged = %s", merged)
+	}
+	if _, again, _ := MergeDaemonConfig(merged, p); again {
+		t.Fatal("a second merge changed the config")
 	}
 }

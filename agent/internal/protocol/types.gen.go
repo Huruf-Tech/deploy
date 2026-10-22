@@ -350,6 +350,12 @@ type DesiredSpec struct {
 
 	// Built images to keep for rollbacks; older huruf/* images are removed
 	KeepImages []string `json:"keepImages"`
+
+	// The private network (PLAN §8.2); absent means this server isn't in it
+	Mesh *MeshSpec `json:"mesh,omitempty"`
+
+	// Run the tenant's built-in registry here (primary server)
+	Registry *DesiredSpecRegistry `json:"registry,omitempty"`
 }
 
 type Workload struct {
@@ -424,6 +430,43 @@ type RegistryAuth struct {
 	Password string `json:"password"`
 }
 
+type MeshSpec struct {
+	// This server's mesh address with prefix, e.g. 10.209.0.3/16
+	Address string `json:"address"`
+
+	ListenPort int64 `json:"listenPort"`
+
+	// This server's container subnet
+	Subnet string `json:"subnet"`
+
+	Peers []MeshSpecPeersItem `json:"peers"`
+}
+
+type MeshSpecPeersItem struct {
+	Server string `json:"server"`
+
+	PublicKey string `json:"publicKey"`
+
+	// host:port; absent when unknown (NAT)
+	Endpoint string `json:"endpoint,omitempty"`
+
+	MeshIp string `json:"meshIp"`
+
+	Subnet string `json:"subnet"`
+}
+
+type DesiredSpecRegistry struct {
+	// Mesh address and port, e.g. 10.209.0.1:5000
+	Listen string `json:"listen"`
+
+	Username string `json:"username"`
+
+	// Hashed on the server with the edge proxy's `caddy hash-password` (bcrypt)
+	Password string `json:"password"`
+
+	Image string `json:"image"`
+}
+
 type WorkloadStatusEvent struct {
 	Id string `json:"id"`
 
@@ -445,6 +488,24 @@ type WorkloadStatusEventData struct {
 
 	// One of: starting, healthy, failed
 	State string `json:"state"`
+
+	Error string `json:"error,omitempty"`
+}
+
+type MeshStatusEvent struct {
+	Id string `json:"id"`
+
+	// Always "mesh.status"
+	Type string `json:"type"`
+
+	Data MeshStatusEventData `json:"data"`
+}
+
+type MeshStatusEventData struct {
+	PublicKey string `json:"publicKey"`
+
+	// server -> reachable (a WireGuard handshake in the last 3 minutes)
+	Peers map[string]bool `json:"peers"`
 
 	Error string `json:"error,omitempty"`
 }

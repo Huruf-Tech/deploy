@@ -380,6 +380,7 @@ export async function createProject(opts: {
       volumes: input.volumes,
       deployStrategy: strategy,
       autoDeploy: input.autoDeploy,
+      needsPrivateNetwork: input.needsPrivateNetwork,
       distribution: input.distribution,
       ...(input.registry ? { registry: input.registry } : {}),
       ...(input.source.type === "compose"
@@ -483,6 +484,9 @@ export async function updateProject(opts: {
   if (publicPort) $set.publicPort = publicPort;
   else $unset.publicPort = "";
   if (patch.autoDeploy !== undefined) $set.autoDeploy = patch.autoDeploy;
+  if (patch.needsPrivateNetwork !== undefined) {
+    $set.needsPrivateNetwork = patch.needsPrivateNetwork;
+  }
   if (patch.distribution) $set.distribution = patch.distribution;
   if (patch.registry === null) $unset.registry = "";
   else if (patch.registry) $set.registry = patch.registry;

@@ -147,6 +147,12 @@ export const $dockerEnsurePayload = z.object({
   logMaxFile: z.number().int().min(1),
   edgeImage: z.string().describe("Caddy image for the edge proxy"),
   network: z.string().describe("Local Docker network for projects"),
+  subnet: z.string().optional().describe(
+    "The network's subnet, unique in the tenant (e.g. 10.210.3.0/24), so container IPs route over the mesh",
+  ),
+  meshCidr: z.string().optional().describe(
+    "Mesh addresses (e.g. 10.209.0.0/16): trusted as an insecure registry (traffic is WireGuard-encrypted)",
+  ),
 });
 
 /** One host preflight result, reported by `docker.ensure`. */
@@ -242,6 +248,24 @@ export const $workload = z.object({
   releases: z.array($workloadRelease).max(2),
 });
 
+/** WireGuard peers (PLAN §8.2): mesh address plus container subnet each. */
+export const $meshSpec = z.object({
+  address: z.string().describe(
+    "This server's mesh address with prefix, e.g. 10.209.0.3/16",
+  ),
+  listenPort: z.number().int(),
+  subnet: z.string().describe("This server's container subnet"),
+  peers: z.array(z.object({
+    server: z.string(),
+    publicKey: z.string(),
+    endpoint: z.string().optional().describe(
+      "host:port; absent when unknown (NAT)",
+    ),
+    meshIp: z.string(),
+    subnet: z.string(),
+  })),
+});
+
 /** Everything this server should run (PLAN §4.4). Precomputed and sealed when it changes. */
 export const $desiredSpec = z.object({
   version: z.number().int().min(1),
@@ -252,6 +276,19 @@ export const $desiredSpec = z.object({
   workloads: z.array($workload),
   keepImages: z.array(z.string()).describe(
     "Built images to keep for rollbacks; older huruf/* images are removed",
+  ),
+  mesh: $meshSpec.optional().describe(
+    "The private network (PLAN §8.2); absent means this server isn't in it",
+  ),
+  registry: z.object({
+    listen: z.string().describe("Mesh address and port, e.g. 10.209.0.1:5000"),
+    username: z.string(),
+    password: z.string().describe(
+      "Hashed on the server with the edge proxy's `caddy hash-password` (bcrypt)",
+    ),
+    image: z.string(),
+  }).optional().describe(
+    "Run the tenant's built-in registry here (primary server)",
   ),
 });
 
@@ -331,10 +368,24 @@ export const $workloadStatusEvent = z.object({
   }),
 });
 
+/** The agent's WireGuard key and which peers it has a recent handshake with. */
+export const $meshStatusEvent = z.object({
+  id: z.string().min(1).max(64),
+  type: z.literal("mesh.status"),
+  data: z.object({
+    publicKey: z.string().max(64),
+    peers: z.record(z.string(), z.boolean()).describe(
+      "server -> reachable (a WireGuard handshake in the last 3 minutes)",
+    ),
+    error: z.string().max(500).optional(),
+  }),
+});
+
 export const $agentEvent = z.discriminatedUnion("type", [
   $commandResultEvent,
   $streamChunkEvent,
   $workloadStatusEvent,
+  $meshStatusEvent,
 ]);
 
 export const $eventsRequest = z.object({
@@ -360,3 +411,4 @@ export type TBuildRunPayload = z.output<typeof $buildRunPayload>;
 export type TDesiredSpec = z.output<typeof $desiredSpec>;
 export type TWorkload = z.output<typeof $workload>;
 export type TWorkloadRelease = z.output<typeof $workloadRelease>;
+export type TMeshSpec = z.output<typeof $meshSpec>;

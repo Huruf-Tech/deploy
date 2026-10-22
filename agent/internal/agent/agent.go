@@ -44,7 +44,11 @@ type Agent struct {
 	Streams Streams
 	// Applies the desired state; may be nil (tests).
 	Reconciler *reconcile.Reconciler
-	Log        *slog.Logger
+	// Sets up the private network and registry before workloads; may be nil.
+	Network interface {
+		Apply(ctx context.Context, spec protocol.DesiredSpec) error
+	}
+	Log *slog.Logger
 
 	config        *protocol.AgentConfig
 	configVersion string
@@ -72,7 +76,7 @@ func (a *Agent) Run(ctx context.Context) error {
 				a.Log.Warn("stored desired state is unreadable; waiting for a new one", "error", err)
 			}
 		}
-		go a.Reconciler.Run(ctx, func() time.Duration { return a.reconcileInterval() })
+		go a.Reconciler.Run(ctx, a.ReconcileInterval)
 	}
 	defer func() {
 		stopSending()
@@ -184,15 +188,19 @@ func (a *Agent) applyDesired(ctx context.Context, version int64, sealed string) 
 		return err
 	}
 	a.Log.Info("applying desired state", "version", version, "workloads", len(spec.Workloads))
+	if a.Network != nil {
+		// Errors are reported in mesh.status; workloads still run locally.
+		_ = a.Network.Apply(ctx, spec)
+	}
 	if a.Reconciler != nil {
 		a.Reconciler.Apply(ctx, spec)
 	}
 	return nil
 }
 
-// reconcileInterval comes from the control plane's config; until the first
+// ReconcileInterval comes from the control plane's config; until the first
 // hello answers, the stored spec is re-checked at the agent's retry cap.
-func (a *Agent) reconcileInterval() time.Duration {
+func (a *Agent) ReconcileInterval() time.Duration {
 	if ms := a.reconcileMs.Load(); ms > 0 {
 		return time.Duration(ms) * time.Millisecond
 	}

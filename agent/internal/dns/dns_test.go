@@ -82,3 +82,36 @@ func TestOtherNamesAreForwarded(t *testing.T) {
 		t.Fatalf("not forwarded: %q", resp)
 	}
 }
+
+// A name served on two servers resolves to the replicas of both.
+func TestInternalNamesIncludePeerReplicas(t *testing.T) {
+	peer := &Server{}
+	peer.Set(map[string][]string{"db.internal": {"10.210.2.5"}})
+	conn, err := net.ListenPacket("udp", "127.0.0.2:53")
+	if err != nil {
+		t.Skip("cannot bind 127.0.0.2:53:", err)
+	}
+	defer conn.Close()
+	go func() {
+		buf := make([]byte, 512)
+		for {
+			n, from, err := conn.ReadFrom(buf)
+			if err != nil {
+				return
+			}
+			_, _ = conn.WriteTo(peer.answer(buf[:n], true), from)
+		}
+	}()
+
+	local := &Server{Peers: func() []string { return []string{"127.0.0.2", "127.0.0.3"} }}
+	local.Set(map[string][]string{"db.internal": {"10.210.1.7"}})
+
+	resp := local.Answer(query("db.internal", typeA))
+	if got := aRecords(resp); len(got) != 2 || !got[0].Equal(net.ParseIP("10.210.1.7")) || !got[1].Equal(net.ParseIP("10.210.2.5")) {
+		t.Fatalf("answers = %v", got)
+	}
+	// Peers never forward or fan out.
+	if peer.answer(query("example.com", typeA), true) != nil {
+		t.Fatal("a local-only listener forwarded a query")
+	}
+}

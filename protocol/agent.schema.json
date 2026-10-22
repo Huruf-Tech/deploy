@@ -906,6 +906,52 @@
                   "type",
                   "data"
                 ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64
+                  },
+                  "type": {
+                    "type": "string",
+                    "const": "mesh.status"
+                  },
+                  "data": {
+                    "type": "object",
+                    "properties": {
+                      "publicKey": {
+                        "type": "string",
+                        "maxLength": 64
+                      },
+                      "peers": {
+                        "type": "object",
+                        "propertyNames": {
+                          "type": "string"
+                        },
+                        "additionalProperties": {
+                          "type": "boolean"
+                        },
+                        "description": "server -> reachable (a WireGuard handshake in the last 3 minutes)"
+                      },
+                      "error": {
+                        "type": "string",
+                        "maxLength": 500
+                      }
+                    },
+                    "required": [
+                      "publicKey",
+                      "peers"
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "type",
+                  "data"
+                ]
               }
             ]
           }
@@ -1263,6 +1309,90 @@
             "type": "string"
           },
           "description": "Built images to keep for rollbacks; older huruf/* images are removed"
+        },
+        "mesh": {
+          "description": "The private network (PLAN §8.2); absent means this server isn't in it",
+          "type": "object",
+          "properties": {
+            "address": {
+              "type": "string",
+              "description": "This server's mesh address with prefix, e.g. 10.209.0.3/16"
+            },
+            "listenPort": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            "subnet": {
+              "type": "string",
+              "description": "This server's container subnet"
+            },
+            "peers": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "server": {
+                    "type": "string"
+                  },
+                  "publicKey": {
+                    "type": "string"
+                  },
+                  "endpoint": {
+                    "description": "host:port; absent when unknown (NAT)",
+                    "type": "string"
+                  },
+                  "meshIp": {
+                    "type": "string"
+                  },
+                  "subnet": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "server",
+                  "publicKey",
+                  "meshIp",
+                  "subnet"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "address",
+            "listenPort",
+            "subnet",
+            "peers"
+          ],
+          "additionalProperties": false
+        },
+        "registry": {
+          "description": "Run the tenant's built-in registry here (primary server)",
+          "type": "object",
+          "properties": {
+            "listen": {
+              "type": "string",
+              "description": "Mesh address and port, e.g. 10.209.0.1:5000"
+            },
+            "username": {
+              "type": "string"
+            },
+            "password": {
+              "type": "string",
+              "description": "Hashed on the server with the edge proxy's `caddy hash-password` (bcrypt)"
+            },
+            "image": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "listen",
+            "username",
+            "password",
+            "image"
+          ],
+          "additionalProperties": false
         }
       },
       "required": [
@@ -1326,6 +1456,53 @@
             "workload",
             "release",
             "state"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "type",
+        "data"
+      ]
+    },
+    "MeshStatusEvent": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "type": {
+          "type": "string",
+          "const": "mesh.status"
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "publicKey": {
+              "type": "string",
+              "maxLength": 64
+            },
+            "peers": {
+              "type": "object",
+              "propertyNames": {
+                "type": "string"
+              },
+              "additionalProperties": {
+                "type": "boolean"
+              },
+              "description": "server -> reachable (a WireGuard handshake in the last 3 minutes)"
+            },
+            "error": {
+              "type": "string",
+              "maxLength": 500
+            }
+          },
+          "required": [
+            "publicKey",
+            "peers"
           ]
         }
       },
