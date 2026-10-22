@@ -4,6 +4,7 @@ import { importMasterKey, Keyring } from "@/lib/core/keyring.ts";
 import { QuotaGuard } from "@/lib/core/quotaGuard.ts";
 import { RateLimiter } from "@/lib/core/rateLimiter.ts";
 import { Entitlements } from "@/lib/billing/entitlements.ts";
+import { GitHubApi } from "@/lib/github/githubApi.ts";
 import { keyringModel } from "@/schemas/crypto/keyring.ts";
 import {
   $planFeatures,
@@ -26,6 +27,8 @@ export const keyring = new Keyring(
 export const quotaGuard = new QuotaGuard(tenantUsageModel);
 
 export const rateLimiter = new RateLimiter(rateCounterModel);
+
+export const githubApi = new GitHubApi();
 
 const freePlan = cache(async () => {
   const plan = await planModel.findOne(

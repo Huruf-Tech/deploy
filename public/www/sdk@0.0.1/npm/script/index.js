@@ -8,6 +8,9 @@ var _a;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ThunderSDK = void 0;
 const base_js_1 = require("./base.js");
+const gitIntegrations_js_1 = require("./modules/gitIntegrations.js");
+const githubHooks_js_1 = require("./modules/githubHooks.js");
+const templates_js_1 = require("./modules/templates.js");
 const variables_js_1 = require("./modules/variables.js");
 const home_js_1 = require("./modules/home.js");
 const index_js_1 = require("./modules/index.js");
@@ -107,6 +110,9 @@ Object.defineProperty(ThunderSDK, "_moduleNames", {
     configurable: true,
     writable: true,
     value: [
+        "gitIntegrations",
+        "githubHooks",
+        "templates",
         "variables",
         "home",
         "index",
@@ -131,6 +137,24 @@ Object.defineProperty(ThunderSDK, "_moduleNames", {
         "walletLedgers",
         "wallets",
     ]
+});
+Object.defineProperty(ThunderSDK, "gitIntegrations", {
+    enumerable: true,
+    configurable: true,
+    writable: true,
+    value: (0, gitIntegrations_js_1.gitIntegrationsModule)(_a)
+});
+Object.defineProperty(ThunderSDK, "githubHooks", {
+    enumerable: true,
+    configurable: true,
+    writable: true,
+    value: (0, githubHooks_js_1.githubHooksModule)(_a)
+});
+Object.defineProperty(ThunderSDK, "templates", {
+    enumerable: true,
+    configurable: true,
+    writable: true,
+    value: (0, templates_js_1.templatesModule)(_a)
 });
 Object.defineProperty(ThunderSDK, "variables", {
     enumerable: true,

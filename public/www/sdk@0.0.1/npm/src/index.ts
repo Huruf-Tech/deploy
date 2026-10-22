@@ -6,6 +6,9 @@
 
 import { BaseSDK } from "./base.js";
 
+import { gitIntegrationsModule } from "./modules/gitIntegrations.js";
+import { githubHooksModule } from "./modules/githubHooks.js";
+import { templatesModule } from "./modules/templates.js";
 import { variablesModule } from "./modules/variables.js";
 import { homeModule } from "./modules/home.js";
 import { indexModule } from "./modules/index.js";
@@ -35,6 +38,9 @@ import { essentialsEntry } from "./plugins/essentials/entry.js";
 export class ThunderSDK extends BaseSDK {
     protected static _actionsList?: string[];
     protected static _moduleNames = [
+        "gitIntegrations",
+        "githubHooks",
+        "templates",
         "variables",
         "home",
         "index",
@@ -60,6 +66,9 @@ export class ThunderSDK extends BaseSDK {
         "wallets",
     ];
     
+    static gitIntegrations = gitIntegrationsModule(this);
+    static githubHooks = githubHooksModule(this);
+    static templates = templatesModule(this);
     static variables = variablesModule(this);
     static home = homeModule(this);
     static index = indexModule(this);

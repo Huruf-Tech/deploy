@@ -5,6 +5,9 @@
  */
 var _a;
 import { BaseSDK } from "./base.js";
+import { gitIntegrationsModule } from "./modules/gitIntegrations.js";
+import { githubHooksModule } from "./modules/githubHooks.js";
+import { templatesModule } from "./modules/templates.js";
 import { variablesModule } from "./modules/variables.js";
 import { homeModule } from "./modules/home.js";
 import { indexModule } from "./modules/index.js";
@@ -103,6 +106,9 @@ Object.defineProperty(ThunderSDK, "_moduleNames", {
     configurable: true,
     writable: true,
     value: [
+        "gitIntegrations",
+        "githubHooks",
+        "templates",
         "variables",
         "home",
         "index",
@@ -127,6 +133,24 @@ Object.defineProperty(ThunderSDK, "_moduleNames", {
         "walletLedgers",
         "wallets",
     ]
+});
+Object.defineProperty(ThunderSDK, "gitIntegrations", {
+    enumerable: true,
+    configurable: true,
+    writable: true,
+    value: gitIntegrationsModule(_a)
+});
+Object.defineProperty(ThunderSDK, "githubHooks", {
+    enumerable: true,
+    configurable: true,
+    writable: true,
+    value: githubHooksModule(_a)
+});
+Object.defineProperty(ThunderSDK, "templates", {
+    enumerable: true,
+    configurable: true,
+    writable: true,
+    value: templatesModule(_a)
 });
 Object.defineProperty(ThunderSDK, "variables", {
     enumerable: true,

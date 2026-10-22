@@ -12,6 +12,11 @@ import {
 } from "@/schemas/infrastructure/agentCommand.ts";
 import { SHARD_COUNT } from "@/lib/agents/sweep.ts";
 import { variableModel } from "@/schemas/configuration/variable.ts";
+import { gitIntegrationModel } from "@/schemas/build/gitIntegration.ts";
+import {
+  templateModel,
+  templateVersionModel,
+} from "@/schemas/build/template.ts";
 import { bootstrapSessionModel } from "@/schemas/infrastructure/bootstrapSession.ts";
 import {
   streamChunkModel,
@@ -132,6 +137,22 @@ export const syncDeployIndexes = async () => {
     variableModel.createIndex(
       { scope: 1, user: 1, tenant: 1, key: 1 },
       { name: "uniqueKeyPerOwner", unique: true },
+    ),
+
+    gitIntegrationModel.createIndex(
+      { tenant: 1, owner: 1 },
+      { name: "tenantOwner" },
+    ),
+
+    // Also serves listing: system templates (tenant null) and a tenant's own.
+    templateModel.createIndex(
+      { scope: 1, tenant: 1, slug: 1 },
+      { name: "uniqueSlug", unique: true },
+    ),
+    // Version numbers come from the template's counter; this makes them unique.
+    templateVersionModel.createIndex(
+      { template: 1, version: -1 },
+      { name: "uniqueVersion", unique: true },
     ),
   ]);
 

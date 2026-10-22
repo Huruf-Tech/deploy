@@ -1,17 +1,11 @@
 import { assert, assertEquals, assertThrows } from "@std/assert";
 import { ObjectId } from "mongodb";
-import handler from "@/serve.base.ts";
-import { Env } from "@/core/utils/env.ts";
 import {
   resolveReferences,
   VariableReferenceError,
 } from "@/lib/variables/references.ts";
 import { variableModel } from "@/schemas/configuration/variable.ts";
-import { keyringModel } from "@/schemas/crypto/keyring.ts";
-import { tenantModel } from "@/plugins/Huruf-Tech/thunder-core/schemas/tenant.ts";
-import { tenantMemberModel } from "@/plugins/Huruf-Tech/thunder-core/schemas/tenantMember.ts";
-import { apiKeyModel } from "@/plugins/Huruf-Tech/thunder-core/schemas/apiKey.ts";
-import { mongodb } from "@/database.ts";
+import { testSession } from "./_session.ts";
 
 Deno.test("references: precedence, scoped references, cycles", () => {
   const resolved = resolveReferences([
@@ -49,55 +43,11 @@ Deno.test({
   sanitizeOps: false,
   sanitizeResources: false,
   fn: async (t) => {
-    const origin = Env.getSync("BASE_URL");
-    const email = `variables-${Date.now()}@example.com`;
-    let cookie = "";
-    let tenant = "";
-    const call = async (
-      method: string,
-      path: string,
-      body?: unknown,
-      headers: Record<string, string> = { cookie },
-    ) => {
-      const res = await handler(
-        new Request(`http://localhost${path}`, {
-          method,
-          headers: {
-            "content-type": "application/json",
-            origin,
-            ...(tenant ? { "x-tenant-id": tenant } : {}),
-            ...headers,
-          },
-          body: body ? JSON.stringify(body) : undefined,
-        }),
-      );
-      const set = res.headers.getSetCookie();
-      if (set.length) cookie = set.map((c) => c.split(";")[0]).join("; ");
-      const text = await res.text();
-      let json;
-      try {
-        json = JSON.parse(text);
-      } catch {
-        json = text;
-      }
-      return { status: res.status, json };
-    };
-
+    const { call, user, tenant, cleanup } = await testSession("variables");
     const secret = "postgres://admin:hunter2-very-secret@db:5432/app";
     const apiKeySecret = crypto.randomUUID();
-    let user!: ObjectId;
 
     try {
-      const signup = await call("POST", "/auth/api/sign-up/email", {
-        email,
-        password: "Passw0rd!long",
-        name: "Variables Test",
-      });
-      assertEquals(signup.status, 200, JSON.stringify(signup.json));
-      user = new ObjectId(signup.json.user.id);
-      tenant = (await call("POST", "/tenants/api", { name: "variables-test" }))
-        .json.tenantId;
-
       await t.step("create in both scopes, with a reference", async () => {
         for (
           const body of [
@@ -218,19 +168,10 @@ Deno.test({
         assertEquals(list.status, 403);
       });
     } finally {
-      const tenantId = tenant ? new ObjectId(tenant) : undefined;
-      await Promise.all([
-        variableModel.deleteMany({ $or: [{ user }, { tenant: tenantId }] }),
-        keyringModel.deleteMany({
-          "owner.ref": { $in: [user, tenantId].filter(Boolean) as ObjectId[] },
-        }),
-        apiKeyModel.deleteMany({ createdBy: user }),
-        tenantModel.deleteMany({ _id: tenantId }),
-        tenantMemberModel.deleteMany({ tenant: tenantId }),
-        mongodb.db().collection("sessions").deleteMany({ userId: user }),
-        mongodb.db().collection("accounts").deleteMany({ userId: user }),
-        mongodb.db().collection("users").deleteMany({ _id: user }),
-      ]);
+      await variableModel.deleteMany({
+        $or: [{ user }, { tenant: new ObjectId(tenant) }],
+      });
+      await cleanup();
     }
   },
 });
