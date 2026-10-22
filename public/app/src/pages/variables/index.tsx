@@ -351,7 +351,13 @@ function ScriptAccess() {
         <div>
           <Button
             variant="outline"
-            onClick={() => (window.location.href = getAuthUrl().toString())}
+            onClick={() => {
+              // Opens the account page on its API keys view.
+              const url = getAuthUrl()
+              url.searchParams.set("tab", "developers")
+              url.searchParams.set("view", "api-keys")
+              window.location.href = url.toString()
+            }}
           >
             {t("Manage API keys")}
           </Button>
