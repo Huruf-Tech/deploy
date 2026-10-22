@@ -104,7 +104,7 @@ function TerminalView({
     if (chunk.data) term.current?.write(chunk.data)
   }, [])
 
-  const { status, error } = useStream(open, onChunk, READ_EVERY_MS)
+  const { status, error } = useStream(open, onChunk, READ_EVERY_MS, false)
 
   // Batch keystrokes: one request per 50 ms at most, in order.
   React.useEffect(() => {

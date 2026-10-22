@@ -114,6 +114,9 @@ export default new Router("/api", function streams(router) {
         done: z.boolean().optional(),
         error: z.string().optional(),
       })),
+      closed: z.boolean().optional().describe(
+        "The server closed this session (e.g. idle while the tab was hidden): reopen",
+      ),
     });
 
     return {

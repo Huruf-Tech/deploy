@@ -34,6 +34,12 @@ const owners = new BoundedCache<
   ttlMs: 10 * 60_000,
 });
 
+/** Sessions a read found closed; readers reopen them (PLAN §20.4 bounded). */
+const closedSessions = new BoundedCache<string, true>({
+  maxEntries: 20_000,
+  ttlMs: 10 * 60_000,
+});
+
 const INPUT_TTL_MS = 2 * 60_000;
 const TERMINAL_PACE_MS = 2 * 60_000;
 /** Last terminal-activity write per session: keystrokes arrive every ~50 ms, we write every 30 s. */
@@ -217,12 +223,17 @@ export const readStream = async (
     throw Response.notFound("Unknown stream");
   }
 
+  // The periodic lastReadAt write doubles as the liveness check: it only
+  // matches an open session, so no match means the server closed it (idle,
+  // e.g. while the tab was hidden) and the reader should reopen.
   const now = Date.now();
   if (now - (touched.get(key) ?? 0) > TOUCH_EVERY_MS) {
     touched.set(key, now);
-    await streamSessionModel.updateOne({ _id: session }, {
-      $set: { lastReadAt: new Date(now) },
-    });
+    const { matchedCount } = await streamSessionModel.updateOne(
+      { _id: session, status: "open" },
+      { $set: { lastReadAt: new Date(now) } },
+    );
+    if (!matchedCount) closedSessions.set(key, true);
   }
 
   const chunks = await streamChunkModel
@@ -233,7 +244,7 @@ export const readStream = async (
     })
     .toArray();
 
-  return { chunks };
+  return closedSessions.get(key) ? { chunks, closed: true } : { chunks };
 };
 
 export const closeStream = async (session: ObjectId, tenant: ObjectId) => {
