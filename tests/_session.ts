@@ -18,24 +18,29 @@ export type TCall = (
 
 /**
  * A signed-up user with their own tenant, calling the real handler in process.
- * `call` sends the session cookie and tenant header unless `headers` replaces
- * the cookie. `cleanup` removes the user, the tenant and their keys.
+ * `call` sends the session cookie and tenant header; `headers` override them
+ * (`{ cookie: "" }` calls without a session, `"x-tenant-id"` switches tenant). `cleanup` removes the user, the
+ * tenant and their keys.
  */
 export async function testSession(name: string) {
   const origin = Env.getSync("BASE_URL");
   let cookie = "";
   let tenant = "";
 
-  const call: TCall = async (method, path, body, headers = { cookie }) => {
+  const call: TCall = async (method, path, body, headers = {}) => {
     const res = await handler(
       new Request(`http://localhost${path}`, {
         method,
-        headers: {
-          "content-type": "application/json",
-          origin,
-          ...(tenant ? { "x-tenant-id": tenant } : {}),
-          ...headers,
-        },
+        // Empty values drop a default header.
+        headers: Object.fromEntries(
+          Object.entries({
+            "content-type": "application/json",
+            origin,
+            "x-tenant-id": tenant,
+            cookie,
+            ...headers,
+          }).filter(([, value]) => value),
+        ),
         body: body ? JSON.stringify(body) : undefined,
         redirect: "manual",
       }),
@@ -52,8 +57,9 @@ export async function testSession(name: string) {
     return { status: res.status, json, headers: res.headers };
   };
 
+  const email = `${name}-${Date.now()}@example.com`;
   const signup = await call("POST", "/auth/api/sign-up/email", {
-    email: `${name}-${Date.now()}@example.com`,
+    email,
     password: "Passw0rd!long",
     name,
   });
@@ -78,5 +84,5 @@ export async function testSession(name: string) {
     ]);
   };
 
-  return { call, user, tenant, tenantId, cleanup };
+  return { call, email, user, tenant, tenantId, cleanup };
 }

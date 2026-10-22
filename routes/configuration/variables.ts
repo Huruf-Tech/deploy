@@ -31,7 +31,12 @@ export default new Router("/api", function variables(router) {
 
   const context = async (req: Request, scope: "global" | "tenant") => {
     const { user, tenant } = await withTenant(req);
-    const viewer = { user: user._id, tenant: tenant._id };
+    // A workspace resolves with its owner's account variables, whoever asks
+    // (owner's decision); members override them with project variables.
+    const viewer = {
+      user: scope === "global" ? user._id : tenant.createdBy,
+      tenant: tenant._id,
+    };
     const owner: TVariableOwner = scope === "global"
       ? { scope, user: viewer.user }
       : { scope, tenant: viewer.tenant };

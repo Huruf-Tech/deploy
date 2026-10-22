@@ -143,7 +143,7 @@ Deno.test({
         assertEquals(created.status, 200, JSON.stringify(created.json));
 
         // No cookie: the key and the tenant header only, like a CI job.
-        const keyOnly = { "x-api-key": apiKeySecret };
+        const keyOnly = { "x-api-key": apiKeySecret, cookie: "" };
         const { status, json } = await call(
           "GET",
           "/variables/api/resolve?stage=runtime",

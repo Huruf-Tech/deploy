@@ -137,7 +137,7 @@ Deno.test({
               encodeURIComponent(state)
             }`,
             undefined,
-            {},
+            { cookie: "", "x-tenant-id": "" },
           );
           assertEquals(created.status, 302);
           const install = new URL(created.headers.get("location")!);
@@ -150,7 +150,7 @@ Deno.test({
               encodeURIComponent(install.searchParams.get("state")!)
             }`,
             undefined,
-            {},
+            { cookie: "", "x-tenant-id": "" },
           );
           assertEquals(installed.status, 302);
           const back = new URL(installed.headers.get("location")!);
@@ -166,7 +166,7 @@ Deno.test({
           "GET",
           "/githubHooks/api/manifest?code=one-time-code&state=forged",
           undefined,
-          {},
+          { cookie: "", "x-tenant-id": "" },
         );
         assertMatch(forged.headers.get("location")!, /error=expired/);
       });

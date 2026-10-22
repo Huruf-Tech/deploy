@@ -879,6 +879,7 @@ Each phase ends with a **review checkpoint** (demo + code review + approval). Ph
     - Inputs carry their server, so an agent can never read another server's keystrokes.
   - **Output:** flushed every 30 ms and sent urgently, without waiting for the 500 ms sender cycle. The browser reads every 300 ms, and the server polls at terminal pace (`terminalUntil`, kept alive by typing).
   - **Limits:** `concurrentTerminals`, `SAFETY_TERMINAL_IDLE_MIN` (no keystrokes), `SAFETY_TERMINAL_MAX_HOURS`.
+  - **Who gets shells (RBAC, owner's decision):** `openExec`, `openTerminal` and `openHostTerminal` are in their own `shell` policy, not `deploy`. Members get the intersection of their inviter's policies and their role's, so the owner decides by the role they invite with: `operator` (deploy + shell) or `deployer` (deploy only). `tests/rbac_test.ts` checks both.
   - **Container shells are cleaned up:** tagged with `HURUF_TERMINAL=<session>` and hung up on close, because killing the `docker exec` client leaves the shell running.
   - **`--init`:** the edge runs with `--init`, so killed processes are reaped. **Phase 6: run every project container with `--init`.**
   - **UI:** xterm.js in a lazy chunk (85 kB gzipped), resize, and line mode for instant, screen-reader-friendly input.
@@ -903,6 +904,7 @@ Each phase ends with a **review checkpoint** (demo + code review + approval). Ph
   - **External access:** `GET /variables/api/resolve` with `X-Api-Key` + `X-TENANT-ID`, rate-limited by `variableApiReadsPerMinute`. A key with the `variableApi` scope can only resolve.
   - **Quota:** `variablesPerScope`, a count bounded by the limit on the unique `(scope, user, tenant, key)` index.
   - **UI:** Configuration → Variables (workspace and account tabs, masked secrets with reveal, add/edit dialog, a curl snippet for scripts).
+  - **Owner decision:** a workspace resolves with its **owner's** account variables, whoever deploys or calls `resolve`. Members who need different values add project variables (Phase 6).
   - **Verified:** `tests/variables_test.ts` runs the "done when" end to end (API-key-only resolve, no plaintext in Mongo, cycle rejected, key limited to resolve).
 
 ### Phase 5 — GitHub App and templates

@@ -196,7 +196,7 @@ function VariableTable({ scope }: { scope: TScope }) {
             <EmptyDescription>
               {scope === "tenant"
                 ? t("Shared by everyone in this workspace and its apps.")
-                : t("Yours alone, available in every workspace you belong to.")}
+                : t("Yours alone. Every workspace you own uses them.")}
             </EmptyDescription>
           </EmptyHeader>
           <EmptyContent>{add}</EmptyContent>
