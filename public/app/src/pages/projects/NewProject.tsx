@@ -37,6 +37,8 @@ import {
 } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
 import { getLocalPath } from "@/core/lib/utils"
+import { useCapacity } from "@/hooks/use-capacity"
+import { classFootprints, fitsIn, roomOf } from "@/lib/capacity"
 import { cn, errorMessage } from "@/lib/utils"
 import { InputField } from "@/pages/templates/Detail"
 import { slugify, TemplateIcon } from "@/pages/templates/shared"
@@ -367,6 +369,18 @@ export default function NewProject() {
       async ({ signal }) => await ThunderSDK.projects.placementInfo({ signal })
     )
   )
+  const projects = use(
+    ThunderSDK.useCaching(
+      ["projects"],
+      async ({ signal }) => await ThunderSDK.projects.list({ signal })
+    )
+  )
+  const onlineServers = React.useMemo(
+    () => (placement.data ?? []).filter((s) => s.online).map((s) => s.server),
+    [placement.data]
+  )
+  // Observed footprints (PLAN §7.1): fit by what this kind of app uses here.
+  const capacity = useCapacity(onlineServers)
   const wantedKind = kind === "template" ? "service" : "app"
   const choices = (templates.data ?? []).filter((x) => x.kind === wantedKind)
 
@@ -414,6 +428,37 @@ export default function NewProject() {
   const usesTemplate = kind === "template" || (fromRepo && mode === "template")
   const needCpu = 0.1 * replicas
   const needMem = 128 * replicas
+  const reports = (capacity.data ?? []).flatMap((r) =>
+    "report" in r ? [r] : []
+  )
+  const footprint = (usesTemplate &&
+    templateId &&
+    projects.data &&
+    classFootprints(
+      reports.map((r) => r.report),
+      projects.data
+    ).find((c) => c.key === templateId && c.samples > 0)) || {
+    key: "new",
+    name: name || "this app",
+    cpu: 0.1,
+    memMb: 128,
+    diskMb: 0,
+    samples: 0,
+  }
+  /** Room left on a server after this project, in more apps like it. */
+  const fitAfter = (server: string) => {
+    const r = reports.find((x) => x.server === server)
+    if (!r) return undefined
+    const room = roomOf(r.report)
+    const after = {
+      cpu: room.cpu - footprint.cpu * replicas,
+      memMb: room.memMb - footprint.memMb * replicas,
+      diskMb: room.diskMb - footprint.diskMb * replicas,
+    }
+    return after.memMb < 0 || after.diskMb < 0
+      ? -1
+      : fitsIn(after, footprint).fits
+  }
 
   const submit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -778,6 +823,7 @@ export default function NewProject() {
               <div className="flex flex-col gap-2">
                 {placement.data.map((s) => {
                   const fits = s.cpuFree >= needCpu && s.memFreeMb >= needMem
+                  const after = fitAfter(s.server)
                   const checked = servers.includes(s.server)
                   return (
                     <label
@@ -816,6 +862,31 @@ export default function NewProject() {
                             }
                           )}
                         </span>
+                        {after !== undefined && (
+                          <span
+                            className={cn(
+                              "block text-xs",
+                              after < 0
+                                ? "text-destructive"
+                                : "text-muted-foreground"
+                            )}
+                          >
+                            {after < 0
+                              ? t(
+                                  "By what runs there now, it's short on memory or disk."
+                                )
+                              : t(
+                                  "After this, room for ≈ {{n}} more like it ({{mem}} MB each, {{how}}).",
+                                  {
+                                    n: after,
+                                    mem: Math.round(footprint.memMb),
+                                    how: footprint.samples
+                                      ? t("measured")
+                                      : t("reserved"),
+                                  }
+                                )}
+                          </span>
+                        )}
                       </span>
                       {!fits && (
                         <span className="text-xs text-destructive">

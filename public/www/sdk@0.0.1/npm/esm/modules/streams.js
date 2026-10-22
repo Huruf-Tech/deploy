@@ -63,6 +63,26 @@ export const streamsModule = (sdk) => {
                 return res;
             }, data);
         },
+        openCapacity(data) {
+            return sdk.resolveAxiosResponse(async () => {
+                sdk.checkPermission("streams", "openCapacity");
+                const method = "post";
+                const toPath = compile("streams/api/capacity");
+                const requestPayload = {
+                    method,
+                    url: toPath(data?.params),
+                    params: data?.query,
+                    data: data?.body,
+                    signal: data?.signal,
+                    ...(data?.axiosConfig
+                        ? sdk.resolveAxiosConfig(data.axiosConfig)
+                        : undefined),
+                };
+                sdk.log("Sending Request:", requestPayload);
+                const res = await sdk._axios.request(requestPayload);
+                return res;
+            }, data);
+        },
         openExec(data) {
             return sdk.resolveAxiosResponse(async () => {
                 sdk.checkPermission("streams", "openExec");
@@ -187,6 +207,7 @@ export const streamsModule = (sdk) => {
     methods.openLogs.__scope = "streams";
     methods.openBuild.__scope = "streams";
     methods.openMetrics.__scope = "streams";
+    methods.openCapacity.__scope = "streams";
     methods.openExec.__scope = "streams";
     methods.openTerminal.__scope = "streams";
     methods.openHostTerminal.__scope = "streams";

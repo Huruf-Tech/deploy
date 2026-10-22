@@ -18,6 +18,8 @@ import { networksModule } from "./modules/networks.js";
 import { registriesModule } from "./modules/registries.js";
 import { serversModule } from "./modules/servers.js";
 import { streamsModule } from "./modules/streams.js";
+import { alertEventsModule } from "./modules/alertEvents.js";
+import { alertRulesModule } from "./modules/alertRules.js";
 import { wellKnownModule } from "./modules/.well-known.js";
 import { accessControlModule } from "./modules/accessControl.js";
 import { accessControlPoliciesModule } from "./modules/accessControlPolicies.js";
@@ -123,6 +125,8 @@ Object.defineProperty(ThunderSDK, "_moduleNames", {
         "registries",
         "servers",
         "streams",
+        "alertEvents",
+        "alertRules",
         "wellKnown",
         "accessControl",
         "accessControlPolicies",
@@ -219,6 +223,18 @@ Object.defineProperty(ThunderSDK, "streams", {
     configurable: true,
     writable: true,
     value: streamsModule(_a)
+});
+Object.defineProperty(ThunderSDK, "alertEvents", {
+    enumerable: true,
+    configurable: true,
+    writable: true,
+    value: alertEventsModule(_a)
+});
+Object.defineProperty(ThunderSDK, "alertRules", {
+    enumerable: true,
+    configurable: true,
+    writable: true,
+    value: alertRulesModule(_a)
 });
 Object.defineProperty(ThunderSDK, "wellKnown", {
     enumerable: true,

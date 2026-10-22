@@ -33,6 +33,12 @@ export type openMetrics$body = {
 export type openMetrics$return = {
     session: string;
 };
+export type openCapacity$body = {
+    server?: string;
+};
+export type openCapacity$return = {
+    session: string;
+};
 export type openExec$body = {
     server?: string;
     container: string;
@@ -97,6 +103,8 @@ export const streamsModule = (sdk: typeof BaseSDK) => {
         openBuild$return: openBuild$return,
         openMetrics$body: openMetrics$body,
         openMetrics$return: openMetrics$return,
+        openCapacity$body: openCapacity$body,
+        openCapacity$return: openCapacity$return,
         openExec$body: openExec$body,
         openExec$return: openExec$return,
         openTerminal$body: openTerminal$body,
@@ -179,6 +187,34 @@ export const streamsModule = (sdk: typeof BaseSDK) => {
 
             const method = "post";
             const toPath = compile("streams/api/metrics");
+            const requestPayload = {
+                method,
+                url: toPath(data?.params),
+                params: data?.query,
+                data: data?.body,
+                signal: data?.signal,
+                ...(data?.axiosConfig
+                ? sdk.resolveAxiosConfig(data.axiosConfig)
+                : undefined),
+            };
+
+            sdk.log("Sending Request:", requestPayload);
+
+            const res = await sdk._axios!.request(requestPayload);
+
+            return res;
+        }, data);
+    },
+        openCapacity(data: {
+        params?: undefined,
+        query?: undefined,
+        body: openCapacity$body,
+    } & TRequestOptions<openCapacity$return>) {
+        return sdk.resolveAxiosResponse(async () => {
+            sdk.checkPermission("streams", "openCapacity");
+
+            const method = "post";
+            const toPath = compile("streams/api/capacity");
             const requestPayload = {
                 method,
                 url: toPath(data?.params),
@@ -370,6 +406,7 @@ export const streamsModule = (sdk: typeof BaseSDK) => {
     (methods.openLogs as any).__scope = "streams";
     (methods.openBuild as any).__scope = "streams";
     (methods.openMetrics as any).__scope = "streams";
+    (methods.openCapacity as any).__scope = "streams";
     (methods.openExec as any).__scope = "streams";
     (methods.openTerminal as any).__scope = "streams";
     (methods.openHostTerminal as any).__scope = "streams";

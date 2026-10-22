@@ -1,4 +1,5 @@
 import z from "zod";
+import { templateModel } from "@/schemas/build/template.ts";
 import type { ObjectId } from "mongodb";
 import { Router } from "@/core/http/router.ts";
 import { bodyAsJson, paramsAsJson, queryAsJson } from "@/core/http/utils.ts";
@@ -70,6 +71,9 @@ export default new Router("/api", function projects(router) {
       source: z.string().describe("Short description, e.g. acme/shop@main"),
       sourceType: z.enum(["github", "git", "image", "template", "compose"]),
       servers: z.number(),
+      template: z.object({ _id: z.string(), name: z.string() }).optional()
+        .describe("Its app class for capacity footprints (PLAN §7.1)"),
+      runtime: z.object({ cpuReserve: z.number(), memReserveMb: z.number() }),
       publicPort: z.number().optional(),
       release: z.number().optional(),
       lastDeployment: z.object({
@@ -90,7 +94,7 @@ export default new Router("/api", function projects(router) {
           limit: 500,
         }).toArray();
         const ids = projects.map((p) => p._id);
-        const [latest, releases] = await Promise.all([
+        const [latest, releases, templates] = await Promise.all([
           deploymentModel.aggregate<
             { _id: ObjectId; status: string; createdAt: Date; commit?: unknown }
           >([
@@ -115,9 +119,18 @@ export default new Router("/api", function projects(router) {
             },
             { projection: { number: 1 } },
           ).toArray(),
+          templateModel.find({
+            _id: {
+              $in: projects.flatMap((p) =>
+                p.template ? [p.template.template] : []
+              ),
+            },
+          }, { projection: { name: 1 } }).toArray(),
         ]);
 
         return Response.json(projects.map((p) => {
+          const template = p.template &&
+            templates.find((x) => x._id.equals(p.template!.template));
           const last = latest.find((d) => d._id.equals(p._id));
           return {
             _id: p._id,
@@ -136,6 +149,13 @@ export default new Router("/api", function projects(router) {
               : "template",
             sourceType: p.source.type,
             servers: p.servers.length,
+            ...(template
+              ? { template: { _id: template._id, name: template.name } }
+              : {}),
+            runtime: {
+              cpuReserve: p.runtime.cpuReserve,
+              memReserveMb: p.runtime.memReserveMb,
+            },
             publicPort: p.publicPort,
             release: releases.find((r) => r._id.equals(p.activeRelease!))
               ?.number,

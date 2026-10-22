@@ -23,6 +23,12 @@ export type openMetrics$body = {
 export type openMetrics$return = {
     session: string;
 };
+export type openCapacity$body = {
+    server?: string;
+};
+export type openCapacity$return = {
+    session: string;
+};
 export type openExec$body = {
     server?: string;
     container: string;
@@ -86,6 +92,8 @@ export declare const streamsModule: (sdk: typeof BaseSDK) => {
         openBuild$return: openBuild$return;
         openMetrics$body: openMetrics$body;
         openMetrics$return: openMetrics$return;
+        openCapacity$body: openCapacity$body;
+        openCapacity$return: openCapacity$return;
         openExec$body: openExec$body;
         openExec$return: openExec$return;
         openTerminal$body: openTerminal$body;
@@ -131,6 +139,17 @@ export declare const streamsModule: (sdk: typeof BaseSDK) => {
         then: <TResult1 = openMetrics$return, TResult2 = never>(onfulfilled?: ((value: openMetrics$return) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
         catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<openMetrics$return | TResult>;
         finally: (onfinally?: (() => void) | null | undefined) => Promise<openMetrics$return>;
+    };
+    readonly openCapacity: (data: {
+        params?: undefined;
+        query?: undefined;
+        body: openCapacity$body;
+    } & TRequestOptions<openCapacity$return>) => {
+        readonly raw: Promise<import("axios").AxiosResponse<openCapacity$return, any, {}, any>>;
+        readonly data: Promise<openCapacity$return>;
+        then: <TResult1 = openCapacity$return, TResult2 = never>(onfulfilled?: ((value: openCapacity$return) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+        catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<openCapacity$return | TResult>;
+        finally: (onfinally?: (() => void) | null | undefined) => Promise<openCapacity$return>;
     };
     readonly openExec: (data: {
         params?: undefined;

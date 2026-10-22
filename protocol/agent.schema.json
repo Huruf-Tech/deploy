@@ -1917,6 +1917,9 @@
               "minimum": -9007199254740991,
               "maximum": 9007199254740991
             },
+            "headroomPercent": {
+              "type": "number"
+            },
             "day": {
               "description": "Host usage over the last 24 h",
               "type": "object",
@@ -1955,7 +1958,8 @@
           "required": [
             "cpuCores",
             "memTotal",
-            "diskTotal"
+            "diskTotal",
+            "headroomPercent"
           ]
         },
         "workloads": {

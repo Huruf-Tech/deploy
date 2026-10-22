@@ -36,6 +36,14 @@ export type hello$return = {
         maxBackoffMs: number;
         /** How often the agent re-checks its workloads against the desired state (self-healing) */
         reconcileIntervalMs: number;
+        /** How often the agent samples usage for alerts, autoscaling and footprints */
+        monitorIntervalMs: number;
+        capacity: {
+            /** Kept free for the OS, agent and proxy when computing room (PLAN §7.1) */
+            headroomPercent: number;
+            /** Daily peaks kept on the agent */
+            retentionDays: number;
+        };
     };
     server: string;
     status: "pending" | "active" | "rejected";
@@ -71,6 +79,8 @@ export type poll$return = {
         cols?: number | undefined;
         rows?: number | undefined;
     }[]> | undefined;
+    /** The agent's cursor is ahead of this server's commands (state from an earlier registration): forget received commands and the stored desired state */
+    resetCommands?: boolean | undefined;
     /** Only when the version is newer than appliedVersion */
     desired?: {
         version: number;
@@ -91,6 +101,14 @@ export type config$return = {
         maxBackoffMs: number;
         /** How often the agent re-checks its workloads against the desired state (self-healing) */
         reconcileIntervalMs: number;
+        /** How often the agent samples usage for alerts, autoscaling and footprints */
+        monitorIntervalMs: number;
+        capacity: {
+            /** Kept free for the OS, agent and proxy when computing room (PLAN §7.1) */
+            headroomPercent: number;
+            /** Daily peaks kept on the agent */
+            retentionDays: number;
+        };
     };
 };
 export type events$body = {
@@ -134,6 +152,25 @@ export type events$body = {
             /** server -> reachable (a WireGuard handshake in the last 3 minutes) */
             peers: Record<string, boolean>;
             error?: string | undefined;
+        };
+    } | {
+        id: string;
+        type: "alert.fired" | "alert.resolved";
+        data: {
+            rule: string;
+            value: number;
+            /** Unix ms; identifies the episode */
+            firedAt: number;
+        };
+    } | {
+        id: string;
+        type: "autoscale.changed";
+        data: {
+            project: string;
+            workload: string;
+            from: number;
+            to: number;
+            reason: string;
         };
     })[];
 };

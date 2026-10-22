@@ -266,6 +266,22 @@ function Settings({
     project.servers.map((s) => s._id)
   )
   const [replicas, setReplicas] = React.useState(project.replicasPerServer)
+  const [autoscale, setAutoscale] = React.useState(!!project.autoscale)
+  const [scaleMin, setScaleMin] = React.useState(
+    String(project.autoscale?.min ?? 1)
+  )
+  const [scaleMax, setScaleMax] = React.useState(
+    String(project.autoscale?.max ?? 3)
+  )
+  const [scaleCpu, setScaleCpu] = React.useState(
+    String(project.autoscale?.cpuPercent ?? (project.autoscale ? "" : 70))
+  )
+  const [scaleMem, setScaleMem] = React.useState(
+    project.autoscale?.memPercent ? String(project.autoscale.memPercent) : ""
+  )
+  const [cooldown, setCooldown] = React.useState(
+    String(project.autoscale?.cooldownSec ?? 120)
+  )
   const [publicPort, setPublicPort] = React.useState(
     project.publicPort ? String(project.publicPort) : ""
   )
@@ -305,6 +321,15 @@ function Settings({
         body: {
           servers,
           replicasPerServer: replicas,
+          autoscale: autoscale
+            ? {
+                min: Number(scaleMin),
+                max: Number(scaleMax),
+                ...(scaleCpu ? { cpuPercent: Number(scaleCpu) } : {}),
+                ...(scaleMem ? { memPercent: Number(scaleMem) } : {}),
+                cooldownSec: Number(cooldown),
+              }
+            : null,
           publicPort: publicPort ? Number(publicPort) : null,
           deployStrategy: strategy,
           acknowledgeVolumeRisk: strategy !== project.deployStrategy,
@@ -391,6 +416,100 @@ function Settings({
               "Changing servers takes effect on the next deploy: the new ones start, then the old ones drain."
             )}
           </FieldDescription>
+        </FieldSet>
+
+        <FieldSet>
+          <Field orientation="horizontal">
+            <Switch
+              id="s-autoscale"
+              checked={autoscale}
+              onCheckedChange={setAutoscale}
+            />
+            <FieldLabel htmlFor="s-autoscale">{t("Autoscale")}</FieldLabel>
+          </Field>
+          <FieldDescription>
+            {t(
+              "Each server adds or removes replicas of this project to stay near the targets, within the bounds and at most once per cooldown. Placement reserves room for the maximum."
+            )}
+          </FieldDescription>
+          {autoscale && (
+            <div className="grid gap-4 sm:grid-cols-5">
+              <Field>
+                <FieldLabel htmlFor="s-scale-min">
+                  {t("Min replicas")}
+                </FieldLabel>
+                <Input
+                  id="s-scale-min"
+                  type="number"
+                  min={1}
+                  max={20}
+                  value={scaleMin}
+                  onChange={(e) => setScaleMin(e.target.value)}
+                />
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="s-scale-max">
+                  {t("Max replicas")}
+                </FieldLabel>
+                <Input
+                  id="s-scale-max"
+                  type="number"
+                  min={1}
+                  max={20}
+                  value={scaleMax}
+                  onChange={(e) => setScaleMax(e.target.value)}
+                />
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="s-scale-cpu">
+                  {t("CPU target %")}
+                </FieldLabel>
+                <Input
+                  id="s-scale-cpu"
+                  type="number"
+                  min={10}
+                  max={100}
+                  value={scaleCpu}
+                  placeholder={t("None")}
+                  onChange={(e) => setScaleCpu(e.target.value)}
+                />
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="s-scale-mem">
+                  {t("Memory target %")}
+                </FieldLabel>
+                <Input
+                  id="s-scale-mem"
+                  type="number"
+                  min={10}
+                  max={100}
+                  value={scaleMem}
+                  placeholder={t("None")}
+                  onChange={(e) => setScaleMem(e.target.value)}
+                />
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="s-cooldown">
+                  {t("Cooldown (s)")}
+                </FieldLabel>
+                <Input
+                  id="s-cooldown"
+                  type="number"
+                  min={30}
+                  max={3600}
+                  value={cooldown}
+                  onChange={(e) => setCooldown(e.target.value)}
+                />
+              </Field>
+            </div>
+          )}
+          {autoscale && (
+            <FieldDescription>
+              {t(
+                "Targets are a percent of each replica's limit, or its reservation without one."
+              )}
+            </FieldDescription>
+          )}
         </FieldSet>
 
         <div className="grid gap-4 sm:grid-cols-3">
@@ -781,7 +900,9 @@ export default function ProjectDetail() {
                 </p>
                 <p className="text-sm text-muted-foreground">
                   {t("{{n}} replicas each · {{strategy}}", {
-                    n: project.replicasPerServer,
+                    n: project.autoscale
+                      ? `${project.autoscale.min}–${project.autoscale.max}`
+                      : project.replicasPerServer,
                     strategy: {
                       rolling: t("rolling"),
                       allAtOnce: t("all at once"),
@@ -789,6 +910,22 @@ export default function ProjectDetail() {
                     }[project.deployStrategy],
                   })}
                 </p>
+                {project.autoscale &&
+                  project.autoscaled?.map((a) => (
+                    <p
+                      key={a.server}
+                      className="text-xs text-muted-foreground"
+                      title={a.reason}
+                    >
+                      {t("{{server}}: {{n}} replicas now ({{reason}})", {
+                        server:
+                          project.servers.find((s) => s._id === a.server)
+                            ?.name ?? a.server,
+                        n: a.replicas,
+                        reason: a.reason,
+                      })}
+                    </p>
+                  ))}
               </CardContent>
             </Card>
             <Card>

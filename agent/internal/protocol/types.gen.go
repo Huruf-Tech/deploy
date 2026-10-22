@@ -633,6 +633,8 @@ type CapacityReportHost struct {
 
 	DiskTotal int64 `json:"diskTotal"`
 
+	HeadroomPercent float64 `json:"headroomPercent"`
+
 	// Host usage over the last 24 h
 	Day *CapacityReportHostDay `json:"day,omitempty"`
 }

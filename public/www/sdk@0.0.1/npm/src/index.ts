@@ -19,6 +19,8 @@ import { networksModule } from "./modules/networks.js";
 import { registriesModule } from "./modules/registries.js";
 import { serversModule } from "./modules/servers.js";
 import { streamsModule } from "./modules/streams.js";
+import { alertEventsModule } from "./modules/alertEvents.js";
+import { alertRulesModule } from "./modules/alertRules.js";
 import { wellKnownModule } from "./modules/.well-known.js";
 import { accessControlModule } from "./modules/accessControl.js";
 import { accessControlPoliciesModule } from "./modules/accessControlPolicies.js";
@@ -55,6 +57,8 @@ export class ThunderSDK extends BaseSDK {
         "registries",
         "servers",
         "streams",
+        "alertEvents",
+        "alertRules",
         "wellKnown",
         "accessControl",
         "accessControlPolicies",
@@ -87,6 +91,8 @@ export class ThunderSDK extends BaseSDK {
     static registries = registriesModule(this);
     static servers = serversModule(this);
     static streams = streamsModule(this);
+    static alertEvents = alertEventsModule(this);
+    static alertRules = alertRulesModule(this);
     static wellKnown = wellKnownModule(this);
     static accessControl = accessControlModule(this);
     static accessControlPolicies = accessControlPoliciesModule(this);

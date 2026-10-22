@@ -480,6 +480,7 @@ export const $capacityReport = z.object({
     cpuCores: z.number().int(),
     memTotal: z.number().int(),
     diskTotal: z.number().int(),
+    headroomPercent: z.number(),
     day: $footprint.extend({ diskPeak: z.number().int() }).optional()
       .describe("Host usage over the last 24 h"),
   }),

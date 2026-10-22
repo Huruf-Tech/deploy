@@ -317,10 +317,7 @@ func weightedP95[T int64 | float64](list []bucket, value func(bucket) T) T {
 // roomMb is memory left for more apps: capacity minus headroom minus the
 // larger of what's reserved (autoscale max) and what's used at p95 (24 h).
 func (m *Monitor) roomMb(spec protocol.DesiredSpec, host protocol.MetricsSample) float64 {
-	headroom := 15.0
-	if m.Config != nil {
-		headroom = m.Config().HeadroomPercent
-	}
+	headroom := m.headroom()
 	var reserved float64
 	for _, w := range spec.Workloads {
 		reserved += float64(w.Reserve.MemMb) * float64(maxReplicas(w, m.Scaler))
@@ -330,6 +327,13 @@ func (m *Monitor) roomMb(spec protocol.DesiredSpec, host protocol.MetricsSample)
 		used = float64(f.MemP95) / (1 << 20)
 	}
 	return float64(host.MemTotal)/(1<<20)*(1-headroom/100) - max(reserved, used)
+}
+
+func (m *Monitor) headroom() float64 {
+	if m.Config != nil {
+		return m.Config().HeadroomPercent
+	}
+	return 15
 }
 
 func maxReplicas(w protocol.Workload, s Scaler) int {
@@ -534,6 +538,7 @@ func (m *Monitor) Report(ctx context.Context) protocol.CapacityReport {
 		At: m.Now().UnixMilli(),
 		Host: protocol.CapacityReportHost{
 			CpuCores: int64(m.Cores), MemTotal: host.MemTotal, DiskTotal: host.DiskTotal,
+			HeadroomPercent: m.headroom(),
 		},
 		Workloads: []protocol.CapacityReportWorkloadsItem{},
 		Daily:     append([]protocol.CapacityReportDailyItem{}, m.data.Daily...),

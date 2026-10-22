@@ -953,6 +953,8 @@ export declare class ThunderSDK extends BaseSDK {
             openBuild$return: import("./modules/streams.js").openBuild$return;
             openMetrics$body: import("./modules/streams.js").openMetrics$body;
             openMetrics$return: import("./modules/streams.js").openMetrics$return;
+            openCapacity$body: import("./modules/streams.js").openCapacity$body;
+            openCapacity$return: import("./modules/streams.js").openCapacity$return;
             openExec$body: import("./modules/streams.js").openExec$body;
             openExec$return: import("./modules/streams.js").openExec$return;
             openTerminal$body: import("./modules/streams.js").openTerminal$body;
@@ -998,6 +1000,17 @@ export declare class ThunderSDK extends BaseSDK {
             then: <TResult1 = import("./modules/streams.js").openMetrics$return, TResult2 = never>(onfulfilled?: ((value: import("./modules/streams.js").openMetrics$return) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
             catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<import("./modules/streams.js").openMetrics$return | TResult>;
             finally: (onfinally?: (() => void) | null | undefined) => Promise<import("./modules/streams.js").openMetrics$return>;
+        };
+        readonly openCapacity: (data: {
+            params?: undefined;
+            query?: undefined;
+            body: import("./modules/streams.js").openCapacity$body;
+        } & import("./types.js").TRequestOptions<import("./modules/streams.js").openCapacity$return>) => {
+            readonly raw: Promise<import("axios").AxiosResponse<import("./modules/streams.js").openCapacity$return, any, {}, any>>;
+            readonly data: Promise<import("./modules/streams.js").openCapacity$return>;
+            then: <TResult1 = import("./modules/streams.js").openCapacity$return, TResult2 = never>(onfulfilled?: ((value: import("./modules/streams.js").openCapacity$return) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+            catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<import("./modules/streams.js").openCapacity$return | TResult>;
+            finally: (onfinally?: (() => void) | null | undefined) => Promise<import("./modules/streams.js").openCapacity$return>;
         };
         readonly openExec: (data: {
             params?: undefined;
@@ -1056,6 +1069,77 @@ export declare class ThunderSDK extends BaseSDK {
         };
         readonly close: (data: {
             params: import("./modules/streams.js").close$params;
+            query?: undefined;
+            body?: undefined;
+        } & import("./types.js").TRequestOptions<unknown>) => {
+            readonly raw: Promise<import("axios").AxiosResponse<unknown, any, {}, any>>;
+            readonly data: Promise<unknown>;
+            then: <TResult1 = unknown, TResult2 = never>(onfulfilled?: ((value: unknown) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+            catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<unknown>;
+            finally: (onfinally?: (() => void) | null | undefined) => Promise<unknown>;
+        };
+    };
+    static alertEvents: {
+        readonly type: {
+            list$query: import("./modules/alertEvents.js").list$query;
+            list$return: import("./modules/alertEvents.js").list$return;
+        };
+        readonly list: (data: {
+            params?: undefined;
+            query: import("./modules/alertEvents.js").list$query;
+            body?: undefined;
+        } & import("./types.js").TRequestOptions<import("./modules/alertEvents.js").list$return>) => {
+            readonly raw: Promise<import("axios").AxiosResponse<import("./modules/alertEvents.js").list$return, any, {}, any>>;
+            readonly data: Promise<import("./modules/alertEvents.js").list$return>;
+            then: <TResult1 = import("./modules/alertEvents.js").list$return, TResult2 = never>(onfulfilled?: ((value: import("./modules/alertEvents.js").list$return) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+            catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<import("./modules/alertEvents.js").list$return | TResult>;
+            finally: (onfinally?: (() => void) | null | undefined) => Promise<import("./modules/alertEvents.js").list$return>;
+        };
+    };
+    static alertRules: {
+        readonly type: {
+            list$return: import("./modules/alertRules.js").list$return;
+            create$body: import("./modules/alertRules.js").create$body;
+            create$return: import("./modules/alertRules.js").create$return;
+            update$params: import("./modules/alertRules.js").update$params;
+            update$body: import("./modules/alertRules.js").update$body;
+            del$params: import("./modules/alertRules.js").del$params;
+        };
+        readonly list: (data?: {
+            params?: undefined;
+            query?: undefined;
+            body?: undefined;
+        } & import("./types.js").TRequestOptions<import("./modules/alertRules.js").list$return>) => {
+            readonly raw: Promise<import("axios").AxiosResponse<import("./modules/alertRules.js").list$return, any, {}, any>>;
+            readonly data: Promise<import("./modules/alertRules.js").list$return>;
+            then: <TResult1 = import("./modules/alertRules.js").list$return, TResult2 = never>(onfulfilled?: ((value: import("./modules/alertRules.js").list$return) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+            catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<import("./modules/alertRules.js").list$return | TResult>;
+            finally: (onfinally?: (() => void) | null | undefined) => Promise<import("./modules/alertRules.js").list$return>;
+        };
+        readonly create: (data: {
+            params?: undefined;
+            query?: undefined;
+            body: import("./modules/alertRules.js").create$body;
+        } & import("./types.js").TRequestOptions<import("./modules/alertRules.js").create$return>) => {
+            readonly raw: Promise<import("axios").AxiosResponse<import("./modules/alertRules.js").create$return, any, {}, any>>;
+            readonly data: Promise<import("./modules/alertRules.js").create$return>;
+            then: <TResult1 = import("./modules/alertRules.js").create$return, TResult2 = never>(onfulfilled?: ((value: import("./modules/alertRules.js").create$return) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+            catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<import("./modules/alertRules.js").create$return | TResult>;
+            finally: (onfinally?: (() => void) | null | undefined) => Promise<import("./modules/alertRules.js").create$return>;
+        };
+        readonly update: (data: {
+            params: import("./modules/alertRules.js").update$params;
+            query?: undefined;
+            body: import("./modules/alertRules.js").update$body;
+        } & import("./types.js").TRequestOptions<unknown>) => {
+            readonly raw: Promise<import("axios").AxiosResponse<unknown, any, {}, any>>;
+            readonly data: Promise<unknown>;
+            then: <TResult1 = unknown, TResult2 = never>(onfulfilled?: ((value: unknown) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+            catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<unknown>;
+            finally: (onfinally?: (() => void) | null | undefined) => Promise<unknown>;
+        };
+        readonly del: (data: {
+            params: import("./modules/alertRules.js").del$params;
             query?: undefined;
             body?: undefined;
         } & import("./types.js").TRequestOptions<unknown>) => {

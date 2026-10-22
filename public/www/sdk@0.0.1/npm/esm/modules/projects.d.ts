@@ -10,6 +10,15 @@ export type list$return = {
     source: string;
     sourceType: "github" | "git" | "image" | "template" | "compose";
     servers: number;
+    /** Its app class for capacity footprints (PLAN §7.1) */
+    template?: {
+        _id: string;
+        name: string;
+    } | undefined;
+    runtime: {
+        cpuReserve: number;
+        memReserveMb: number;
+    };
     publicPort?: number | undefined;
     release?: number | undefined;
     lastDeployment?: {
@@ -76,6 +85,15 @@ export type create$body = {
     } | undefined;
     servers: string[];
     replicasPerServer?: number;
+    autoscale?: {
+        min: number;
+        max: number;
+        /** Target CPU per replica, as a percent of its CPU limit (else reservation) */
+        cpuPercent?: number | undefined;
+        /** Target memory per replica, as a percent of its memory limit (else reservation) */
+        memPercent?: number | undefined;
+        cooldownSec?: number;
+    } | undefined;
     publicPort?: number | undefined;
     volumes?: {
         name: string;
@@ -167,6 +185,22 @@ export type get$return = {
     }[];
     placedOn: string[];
     replicasPerServer: number;
+    autoscale?: {
+        min: number;
+        max: number;
+        /** Target CPU per replica, as a percent of its CPU limit (else reservation) */
+        cpuPercent?: number | undefined;
+        /** Target memory per replica, as a percent of its memory limit (else reservation) */
+        memPercent?: number | undefined;
+        cooldownSec: number;
+    } | undefined;
+    /** The autoscaler's latest change per server */
+    autoscaled?: {
+        server: string;
+        replicas: number;
+        reason: string;
+        at: string;
+    }[] | undefined;
     publicPort?: number | undefined;
     volumes: {
         name: string;
@@ -219,6 +253,15 @@ export type update$body = {
     } | undefined;
     servers?: string[] | undefined;
     replicasPerServer?: number | undefined;
+    autoscale?: ({
+        min: number;
+        max: number;
+        /** Target CPU per replica, as a percent of its CPU limit (else reservation) */
+        cpuPercent?: number | undefined;
+        /** Target memory per replica, as a percent of its memory limit (else reservation) */
+        memPercent?: number | undefined;
+        cooldownSec?: number;
+    } | null) | undefined;
     publicPort?: (number | null) | undefined;
     deployStrategy?: ("rolling" | "allAtOnce" | "stopFirst") | undefined;
     autoDeploy?: boolean | undefined;

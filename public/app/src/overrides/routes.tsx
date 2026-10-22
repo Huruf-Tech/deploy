@@ -1,6 +1,8 @@
 import { Outlet } from "react-router"
 import {
+  IconBell,
   IconBox,
+  IconHistory,
   IconBraces,
   IconBrandGithub,
   IconFolders,
@@ -25,6 +27,8 @@ import NewProject from "@/pages/projects/NewProject"
 import ProjectDetail from "@/pages/projects/Detail"
 import Registries from "@/pages/registries"
 import Network from "@/pages/network"
+import AlertRules from "@/pages/alerts"
+import AlertHistory from "@/pages/alerts/History"
 
 /** `users` is root-only, so it doubles as the admin check for the Admin group. */
 const isAdmin = () => ThunderSDK.isPermitted("users", "get")
@@ -133,11 +137,32 @@ export const routes: TRoutesOverride = {
     display: () => ThunderSDK.isPermitted("gitIntegrations", "list"),
     Component: GitHub,
   },
+  // PLAN §16 Phase 8 Monitoring group.
+  alertRules: {
+    name: "Alert rules",
+    path: "alertRules",
+    group: "Monitoring",
+    icon: IconBell,
+    priority: 0,
+    display: () => ThunderSDK.isPermitted("alertRules", "list"),
+    Component: AlertRules,
+  },
+  alertEvents: {
+    name: "Alert history",
+    path: "alertEvents",
+    group: "Monitoring",
+    icon: IconHistory,
+    priority: 1,
+    display: () => ThunderSDK.isPermitted("alertEvents", "list"),
+    Component: AlertHistory,
+  },
+
   // GitHub's callbacks; nothing to show in the dashboard.
   githubHooks: { display: false },
 
   Applications: { merge: true, priority: 5 },
   Infrastructure: { merge: true, priority: 10 },
+  Monitoring: { merge: true, priority: 12 },
   Build: { merge: true, priority: 15 },
   Configuration: { merge: true, priority: 20 },
   Admin: { merge: true, priority: 90 },
