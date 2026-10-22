@@ -6,6 +6,7 @@
 
 import { BaseSDK } from "./base.js";
 
+import { variablesModule } from "./modules/variables.js";
 import { homeModule } from "./modules/home.js";
 import { indexModule } from "./modules/index.js";
 import { agentsModule } from "./modules/agents.js";
@@ -34,6 +35,7 @@ import { essentialsEntry } from "./plugins/essentials/entry.js";
 export class ThunderSDK extends BaseSDK {
     protected static _actionsList?: string[];
     protected static _moduleNames = [
+        "variables",
         "home",
         "index",
         "agents",
@@ -58,6 +60,7 @@ export class ThunderSDK extends BaseSDK {
         "wallets",
     ];
     
+    static variables = variablesModule(this);
     static home = homeModule(this);
     static index = indexModule(this);
     static agents = agentsModule(this);

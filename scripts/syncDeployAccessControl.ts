@@ -11,8 +11,13 @@ export const syncDeployAccessControl = async () => {
   const deploy = await ACManager.resolvePolicy("deploy", [
     "servers",
     "streams",
+    "variables",
   ]);
-  await ACManager.resolveRole("user", [deploy]);
+  // Give an API key the scope ["variableApi"] to let it read resolved variables only.
+  const variableApi = await ACManager.resolvePolicy("variableApi", [
+    "variables.resolve",
+  ]);
+  await ACManager.resolveRole("user", [deploy, variableApi]);
 };
 
 if (import.meta.main) {

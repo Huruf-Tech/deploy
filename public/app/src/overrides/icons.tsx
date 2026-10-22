@@ -1,4 +1,5 @@
 import {
+  IconAdjustmentsHorizontal,
   IconServer2,
   IconServerCog,
   IconShieldLock,
@@ -11,5 +12,6 @@ export const icons: TIconsOverride = {
   servers: IconServer2,
   envs: IconVariable,
   Infrastructure: IconServerCog,
+  Configuration: IconAdjustmentsHorizontal,
   Admin: IconShieldLock,
 }

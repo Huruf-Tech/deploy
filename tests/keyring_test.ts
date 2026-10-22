@@ -3,6 +3,7 @@ import { ObjectId } from "mongodb";
 import {
   importMasterKey,
   Keyring,
+  rewrapDataKey,
   type TKeyringStore,
 } from "@/lib/core/keyring.ts";
 import type { TKeyring } from "@/schemas/crypto/keyring.ts";
@@ -66,4 +67,25 @@ Deno.test("Keyring ciphertext is bound to its owner and master key", async () =>
 
 Deno.test("importMasterKey rejects keys that are not 32 bytes", async () => {
   await assertRejects(() => importMasterKey(btoa("too-short")));
+});
+
+Deno.test("rewrapDataKey moves data keys to a new master key, once", async () => {
+  const { docs, store } = memoryStore();
+  const oldMaster = randomMasterKey();
+  const newMaster = randomMasterKey();
+  const tenant = { kind: "tenant" as const, ref: new ObjectId() };
+  const sealed = await new Keyring(store, () => importMasterKey(oldMaster))
+    .encrypt(tenant, "value", "variable:1");
+
+  const [from, to] = await Promise.all(
+    [oldMaster, newMaster].map(importMasterKey),
+  );
+  docs[0].dataKeyEnc = (await rewrapDataKey(docs[0], from, to))!;
+  assertEquals(await rewrapDataKey(docs[0], from, to), null);
+
+  // Values sealed before the rotation still open with the new master key.
+  const keyring = new Keyring(store, () => importMasterKey(newMaster));
+  assertEquals(await keyring.decrypt(tenant, sealed, "variable:1"), "value");
+  // The context is part of the AAD.
+  await assertRejects(() => keyring.decrypt(tenant, sealed, "variable:2"));
 });

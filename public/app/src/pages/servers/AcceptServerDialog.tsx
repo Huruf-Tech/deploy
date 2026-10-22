@@ -14,11 +14,7 @@ import {
 } from "@/components/ui/dialog"
 import { Field, FieldError, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
-
-const errorMessage = (error: unknown) => {
-  const data = (error as { response?: { data?: unknown } }).response?.data
-  return typeof data === "string" && data ? data : null
-}
+import { errorMessage } from "@/lib/utils"
 
 export function AcceptServerDialog({
   server,

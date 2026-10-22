@@ -75,6 +75,8 @@ export type read$return = {
         done?: boolean | undefined;
         error?: string | undefined;
     }[];
+    /** The server closed this session (e.g. idle while the tab was hidden): reopen */
+    closed?: boolean | undefined;
 };
 export type close$params = {
     id?: string;

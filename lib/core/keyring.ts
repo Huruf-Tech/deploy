@@ -3,15 +3,18 @@ import type { TKeyring, TKeyringOwner } from "@/schemas/crypto/keyring.ts";
 import { BoundedCache } from "@/lib/core/boundedCache.ts";
 
 const FORMAT = "v1";
-// ponytail: single master key version; rotation (re-wrap script + versioned master keys) lands with Phase 4.
+// Rotation re-wraps every data key in place (scripts/rewrapKeyring.ts) and bumps the doc's keyVersion.
 const KEY_VERSION = 1;
 
 const toBase64 = (bytes: Uint8Array) => btoa(String.fromCharCode(...bytes));
 const fromBase64 = (text: string) =>
   Uint8Array.from(atob(text), (c) => c.charCodeAt(0));
 
-const ownerTag = (owner: TKeyringOwner) =>
-  new TextEncoder().encode(`${owner.kind}:${owner.ref}`);
+/** AAD: the owner, plus an optional context (e.g. the record id) to stop swaps within one owner. */
+const ownerTag = (owner: TKeyringOwner, context?: string) =>
+  new TextEncoder().encode(
+    `${owner.kind}:${owner.ref}${context ? `|${context}` : ""}`,
+  );
 
 const importAesKey = (raw: Uint8Array) =>
   crypto.subtle.importKey(
@@ -62,6 +65,22 @@ export async function importMasterKey(base64: string) {
   return await importAesKey(raw);
 }
 
+/**
+ * Re-seals a stored data key under a new master key. Returns null when it is
+ * already sealed with `to`, so an interrupted rotation can simply be re-run.
+ */
+export async function rewrapDataKey(
+  doc: Pick<TKeyring, "owner" | "dataKeyEnc">,
+  from: CryptoKey,
+  to: CryptoKey,
+) {
+  const aad = ownerTag(doc.owner);
+  if (await open(to, doc.dataKeyEnc, aad).then(() => true, () => false)) {
+    return null;
+  }
+  return await seal(to, await open(from, doc.dataKeyEnc, aad), aad);
+}
+
 export type TKeyringStore = Pick<
   Collection<TKeyring>,
   "findOne" | "insertOne"
@@ -84,17 +103,17 @@ export class Keyring {
     private readonly loadMasterKey: () => Promise<CryptoKey>,
   ) {}
 
-  async encrypt(owner: TKeyringOwner, plaintext: string) {
+  async encrypt(owner: TKeyringOwner, plaintext: string, context?: string) {
     return await seal(
       await this.dataKey(owner),
       new TextEncoder().encode(plaintext),
-      ownerTag(owner),
+      ownerTag(owner, context),
     );
   }
 
-  async decrypt(owner: TKeyringOwner, sealed: string) {
+  async decrypt(owner: TKeyringOwner, sealed: string, context?: string) {
     return new TextDecoder().decode(
-      await open(await this.dataKey(owner), sealed, ownerTag(owner)),
+      await open(await this.dataKey(owner), sealed, ownerTag(owner, context)),
     );
   }
 

@@ -1,9 +1,15 @@
-import { IconLock, IconShieldCheck, IconUserShield } from "@tabler/icons-react"
+import {
+  IconBraces,
+  IconLock,
+  IconShieldCheck,
+  IconUserShield,
+} from "@tabler/icons-react"
 import { ThunderSDK } from "thunder-sdk"
 
 import type { TRoutesOverride } from "@/core/types"
 import { regroup } from "@/lib/regroup"
 import Overview from "@/pages/overview"
+import Variables from "@/pages/variables"
 
 /** `users` is root-only, so it doubles as the admin check for the Admin group. */
 const isAdmin = () => ThunderSDK.isPermitted("users", "get")
@@ -41,6 +47,17 @@ export const routes: TRoutesOverride = {
 
   servers: { merge: true, name: "Servers" },
 
+  // A custom page: the backend router is not a createCRUD, so nothing is generated.
+  variables: {
+    name: "Variables",
+    path: "variables",
+    group: "Configuration",
+    icon: IconBraces,
+    Component: Variables,
+    display: () => ThunderSDK.isPermitted("variables", "list"),
+  },
+
   Infrastructure: { merge: true, priority: 10 },
+  Configuration: { merge: true, priority: 20 },
   Admin: { merge: true, priority: 90 },
 }

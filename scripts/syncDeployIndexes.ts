@@ -11,6 +11,7 @@ import {
   sweepShardModel,
 } from "@/schemas/infrastructure/agentCommand.ts";
 import { SHARD_COUNT } from "@/lib/agents/sweep.ts";
+import { variableModel } from "@/schemas/configuration/variable.ts";
 import { bootstrapSessionModel } from "@/schemas/infrastructure/bootstrapSession.ts";
 import {
   streamChunkModel,
@@ -125,6 +126,12 @@ export const syncDeployIndexes = async () => {
     bootstrapSessionModel.createIndex(
       { expiresAt: 1 },
       { name: "ttl", expireAfterSeconds: 0 },
+    ),
+
+    // One key per scope owner; also serves listing (sorted by key) and the quota count.
+    variableModel.createIndex(
+      { scope: 1, user: 1, tenant: 1, key: 1 },
+      { name: "uniqueKeyPerOwner", unique: true },
     ),
   ]);
 

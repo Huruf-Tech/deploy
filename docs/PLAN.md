@@ -894,6 +894,16 @@ Each phase ends with a **review checkpoint** (demo + code review + approval). Ph
 ### Phase 4 — Variables manager
 - Scopes (global per user), precedence, references, secrets, reveal auditing, `file`/`build` kinds, external `resolve` with API keys, SDK.
 - **Done when:** an external script reads resolved variables with an API key, and there is no plaintext in Mongo.
+- **Status (done, pending review):**
+  - **Scopes:** `global` (the user) and `tenant`, tenant wins. **Project scope arrives with projects in Phase 6**; the resolver takes scope layers, so it is one more layer.
+  - **Encryption:** values are AES-256-GCM under the owner's data key, with the variable's `_id` in the AAD, so a ciphertext copied onto another variable fails. Non-secret values are encrypted too. Master key rotation: `scripts/rewrapKeyring.ts` (re-runnable).
+  - **References:** `${{KEY}}` (merged set) and `${{global.KEY}}` / `${{tenant.KEY}}`. Saves that would create a cycle are rejected; missing references fail at resolve time.
+  - **Secrets:** left out of lists, read one at a time with `reveal`. **Reveals are not audited**: audit logs are off by the owner's decision.
+  - **Kinds:** `env`/`file` and `build`/`runtime`/`both` are stored and returned by `resolve` (`env` and `files`). Delivery to containers is Phase 6.
+  - **External access:** `GET /variables/api/resolve` with `X-Api-Key` + `X-TENANT-ID`, rate-limited by `variableApiReadsPerMinute`. A key with the `variableApi` scope can only resolve.
+  - **Quota:** `variablesPerScope`, a count bounded by the limit on the unique `(scope, user, tenant, key)` index.
+  - **UI:** Configuration → Variables (workspace and account tabs, masked secrets with reveal, add/edit dialog, a curl snippet for scripts).
+  - **Verified:** `tests/variables_test.ts` runs the "done when" end to end (API-key-only resolve, no plaintext in Mongo, cycle rejected, key limited to resolve).
 
 ### Phase 5 — GitHub App and templates
 - Manifest flow (user or org), installations, repo/branch browsing, share toggle, webhook with signature verification.

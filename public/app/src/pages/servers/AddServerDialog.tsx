@@ -24,18 +24,11 @@ import { Input } from "@/components/ui/input"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
 import { usePolling } from "@/hooks/use-polling"
-import { cn } from "@/lib/utils"
+import { cn, errorMessage } from "@/lib/utils"
 
 type TProgress = Awaited<
   ReturnType<typeof ThunderSDK.servers.bootstrapProgress>
 >
-
-const errorMessage = (error: unknown) => {
-  const data = (error as { response?: { data?: unknown } }).response?.data
-  if (typeof data === "string" && data) return data
-  const messages = (data as { messages?: { message?: string }[] })?.messages
-  return messages?.[0]?.message ?? null
-}
 
 function SshForm({ onStarted }: { onStarted: (session: string) => void }) {
   const { t } = useTranslation()
