@@ -74,7 +74,9 @@ export function EnvEditor({
   }
 
   return (
-    <div className="flex flex-col gap-3">
+    // min-w-0: inside a grid or flex parent (the dialog), long values must
+    // truncate rather than widen the whole dialog.
+    <div className="flex w-full min-w-0 flex-col gap-3">
       <div
         onDragOver={(e) => {
           e.preventDefault()
@@ -153,21 +155,27 @@ export function EnvEditor({
 
       {!!value.length && (
         <ul
-          className="flex flex-col divide-y rounded-2xl border"
+          className="flex min-w-0 flex-col divide-y rounded-2xl border"
           aria-label={t("Variables to add")}
         >
           {value.map((v) => (
             <li key={v.key} className="flex items-center gap-2 px-3 py-2">
               <span className="min-w-0 flex-1">
                 <span className="flex items-center gap-2">
-                  <span className="truncate font-mono text-xs font-medium">
+                  <span
+                    className="truncate font-mono text-xs font-medium"
+                    title={v.key}
+                  >
                     {v.key}
                   </span>
                   {existing?.has(v.key) && (
                     <Badge variant="outline">{t("Exists")}</Badge>
                   )}
                 </span>
-                <span className="block truncate font-mono text-xs text-muted-foreground">
+                <span
+                  className="block truncate font-mono text-xs text-muted-foreground"
+                  title={v.isSecret ? undefined : v.value}
+                >
                   {v.isSecret ? "••••••••" : v.value || t("(empty)")}
                 </span>
               </span>
