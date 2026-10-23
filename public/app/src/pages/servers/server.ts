@@ -18,7 +18,9 @@ export const serverSchema = z.object({
     memory: z.number(),
     disk: z.number(),
     agentVersion: z.string(),
+    agentSha256: z.string().nullish(),
   }),
+  labels: z.record(z.string(), z.string()).nullish(),
   resources: z
     .object({ cpu: z.number(), memFree: z.number(), diskFree: z.number() })
     .nullish(),

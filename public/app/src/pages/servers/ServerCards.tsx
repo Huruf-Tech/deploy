@@ -45,6 +45,7 @@ import { AcceptServerDialog } from "./AcceptServerDialog"
 import { AddServerButton } from "./AddServerButton"
 import { onServersChanged } from "./events"
 import { StatusPill } from "./StatusPill"
+import { LabelChips } from "./ServerLabels"
 import {
   gib,
   serverSchema,
@@ -216,6 +217,7 @@ function ServerCard({
           <Chip>{gib(inventory.memory)}</Chip>
           {server.status === "active" && <SetupChips setup={server.setup} />}
         </div>
+        <LabelChips labels={server.labels} />
 
         {server.setup?.status === "failed" && (
           <div className="flex flex-col gap-2 rounded-2xl bg-destructive/10 p-3 text-xs text-destructive">
@@ -322,21 +324,14 @@ export default function ServerCards({ data, isLoading, fetcher }: TCardProps) {
     [data]
   )
   // Refetch while something is in flight: pending approval or host setup.
-  const hasPending = servers.some(
-    (s) =>
-      s.status === "pending" ||
-      (s.status === "active" &&
-        s.setup?.status !== "ready" &&
-        s.setup?.status !== "failed")
-  )
-
   usePolling(() => {
     ThunderSDK.servers
       .liveness({})
       .then((rows) => setLiveness(new Map(rows.map((r) => [r.server, r]))))
       .catch(() => {})
-    // Pending servers flip to active from another tab or the agent's side.
-    if (hasPending) refetch()
+    // The list too: a server installed by hand (or from another tab) appears
+    // as soon as its agent says hello, and pending ones flip to active.
+    refetch()
   }, 5_000)
 
   const reject = async (server: TServer) => {

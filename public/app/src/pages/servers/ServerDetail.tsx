@@ -50,6 +50,7 @@ import { LogsSheet } from "./LogsSheet"
 // xterm.js is loaded only when a terminal opens (PLAN §15.5 per-route bundles).
 const TerminalSheet = React.lazy(() => import("./TerminalSheet"))
 import { StatusPill } from "./StatusPill"
+import { ServerLabels } from "./ServerLabels"
 import {
   gib,
   serverSchema,
@@ -363,7 +364,10 @@ function LiveMetrics({
 function AgentUpdate({
   server,
 }: {
-  server: { _id: string; inventory: { arch: string; agentSha256?: string } }
+  server: {
+    _id: string
+    inventory: { arch: string; agentSha256?: string | null }
+  }
 }) {
   const { t } = useTranslation()
   const { data } = use(
@@ -457,6 +461,13 @@ export default function ServerDetail() {
             {server.setup?.dockerVersion &&
               ` · Docker ${server.setup.dockerVersion}`}
           </p>
+        </div>
+        <div className="order-last w-full">
+          <ServerLabels
+            server={server._id}
+            labels={server.labels}
+            onSaved={() => request.invalidate()}
+          />
         </div>
         <StatusPill state={state} />
         {state === "online" && <AgentUpdate server={server} />}

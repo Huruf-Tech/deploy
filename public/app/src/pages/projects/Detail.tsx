@@ -62,6 +62,7 @@ import { LogsSheet } from "@/pages/servers/LogsSheet"
 import { VariableTable } from "@/pages/variables"
 import { DeploymentSheet } from "./DeploymentSheet"
 import { type TVolume, VolumesEditor } from "./VolumesEditor"
+import { LabelChips } from "@/pages/servers/ServerLabels"
 import {
   ago,
   DeploymentStatus,
@@ -406,7 +407,10 @@ function Settings({
                     )
                   }
                 />
-                <span className="flex-1 text-sm">{s.name}</span>
+                <span className="flex min-w-0 flex-1 flex-col gap-1 text-sm">
+                  {s.name}
+                  <LabelChips labels={s.labels} />
+                </span>
                 <span className="text-xs text-muted-foreground">
                   {t("{{cpu}} CPU · {{mem}} MiB free", {
                     cpu: s.cpuFree.toFixed(1),

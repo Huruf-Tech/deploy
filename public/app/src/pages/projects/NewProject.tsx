@@ -41,6 +41,7 @@ import { getLocalPath } from "@/core/lib/utils"
 import { useCapacity } from "@/hooks/use-capacity"
 import { type TVolume, VolumesEditor } from "./VolumesEditor"
 import { EnvEditor, type TEnvVariable } from "@/components/env-import"
+import { LabelChips } from "@/pages/servers/ServerLabels"
 import { classFootprints, fitsIn, roomOf } from "@/lib/capacity"
 import { cn, errorMessage } from "@/lib/utils"
 import { InputField } from "@/pages/templates/Detail"
@@ -870,6 +871,7 @@ export default function NewProject() {
                             </span>
                           )}
                         </span>
+                        <LabelChips labels={s.labels} />
                         <span className="block text-xs text-muted-foreground">
                           {t(
                             "{{cpu}} of {{cores}} CPU and {{mem}} MiB free to allocate",
