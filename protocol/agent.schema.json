@@ -428,7 +428,8 @@
                   "stream.close",
                   "build.run",
                   "server.prune",
-                  "agent.update"
+                  "agent.update",
+                  "registry.delete"
                 ]
               },
               "payload": {
@@ -1590,7 +1591,7 @@
           "items": {
             "type": "string"
           },
-          "description": "Built images to keep for rollbacks; older huruf/* images are removed"
+          "description": "Images of kept releases (local and registry tags), for rollbacks; other images we built are removed"
         },
         "mesh": {
           "description": "The private network (PLAN §8.2); absent means this server isn't in it",
@@ -2184,6 +2185,25 @@
       "required": [
         "url",
         "sha256"
+      ],
+      "additionalProperties": false
+    },
+    "RegistryDeletePayload": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "tags": {
+          "minItems": 1,
+          "maxItems": 500,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 300
+          }
+        }
+      },
+      "required": [
+        "tags"
       ],
       "additionalProperties": false
     }

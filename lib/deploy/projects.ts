@@ -21,6 +21,7 @@ import {
   importVariables,
 } from "@/lib/variables/variables.ts";
 import { refreshSpecs } from "@/lib/deploy/specs.ts";
+import { dropBuiltinImages } from "@/lib/deploy/registryCleanup.ts";
 import { storageModel } from "@/schemas/infrastructure/storage.ts";
 import {
   $projectRuntime,
@@ -647,6 +648,11 @@ export async function deleteProject(tenant: ObjectId, id: ObjectId) {
     ...project.placedOn,
     ...active.flatMap((d) => d.servers),
   ]);
+  const releases = await releaseModel.find({ project: id }, {
+    projection: { pushedImage: 1, builtinRegistry: 1 },
+    limit: 1_000,
+  }).toArray();
+  await dropBuiltinImages(tenant, releases);
   await Promise.all([
     releaseModel.deleteMany({ project: id }),
     deploymentModel.deleteMany({ project: id }),

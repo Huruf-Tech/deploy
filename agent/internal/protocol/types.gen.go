@@ -153,7 +153,7 @@ type PollResponse struct {
 type Command struct {
 	Seq int64 `json:"seq"`
 
-	// One of: ping, docker.ensure, stream.open, stream.close, build.run, server.prune, agent.update
+	// One of: ping, docker.ensure, stream.open, stream.close, build.run, server.prune, agent.update, registry.delete
 	Type string `json:"type"`
 
 	Payload map[string]any `json:"payload"`
@@ -367,7 +367,7 @@ type DesiredSpec struct {
 
 	Workloads []Workload `json:"workloads"`
 
-	// Built images to keep for rollbacks; older huruf/* images are removed
+	// Images of kept releases (local and registry tags), for rollbacks; other images we built are removed
 	KeepImages []string `json:"keepImages"`
 
 	// The private network (PLAN §8.2); absent means this server isn't in it
@@ -729,4 +729,8 @@ type AgentUpdatePayload struct {
 	Url string `json:"url"`
 
 	Sha256 string `json:"sha256"`
+}
+
+type RegistryDeletePayload struct {
+	Tags []string `json:"tags"`
 }

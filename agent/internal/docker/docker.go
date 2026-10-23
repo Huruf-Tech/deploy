@@ -26,8 +26,8 @@ import (
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/reconcile"
 )
 
-// Images we build are tagged huruf/<project>:<release>-<sha>; only those are garbage-collected.
-const builtImages = "huruf/*"
+// Images we build carry this label (set by build.run); only those are garbage-collected.
+const builtLabel = "deploy.huruf.project"
 
 // Colors in app output would end up as escape codes in the dashboard.
 var ansi = regexp.MustCompile(`\x1b\[[0-9;?]*[ -/]*[@-~]`)
@@ -343,8 +343,10 @@ func (d *Docker) tail(ctx context.Context, id string) string {
 	return out
 }
 
+// Every image we build carries this label, including copies pulled from a
+// registry, so both the local tag and the registry tag are cleaned up.
 func (d *Docker) RemoveUnusedImages(ctx context.Context, keep []string) error {
-	out, err := run(ctx, nil, "docker", "images", "--filter", "reference="+builtImages, "--format", "{{.Repository}}:{{.Tag}}")
+	out, err := run(ctx, nil, "docker", "images", "--filter", "label="+builtLabel, "--format", "{{.Repository}}:{{.Tag}}")
 	if err != nil {
 		return err
 	}

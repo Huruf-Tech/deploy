@@ -143,6 +143,10 @@ func main() {
 	a.Monitor = usage
 	streamManager.Capacity = usage
 	go usage.Run(ctx)
+	// The built-in registry lives with the mesh: it deletes images of releases that are gone.
+	a.Commands["registry.delete"] = commands.Typed(func(ctx context.Context, p protocol.RegistryDeletePayload) (map[string]any, error) {
+		return network.DeleteTags(ctx, p.Tags)
+	})
 	network.Emit = func(event protocol.MeshStatusEvent) {
 		a.Enqueue(event)
 		a.Wake()

@@ -18,6 +18,7 @@ import { refreshSpecs, sealReleaseSpec } from "@/lib/deploy/specs.ts";
 import { isSecretInput, openCompose, toEnvKey } from "@/lib/deploy/projects.ts";
 import { forStage, resolveVariableSet } from "@/lib/variables/variables.ts";
 import { builtinRegistry, meshServers, reachable } from "@/lib/network/mesh.ts";
+import { dropBuiltinImages } from "@/lib/deploy/registryCleanup.ts";
 import { projectModel, type TProject } from "@/schemas/applications/project.ts";
 import {
   deploymentModel,
@@ -786,11 +787,12 @@ async function complete(id: ObjectId) {
     },
     { returnDocument: "before", projection: { placedOn: 1, tenant: 1 } },
   );
-  // Servers the project left drop it; the others drop the finished rollout's extra state.
-  await refreshSpecs([...deployment.servers, ...(before?.placedOn ?? [])]);
+  // Prune first, so the refreshed specs stop keeping pruned images.
   if (before) {
     await pruneReleases(deployment.project, before.tenant, deployment.release!);
   }
+  // Servers the project left drop it; the others drop the finished rollout's extra state.
+  await refreshSpecs([...deployment.servers, ...(before?.placedOn ?? [])]);
   log.info(`Deployment ${id} is healthy`);
   await onDeploySucceeded(deployment.project);
   await startNext(deployment.project);
@@ -808,10 +810,13 @@ async function pruneReleases(
     limit: limits.releasesKept,
     projection: { _id: 1 },
   }).toArray();
-  await releaseModel.deleteMany({
-    project,
-    _id: { $nin: [active, ...kept.map((r) => r._id)] },
-  });
+  const gone = { project, _id: { $nin: [active, ...kept.map((r) => r._id)] } };
+  const dropped = await releaseModel.find(gone, {
+    projection: { pushedImage: 1, builtinRegistry: 1 },
+    limit: 1_000,
+  }).toArray();
+  await releaseModel.deleteMany(gone);
+  await dropBuiltinImages(tenant, dropped);
 }
 
 /**
@@ -844,7 +849,11 @@ export async function fail(id: ObjectId, error: string) {
     deployment.release && deployment.trigger !== "rollback" &&
     !project?.activeRelease?.equals(deployment.release)
   ) {
-    await releaseModel.deleteOne({ _id: deployment.release });
+    const dropped = await releaseModel.findOneAndDelete(
+      { _id: deployment.release },
+      { projection: { pushedImage: 1, builtinRegistry: 1 } },
+    );
+    if (dropped) await dropBuiltinImages(deployment.tenant, [dropped]);
   }
   if (project) {
     await projectModel.updateOne({ _id: deployment.project }, {

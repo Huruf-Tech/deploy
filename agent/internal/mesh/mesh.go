@@ -44,6 +44,9 @@ type Mesh struct {
 	Log    *slog.Logger
 	Emit   func(protocol.MeshStatusEvent)
 
+	// collect frees deleted images' space; tests replace it.
+	collect func(context.Context) error
+
 	mu       sync.Mutex
 	last     *protocol.DesiredSpec // retried while it fails
 	spec     *protocol.MeshSpec

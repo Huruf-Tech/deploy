@@ -51,6 +51,11 @@ func handle[T any](fn func(context.Context, T) (map[string]any, error)) Handler 
 	}
 }
 
+// Typed is handle for command handlers registered outside this package.
+func Typed[T any](fn func(context.Context, T) (map[string]any, error)) Handler {
+	return handle(fn)
+}
+
 // sealed wraps a handler whose payload arrives sealed to this agent (PLAN §4.2).
 func sealed[T any](open func(string) ([]byte, error), fn func(context.Context, T) (map[string]any, error)) Handler {
 	return handle(func(ctx context.Context, p protocol.SealedPayload) (map[string]any, error) {

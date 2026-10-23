@@ -203,6 +203,26 @@ Deno.test({
       );
 
       await t.step(
+        "pruned releases leave the built-in registry; kept ones stay",
+        async () => {
+          // Free keeps 5 releases: five more deploys prune release 1.
+          for (let i = 0; i < 5; i++) {
+            await call("POST", `/projects/api/${shop}/deploy`, {});
+            for (let r = 0; r < 4; r++) await pollAll();
+          }
+          const commands = await mongodb.db().collection("agentCommands")
+            .find({ tenant: tenantId, type: "registry.delete" }).toArray();
+          assertEquals(
+            commands.map((c) => [String(c.server), c.payload.tags]),
+            [[ids[0], ["shop:1"]]],
+          );
+          const keep = agents[1].spec!.keepImages;
+          assert(keep.includes("10.209.0.1:5000/shop:6"), keep.join(", "));
+          assert(!keep.includes("10.209.0.1:5000/shop:1"), "pruned image kept");
+        },
+      );
+
+      await t.step(
         "a project that can't reach what it uses gets a warning",
         async () => {
           const { json: templates } = await call("GET", "/templates/api");

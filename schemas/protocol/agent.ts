@@ -99,7 +99,17 @@ export const $commandType = z.enum([
   "build.run",
   "server.prune",
   "agent.update",
+  "registry.delete",
 ]);
+
+/**
+ * `registry.delete`, for the server running the built-in registry: these
+ * repo:tag images belong to releases that are gone. Their space is freed by
+ * garbage collection; a digest another tag still uses is kept.
+ */
+export const $registryDeletePayload = z.object({
+  tags: z.array(z.string().max(300)).min(1).max(500),
+});
 
 /** `agent.update`: replace the binary with a verified download, then restart. */
 export const $agentUpdatePayload = z.object({
@@ -348,7 +358,7 @@ export const $desiredSpec = z.object({
   ),
   workloads: z.array($workload),
   keepImages: z.array(z.string()).describe(
-    "Built images to keep for rollbacks; older huruf/* images are removed",
+    "Images of kept releases (local and registry tags), for rollbacks; other images we built are removed",
   ),
   mesh: $meshSpec.optional().describe(
     "The private network (PLAN §8.2); absent means this server isn't in it",

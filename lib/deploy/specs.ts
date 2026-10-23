@@ -301,15 +301,21 @@ export async function computeSpec(
 
   // Built images of every kept release stay on the server for rollbacks (PLAN §9.3).
   const kept = await releaseModel.find(
-    { project: { $in: projects.map((p) => p._id) }, image: { $exists: true } },
-    { projection: { image: 1 }, limit: 5_000 },
+    {
+      project: { $in: projects.map((p) => p._id) },
+      $or: [{ image: { $exists: true } }, { pushedImage: { $exists: true } }],
+    },
+    { projection: { image: 1, pushedImage: 1 }, limit: 5_000 },
   ).toArray();
 
   return {
     network: PROJECT_NETWORK,
     drainMs: await readNumberSetting("AGENT_DRAIN_MS", 3_000),
     workloads: workloads.sort((a, b) => a.name.localeCompare(b.name)),
-    keepImages: [...new Set(kept.map((r) => r.image!))].sort(),
+    // Both names: the builder's local tag and the copy others pulled.
+    keepImages: [
+      ...new Set(kept.flatMap((r) => [r.image, r.pushedImage].filter(Boolean))),
+    ].sort() as string[],
     alerts: serverDoc
       ? await alertSpecsFor(serverDoc, [
         ...new Set(workloads.map((w) => w.project)),
