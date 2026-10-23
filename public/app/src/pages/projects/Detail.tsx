@@ -383,6 +383,8 @@ function Settings({
       await ThunderSDK.projects.del({ params: { id: project._id } })
       // The cached list still has it: refresh it (and the server pickers,
       // keyed under "projects") before going back, so it's gone there.
+      // useCaching is the SDK's cache entry, not a React hook.
+      // eslint-disable-next-line react-hooks/rules-of-hooks
       await ThunderSDK.useCaching(
         ["projects"],
         async ({ signal }) => await ThunderSDK.projects.list({ signal })

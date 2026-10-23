@@ -14,12 +14,15 @@ import {
   IconCpu,
   IconKey,
   IconServer2,
+  IconTag,
+  IconX,
 } from "@tabler/icons-react"
 
 import type { TCardProps } from "@/core/types"
 import { Container } from "@/core/custom/Container"
 import { zodToMongoProjection } from "@/core/lib/zodToMongoProjection"
 import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
 import {
   Card,
   CardAction,
@@ -121,6 +124,9 @@ function ServerCard({
   onReject,
   onPing,
   onPrepare,
+  onLabel,
+  selected,
+  onSelect,
 }: {
   server: TServer
   live?: TLiveness
@@ -128,6 +134,9 @@ function ServerCard({
   onReject: () => void
   onPing: () => void
   onPrepare: () => void
+  onLabel: (key: string, value: string) => void
+  selected: boolean
+  onSelect: () => void
 }) {
   const { t } = useTranslation()
   const state = stateOf(server, live)
@@ -139,7 +148,8 @@ function ServerCard({
       className={cn(
         "transition-shadow duration-200 hover:shadow-lg",
         state === "pending" && "ring-2 ring-warning/40",
-        state === "offline" && "opacity-80"
+        state === "offline" && "opacity-80",
+        selected && "ring-2 ring-primary"
       )}
     >
       <CardHeader>
@@ -167,8 +177,13 @@ function ServerCard({
             </CardDescription>
           </div>
         </div>
-        <CardAction>
+        <CardAction className="flex items-center gap-2">
           <StatusPill state={state} />
+          <Checkbox
+            aria-label={t("Select {{name}}", { name: server.name })}
+            checked={selected}
+            onCheckedChange={onSelect}
+          />
         </CardAction>
       </CardHeader>
 
@@ -229,7 +244,7 @@ function ServerCard({
             <SetupChips server={server._id} setup={server.setup} />
           )}
         </div>
-        <LabelChips labels={server.labels} />
+        <LabelChips labels={server.labels} onPick={onLabel} />
 
         {server.setup?.status === "failed" && (
           <div className="flex flex-col gap-2 rounded-2xl bg-destructive/10 p-3 text-xs text-destructive">
@@ -307,8 +322,23 @@ function AddServerHint() {
   )
 }
 
-export default function ServerCards({ data, isLoading, fetcher }: TCardProps) {
+export default function ServerCards({
+  data,
+  isLoading,
+  fetcher,
+  setFilters,
+  setPage,
+  selectedIds,
+  toggleSelect,
+}: TCardProps) {
   const { t } = useTranslation()
+  // Clicking a label chip shows only the servers that carry it.
+  const [label, setLabel] = React.useState<[string, string] | null>(null)
+  const filterByLabel = (next: [string, string] | null) => {
+    setLabel(next)
+    setPage(0)
+    setFilters(next ? { [`labels.${next[0]}`]: { $eq: next[1] } } : undefined)
+  }
   const [liveness, setLiveness] = React.useState<Map<string, TLiveness>>(
     new Map()
   )
@@ -366,14 +396,31 @@ export default function ServerCards({ data, isLoading, fetcher }: TCardProps) {
   }
 
   return (
-    <Container className="py-4">
+    <Container className="flex flex-col gap-4 py-4">
+      {label && (
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          {t("Servers labeled")}
+          <span className="inline-flex items-center gap-1 rounded-md border py-0.5 ps-2 pe-0.5 font-mono text-xs text-foreground">
+            <IconTag className="size-3" aria-hidden />
+            {label[1] ? `${label[0]}=${label[1]}` : label[0]}
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              aria-label={t("Clear the label filter")}
+              onClick={() => filterByLabel(null)}
+            >
+              <IconX />
+            </Button>
+          </span>
+        </div>
+      )}
       {isLoading ? (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {[0, 1, 2].map((i) => (
             <Skeleton key={i} className="h-56 rounded-4xl" />
           ))}
         </div>
-      ) : !servers.length ? (
+      ) : !servers.length && !label ? (
         <AddServerHint />
       ) : (
         <div
@@ -389,6 +436,9 @@ export default function ServerCards({ data, isLoading, fetcher }: TCardProps) {
               onReject={() => reject(server)}
               onPing={() => ping(server)}
               onPrepare={() => prepare(server)}
+              onLabel={(key, value) => filterByLabel([key, value])}
+              selected={selectedIds.includes(server._id)}
+              onSelect={() => toggleSelect(server._id)}
             />
           ))}
         </div>

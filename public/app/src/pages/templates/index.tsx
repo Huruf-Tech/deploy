@@ -9,19 +9,34 @@ import { use } from "@/core/hooks/use"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
+import {
+  SelectAllCheckbox,
+  SelectCheckbox,
+  SelectionBar,
+  useSelection,
+  type TSelection,
+} from "@/components/selection-bar"
+import { cn } from "@/lib/utils"
 import { CloneDialog, TemplateIcon, type TTemplate } from "./shared"
 
 function TemplateCard({
   template,
   onClone,
+  selection,
 }: {
   template: TTemplate
   onClone: () => void
+  selection?: TSelection
 }) {
   const { t } = useTranslation()
 
   return (
-    <div className="group relative flex flex-col gap-3 rounded-3xl border bg-card p-4 transition-colors hover:border-foreground/20">
+    <div
+      className={cn(
+        "group relative flex flex-col gap-3 rounded-3xl border bg-card p-4 transition-colors hover:border-foreground/20",
+        selection?.has(template._id) && "ring-2 ring-primary"
+      )}
+    >
       <div className="flex items-start gap-3">
         <span className="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-muted">
           <TemplateIcon icon={template.icon} className="size-5" />
@@ -44,6 +59,15 @@ function TemplateCard({
             )}
           </div>
         </div>
+        {selection && (
+          <span className="relative z-10 flex size-8 items-center justify-center">
+            <SelectCheckbox
+              selection={selection}
+              id={template._id}
+              label={template.name}
+            />
+          </span>
+        )}
         <Button
           variant="ghost"
           size="icon-sm"
@@ -69,18 +93,33 @@ function Section({
   templates,
   onClone,
   empty,
+  selection,
 }: {
   title: string
   description: string
   templates: TTemplate[]
   onClone: (template: TTemplate) => void
   empty?: string
+  /** Only the workspace's own templates can be deleted, so only they select. */
+  selection?: TSelection
 }) {
+  const { t } = useTranslation()
   return (
     <section className="flex flex-col gap-3">
-      <div>
-        <h2 className="font-medium">{title}</h2>
-        <p className="text-sm text-muted-foreground">{description}</p>
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h2 className="font-medium">{title}</h2>
+          <p className="text-sm text-muted-foreground">{description}</p>
+        </div>
+        {selection && templates.length > 1 && (
+          <label className="flex items-center gap-2 text-sm text-muted-foreground">
+            <SelectAllCheckbox
+              selection={selection}
+              ids={templates.map((x) => x._id)}
+            />
+            {t("Select all")}
+          </label>
+        )}
       </div>
       {templates.length ? (
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
@@ -89,6 +128,7 @@ function Section({
               key={template._id}
               template={template}
               onClone={() => onClone(template)}
+              selection={selection}
             />
           ))}
         </div>
@@ -112,6 +152,7 @@ export default function TemplatesPage() {
     async ({ signal }) => await ThunderSDK.templates.list({ signal })
   )
   const { data, isLoading } = use(request)
+  const selection = useSelection()
 
   const own = (data ?? []).filter((x) => x.scope === "tenant")
   const system = (data ?? []).filter((x) => x.scope === "system")
@@ -142,6 +183,7 @@ export default function TemplatesPage() {
             )}
             templates={own}
             onClone={setCloning}
+            selection={selection}
             empty={t("Clone a built-in template below to customise it.")}
           />
           <Section
@@ -158,6 +200,13 @@ export default function TemplatesPage() {
           />
         </>
       )}
+
+      <SelectionBar
+        selection={selection}
+        remove={(id) => ThunderSDK.templates.del({ params: { id } })}
+        onDone={() => request.invalidate()}
+        canDelete={ThunderSDK.isPermitted("templates", "del")}
+      />
 
       <CloneDialog
         template={cloning}

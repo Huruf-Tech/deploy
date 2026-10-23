@@ -215,7 +215,7 @@ export const projectGroupsModule = (sdk: typeof BaseSDK) => {
 
     sdk["_moduleGroup"].set(methods, "Applications");
 
-    sdk["_moduleMetadata"].set(methods, {"crud":{"schema":{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","properties":{"tenant":{"tsType":"string","ref":"tenants"},"name":{"type":"string","minLength":1,"maxLength":80,"canFilter":true},"description":{"type":"string","maxLength":500}},"required":["tenant","name"],"additionalProperties":false},"insertSchema":{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","properties":{"name":{"type":"string","minLength":1,"maxLength":80,"canFilter":true},"description":{"type":"string","maxLength":500}},"required":["name"]}}});
+    sdk["_moduleMetadata"].set(methods, {"crud":{"schema":{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","properties":{"tenant":{"tsType":"string","ref":"tenants"},"name":{"type":"string","minLength":1,"maxLength":80,"canFilter":true},"description":{"canFilter":true,"type":"string","maxLength":500}},"required":["tenant","name"],"additionalProperties":false},"insertSchema":{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","properties":{"name":{"type":"string","minLength":1,"maxLength":80,"canFilter":true},"description":{"canFilter":true,"type":"string","maxLength":500}},"required":["name"]}}});
 
     return methods;
 };

@@ -29,10 +29,14 @@ export const $planFeatures = z.object({
 });
 
 export const $plan = z.object({
-  name: z.string().min(1).max(50),
-  slug: z.string().min(1).max(50).regex(/^[a-z0-9-]+$/),
+  name: z.string().min(1).max(50).meta({ canFilter: true }),
+  slug: z.string().min(1).max(50).regex(/^[a-z0-9-]+$/).meta({
+    canFilter: true,
+  }),
   description: z.string().max(500).optional(),
-  visibility: z.enum(["public", "private"]).default("public"),
+  visibility: z.enum(["public", "private"]).default("public").meta({
+    canFilter: true,
+  }),
   allowedTenants: z.array($objectId.meta({ ref: "tenants" })).default([]),
   price: z.object({
     amount: z.number().int().min(0),
@@ -41,10 +45,10 @@ export const $plan = z.object({
   }),
   limits: $planLimits.default($planLimits.parse({})),
   features: $planFeatures.default($planFeatures.parse({})),
-  isFree: z.boolean().default(false),
-  active: z.boolean().default(true),
+  isFree: z.boolean().default(false).meta({ canFilter: true }),
+  active: z.boolean().default(true).meta({ canFilter: true }),
   sortOrder: z.number().int().default(0),
-  createdAt: z.date().default(() => new Date()),
+  createdAt: z.date().default(() => new Date()).meta({ canFilter: true }),
 });
 
 export type TPlanLimits = z.output<typeof $planLimits>;

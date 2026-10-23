@@ -34,7 +34,13 @@ import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Switch } from "@/components/ui/switch"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { errorMessage } from "@/lib/utils"
+import {
+  SelectAllCheckbox,
+  SelectCheckbox,
+  SelectionBar,
+  useSelection,
+} from "@/components/selection-bar"
+import { cn, errorMessage } from "@/lib/utils"
 
 function AddRegistryDialog({
   open,
@@ -192,6 +198,7 @@ export default function RegistriesPage() {
     async ({ signal }) => await ThunderSDK.registries.list({ signal })
   )
   const { data, isLoading } = use(request)
+  const selection = useSelection()
 
   const act = async (fn: () => PromiseLike<unknown>, failure: string) => {
     try {
@@ -239,11 +246,24 @@ export default function RegistriesPage() {
         </Empty>
       ) : (
         <ul className="flex flex-col gap-2">
+          <li>
+            <label className="flex w-fit items-center gap-3 px-3 text-sm text-muted-foreground">
+              <SelectAllCheckbox
+                selection={selection}
+                ids={data.map((r) => r._id)}
+              />
+              {t("Select all")}
+            </label>
+          </li>
           {data.map((r) => (
             <li
               key={r._id}
-              className="flex flex-wrap items-center gap-3 rounded-2xl border p-3"
+              className={cn(
+                "flex flex-wrap items-center gap-3 rounded-2xl border p-3",
+                selection.has(r._id) && "ring-2 ring-primary"
+              )}
             >
+              <SelectCheckbox selection={selection} id={r._id} label={r.name} />
               <IconBox className="size-5 text-muted-foreground" aria-hidden />
               <span className="min-w-0 flex-1">
                 <span className="block font-medium">{r.name}</span>
@@ -290,6 +310,13 @@ export default function RegistriesPage() {
           ))}
         </ul>
       )}
+
+      <SelectionBar
+        selection={selection}
+        remove={(id) => ThunderSDK.registries.del({ params: { id } })}
+        onDone={() => request.invalidate()}
+        canDelete={ThunderSDK.isPermitted("registries", "del")}
+      />
 
       <AddRegistryDialog
         open={adding}

@@ -57,6 +57,12 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import {
+  SelectAllCheckbox,
+  SelectCheckbox,
+  SelectionBar,
+  useSelection,
+} from "@/components/selection-bar"
 import { errorMessage } from "@/lib/utils"
 import { METRICS } from "./metrics"
 
@@ -431,6 +437,7 @@ export default function AlertRules() {
   const { data } = use(request)
   const [editing, setEditing] = React.useState<TRule | null>(null)
   const [open, setOpen] = React.useState(false)
+  const selection = useSelection()
 
   const edit = (rule: TRule | null) => {
     setEditing(rule)
@@ -485,6 +492,12 @@ export default function AlertRules() {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-10">
+                  <SelectAllCheckbox
+                    selection={selection}
+                    ids={data.map((r) => r._id)}
+                  />
+                </TableHead>
                 <TableHead>{t("Rule")}</TableHead>
                 <TableHead>{t("Condition")}</TableHead>
                 <TableHead>{t("Channels")}</TableHead>
@@ -497,7 +510,19 @@ export default function AlertRules() {
               {data.map((rule) => {
                 const meta = METRICS[rule.metric]
                 return (
-                  <TableRow key={rule._id}>
+                  <TableRow
+                    key={rule._id}
+                    data-state={
+                      selection.has(rule._id) ? "selected" : undefined
+                    }
+                  >
+                    <TableCell>
+                      <SelectCheckbox
+                        selection={selection}
+                        id={rule._id}
+                        label={rule.name}
+                      />
+                    </TableCell>
                     <TableCell>
                       <div className="font-medium">{rule.name}</div>
                       {!rule.enabled && (
@@ -555,6 +580,13 @@ export default function AlertRules() {
           </Table>
         </div>
       )}
+
+      <SelectionBar
+        selection={selection}
+        remove={(id) => ThunderSDK.alertRules.del({ params: { id } })}
+        onDone={() => request.invalidate()}
+        canDelete={ThunderSDK.isPermitted("alertRules", "del")}
+      />
 
       <RuleDialog
         rule={editing}

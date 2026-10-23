@@ -50,7 +50,7 @@ import { LogsSheet } from "./LogsSheet"
 // xterm.js is loaded only when a terminal opens (PLAN §15.5 per-route bundles).
 const TerminalSheet = React.lazy(() => import("./TerminalSheet"))
 import { StatusPill } from "./StatusPill"
-import { ServerLabels } from "./ServerLabels"
+import { ServerLabels, ServerName } from "./ServerLabels"
 import { HostSetup } from "./HostSetup"
 import {
   gib,
@@ -455,7 +455,11 @@ export default function ServerDetail() {
           <IconServer2 className="size-6" aria-hidden />
         </div>
         <div className="min-w-0 flex-1">
-          <h1 className="truncate font-heading text-xl">{server.name}</h1>
+          <ServerName
+            server={server._id}
+            name={server.name}
+            onSaved={() => request.invalidate()}
+          />
           <p className="truncate font-mono text-xs text-muted-foreground">
             {server.inventory.hostname} · {server.inventory.os} ·{" "}
             {server.inventory.arch}

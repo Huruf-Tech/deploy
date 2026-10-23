@@ -62,6 +62,7 @@ export type get$return = {
                 ok: boolean;
                 detail: string;
             }[] | undefined;
+            notes?: string[] | undefined;
             error?: string | undefined;
             updatedAt: Date;
         } | undefined;

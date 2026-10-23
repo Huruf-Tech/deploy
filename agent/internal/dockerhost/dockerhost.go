@@ -293,12 +293,12 @@ func run(ctx context.Context, name string, args ...string) (string, error) {
 // shown in the dashboard; none of them blocks setup.
 func Preflight() []Check {
 	release := osRelease()
-	supported := release["ID"] == "ubuntu" &&
-		(release["VERSION_ID"] == "22.04" || release["VERSION_ID"] == "24.04")
+	// VERSION_ID is "YY.MM", so string order is version order.
+	supported := release["ID"] == "ubuntu" && release["VERSION_ID"] >= "22.04"
 	checks := []Check{{
 		Name:   "os",
 		Ok:     supported,
-		Detail: strings.TrimSpace(release["PRETTY_NAME"] + " (supported: Ubuntu 22.04, 24.04)"),
+		Detail: strings.TrimSpace(release["PRETTY_NAME"] + " (supported: Ubuntu 22.04 or newer)"),
 	}}
 
 	memory := memTotal()

@@ -54,6 +54,12 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import {
+  SelectAllCheckbox,
+  SelectCheckbox,
+  SelectionBar,
+  useSelection,
+} from "@/components/selection-bar"
 import { errorMessage } from "@/lib/utils"
 import { VariableDialog, type TScope, type TVariable } from "./VariableDialog"
 import { ImportEnvDialog } from "./ImportEnvDialog"
@@ -172,6 +178,7 @@ export function VariableTable({ scope }: { scope: TScope }) {
   )
   const { data, isLoading } = use(request)
   const reload = () => request.invalidate()
+  const selection = useSelection()
 
   const stageLabel = {
     runtime: t("Runtime"),
@@ -220,6 +227,12 @@ export function VariableTable({ scope }: { scope: TScope }) {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-10">
+                    <SelectAllCheckbox
+                      selection={selection}
+                      ids={data.map((v) => v._id)}
+                    />
+                  </TableHead>
                   <TableHead>{t("Key")}</TableHead>
                   <TableHead>{t("Value")}</TableHead>
                   <TableHead className="hidden md:table-cell">
@@ -232,7 +245,19 @@ export function VariableTable({ scope }: { scope: TScope }) {
               </TableHeader>
               <TableBody>
                 {data.map((variable) => (
-                  <TableRow key={variable._id}>
+                  <TableRow
+                    key={variable._id}
+                    data-state={
+                      selection.has(variable._id) ? "selected" : undefined
+                    }
+                  >
+                    <TableCell>
+                      <SelectCheckbox
+                        selection={selection}
+                        id={variable._id}
+                        label={variable.key}
+                      />
+                    </TableCell>
                     <TableCell className="max-w-56">
                       <div className="flex items-center gap-2">
                         <span className="truncate font-mono text-xs font-medium">
@@ -311,6 +336,15 @@ export function VariableTable({ scope }: { scope: TScope }) {
           </div>
         </>
       )}
+
+      <SelectionBar
+        selection={selection}
+        remove={(id) =>
+          ThunderSDK.variables.del({ params: { id }, query: scope })
+        }
+        onDone={reload}
+        canDelete={ThunderSDK.isPermitted("variables", "del")}
+      />
 
       <ImportEnvDialog
         scope={scope}

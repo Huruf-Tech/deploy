@@ -50,7 +50,14 @@ import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Switch } from "@/components/ui/switch"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { errorMessage } from "@/lib/utils"
+import {
+  SelectAllCheckbox,
+  SelectCheckbox,
+  SelectionBar,
+  useSelection,
+  type TSelection,
+} from "@/components/selection-bar"
+import { cn, errorMessage } from "@/lib/utils"
 import { RepositoriesSheet, type TRepoTarget } from "./RepositoriesSheet"
 
 type TIntegration = Awaited<
@@ -160,10 +167,12 @@ function IntegrationCard({
   integration,
   onChanged,
   onBrowse,
+  selection,
 }: {
   integration: TIntegration
   onChanged: () => void
   onBrowse: (target: TRepoTarget) => void
+  selection: TSelection
 }) {
   const { t } = useTranslation()
   const [busy, setBusy] = React.useState(false)
@@ -184,9 +193,19 @@ function IntegrationCard({
   const installUrl = `https://github.com/apps/${integration.appSlug}/installations/new`
 
   return (
-    <Card>
+    <Card
+      className={cn(selection.has(integration._id) && "ring-2 ring-primary")}
+    >
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
+          {/* Only the owner can remove it, so only theirs are selectable. */}
+          {integration.isOwner && (
+            <SelectCheckbox
+              selection={selection}
+              id={integration._id}
+              label={integration.appName}
+            />
+          )}
           <IconBrandGithub className="size-5" aria-hidden />
           {integration.appName}
         </CardTitle>
@@ -381,6 +400,8 @@ export default function GitHubPage() {
     async ({ signal }) => await ThunderSDK.gitIntegrations.list({ signal })
   )
   const { data, isLoading } = use(request)
+  const selection = useSelection()
+  const owned = (data ?? []).filter((i) => i.isOwner).map((i) => i._id)
 
   // Back from GitHub: report how it went once, then clean the URL.
   React.useEffect(() => {
@@ -436,17 +457,33 @@ export default function GitHubPage() {
           <EmptyContent>{connect}</EmptyContent>
         </Empty>
       ) : (
-        <div className="grid gap-4 lg:grid-cols-2">
-          {data.map((integration) => (
-            <IntegrationCard
-              key={integration._id}
-              integration={integration}
-              onChanged={() => request.invalidate()}
-              onBrowse={setBrowsing}
-            />
-          ))}
+        <div className="flex flex-col gap-3">
+          {owned.length > 1 && (
+            <label className="flex w-fit items-center gap-3 px-1 text-sm text-muted-foreground">
+              <SelectAllCheckbox selection={selection} ids={owned} />
+              {t("Select all")}
+            </label>
+          )}
+          <div className="grid gap-4 lg:grid-cols-2">
+            {data.map((integration) => (
+              <IntegrationCard
+                key={integration._id}
+                integration={integration}
+                onChanged={() => request.invalidate()}
+                onBrowse={setBrowsing}
+                selection={selection}
+              />
+            ))}
+          </div>
         </div>
       )}
+
+      <SelectionBar
+        selection={selection}
+        remove={(id) => ThunderSDK.gitIntegrations.del({ params: { id } })}
+        onDone={() => request.invalidate()}
+        canDelete={ThunderSDK.isPermitted("gitIntegrations", "del")}
+      />
 
       <ConnectDialog open={connecting} onOpenChange={setConnecting} />
       <RepositoriesSheet

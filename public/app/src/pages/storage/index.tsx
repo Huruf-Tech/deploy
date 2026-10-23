@@ -40,7 +40,13 @@ import {
 } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useFresh } from "@/hooks/use-fresh"
-import { errorMessage } from "@/lib/utils"
+import {
+  SelectAllCheckbox,
+  SelectCheckbox,
+  SelectionBar,
+  useSelection,
+} from "@/components/selection-bar"
+import { cn, errorMessage } from "@/lib/utils"
 
 type TStorage = Awaited<ReturnType<typeof ThunderSDK.storages.list>>[number]
 type TProvider = TStorage["provider"]
@@ -259,6 +265,7 @@ export default function StoragePage() {
   const { data: cached, isLoading } = use(request)
   // The cache keeps whatever came back; anything but a list is stale.
   const data = Array.isArray(cached) ? cached : undefined
+  const selection = useSelection()
 
   const remove = async (s: TStorage) => {
     try {
@@ -308,11 +315,24 @@ export default function StoragePage() {
         </Empty>
       ) : (
         <ul className="flex flex-col gap-2">
+          <li>
+            <label className="flex w-fit items-center gap-3 px-3 text-sm text-muted-foreground">
+              <SelectAllCheckbox
+                selection={selection}
+                ids={data.map((s) => s._id)}
+              />
+              {t("Select all")}
+            </label>
+          </li>
           {data.map((s) => (
             <li
               key={s._id}
-              className="flex flex-wrap items-center gap-3 rounded-2xl border p-3"
+              className={cn(
+                "flex flex-wrap items-center gap-3 rounded-2xl border p-3",
+                selection.has(s._id) && "ring-2 ring-primary"
+              )}
             >
+              <SelectCheckbox selection={selection} id={s._id} label={s.name} />
               <IconBucket
                 className="size-5 text-muted-foreground"
                 aria-hidden
@@ -346,6 +366,13 @@ export default function StoragePage() {
           ))}
         </ul>
       )}
+
+      <SelectionBar
+        selection={selection}
+        remove={(id) => ThunderSDK.storages.del({ params: { id } })}
+        onDone={() => request.invalidate()}
+        canDelete={ThunderSDK.isPermitted("storages", "del")}
+      />
 
       <StorageDialog
         storage={dialog.storage}

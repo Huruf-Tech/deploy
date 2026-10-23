@@ -25,11 +25,20 @@ export const $server = $serverUpdate.extend({
   }),
   pairingCode: z.string().optional(),
   pairingExpiresAt: z.date().optional(),
-  installMethod: z.enum(["manual", "ssh"]).default("manual"),
+  installMethod: z.enum(["manual", "ssh"]).default("manual").meta({
+    canFilter: true,
+  }),
   provider: z.object({ kind: z.enum(["byo", "managed"]) }).default({
     kind: "byo",
   }),
-  inventory: $inventory,
+  // The dashboard's list filters (the agent protocol schema stays as is).
+  inventory: $inventory.extend({
+    hostname: $inventory.shape.hostname.meta({ canFilter: true }),
+    os: $inventory.shape.os.meta({ canFilter: true }),
+    arch: $inventory.shape.arch.meta({ canFilter: true }),
+    publicIp: $inventory.shape.publicIp.meta({ canFilter: true }),
+    agentVersion: $inventory.shape.agentVersion.meta({ canFilter: true }),
+  }),
   resources: $resourceSummary.extend({ reportedAt: z.date() }).optional(),
   /** Host preparation by `docker.ensure` (PLAN §16 Phase 2). */
   setup: z.object({
@@ -55,7 +64,7 @@ export const $server = $serverUpdate.extend({
   }).optional(),
   acceptedBy: $objectId.meta({ ref: "users" }).optional(),
   acceptedAt: z.date().optional(),
-  createdAt: z.date(),
+  createdAt: z.date().meta({ canFilter: true }),
 });
 
 export type TServer = z.output<typeof $server>;

@@ -1,6 +1,6 @@
 import type { TFormsOverride } from "@/core/types"
+import ServerForm from "@/pages/servers/ServerForm"
 
 export const forms: TFormsOverride = {
-  // Add your custom form components here
-  // E.g: posts: PostForm
+  servers: ServerForm,
 }

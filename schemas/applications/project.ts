@@ -154,7 +154,7 @@ export const projectModel = mongodb.db().collection<TProject>("projects");
 export const $projectGroup = z.object({
   tenant: $objectId.meta({ ref: "tenants" }),
   name: z.string().min(1).max(80).meta({ canFilter: true }),
-  description: z.string().max(500).optional(),
+  description: z.string().max(500).optional().meta({ canFilter: true }),
 });
 
 export const projectGroupModel = mongodb.db().collection<

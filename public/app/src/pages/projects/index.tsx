@@ -18,6 +18,14 @@ import {
 import { Skeleton } from "@/components/ui/skeleton"
 import { usePolling } from "@/hooks/use-polling"
 import { useFresh } from "@/hooks/use-fresh"
+import { cn } from "@/lib/utils"
+import {
+  SelectAllCheckbox,
+  SelectCheckbox,
+  SelectionBar,
+  useSelection,
+  type TSelection,
+} from "@/components/selection-bar"
 import {
   ago,
   DeploymentStatus,
@@ -27,12 +35,23 @@ import {
   type TProjectSummary,
 } from "./shared"
 
-function ProjectCard({ project }: { project: TProjectSummary }) {
+function ProjectCard({
+  project,
+  selection,
+}: {
+  project: TProjectSummary
+  selection: TSelection
+}) {
   const { t } = useTranslation()
   const last = project.lastDeployment
 
   return (
-    <div className="relative flex flex-col gap-3 rounded-3xl border bg-card p-4 transition-colors hover:border-foreground/20">
+    <div
+      className={cn(
+        "relative flex flex-col gap-3 rounded-3xl border bg-card p-4 transition-colors hover:border-foreground/20",
+        selection.has(project._id) && "ring-2 ring-primary"
+      )}
+    >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           {/* The whole card is the link. */}
@@ -50,11 +69,21 @@ function ProjectCard({ project }: { project: TProjectSummary }) {
             <span className="truncate">{project.source}</span>
           </p>
         </div>
-        {last ? (
-          <DeploymentStatus status={last.status} />
-        ) : (
-          <Badge variant="outline">{t("Not deployed")}</Badge>
-        )}
+        <div className="flex shrink-0 items-center gap-2">
+          {last ? (
+            <DeploymentStatus status={last.status} />
+          ) : (
+            <Badge variant="outline">{t("Not deployed")}</Badge>
+          )}
+          {/* Above the card-wide link. */}
+          <span className="relative z-10 flex">
+            <SelectCheckbox
+              selection={selection}
+              id={project._id}
+              label={project.name}
+            />
+          </span>
+        </div>
       </div>
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
         {project.release !== undefined && (
@@ -87,6 +116,7 @@ export default function ProjectsPage() {
   )
   useFresh(request)
   const { data, isLoading } = use(request)
+  const selection = useSelection()
 
   // Refresh while something is building or deploying.
   usePolling(() => {
@@ -109,7 +139,18 @@ export default function ProjectsPage() {
             {t("Apps and services running on your servers.")}
           </p>
         </div>
-        {!!data?.length && create}
+        {!!data?.length && (
+          <div className="flex items-center gap-3">
+            <label className="flex items-center gap-2 text-sm text-muted-foreground">
+              <SelectAllCheckbox
+                selection={selection}
+                ids={data.map((p) => p._id)}
+              />
+              {t("Select all")}
+            </label>
+            {create}
+          </div>
+        )}
       </div>
 
       {isLoading && !data ? (
@@ -136,10 +177,21 @@ export default function ProjectsPage() {
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {data.map((project) => (
-            <ProjectCard key={project._id} project={project} />
+            <ProjectCard
+              key={project._id}
+              project={project}
+              selection={selection}
+            />
           ))}
         </div>
       )}
+
+      <SelectionBar
+        selection={selection}
+        canDelete={ThunderSDK.isPermitted("projects", "del")}
+        remove={(id) => ThunderSDK.projects.del({ params: { id } })}
+        onDone={() => request.invalidate()}
+      />
     </Page>
   )
 }
