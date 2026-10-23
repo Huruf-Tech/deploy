@@ -1,0 +1,18 @@
+version: "3.9"
+
+services:
+  web:
+    build: .
+    image: __image__
+    container_name: __image__-__environment__
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    restart: unless-stopped
+    mem_limit: 3g
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"

@@ -1,0 +1,20 @@
+{
+  "name": "huruf-deploy",
+  "production": {
+    "version": {
+      "major": 0,
+      "minor": 0,
+      "patch": 0
+    },
+    "dockerOrganization": "oridune",
+    "dockerImage": "huruf-deploy",
+    "dockerCompose": "deploy.docker-compose.yml",
+    "swarmMode": false,
+    "envPaths": [
+      "./.env"
+    ],
+    "agentUrls": [
+      "http://ec2-3-74-42-148.eu-central-1.compute.amazonaws.com:3740/"
+    ]
+  }
+}
