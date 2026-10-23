@@ -13,7 +13,10 @@
       "_temp/",
       ".claude/",
       "protocol/",
-      "**/*.md"
+      "**/*.md",
+      "deploy.docker-compose.yml",
+      "deployment-logs.json",
+      "sdk-plugins/"
     ]
   },
   "lint": {

@@ -374,9 +374,19 @@ func (m *Manager) terminal(ctx context.Context, p protocol.StreamOpenPayload, ou
 		if _, err := os.Stat("/bin/bash"); err == nil {
 			shell = "/bin/bash"
 		}
+		// The agent runs as root (systemd sets no HOME for it); anyone else,
+		// e.g. a CI runner, starts in their own home.
+		home := "/root"
+		if os.Geteuid() != 0 {
+			if h, err := os.UserHomeDir(); err == nil {
+				home = h
+			} else {
+				home = os.TempDir()
+			}
+		}
 		cmd = exec.CommandContext(ctx, shell, "-l")
-		cmd.Dir = "/root"
-		cmd.Env = append(os.Environ(), "TERM=xterm-256color", "HOME=/root")
+		cmd.Dir = home
+		cmd.Env = append(os.Environ(), "TERM=xterm-256color", "HOME="+home)
 	}
 
 	master, err := pty.Start(cmd, cols, rows)
