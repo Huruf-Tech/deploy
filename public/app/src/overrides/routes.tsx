@@ -1,5 +1,6 @@
 import { Outlet } from "react-router"
 import {
+  IconActivity,
   IconBell,
   IconBox,
   IconCreditCard,
@@ -33,6 +34,7 @@ import Registries from "@/pages/registries"
 import Storage from "@/pages/storage"
 import Billing from "@/pages/billing"
 import BillingAdmin from "@/pages/billing/Admin"
+import ControlPlane from "@/pages/admin/ControlPlane"
 import Network from "@/pages/network"
 import AlertRules from "@/pages/alerts"
 import AlertHistory from "@/pages/alerts/History"
@@ -75,6 +77,14 @@ export const routes: TRoutesOverride = {
     icon: IconReportMoney,
     display: isAdmin,
     Component: BillingAdmin,
+  },
+  controlPlane: {
+    name: "Control plane",
+    path: "controlPlane",
+    group: "Admin",
+    icon: IconActivity,
+    display: isAdmin,
+    Component: ControlPlane,
   },
   // Every member sees plan & usage; only the owner changes it.
   billing: {

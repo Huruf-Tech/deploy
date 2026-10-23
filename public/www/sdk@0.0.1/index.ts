@@ -25,6 +25,7 @@ import { storagesModule } from "./modules/storages.ts";
 import { streamsModule } from "./modules/streams.ts";
 import { alertEventsModule } from "./modules/alertEvents.ts";
 import { alertRulesModule } from "./modules/alertRules.ts";
+import { controlPlaneModule } from "./modules/controlPlane.ts";
 import { wellKnownModule } from "./modules/.well-known.ts";
 import { accessControlModule } from "./modules/accessControl.ts";
 import { accessControlPoliciesModule } from "./modules/accessControlPolicies.ts";
@@ -67,6 +68,7 @@ export class ThunderSDK extends BaseSDK {
         "streams",
         "alertEvents",
         "alertRules",
+        "controlPlane",
         "wellKnown",
         "accessControl",
         "accessControlPolicies",
@@ -105,6 +107,7 @@ export class ThunderSDK extends BaseSDK {
     static streams = streamsModule(this);
     static alertEvents = alertEventsModule(this);
     static alertRules = alertRulesModule(this);
+    static controlPlane = controlPlaneModule(this);
     static wellKnown = wellKnownModule(this);
     static accessControl = accessControlModule(this);
     static accessControlPolicies = accessControlPoliciesModule(this);

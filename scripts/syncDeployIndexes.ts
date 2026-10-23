@@ -14,6 +14,7 @@ import {
   sweepShardModel,
 } from "@/schemas/infrastructure/agentCommand.ts";
 import { SHARD_COUNT } from "@/lib/agents/sweep.ts";
+import { controlPlaneSampleModel } from "@/schemas/monitoring/controlPlane.ts";
 import { variableModel } from "@/schemas/configuration/variable.ts";
 import { gitIntegrationModel } from "@/schemas/build/gitIntegration.ts";
 import {
@@ -40,6 +41,11 @@ import {
 /** Every Huruf Deploy index lives here (PLAN §6). Run by setup, never at startup. */
 export const syncDeployIndexes = async () => {
   await Promise.all([
+    controlPlaneSampleModel.createIndex({ at: 1 }, { name: "at" }),
+    controlPlaneSampleModel.createIndex(
+      { expiresAt: 1 },
+      { name: "ttl", expireAfterSeconds: 0 },
+    ),
     keyringModel.createIndex(
       { "owner.kind": 1, "owner.ref": 1 },
       { name: "uniqueOwner", unique: true },

@@ -27,6 +27,7 @@ const storages_js_1 = require("./modules/storages.js");
 const streams_js_1 = require("./modules/streams.js");
 const alertEvents_js_1 = require("./modules/alertEvents.js");
 const alertRules_js_1 = require("./modules/alertRules.js");
+const controlPlane_js_1 = require("./modules/controlPlane.js");
 const _well_known_js_1 = require("./modules/.well-known.js");
 const accessControl_js_1 = require("./modules/accessControl.js");
 const accessControlPolicies_js_1 = require("./modules/accessControlPolicies.js");
@@ -139,6 +140,7 @@ Object.defineProperty(ThunderSDK, "_moduleNames", {
         "streams",
         "alertEvents",
         "alertRules",
+        "controlPlane",
         "wellKnown",
         "accessControl",
         "accessControlPolicies",
@@ -271,6 +273,12 @@ Object.defineProperty(ThunderSDK, "alertRules", {
     configurable: true,
     writable: true,
     value: (0, alertRules_js_1.alertRulesModule)(_a)
+});
+Object.defineProperty(ThunderSDK, "controlPlane", {
+    enumerable: true,
+    configurable: true,
+    writable: true,
+    value: (0, controlPlane_js_1.controlPlaneModule)(_a)
 });
 Object.defineProperty(ThunderSDK, "wellKnown", {
     enumerable: true,

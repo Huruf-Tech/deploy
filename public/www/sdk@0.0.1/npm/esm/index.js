@@ -24,6 +24,7 @@ import { storagesModule } from "./modules/storages.js";
 import { streamsModule } from "./modules/streams.js";
 import { alertEventsModule } from "./modules/alertEvents.js";
 import { alertRulesModule } from "./modules/alertRules.js";
+import { controlPlaneModule } from "./modules/controlPlane.js";
 import { wellKnownModule } from "./modules/.well-known.js";
 import { accessControlModule } from "./modules/accessControl.js";
 import { accessControlPoliciesModule } from "./modules/accessControlPolicies.js";
@@ -135,6 +136,7 @@ Object.defineProperty(ThunderSDK, "_moduleNames", {
         "streams",
         "alertEvents",
         "alertRules",
+        "controlPlane",
         "wellKnown",
         "accessControl",
         "accessControlPolicies",
@@ -267,6 +269,12 @@ Object.defineProperty(ThunderSDK, "alertRules", {
     configurable: true,
     writable: true,
     value: alertRulesModule(_a)
+});
+Object.defineProperty(ThunderSDK, "controlPlane", {
+    enumerable: true,
+    configurable: true,
+    writable: true,
+    value: controlPlaneModule(_a)
 });
 Object.defineProperty(ThunderSDK, "wellKnown", {
     enumerable: true,
