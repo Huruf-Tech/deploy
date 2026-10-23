@@ -1,0 +1,29 @@
+# Secrets and local state never go into the image: pass settings as env vars.
+.env
+.env.*
+**/.env
+**/.env.*
+.git
+.githooks
+.claude
+_temp
+logs
+**/node_modules
+
+# Not needed to run the control plane.
+tests
+tools
+docs
+benchmarks
+protocol
+sdk-plugins
+public/app/src
+public/app/public
+public/app/*.json
+public/app/*.ts
+public/app/*.js
+public/app/llms.txt
+
+# The agent is a separate Go program; the control plane only serves its installer.
+agent
+!agent/packaging
