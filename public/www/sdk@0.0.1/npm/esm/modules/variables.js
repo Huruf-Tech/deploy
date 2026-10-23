@@ -43,6 +43,26 @@ export const variablesModule = (sdk) => {
                 return res;
             }, data);
         },
+        importEnv(data) {
+            return sdk.resolveAxiosResponse(async () => {
+                sdk.checkPermission("variables", "importEnv");
+                const method = "post";
+                const toPath = compile("variables/api/import");
+                const requestPayload = {
+                    method,
+                    url: toPath(data?.params),
+                    params: data?.query,
+                    data: data?.body,
+                    signal: data?.signal,
+                    ...(data?.axiosConfig
+                        ? sdk.resolveAxiosConfig(data.axiosConfig)
+                        : undefined),
+                };
+                sdk.log("Sending Request:", requestPayload);
+                const res = await sdk._axios.request(requestPayload);
+                return res;
+            }, data);
+        },
         update(data) {
             return sdk.resolveAxiosResponse(async () => {
                 sdk.checkPermission("variables", "update");
@@ -126,6 +146,7 @@ export const variablesModule = (sdk) => {
     };
     methods.list.__scope = "variables";
     methods.create.__scope = "variables";
+    methods.importEnv.__scope = "variables";
     methods.update.__scope = "variables";
     methods.del.__scope = "variables";
     methods.reveal.__scope = "variables";

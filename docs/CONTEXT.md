@@ -90,4 +90,4 @@ Background from the planning conversation that is **not** in [PLAN.md](PLAN.md).
   - Verification emails: thunder-core doesn't configure Better Auth's `emailVerification`, so no verification email is sent. The fix belongs in the plugin.
   - Alert channels: confirm that email (needs real SMTP settings) and Slack (needs a workspace webhook) arrive.
   - Capacity: the "fits N more" ±1 check needs a week of real use.
-  - Test database: tests and dev share the database in the single `.env`.
+  - Test database: `.env` now points at production, so tests must never read it alone. A gitignored `.env.test` (local Mongo, `huruf-deploy-test`) overrides it whenever `ENV_TYPE=test`, which `deno task test` sets. On a new machine, create it before running tests.

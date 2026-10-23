@@ -177,13 +177,13 @@ Deno.test({
           const page = (await call("GET", "/billing/api")).json;
           assertEquals(page.subscription.status, "pastDue");
           assertMatch(page.subscription.lastError, /balance/i);
-        // The owner hears about it once (sent in the background).
-        for (let i = 0; i < 20 && !mails.length; i++) {
-          await new Promise((r) => setTimeout(r, 50));
-        }
-        assertEquals(mails.length, 1);
-        assertMatch(mails[0].subject!, /couldn't renew/);
-        assertEquals(mails[0].to, session.email);
+          // The owner hears about it once (sent in the background).
+          for (let i = 0; i < 20 && !mails.length; i++) {
+            await new Promise((r) => setTimeout(r, 50));
+          }
+          assertEquals(mails.length, 1);
+          assertMatch(mails[0].subject!, /couldn't renew/);
+          assertEquals(mails[0].to, session.email);
         },
       );
 

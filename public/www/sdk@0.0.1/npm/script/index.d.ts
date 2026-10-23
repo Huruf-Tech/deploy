@@ -671,6 +671,8 @@ export declare class ThunderSDK extends BaseSDK {
             list$return: import("./modules/variables.js").list$return;
             create$body: import("./modules/variables.js").create$body;
             create$return: import("./modules/variables.js").create$return;
+            importEnv$body: import("./modules/variables.js").importEnv$body;
+            importEnv$return: import("./modules/variables.js").importEnv$return;
             update$params: import("./modules/variables.js").update$params;
             update$body: import("./modules/variables.js").update$body;
             del$params: import("./modules/variables.js").del$params;
@@ -702,6 +704,17 @@ export declare class ThunderSDK extends BaseSDK {
             then: <TResult1 = import("./modules/variables.js").create$return, TResult2 = never>(onfulfilled?: ((value: import("./modules/variables.js").create$return) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
             catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<import("./modules/variables.js").create$return | TResult>;
             finally: (onfinally?: (() => void) | null | undefined) => Promise<import("./modules/variables.js").create$return>;
+        };
+        readonly importEnv: (data: {
+            params?: undefined;
+            query?: undefined;
+            body: import("./modules/variables.js").importEnv$body;
+        } & import("./types.js").TRequestOptions<import("./modules/variables.js").importEnv$return>) => {
+            readonly raw: Promise<import("axios").AxiosResponse<import("./modules/variables.js").importEnv$return, any, {}, any>>;
+            readonly data: Promise<import("./modules/variables.js").importEnv$return>;
+            then: <TResult1 = import("./modules/variables.js").importEnv$return, TResult2 = never>(onfulfilled?: ((value: import("./modules/variables.js").importEnv$return) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+            catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<import("./modules/variables.js").importEnv$return | TResult>;
+            finally: (onfinally?: (() => void) | null | undefined) => Promise<import("./modules/variables.js").importEnv$return>;
         };
         readonly update: (data: {
             params: import("./modules/variables.js").update$params;

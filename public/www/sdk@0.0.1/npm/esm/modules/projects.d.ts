@@ -73,6 +73,12 @@ export type create$body = {
     inputs?: Record<string, unknown>;
     /** The compose file, for the `compose` source */
     compose?: string | undefined;
+    /** Project variables to create with it (e.g. a pasted .env) */
+    variables?: {
+        key: string;
+        value: string;
+        isSecret?: boolean;
+    }[];
     runtime?: {
         port?: (number | undefined) | undefined;
         healthcheckPath?: (string | undefined) | undefined;

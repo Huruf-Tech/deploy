@@ -40,6 +40,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { getLocalPath } from "@/core/lib/utils"
 import { useCapacity } from "@/hooks/use-capacity"
 import { type TVolume, VolumesEditor } from "./VolumesEditor"
+import { EnvEditor, type TEnvVariable } from "@/components/env-import"
 import { classFootprints, fitsIn, roomOf } from "@/lib/capacity"
 import { cn, errorMessage } from "@/lib/utils"
 import { InputField } from "@/pages/templates/Detail"
@@ -354,6 +355,7 @@ export default function NewProject() {
   const [servers, setServers] = React.useState<string[]>([])
   const [replicas, setReplicas] = React.useState(1)
   const [volumes, setVolumes] = React.useState<TVolume[]>([])
+  const [variables, setVariables] = React.useState<TEnvVariable[]>([])
   const [port, setPort] = React.useState("")
   const [publicPort, setPublicPort] = React.useState("")
   const [healthPath, setHealthPath] = React.useState("")
@@ -527,6 +529,7 @@ export default function NewProject() {
           ...(publicPort ? { publicPort: Number(publicPort) } : {}),
           // Compose files and one-click services declare their own volumes.
           volumes: composeLike ? [] : volumes,
+          variables,
           autoDeploy: true,
           distribution: "auto",
         },
@@ -976,6 +979,18 @@ export default function NewProject() {
               </Field>
             )}
           </div>
+        </Section>
+
+        <Section
+          step={kind === "image" || kind === "compose" ? 3 : 4}
+          title={t("Variables")}
+        >
+          <p className="text-sm text-muted-foreground">
+            {t(
+              "Optional. Paste or drop the project's .env; you can add more later under Variables. Workspace variables apply too, and these override them."
+            )}
+          </p>
+          <EnvEditor value={variables} onChange={setVariables} />
         </Section>
 
         {error && <FieldError>{error}</FieldError>}

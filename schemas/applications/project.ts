@@ -178,6 +178,13 @@ export const $projectInput = z.object({
   compose: z.string().max(100_000).optional().describe(
     "The compose file, for the `compose` source",
   ),
+  variables: z.array(z.object({
+    key: z.string().min(1).max(128).regex(/^[A-Za-z_][A-Za-z0-9_]*$/),
+    value: z.string().max(65_536),
+    isSecret: z.boolean().default(false),
+  })).max(200).default([]).describe(
+    "Project variables to create with it (e.g. a pasted .env)",
+  ),
   runtime: $projectRuntime.partial().optional(),
   servers: $project.shape.servers,
   replicasPerServer: z.number().int().min(0).max(20).default(1),

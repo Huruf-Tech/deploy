@@ -40,6 +40,24 @@ export type create$body = {
 export type create$return = {
     _id: string;
 };
+export type importEnv$body = {
+    scope: "global" | "tenant" | "project";
+    /** Required for the project scope */
+    project?: string | undefined;
+    variables: {
+        key: string;
+        value: string;
+        isSecret?: boolean;
+    }[];
+    /** Replace the values of keys that already exist */
+    overwrite?: boolean;
+};
+export type importEnv$return = {
+    created: string[];
+    updated: string[];
+    /** Existing keys left as they were */
+    skipped: string[];
+};
 export type update$params = {
     id?: string;
 };
@@ -88,6 +106,8 @@ export const variablesModule = (sdk: typeof BaseSDK) => {
         list$return: list$return,
         create$body: create$body,
         create$return: create$return,
+        importEnv$body: importEnv$body,
+        importEnv$return: importEnv$return,
         update$params: update$params,
         update$body: update$body,
         del$params: del$params,
@@ -139,6 +159,34 @@ export const variablesModule = (sdk: typeof BaseSDK) => {
 
             const method = "post";
             const toPath = compile("variables/api/");
+            const requestPayload = {
+                method,
+                url: toPath(data?.params),
+                params: data?.query,
+                data: data?.body,
+                signal: data?.signal,
+                ...(data?.axiosConfig
+                ? sdk.resolveAxiosConfig(data.axiosConfig)
+                : undefined),
+            };
+
+            sdk.log("Sending Request:", requestPayload);
+
+            const res = await sdk._axios!.request(requestPayload);
+
+            return res;
+        }, data);
+    },
+        importEnv(data: {
+        params?: undefined,
+        query?: undefined,
+        body: importEnv$body,
+    } & TRequestOptions<importEnv$return>) {
+        return sdk.resolveAxiosResponse(async () => {
+            sdk.checkPermission("variables", "importEnv");
+
+            const method = "post";
+            const toPath = compile("variables/api/import");
             const requestPayload = {
                 method,
                 url: toPath(data?.params),
@@ -273,6 +321,7 @@ export const variablesModule = (sdk: typeof BaseSDK) => {
 
     (methods.list as any).__scope = "variables";
     (methods.create as any).__scope = "variables";
+    (methods.importEnv as any).__scope = "variables";
     (methods.update as any).__scope = "variables";
     (methods.del as any).__scope = "variables";
     (methods.reveal as any).__scope = "variables";

@@ -30,6 +30,24 @@ export type create$body = {
 export type create$return = {
     _id: string;
 };
+export type importEnv$body = {
+    scope: "global" | "tenant" | "project";
+    /** Required for the project scope */
+    project?: string | undefined;
+    variables: {
+        key: string;
+        value: string;
+        isSecret?: boolean;
+    }[];
+    /** Replace the values of keys that already exist */
+    overwrite?: boolean;
+};
+export type importEnv$return = {
+    created: string[];
+    updated: string[];
+    /** Existing keys left as they were */
+    skipped: string[];
+};
 export type update$params = {
     id?: string;
 };
@@ -77,6 +95,8 @@ export declare const variablesModule: (sdk: typeof BaseSDK) => {
         list$return: list$return;
         create$body: create$body;
         create$return: create$return;
+        importEnv$body: importEnv$body;
+        importEnv$return: importEnv$return;
         update$params: update$params;
         update$body: update$body;
         del$params: del$params;
@@ -108,6 +128,17 @@ export declare const variablesModule: (sdk: typeof BaseSDK) => {
         then: <TResult1 = create$return, TResult2 = never>(onfulfilled?: ((value: create$return) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
         catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<create$return | TResult>;
         finally: (onfinally?: (() => void) | null | undefined) => Promise<create$return>;
+    };
+    readonly importEnv: (data: {
+        params?: undefined;
+        query?: undefined;
+        body: importEnv$body;
+    } & TRequestOptions<importEnv$return>) => {
+        readonly raw: Promise<import("axios").AxiosResponse<importEnv$return, any, {}, any>>;
+        readonly data: Promise<importEnv$return>;
+        then: <TResult1 = importEnv$return, TResult2 = never>(onfulfilled?: ((value: importEnv$return) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+        catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<importEnv$return | TResult>;
+        finally: (onfinally?: (() => void) | null | undefined) => Promise<importEnv$return>;
     };
     readonly update: (data: {
         params: update$params;

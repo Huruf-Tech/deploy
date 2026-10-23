@@ -10,6 +10,7 @@ import {
   IconKey,
   IconLock,
   IconPencil,
+  IconFileImport,
   IconPlus,
   IconTrash,
 } from "@tabler/icons-react"
@@ -55,6 +56,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { errorMessage } from "@/lib/utils"
 import { VariableDialog, type TScope, type TVariable } from "./VariableDialog"
+import { ImportEnvDialog } from "./ImportEnvDialog"
 
 function SecretValue({
   variable,
@@ -161,6 +163,7 @@ export function VariableTable({ scope }: { scope: TScope }) {
   const { t } = useTranslation()
   const [editing, setEditing] = React.useState<TVariable | "new" | null>(null)
   const [deleting, setDeleting] = React.useState<TVariable>()
+  const [importing, setImporting] = React.useState(false)
 
   const request = ThunderSDK.useCaching(
     ["variables", scope.scope, scope.project ?? ""],
@@ -177,9 +180,14 @@ export function VariableTable({ scope }: { scope: TScope }) {
   }
 
   const add = (
-    <Button onClick={() => setEditing("new")}>
-      <IconPlus aria-hidden /> {t("Add variable")}
-    </Button>
+    <div className="flex flex-wrap gap-2">
+      <Button variant="outline" onClick={() => setImporting(true)}>
+        <IconFileImport aria-hidden /> {t("Import .env")}
+      </Button>
+      <Button onClick={() => setEditing("new")}>
+        <IconPlus aria-hidden /> {t("Add variable")}
+      </Button>
+    </div>
   )
 
   return (
@@ -304,6 +312,13 @@ export function VariableTable({ scope }: { scope: TScope }) {
         </>
       )}
 
+      <ImportEnvDialog
+        scope={scope}
+        existing={new Set((data ?? []).map((v) => v.key))}
+        open={importing}
+        onOpenChange={setImporting}
+        onImported={reload}
+      />
       <VariableDialog
         scope={scope}
         variable={editing === "new" ? undefined : (editing ?? undefined)}

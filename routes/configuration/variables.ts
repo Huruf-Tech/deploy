@@ -7,6 +7,7 @@ import { withTenant } from "@/plugins/Huruf-Tech/thunder-core/utils/withTenant.t
 import {
   createVariable,
   deleteVariable,
+  importVariables,
   listVariables,
   resolveVariables,
   revealVariable,
@@ -106,6 +107,41 @@ export default new Router("/api", function variables(router) {
           settings,
         });
         return Response.json({ _id: _id.toString() });
+      },
+    };
+  });
+
+  // A pasted or uploaded .env file.
+  router.post("/import", function importEnv() {
+    const $body = $scoped.extend({
+      variables: z.array(z.object({
+        key: $variableKey,
+        value: $variableValue,
+        isSecret: z.boolean().default(false),
+      })).min(1).max(200),
+      overwrite: z.boolean().default(false).describe(
+        "Replace the values of keys that already exist",
+      ),
+    });
+    const $return = z.object({
+      created: z.array(z.string()),
+      updated: z.array(z.string()),
+      skipped: z.array(z.string()).describe("Existing keys left as they were"),
+    });
+
+    return {
+      shape: () => ({ body: $body, return: $return }),
+      handler: async (req) => {
+        const { scope, project, variables, overwrite } = $body.parse(
+          await bodyAsJson(req),
+        );
+        return Response.json(
+          await importVariables({
+            ...await context(req, { scope, project }),
+            items: variables,
+            overwrite,
+          }),
+        );
       },
     };
   });

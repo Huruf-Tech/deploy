@@ -18,6 +18,7 @@ import { usableIntegration } from "@/lib/github/integrations.ts";
 import {
   createVariable,
   deleteProjectVariables,
+  importVariables,
 } from "@/lib/variables/variables.ts";
 import { refreshSpecs } from "@/lib/deploy/specs.ts";
 import { storageModel } from "@/schemas/infrastructure/storage.ts";
@@ -444,12 +445,26 @@ export async function createProject(opts: {
     throw error;
   }
 
-  // Generated and secret template inputs (PLAN §9.1).
   const viewer = { user: await tenantOwner(tenant), tenant, project: _id };
+  const owner = { scope: "project" as const, tenant, project: _id };
+  // The user's own variables first: they win over generated template inputs.
+  if (input.variables.length) {
+    await importVariables({
+      viewer,
+      owner,
+      items: input.variables,
+      overwrite: false,
+      by: user,
+    });
+  }
+  const given = new Set(input.variables.map((v) => v.key));
+
+  // Generated and secret template inputs (PLAN §9.1).
   for (const [key, value] of Object.entries(secrets)) {
+    if (given.has(key)) continue;
     await createVariable({
       viewer,
-      owner: { scope: "project", tenant, project: _id },
+      owner,
       key,
       value,
       settings: {

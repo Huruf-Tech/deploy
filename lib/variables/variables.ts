@@ -253,6 +253,57 @@ export async function updateVariable(opts: {
   await variableModel.updateOne(filter, { $set, $inc: { version: 1 } });
 }
 
+/** One line of an imported .env file. */
+export type TImportedVariable = {
+  key: string;
+  value: string;
+  isSecret: boolean;
+};
+
+/**
+ * Imports many variables at once (a pasted or uploaded .env). New keys are
+ * created; existing ones are updated only with `overwrite`, else skipped.
+ * Each goes through create/update, so quotas, encryption and cycle checks
+ * apply as for one variable.
+ */
+export async function importVariables(opts: {
+  viewer: TViewer;
+  owner: TVariableOwner;
+  items: TImportedVariable[];
+  overwrite: boolean;
+  by?: ObjectId;
+}) {
+  const existing = new Map(
+    (await variableModel.find(ownerFilter(opts.owner), {
+      projection: { key: 1 },
+    }).toArray()).map((v) => [v.key, v._id]),
+  );
+  const result = {
+    created: [] as string[],
+    updated: [] as string[],
+    skipped: [] as string[],
+  };
+  for (const { key, value, isSecret } of opts.items) {
+    const id = existing.get(key);
+    if (id && !opts.overwrite) {
+      result.skipped.push(key);
+    } else if (id) {
+      await updateVariable({ ...opts, id, value, settings: { isSecret } });
+      result.updated.push(key);
+    } else {
+      const created = await createVariable({
+        ...opts,
+        key,
+        value,
+        settings: { isSecret, kind: "env", stage: "runtime" },
+      });
+      existing.set(key, created);
+      result.created.push(key);
+    }
+  }
+  return result;
+}
+
 export async function deleteVariable(owner: TVariableOwner, id: ObjectId) {
   const { deletedCount } = await variableModel.deleteOne({
     _id: id,
