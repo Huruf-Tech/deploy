@@ -46,6 +46,7 @@ const MESSAGES: Array<[string, z.ZodType, "input" | "output"]> = [
   ["CapacityReport", protocol.$capacityReport, "input"],
   ["AgentUpdatePayload", protocol.$agentUpdatePayload, "output"],
   ["RegistryDeletePayload", protocol.$registryDeletePayload, "output"],
+  ["HostCleanupPayload", protocol.$hostCleanupPayload, "output"],
 ];
 
 const schemas = Object.fromEntries(

@@ -100,6 +100,7 @@ export const $commandType = z.enum([
   "server.prune",
   "agent.update",
   "registry.delete",
+  "host.cleanup",
 ]);
 
 /**
@@ -109,6 +110,16 @@ export const $commandType = z.enum([
  */
 export const $registryDeletePayload = z.object({
   tags: z.array(z.string().max(300)).min(1).max(500),
+});
+
+/**
+ * `host.cleanup`: what uninstalling would remove and keep (a dry run), or, with
+ * `dryRun: false`, the same plan after scheduling `huruf-deploy-agent uninstall`
+ * outside the agent. Project data volumes go only with `purgeData`.
+ */
+export const $hostCleanupPayload = z.object({
+  dryRun: z.boolean(),
+  purgeData: z.boolean(),
 });
 
 /** `agent.update`: replace the binary with a verified download, then restart. */

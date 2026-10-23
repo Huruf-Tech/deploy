@@ -11,6 +11,7 @@ import {
   IconTerminal2,
   IconPlugConnectedX,
   IconServer2,
+  IconTrash,
 } from "@tabler/icons-react"
 
 import { Page } from "@/components/page"
@@ -52,6 +53,7 @@ const TerminalSheet = React.lazy(() => import("./TerminalSheet"))
 import { StatusPill } from "./StatusPill"
 import { ServerLabels, ServerName } from "./ServerLabels"
 import { HostSetup } from "./HostSetup"
+import { RemoveServerDialog } from "./RemoveServerDialog"
 import {
   gib,
   serverSchema,
@@ -407,6 +409,7 @@ export default function ServerDetail() {
   const { t } = useTranslation()
   const { id = "" } = useParams<{ id: string }>()
   const [live, setLive] = React.useState<TLiveness>()
+  const [removing, setRemoving] = React.useState(false)
   const [terminal, setTerminal] = React.useState<{
     container: string | null
   } | null>(null)
@@ -485,7 +488,18 @@ export default function ServerDetail() {
               <IconTerminal2 aria-hidden /> {t("Terminal")}
             </Button>
           )}
+        {ThunderSDK.isPermitted("servers", "del") && (
+          <Button variant="outline" onClick={() => setRemoving(true)}>
+            <IconTrash aria-hidden /> {t("Remove")}
+          </Button>
+        )}
       </div>
+      <RemoveServerDialog
+        server={server}
+        online={state === "online"}
+        open={removing}
+        onOpenChange={setRemoving}
+      />
 
       <HostSetup
         server={server}

@@ -131,6 +131,25 @@ export type ping$return = {
     command: string;
     seq: number;
 };
+export type cleanup$params = {
+    id?: string;
+};
+export type cleanup$body = {
+    dryRun: boolean;
+    purgeData: boolean;
+};
+export type cleanup$return = {
+    command: string;
+};
+export type command$params = {
+    id?: string;
+    command?: string;
+};
+export type command$return = {
+    status: "pending" | "delivered" | "done" | "failed";
+    result?: Record<string, unknown> | undefined;
+    error?: string | undefined;
+};
 export type bootstrap$body = {
     host: string;
     port?: number;
@@ -183,6 +202,11 @@ export const serversModule = (sdk: typeof BaseSDK) => {
         prepare$return: prepare$return,
         ping$params: ping$params,
         ping$return: ping$return,
+        cleanup$params: cleanup$params,
+        cleanup$body: cleanup$body,
+        cleanup$return: cleanup$return,
+        command$params: command$params,
+        command$return: command$return,
         bootstrap$body: bootstrap$body,
         bootstrap$return: bootstrap$return,
         bootstrapProgress$params: bootstrapProgress$params,
@@ -473,6 +497,62 @@ export const serversModule = (sdk: typeof BaseSDK) => {
             return res;
         }, data);
     },
+        cleanup(data: {
+        params: cleanup$params,
+        query?: undefined,
+        body: cleanup$body,
+    } & TRequestOptions<cleanup$return>) {
+        return sdk.resolveAxiosResponse(async () => {
+            sdk.checkPermission("servers", "cleanup");
+
+            const method = "post";
+            const toPath = compile("servers/api/:id/cleanup");
+            const requestPayload = {
+                method,
+                url: toPath(data?.params),
+                params: data?.query,
+                data: data?.body,
+                signal: data?.signal,
+                ...(data?.axiosConfig
+                ? sdk.resolveAxiosConfig(data.axiosConfig)
+                : undefined),
+            };
+
+            sdk.log("Sending Request:", requestPayload);
+
+            const res = await sdk._axios!.request(requestPayload);
+
+            return res;
+        }, data);
+    },
+        command(data: {
+        params: command$params,
+        query?: undefined,
+        body?: undefined,
+    } & TRequestOptions<command$return>) {
+        return sdk.resolveAxiosResponse(async () => {
+            sdk.checkPermission("servers", "command");
+
+            const method = "get";
+            const toPath = compile("servers/api/:id/commands/:command");
+            const requestPayload = {
+                method,
+                url: toPath(data?.params),
+                params: data?.query,
+                data: data?.body,
+                signal: data?.signal,
+                ...(data?.axiosConfig
+                ? sdk.resolveAxiosConfig(data.axiosConfig)
+                : undefined),
+            };
+
+            sdk.log("Sending Request:", requestPayload);
+
+            const res = await sdk._axios!.request(requestPayload);
+
+            return res;
+        }, data);
+    },
         bootstrap(data: {
         params?: undefined,
         query?: undefined,
@@ -597,6 +677,8 @@ export const serversModule = (sdk: typeof BaseSDK) => {
     (methods.reject as any).__scope = "servers";
     (methods.prepare as any).__scope = "servers";
     (methods.ping as any).__scope = "servers";
+    (methods.cleanup as any).__scope = "servers";
+    (methods.command as any).__scope = "servers";
     (methods.bootstrap as any).__scope = "servers";
     (methods.bootstrapProgress as any).__scope = "servers";
     (methods.installCommand as any).__scope = "servers";

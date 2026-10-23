@@ -9,7 +9,12 @@ import {
   releaseServer,
   serverLiveness,
 } from "@/lib/agents/servers.ts";
-import { issueCommand, prepareHost } from "@/lib/agents/commands.ts";
+import {
+  commandOutcome,
+  issueCommand,
+  prepareHost,
+} from "@/lib/agents/commands.ts";
+import { $hostCleanupPayload } from "@/schemas/protocol/agent.ts";
 import { latestAgent, requestAgentUpdate } from "@/lib/agents/updates.ts";
 import {
   agentEndpoints,
@@ -143,6 +148,50 @@ export default new Router("/api", function servers(router) {
           createdBy: user._id,
         });
         return Response.json({ command: command.toString(), seq });
+      },
+    };
+  });
+
+  // Remove server: the agent lists what uninstalling removes and keeps
+  // (dryRun), or schedules the uninstall. Results come from `command`.
+  router.post("/:id/cleanup", function cleanup() {
+    const $body = $hostCleanupPayload;
+    const $return = z.object({ command: z.string() });
+
+    return {
+      shape: () => ({ params: $params, body: $body, return: $return }),
+      handler: async (req) => {
+        const { id } = $params.parse(paramsAsJson(req));
+        const payload = $body.parse(await bodyAsJson(req));
+        const { tenant, user } = await withTenant(req);
+        const { command } = await issueCommand({
+          server: id,
+          tenant: tenant._id,
+          type: "host.cleanup",
+          payload,
+          createdBy: user._id,
+        });
+        return Response.json({ command: command.toString() });
+      },
+    };
+  });
+
+  router.get("/:id/commands/:command", function command() {
+    const $commandParams = z.object({ id: $objectId, command: $objectId });
+    const $return = z.object({
+      status: z.enum(["pending", "delivered", "done", "failed"]),
+      result: z.record(z.string(), z.unknown()).optional(),
+      error: z.string().optional(),
+    });
+
+    return {
+      shape: () => ({ params: $commandParams, return: $return }),
+      handler: async (req) => {
+        const { id, command } = $commandParams.parse(paramsAsJson(req));
+        const { tenant } = await withTenant(req);
+        return Response.json(
+          await commandOutcome({ tenant: tenant._id, server: id, command }),
+        );
       },
     };
   });

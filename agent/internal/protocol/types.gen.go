@@ -153,7 +153,7 @@ type PollResponse struct {
 type Command struct {
 	Seq int64 `json:"seq"`
 
-	// One of: ping, docker.ensure, stream.open, stream.close, build.run, server.prune, agent.update, registry.delete
+	// One of: ping, docker.ensure, stream.open, stream.close, build.run, server.prune, agent.update, registry.delete, host.cleanup
 	Type string `json:"type"`
 
 	Payload map[string]any `json:"payload"`
@@ -733,4 +733,10 @@ type AgentUpdatePayload struct {
 
 type RegistryDeletePayload struct {
 	Tags []string `json:"tags"`
+}
+
+type HostCleanupPayload struct {
+	DryRun bool `json:"dryRun"`
+
+	PurgeData bool `json:"purgeData"`
 }

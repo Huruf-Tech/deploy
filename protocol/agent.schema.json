@@ -429,7 +429,8 @@
                   "build.run",
                   "server.prune",
                   "agent.update",
-                  "registry.delete"
+                  "registry.delete",
+                  "host.cleanup"
                 ]
               },
               "payload": {
@@ -2204,6 +2205,23 @@
       },
       "required": [
         "tags"
+      ],
+      "additionalProperties": false
+    },
+    "HostCleanupPayload": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "dryRun": {
+          "type": "boolean"
+        },
+        "purgeData": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "dryRun",
+        "purgeData"
       ],
       "additionalProperties": false
     }

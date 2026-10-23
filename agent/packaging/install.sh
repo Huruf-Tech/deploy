@@ -56,6 +56,13 @@ curl -fsSL "$BASE/SHA256SUMS" -o "$TMP/SHA256SUMS"
 install -m 0755 "$TMP/$BINARY" /usr/local/bin/huruf-deploy-agent
 
 install -d -m 0700 /etc/huruf-deploy-agent
+# The ledger of host changes, which uninstall undoes. Only a fresh install
+# starts it: an older install's earlier changes weren't recorded.
+if [ ! -d /var/lib/huruf-deploy-agent ]; then
+  install -d -m 0700 /var/lib/huruf-deploy-agent
+  printf '{"kind":"installed","at":"%s"}\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > /var/lib/huruf-deploy-agent/ledger.jsonl
+  chmod 0600 /var/lib/huruf-deploy-agent/ledger.jsonl
+fi
 umask 077
 cat > /etc/huruf-deploy-agent/agent.env <<EOF
 HURUF_DEPLOY_URL=$URL

@@ -81,7 +81,7 @@ export type poll$return = {
     configVersion: string;
     commands: {
         seq: number;
-        type: "ping" | "docker.ensure" | "stream.open" | "stream.close" | "build.run" | "server.prune" | "agent.update" | "registry.delete";
+        type: "ping" | "docker.ensure" | "stream.open" | "stream.close" | "build.run" | "server.prune" | "agent.update" | "registry.delete" | "host.cleanup";
         payload: Record<string, unknown>;
     }[];
     /** New terminal input per session, after the cursors in `streams` */

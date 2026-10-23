@@ -121,6 +121,25 @@ export type ping$return = {
     command: string;
     seq: number;
 };
+export type cleanup$params = {
+    id?: string;
+};
+export type cleanup$body = {
+    dryRun: boolean;
+    purgeData: boolean;
+};
+export type cleanup$return = {
+    command: string;
+};
+export type command$params = {
+    id?: string;
+    command?: string;
+};
+export type command$return = {
+    status: "pending" | "delivered" | "done" | "failed";
+    result?: Record<string, unknown> | undefined;
+    error?: string | undefined;
+};
 export type bootstrap$body = {
     host: string;
     port?: number;
@@ -172,6 +191,11 @@ export declare const serversModule: (sdk: typeof BaseSDK) => {
         prepare$return: prepare$return;
         ping$params: ping$params;
         ping$return: ping$return;
+        cleanup$params: cleanup$params;
+        cleanup$body: cleanup$body;
+        cleanup$return: cleanup$return;
+        command$params: command$params;
+        command$return: command$return;
         bootstrap$body: bootstrap$body;
         bootstrap$return: bootstrap$return;
         bootstrapProgress$params: bootstrapProgress$params;
@@ -288,6 +312,28 @@ export declare const serversModule: (sdk: typeof BaseSDK) => {
         then: <TResult1 = ping$return, TResult2 = never>(onfulfilled?: ((value: ping$return) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
         catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<ping$return | TResult>;
         finally: (onfinally?: (() => void) | null | undefined) => Promise<ping$return>;
+    };
+    readonly cleanup: (data: {
+        params: cleanup$params;
+        query?: undefined;
+        body: cleanup$body;
+    } & TRequestOptions<cleanup$return>) => {
+        readonly raw: Promise<import("axios").AxiosResponse<cleanup$return, any, {}, any>>;
+        readonly data: Promise<cleanup$return>;
+        then: <TResult1 = cleanup$return, TResult2 = never>(onfulfilled?: ((value: cleanup$return) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+        catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<cleanup$return | TResult>;
+        finally: (onfinally?: (() => void) | null | undefined) => Promise<cleanup$return>;
+    };
+    readonly command: (data: {
+        params: command$params;
+        query?: undefined;
+        body?: undefined;
+    } & TRequestOptions<command$return>) => {
+        readonly raw: Promise<import("axios").AxiosResponse<command$return, any, {}, any>>;
+        readonly data: Promise<command$return>;
+        then: <TResult1 = command$return, TResult2 = never>(onfulfilled?: ((value: command$return) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+        catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<command$return | TResult>;
+        finally: (onfinally?: (() => void) | null | undefined) => Promise<command$return>;
     };
     readonly bootstrap: (data: {
         params?: undefined;

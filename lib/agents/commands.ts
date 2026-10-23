@@ -56,6 +56,20 @@ export const issueCommand = async (opts: {
   return { command: insertedId, seq: lease.commandSeq };
 };
 
+/** A command's status and what the agent answered, for the dashboard. */
+export const commandOutcome = async (opts: {
+  tenant: ObjectId;
+  server: ObjectId;
+  command: ObjectId;
+}) => {
+  const doc = await agentCommandModel.findOne(
+    { _id: opts.command, tenant: opts.tenant, server: opts.server },
+    { projection: { status: 1, result: 1, error: 1 } },
+  );
+  if (!doc) throw Response.notFound("No such command");
+  return { status: doc.status, result: doc.result, error: doc.error };
+};
+
 /**
  * Asks the agent to make the host ready (PLAN §16 Phase 2): Docker installed
  * and configured, the project network, the edge proxy. Idempotent on the

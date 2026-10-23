@@ -18,6 +18,8 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	"github.com/Huruf-Tech/huruf-deploy/agent/internal/ledger"
 )
 
 const (
@@ -71,6 +73,7 @@ func Ensure(ctx context.Context, p Payload) (map[string]any, error) {
 		if _, err := run(install, "sh", "-c", "curl -fsSL https://get.docker.com | sh"); err != nil {
 			return result(), fmt.Errorf("installing Docker: %w", err)
 		}
+		_ = ledger.Record(ledger.Entry{Kind: "docker"})
 		notes = append(notes, "Docker installed")
 	}
 
@@ -94,6 +97,7 @@ func Ensure(ctx context.Context, p Payload) (map[string]any, error) {
 		return result(), fmt.Errorf("%s is not valid JSON: %w", daemonConfigPath, err)
 	}
 	if changed {
+		recordDaemonChanges(existing, merged)
 		if err := os.MkdirAll("/etc/docker", 0o755); err != nil {
 			return result(), err
 		}
@@ -156,6 +160,40 @@ func Ensure(ctx context.Context, p Payload) (map[string]any, error) {
 		return result(), err
 	}
 	return result(), nil
+}
+
+// managedKeys are the daemon.json keys host setup sets.
+var managedKeys = []string{"log-driver", "log-opts", "live-restore"}
+
+// recordDaemonChanges notes each managed key's value before the agent first
+// set it, and the registry range it added, so uninstalling restores them.
+func recordDaemonChanges(before, after []byte) {
+	old, next := map[string]json.RawMessage{}, map[string]json.RawMessage{}
+	_ = json.Unmarshal(before, &old)
+	_ = json.Unmarshal(after, &next)
+	for _, key := range managedKeys {
+		prev, had := old[key]
+		value, set := next[key]
+		if set && (!had || !bytes.Equal(compact(prev), compact(value))) {
+			_ = ledger.Record(ledger.Entry{Kind: "daemon-key", Name: key, Prev: prev, Absent: !had})
+		}
+	}
+	var was, now []string
+	_ = json.Unmarshal(old["insecure-registries"], &was)
+	_ = json.Unmarshal(next["insecure-registries"], &now)
+	for _, r := range now {
+		if !slices.Contains(was, r) {
+			_ = ledger.Record(ledger.Entry{Kind: "insecure-registry", Name: r})
+		}
+	}
+}
+
+func compact(raw []byte) []byte {
+	var b bytes.Buffer
+	if json.Compact(&b, raw) != nil {
+		return raw
+	}
+	return b.Bytes()
 }
 
 // MergeDaemonConfig sets the keys we manage and keeps every other key the user has.
@@ -241,6 +279,9 @@ func ensureWireGuardTools(ctx context.Context) string {
 	defer cancel()
 	if _, err := run(install, "sh", "-c", "DEBIAN_FRONTEND=noninteractive apt-get install -y wireguard-tools iproute2 || (apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y wireguard-tools iproute2)"); err != nil {
 		return "Installing wireguard-tools failed: " + err.Error()
+	}
+	if wgErr != nil {
+		_ = ledger.Record(ledger.Entry{Kind: "package", Name: "wireguard-tools"})
 	}
 	return "wireguard-tools installed"
 }

@@ -203,6 +203,46 @@ export const serversModule = (sdk) => {
                 return res;
             }, data);
         },
+        cleanup(data) {
+            return sdk.resolveAxiosResponse(async () => {
+                sdk.checkPermission("servers", "cleanup");
+                const method = "post";
+                const toPath = compile("servers/api/:id/cleanup");
+                const requestPayload = {
+                    method,
+                    url: toPath(data?.params),
+                    params: data?.query,
+                    data: data?.body,
+                    signal: data?.signal,
+                    ...(data?.axiosConfig
+                        ? sdk.resolveAxiosConfig(data.axiosConfig)
+                        : undefined),
+                };
+                sdk.log("Sending Request:", requestPayload);
+                const res = await sdk._axios.request(requestPayload);
+                return res;
+            }, data);
+        },
+        command(data) {
+            return sdk.resolveAxiosResponse(async () => {
+                sdk.checkPermission("servers", "command");
+                const method = "get";
+                const toPath = compile("servers/api/:id/commands/:command");
+                const requestPayload = {
+                    method,
+                    url: toPath(data?.params),
+                    params: data?.query,
+                    data: data?.body,
+                    signal: data?.signal,
+                    ...(data?.axiosConfig
+                        ? sdk.resolveAxiosConfig(data.axiosConfig)
+                        : undefined),
+                };
+                sdk.log("Sending Request:", requestPayload);
+                const res = await sdk._axios.request(requestPayload);
+                return res;
+            }, data);
+        },
         bootstrap(data) {
             return sdk.resolveAxiosResponse(async () => {
                 sdk.checkPermission("servers", "bootstrap");
@@ -294,6 +334,8 @@ export const serversModule = (sdk) => {
     methods.reject.__scope = "servers";
     methods.prepare.__scope = "servers";
     methods.ping.__scope = "servers";
+    methods.cleanup.__scope = "servers";
+    methods.command.__scope = "servers";
     methods.bootstrap.__scope = "servers";
     methods.bootstrapProgress.__scope = "servers";
     methods.installCommand.__scope = "servers";

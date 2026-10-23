@@ -257,6 +257,31 @@ Deno.test({
           );
         },
       );
+
+      await t.step(
+        "remove server: the cleanup command and its outcome",
+        async () => {
+          const issued = await call(
+            "POST",
+            `/servers/api/${ids[2]}/cleanup`,
+            { dryRun: true, purgeData: false },
+          );
+          assertEquals(issued.status, 200, JSON.stringify(issued.json));
+          const path = `/servers/api/${ids[2]}/commands/${issued.json.command}`;
+          assertEquals((await call("GET", path)).json.status, "pending");
+          await poll(agents[2]);
+          await poll(agents[2]); // the result arrives with the next poll
+          const outcome = await call("GET", path);
+          assertEquals(outcome.json.status, "done");
+          assert(outcome.json.result);
+          // Another server's id doesn't reveal it.
+          const other = await call(
+            "GET",
+            `/servers/api/${ids[1]}/commands/${issued.json.command}`,
+          );
+          assertEquals(other.status, 404);
+        },
+      );
     } finally {
       const d = mongodb.db();
       const serverIds = ids.map((s) => new ObjectId(s));

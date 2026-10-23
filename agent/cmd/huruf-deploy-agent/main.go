@@ -14,6 +14,7 @@ import (
 	"log/slog"
 	"net"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"runtime"
@@ -23,11 +24,13 @@ import (
 
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/agent"
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/build"
+	"github.com/Huruf-Tech/huruf-deploy/agent/internal/cleanup"
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/commands"
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/dns"
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/docker"
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/edge"
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/identity"
+	"github.com/Huruf-Tech/huruf-deploy/agent/internal/ledger"
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/mesh"
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/metrics"
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/monitor"
@@ -50,6 +53,9 @@ const (
 )
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "uninstall" {
+		os.Exit(uninstall(os.Args[2:]))
+	}
 	url := flag.String("url", os.Getenv("HURUF_DEPLOY_URL"), "control plane base URL")
 	tenant := flag.String("tenant", os.Getenv("HURUF_DEPLOY_TENANT"), "tenant id")
 	joinToken := flag.String("join-token", os.Getenv("HURUF_DEPLOY_JOIN_TOKEN"), "one-time token from the SSH install wizard")
@@ -61,6 +67,7 @@ func main() {
 		fmt.Println(version)
 		return
 	}
+	ledger.Path = filepath.Join(*stateDir, "ledger.jsonl")
 
 	log := slog.New(slog.NewTextHandler(os.Stdout, nil))
 	if *url == "" || *tenant == "" {
@@ -146,6 +153,23 @@ func main() {
 	// The built-in registry lives with the mesh: it deletes images of releases that are gone.
 	a.Commands["registry.delete"] = commands.Typed(func(ctx context.Context, p protocol.RegistryDeletePayload) (map[string]any, error) {
 		return network.DeleteTags(ctx, p.Tags)
+	})
+	// The dashboard's "Remove server": the plan, and with dryRun false the
+	// uninstall runs in its own unit, so stopping this service doesn't stop it.
+	a.Commands["host.cleanup"] = commands.Typed(func(ctx context.Context, p protocol.HostCleanupPayload) (map[string]any, error) {
+		steps := cleanup.Plan(ctx, cleanup.Options{StateDir: *stateDir, PurgeData: p.PurgeData, Teardown: network.Teardown})
+		if p.DryRun {
+			return map[string]any{"steps": steps}, nil
+		}
+		args := []string{"--unit", "huruf-deploy-uninstall", "--collect", "--on-active", "10",
+			cleanup.Binary, "uninstall", "-yes", "-state-dir", *stateDir}
+		if p.PurgeData {
+			args = append(args, "-purge-data")
+		}
+		if out, err := exec.CommandContext(ctx, "systemd-run", args...).CombinedOutput(); err != nil {
+			return nil, fmt.Errorf("scheduling the uninstall: %w: %s", err, out)
+		}
+		return map[string]any{"steps": steps, "scheduled": true}, nil
 	})
 	network.Emit = func(event protocol.MeshStatusEvent) {
 		a.Enqueue(event)

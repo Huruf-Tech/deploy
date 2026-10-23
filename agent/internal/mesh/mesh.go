@@ -77,6 +77,20 @@ func (m *Mesh) keyPath() string {
 	return filepath.Join(dir, "huruf-deploy.key")
 }
 
+// Teardown removes the interface, its forwarding rules and the key (uninstall).
+func (m *Mesh) Teardown(ctx context.Context) error {
+	if err := m.applyMesh(ctx, nil); err != nil {
+		return err
+	}
+	if err := os.Remove(m.keyPath()); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	return nil
+}
+
+// KeyPath is where the WireGuard private key lives.
+func (m *Mesh) KeyPath() string { return m.keyPath() }
+
 func (m *Mesh) privateKey() ([]byte, error) {
 	raw, err := os.ReadFile(m.keyPath())
 	if errors.Is(err, os.ErrNotExist) {
