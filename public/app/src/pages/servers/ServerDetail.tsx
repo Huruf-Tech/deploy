@@ -51,6 +51,7 @@ import { LogsSheet } from "./LogsSheet"
 const TerminalSheet = React.lazy(() => import("./TerminalSheet"))
 import { StatusPill } from "./StatusPill"
 import { ServerLabels } from "./ServerLabels"
+import { HostSetup } from "./HostSetup"
 import {
   gib,
   serverSchema,
@@ -481,6 +482,12 @@ export default function ServerDetail() {
             </Button>
           )}
       </div>
+
+      <HostSetup
+        server={server}
+        online={state === "online"}
+        onChanged={() => request.invalidate()}
+      />
 
       {state === "online" ? (
         <LiveMetrics

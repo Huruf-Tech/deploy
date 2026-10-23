@@ -33,6 +33,7 @@ export const serverSchema = z.object({
           z.object({ name: z.string(), ok: z.boolean(), detail: z.string() })
         )
         .nullish(),
+      notes: z.array(z.string()).nullish(),
       error: z.string().nullish(),
     })
     .nullish(),

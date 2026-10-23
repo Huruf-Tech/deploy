@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/empty"
 import { Skeleton } from "@/components/ui/skeleton"
 import { usePolling } from "@/hooks/use-polling"
+import { useFresh } from "@/hooks/use-fresh"
 import {
   ago,
   DeploymentStatus,
@@ -84,6 +85,7 @@ export default function ProjectsPage() {
     ["projects"],
     async ({ signal }) => await ThunderSDK.projects.list({ signal })
   )
+  useFresh(request)
   const { data, isLoading } = use(request)
 
   // Refresh while something is building or deploying.

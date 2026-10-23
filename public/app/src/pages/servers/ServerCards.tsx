@@ -70,7 +70,13 @@ function Chip({
   )
 }
 
-function SetupChips({ setup }: { setup: TServer["setup"] }) {
+function SetupChips({
+  server,
+  setup,
+}: {
+  server: string
+  setup: TServer["setup"]
+}) {
   const { t } = useTranslation()
 
   if (!setup || setup.status === "pending")
@@ -92,13 +98,17 @@ function SetupChips({ setup }: { setup: TServer["setup"] }) {
         </Chip>
       )}
       {warnings.length > 0 && (
-        <span
-          className="inline-flex items-center gap-1 rounded-md bg-warning/15 px-2 py-0.5 text-xs text-foreground"
+        // Opens the server page's Host setup section, which lists them.
+        <Link
+          to={`./${server}#host-setup`}
+          className="inline-flex items-center gap-1 rounded-md bg-warning/15 px-2 py-0.5 text-xs text-foreground underline-offset-2 hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
           title={warnings.map((w) => `${w.name}: ${w.detail}`).join("\n")}
         >
           <IconAlertTriangle className="size-3.5" aria-hidden />
-          {t("{{count}} host warnings", { count: warnings.length })}
-        </span>
+          {warnings.length === 1
+            ? t("1 host warning")
+            : t("{{count}} host warnings", { count: warnings.length })}
+        </Link>
       )}
     </>
   )
@@ -215,7 +225,9 @@ function ServerCard({
             {inventory.arch}
           </Chip>
           <Chip>{gib(inventory.memory)}</Chip>
-          {server.status === "active" && <SetupChips setup={server.setup} />}
+          {server.status === "active" && (
+            <SetupChips server={server._id} setup={server.setup} />
+          )}
         </div>
         <LabelChips labels={server.labels} />
 

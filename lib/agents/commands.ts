@@ -113,6 +113,10 @@ export const recordHostSetup = async (
   const checks = outcome.result?.checks as
     | z.output<typeof $hostCheck>[]
     | undefined;
+  const notes = (outcome.result?.notes as unknown[] | undefined)
+    ?.filter((n): n is string => typeof n === "string")
+    .map((n) => n.slice(0, 500))
+    .slice(0, 20);
 
   // Only fields with values: the driver stores `undefined` as `null`,
   // which the schemas (and the dashboard) treat as invalid.
@@ -122,6 +126,7 @@ export const recordHostSetup = async (
         status: outcome.ok ? "ready" : "failed",
         ...(dockerVersion ? { dockerVersion } : {}),
         ...(checks ? { checks } : {}),
+        ...(notes?.length ? { notes } : {}),
         ...(outcome.error ? { error: outcome.error } : {}),
         updatedAt: new Date(),
       },

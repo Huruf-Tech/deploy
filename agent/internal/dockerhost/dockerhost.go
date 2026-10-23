@@ -98,18 +98,30 @@ func Ensure(ctx context.Context, p Payload) (map[string]any, error) {
 		return result(), fmt.Errorf("starting Docker: %w", err)
 	}
 	if changed {
-		// Restarting Docker stops containers that were started without live-restore,
-		// so a busy host gets the new settings on its next Docker restart instead.
+		// Restarting Docker stops containers that were started without
+		// live-restore. On such a busy host, a reload (SIGHUP) applies what can
+		// change live: live-restore and the mesh's insecure registry, which the
+		// built-in registry needs. Log limits wait for the next restart.
 		if out, _ := run(ctx, "docker", "ps", "-q"); liveRestore || strings.TrimSpace(out) == "" {
 			if _, err := run(ctx, "systemctl", "restart", "docker"); err != nil {
 				return result(), fmt.Errorf("restarting Docker: %w", err)
 			}
+		} else if _, err := run(ctx, "systemctl", "reload", "docker"); err == nil {
+			notes = append(notes, "Docker settings reloaded; log limits apply on the next Docker restart")
 		} else {
 			notes = append(notes, "Docker settings apply on the next Docker restart")
 		}
 	}
 	if err := waitForDocker(ctx); err != nil {
 		return result(), err
+	}
+
+	// The built-in registry is plain HTTP over the (encrypted) mesh: Docker
+	// must trust the mesh range, or every pull from it fails.
+	if p.MeshCidr != "" && !trustsRegistry(ctx, p.MeshCidr) {
+		notes = append(notes, fmt.Sprintf(
+			"Docker doesn't trust %s yet, so pulls from the built-in registry fail. Is Docker installed as a snap? It ignores %s; use Docker from get.docker.com.",
+			p.MeshCidr, daemonConfigPath))
 	}
 
 	if note, err := ensureNetwork(ctx, p); err != nil {
@@ -231,6 +243,13 @@ func ensureEdge(ctx context.Context, image string) error {
 		return fmt.Errorf("starting the edge proxy: %w", err)
 	}
 	return nil
+}
+
+// trustsRegistry reports whether the running Docker treats cidr as an
+// insecure (HTTP) registry range.
+func trustsRegistry(ctx context.Context, cidr string) bool {
+	out, err := run(ctx, "docker", "info", "--format", "{{json .RegistryConfig.InsecureRegistryCIDRs}}")
+	return err == nil && strings.Contains(out, `"`+cidr+`"`)
 }
 
 func waitForDocker(ctx context.Context) error {

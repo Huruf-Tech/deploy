@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
 import {
   IconAlertTriangle,
+  IconLoader2,
   IconChevronDown,
   IconExternalLink,
   IconFileText,
@@ -375,13 +376,26 @@ function Settings({
     }
   }
 
+  const [removing, setRemoving] = React.useState(false)
   const remove = async () => {
+    setRemoving(true)
     try {
       await ThunderSDK.projects.del({ params: { id: project._id } })
-      toast.success(t("Project deleted"))
+      // The cached list still has it: refresh it (and the server pickers,
+      // keyed under "projects") before going back, so it's gone there.
+      await ThunderSDK.useCaching(
+        ["projects"],
+        async ({ signal }) => await ThunderSDK.projects.list({ signal })
+      ).invalidate()
+      toast.success(
+        t(
+          "Project deleted. Its containers stop on each server's next check-in."
+        )
+      )
       navigate("..", { relative: "path" })
     } catch (e) {
       toast.error(errorMessage(e) ?? t("Could not delete the project"))
+      setRemoving(false)
     }
   }
 
@@ -754,10 +768,11 @@ function Settings({
           <DialogFooter>
             <Button
               variant="destructive"
-              disabled={confirm !== project.slug}
+              disabled={confirm !== project.slug || removing}
               onClick={remove}
             >
-              {t("Delete")}
+              {removing && <IconLoader2 className="animate-spin" aria-hidden />}
+              {removing ? t("Deleting…") : t("Delete")}
             </Button>
           </DialogFooter>
         </DialogContent>

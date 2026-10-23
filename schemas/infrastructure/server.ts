@@ -36,6 +36,8 @@ export const $server = $serverUpdate.extend({
     status: z.enum(["pending", "ready", "failed"]),
     dockerVersion: z.string().optional(),
     checks: z.array($hostCheck).optional(),
+    /** What setup did or left for later, e.g. "Docker settings reloaded". */
+    notes: z.array(z.string()).optional(),
     error: z.string().optional(),
     updatedAt: z.date(),
   }).optional(),

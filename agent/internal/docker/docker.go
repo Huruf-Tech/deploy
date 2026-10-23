@@ -240,7 +240,11 @@ func WithLogin(ctx context.Context, auth protocol.RegistryAuth, fn func(config s
 	login := exec.CommandContext(ctx, "docker", "--config", config, "login", auth.Registry, "-u", auth.Username, "--password-stdin")
 	login.Stdin = strings.NewReader(auth.Password)
 	if out, err := login.CombinedOutput(); err != nil {
-		return fmt.Errorf("registry login: %w: %s", err, strings.TrimSpace(string(out)))
+		msg := strings.TrimSpace(string(out))
+		if strings.Contains(msg, "HTTP response to HTTPS client") {
+			msg += " (this server's Docker doesn't trust the private network's registry yet: run its host setup again)"
+		}
+		return fmt.Errorf("registry login: %w: %s", err, msg)
 	}
 	return fn(config)
 }
