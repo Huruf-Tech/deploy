@@ -12,17 +12,27 @@ concurrency:
 jobs:
   backend:
     runs-on: ubuntu-latest
-    services:
-      mongo:
-        image: mongo:8
-        ports: ["27017:27017"]
     env:
-      DATABASE_URL: mongodb://localhost:27017/huruf-deploy-ci
+      # Transactions (Better Auth, wallets, quotas) need a replica set: a
+      # single-node one, like local development.
+      DATABASE_URL: mongodb://localhost:27017/huruf-deploy-ci?directConnection=true
       BASE_URL: http://localhost:8000
       SECRET_KEY: ci-only-secret
       BETTER_AUTH_CAPABILITIES: email
     steps:
       - uses: actions/checkout@v4
+      - name: MongoDB (single-node replica set)
+        run: |
+          docker run -d --name mongo -p 27017:27017 mongo:8 --replSet rs0 --bind_ip_all
+          for i in $(seq 1 30); do
+            docker exec mongo mongosh --quiet --eval "db.adminCommand('ping')" && break
+            sleep 1
+          done
+          docker exec mongo mongosh --quiet --eval "rs.initiate({_id: 'rs0', members: [{_id: 0, host: 'localhost:27017'}]})"
+          for i in $(seq 1 30); do
+            docker exec mongo mongosh --quiet --eval "rs.status().myState" | grep -q 1 && break
+            sleep 1
+          done
       - uses: denoland/setup-deno@v2
         with:
           deno-version: v2.x
