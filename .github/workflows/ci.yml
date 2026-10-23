@@ -25,6 +25,10 @@ jobs:
       # Nothing is mailed from tests: an address nothing listens on.
       SMTP_HOST: 127.0.0.1
       SMTP_PORT: "2599"
+      SMTP_USERNAME: ci
+      SMTP_PASSWORD: ci
+      SMTP_SENDER_NAME: Huruf Deploy CI
+      SMTP_SENDER: ci@example.com
     steps:
       - uses: actions/checkout@v4
       - name: MongoDB (single-node replica set)
