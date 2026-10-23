@@ -97,7 +97,10 @@ func Ensure(ctx context.Context, p Payload) (map[string]any, error) {
 	if _, err := run(ctx, "systemctl", "enable", "--now", "docker"); err != nil {
 		return result(), fmt.Errorf("starting Docker: %w", err)
 	}
-	if changed {
+	// The file can be right while the running Docker still predates it (an
+	// older agent wrote it but skipped the restart on a busy host): apply it then too.
+	stale := !changed && p.MeshCidr != "" && !trustsRegistry(ctx, p.MeshCidr)
+	if changed || stale {
 		// Restarting Docker stops containers that were started without
 		// live-restore. On such a busy host, a reload (SIGHUP) applies what can
 		// change live: live-restore and the mesh's insecure registry, which the
