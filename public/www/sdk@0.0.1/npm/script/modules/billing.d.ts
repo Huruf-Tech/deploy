@@ -89,6 +89,7 @@ export type plans$return = {
     isFree: boolean;
     active: boolean;
     sortOrder: number;
+    updatedAt: Date;
     _id: string;
 }[];
 export type periods$return = {

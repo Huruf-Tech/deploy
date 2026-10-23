@@ -37,7 +37,6 @@ export type create$body = {
     isFree?: boolean;
     active?: boolean;
     sortOrder?: number;
-    createdAt?: Date;
 };
 export type create$return = {
     _id: string;
@@ -94,6 +93,7 @@ export type get$return = {
         active: boolean;
         sortOrder: number;
         createdAt: Date;
+        updatedAt: Date;
         _id: string;
     }[];
 };

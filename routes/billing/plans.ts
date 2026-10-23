@@ -1,7 +1,12 @@
 import { Router } from "@/core/http/router.ts";
 import { Response } from "@/core/http/response.ts";
 import { createCRUD } from "@/core/utils/createCRUD.ts";
-import { $plan, planModel } from "@/schemas/billing/plan.ts";
+import {
+  $plan,
+  $planInput,
+  $planUpdate,
+  planModel,
+} from "@/schemas/billing/plan.ts";
 import { subscriptionModel } from "@/schemas/billing/subscription.ts";
 
 const FREE_IS_SEEDED = "There is one Free plan, created by setup";
@@ -15,7 +20,8 @@ export default new Router("/api", function plans(router) {
   createCRUD({
     router,
     schema: $plan,
-    updateSchema: $plan.omit({ createdAt: true }).partial(),
+    insertSchema: $planInput,
+    updateSchema: $planUpdate,
     model: planModel,
   }, {
     hooks: {

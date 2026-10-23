@@ -28,7 +28,7 @@ export const $planFeatures = z.object({
   managedServers: z.boolean().default(false),
 });
 
-export const $plan = z.object({
+export const $planInput = z.object({
   name: z.string().min(1).max(50).meta({ canFilter: true }),
   slug: z.string().min(1).max(50).regex(/^[a-z0-9-]+$/).meta({
     canFilter: true,
@@ -48,7 +48,25 @@ export const $plan = z.object({
   isFree: z.boolean().default(false).meta({ canFilter: true }),
   active: z.boolean().default(true).meta({ canFilter: true }),
   sortOrder: z.number().int().default(0),
+});
+
+/**
+ * Updates are partial, and Zod fills `.default()`s even for absent keys: with
+ * $planInput, renaming a plan would reset its limits, features and visibility.
+ */
+export const $planUpdate = $planInput.extend({
+  visibility: $planInput.shape.visibility.unwrap(),
+  allowedTenants: $planInput.shape.allowedTenants.unwrap(),
+  limits: $planLimits,
+  features: $planFeatures,
+  isFree: z.boolean(),
+  active: z.boolean(),
+  sortOrder: z.number().int(),
+}).partial();
+
+export const $plan = $planInput.extend({
   createdAt: z.date().default(() => new Date()).meta({ canFilter: true }),
+  updatedAt: z.date().default(() => new Date()).meta({ canFilter: true }),
 });
 
 export type TPlanLimits = z.output<typeof $planLimits>;
