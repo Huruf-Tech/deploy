@@ -33,6 +33,7 @@ import {
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { usePolling } from "@/hooks/use-polling"
 import { cn } from "@/lib/utils"
+import { ControlPlaneRules } from "./ControlPlaneRules"
 
 type TRange = "1h" | "24h" | "7d"
 
@@ -712,6 +713,10 @@ export default function ControlPlane() {
               </CardContent>
             </Card>
           </div>
+
+          {ThunderSDK.isPermitted("controlPlane", "rules") && (
+            <ControlPlaneRules />
+          )}
 
           <p className="flex gap-2 text-sm text-muted-foreground">
             <IconHeartbeat className="mt-0.5 size-4 shrink-0" aria-hidden />

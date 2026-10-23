@@ -17,6 +17,7 @@ import {
   alertEventModel,
   alertRuleModel,
   METRICS_BY_TARGET,
+  PLATFORM_OWNER,
   type TAlertChannel,
   type TAlertRule,
 } from "@/schemas/monitoring/alert.ts";
@@ -31,7 +32,7 @@ const MAX_RULES = 50;
 export const $alertRuleInput = z.object({
   name: z.string().min(1).max(80),
   target: z.object({
-    kind: z.enum(["server", "project"]),
+    kind: z.enum(["server", "project", "controlPlane"]),
     ref: $objectId.optional(),
   }),
   metric: $alertMetric,
@@ -57,7 +58,16 @@ const DEFAULTS: Record<TAlertRule["metric"], [number, number]> = {
   room: [512, 600],
   agentOffline: [0, 20],
   deployFailed: [0, 0],
+  // Control plane: % of one core, % of host memory, p95 ms, % of requests,
+  // % of the expected polls that arrive (below fires).
+  cpCpu: [80, 300],
+  cpMemory: [90, 300],
+  cpPollLatency: [100, 300],
+  cpErrorRate: [2, 300],
+  cpPollsMissing: [50, 180],
 };
+
+const isPlatform = (tenant: ObjectId) => tenant.equals(PLATFORM_OWNER);
 
 /** What the API shows: channel secrets stay out. */
 const view = ({ channels, ...rule }: WithId<TAlertRule>) => ({
@@ -75,6 +85,18 @@ export async function listRules(tenant: ObjectId) {
 
 /** Emails of the workspace's members: alerts never go to strangers. */
 async function memberEmails(tenant: ObjectId) {
+  // The control plane's alerts go to platform admins.
+  if (isPlatform(tenant)) {
+    const admins = await userModel.find({ role: { $in: ["admin", "root"] } }, {
+      projection: { email: 1 },
+      limit: 1_000,
+    }).toArray();
+    return new Set(
+      admins.map((u) => u.email).filter((e): e is string => !!e).map((e) =>
+        e.toLowerCase()
+      ),
+    );
+  }
   const [doc, members] = await Promise.all([
     tenantModel.findOne({ _id: tenant }, { projection: { createdBy: 1 } }),
     tenantMemberModel.find({ tenant }, {
@@ -110,7 +132,9 @@ async function sealChannels(
       const email = target.trim().toLowerCase();
       if (!emails.has(email)) {
         throw Response.badRequest(
-          `${target} isn't a member of this workspace; alerts go to members only`,
+          isPlatform(tenant)
+            ? `${target} isn't a platform admin; control plane alerts go to admins only`
+            : `${target} isn't a member of this workspace; alerts go to members only`,
         );
       }
       return { type, target: email };
@@ -142,6 +166,13 @@ async function sealChannels(
 }
 
 async function validate(tenant: ObjectId, input: TAlertRuleInput) {
+  if (isPlatform(tenant) !== (input.target.kind === "controlPlane")) {
+    throw Response.badRequest(
+      isPlatform(tenant)
+        ? "Control plane rules watch the control plane"
+        : "Only platform admins watch the control plane",
+    );
+  }
   const allowed: readonly string[] = METRICS_BY_TARGET[input.target.kind];
   if (!allowed.includes(input.metric)) {
     throw Response.badRequest(
@@ -149,7 +180,7 @@ async function validate(tenant: ObjectId, input: TAlertRuleInput) {
     );
   }
   const ref = input.target.ref;
-  if (!ref) return;
+  if (!ref || input.target.kind === "controlPlane") return;
   const found = input.target.kind === "server"
     ? await serverModel.countDocuments({ _id: ref, tenant }, { limit: 1 })
     : await projectModel.countDocuments({ _id: ref, tenant }, { limit: 1 });
@@ -162,7 +193,9 @@ async function fields(input: TAlertRuleInput) {
     name: input.name,
     target: {
       kind: input.target.kind,
-      ...(input.target.ref ? { ref: input.target.ref } : {}),
+      ...(input.target.ref && input.target.kind !== "controlPlane"
+        ? { ref: input.target.ref }
+        : {}),
     },
     metric: input.metric,
     threshold: input.threshold ?? threshold,
@@ -189,8 +222,10 @@ export async function createRule(
   user: ObjectId,
   input: TAlertRuleInput,
 ) {
-  const { limits } = await entitlements.resolve(tenant);
-  const allowed = Math.min(MAX_RULES, limits.alertRules);
+  const allowed = isPlatform(tenant) ? MAX_RULES : Math.min(
+    MAX_RULES,
+    (await entitlements.resolve(tenant)).limits.alertRules,
+  );
   if (await alertRuleModel.countDocuments({ tenant }) >= allowed) {
     throw Response.badRequest(`Your plan allows ${allowed} alert rules`);
   }

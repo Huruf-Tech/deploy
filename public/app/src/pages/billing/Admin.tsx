@@ -182,10 +182,12 @@ export default function BillingAdmin() {
             )}
           </p>
         </div>
-        <Button onClick={() => setGranting(true)}>
-          <IconGift data-icon="inline-start" />
-          {t("Grant a plan")}
-        </Button>
+        {ThunderSDK.isPermitted("billingAdmin", "grant") && (
+          <Button onClick={() => setGranting(true)}>
+            <IconGift data-icon="inline-start" />
+            {t("Grant a plan")}
+          </Button>
+        )}
       </div>
       {!data ? (
         <Skeleton className="h-40 rounded-3xl" />

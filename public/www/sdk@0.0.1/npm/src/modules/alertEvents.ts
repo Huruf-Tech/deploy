@@ -17,10 +17,11 @@ export type list$query = {
 export type list$return = {
     rule: string;
     ruleName: string;
-    metric: "cpu" | "memory" | "disk" | "room" | "agentOffline" | "deployFailed";
+    metric: "cpu" | "memory" | "disk" | "room" | "agentOffline" | "deployFailed" | "cpCpu" | "cpMemory" | "cpPollLatency" | "cpErrorRate" | "cpPollsMissing";
     threshold: number;
     server?: string | undefined;
     project?: string | undefined;
+    instance?: string | undefined;
     firedAt: Date;
     resolvedAt?: Date | undefined;
     value?: number | undefined;

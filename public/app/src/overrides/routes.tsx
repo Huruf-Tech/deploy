@@ -39,9 +39,6 @@ import Network from "@/pages/network"
 import AlertRules from "@/pages/alerts"
 import AlertHistory from "@/pages/alerts/History"
 
-/** `users` is root-only, so it doubles as the admin check for the Admin group. */
-const isAdmin = () => ThunderSDK.isPermitted("users", "get")
-
 /** Nav groups follow PLAN §15.2; each phase adds its group with a priority in that order. */
 export const routes: TRoutesOverride = {
   overview: { Component: Overview },
@@ -56,26 +53,25 @@ export const routes: TRoutesOverride = {
   users: regroup("users", "Admin", {
     name: "Users",
     icon: IconUserShield,
-    display: isAdmin,
   }),
   accessControl: regroup("accessControl", "Admin", {
     name: "Roles",
     icon: IconShieldCheck,
-    display: isAdmin,
   }),
   accessControlPolicies: regroup("accessControlPolicies", "Admin", {
     name: "Policies",
     icon: IconLock,
-    display: isAdmin,
   }),
 
-  plans: { merge: true, name: "Plans", icon: IconReceipt2, display: isAdmin },
+  // CRUD modules (users, roles, policies, plans) show only with their own
+  // get/create permission: core's router checks it.
+  plans: { merge: true, name: "Plans", icon: IconReceipt2 },
   billingAdmin: {
     name: "Billing",
     path: "billing",
     group: "Admin",
     icon: IconReportMoney,
-    display: isAdmin,
+    display: () => ThunderSDK.isPermitted("billingAdmin", "subscriptions"),
     Component: BillingAdmin,
   },
   controlPlane: {
@@ -83,7 +79,7 @@ export const routes: TRoutesOverride = {
     path: "controlPlane",
     group: "Admin",
     icon: IconActivity,
-    display: isAdmin,
+    display: () => ThunderSDK.isPermitted("controlPlane", "overview"),
     Component: ControlPlane,
   },
   // Every member sees plan & usage; only the owner changes it.

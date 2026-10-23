@@ -1,4 +1,5 @@
 import z from "zod";
+import { ObjectId } from "mongodb";
 import { mongodb } from "@/database.ts";
 import { $objectId } from "@/core/utils/createCRUD.ts";
 
@@ -10,6 +11,12 @@ export const $alertMetric = z.enum([
   "room",
   "agentOffline",
   "deployFailed",
+  // The control plane itself (platform admins' rules).
+  "cpCpu",
+  "cpMemory",
+  "cpPollLatency",
+  "cpErrorRate",
+  "cpPollsMissing",
 ]);
 export const AGENT_METRICS = ["cpu", "memory", "disk", "room"] as const;
 
@@ -17,7 +24,20 @@ export const AGENT_METRICS = ["cpu", "memory", "disk", "room"] as const;
 export const METRICS_BY_TARGET = {
   server: ["cpu", "memory", "disk", "room", "agentOffline"],
   project: ["cpu", "memory", "deployFailed"],
+  controlPlane: [
+    "cpCpu",
+    "cpMemory",
+    "cpPollLatency",
+    "cpErrorRate",
+    "cpPollsMissing",
+  ],
 } as const;
+
+/**
+ * Owner of the control plane's rules and alerts: not a workspace, so no
+ * workspace ever lists them; channel secrets are sealed under it.
+ */
+export const PLATFORM_OWNER = new ObjectId("000000000000000000000000");
 
 export const $alertChannelType = z.enum(["email", "webhook", "slack"]);
 
@@ -33,12 +53,12 @@ export const $alertRule = z.object({
   tenant: $objectId.meta({ ref: "tenants" }),
   name: z.string().min(1).max(80),
   target: z.object({
-    kind: z.enum(["server", "project"]),
+    kind: z.enum(["server", "project", "controlPlane"]),
     ref: $objectId.optional().describe("Every server (or project) when absent"),
   }),
   metric: $alertMetric,
   threshold: z.number().describe(
-    "Percent for cpu/memory/disk (above fires); MiB of room (below fires)",
+    "Percent for cpu/memory/disk (above fires); MiB of room (below fires); control plane: see METRICS_BY_TARGET",
   ),
   forSec: z.number().int().min(0).max(86_400),
   channels: z.array($alertChannel).min(1).max(10),
@@ -68,6 +88,8 @@ export const $alertEvent = z.object({
   threshold: z.number(),
   server: $objectId.meta({ ref: "servers" }).optional(),
   project: $objectId.meta({ ref: "projects" }).optional(),
+  /** A control plane instance ("host (id)"), or "all" for fleet-wide rules. */
+  instance: z.string().max(200).optional(),
   /** rule:subject; unique among open events, so a repeat never fires twice. */
   key: z.string(),
   open: z.literal(true).optional(),

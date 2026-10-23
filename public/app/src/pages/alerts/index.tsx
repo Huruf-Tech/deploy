@@ -78,6 +78,11 @@ const DEFAULTS: Record<TMetric, [number, number]> = {
   room: [512, 600],
   agentOffline: [0, 20],
   deployFailed: [0, 0],
+  cpCpu: [80, 300],
+  cpMemory: [90, 300],
+  cpPollLatency: [100, 300],
+  cpErrorRate: [2, 300],
+  cpPollsMissing: [50, 180],
 }
 
 function Choice<T extends string>({

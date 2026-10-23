@@ -13,12 +13,12 @@ import { compile } from "path-to-regexp";
 export type list$return = {
     name: string;
     target: {
-        kind: "server" | "project";
+        kind: "server" | "project" | "controlPlane";
         /** Every server (or project) when absent */
         ref?: string | undefined;
     };
-    metric: "cpu" | "memory" | "disk" | "room" | "agentOffline" | "deployFailed";
-    /** Percent for cpu/memory/disk (above fires); MiB of room (below fires) */
+    metric: "cpu" | "memory" | "disk" | "room" | "agentOffline" | "deployFailed" | "cpCpu" | "cpMemory" | "cpPollLatency" | "cpErrorRate" | "cpPollsMissing";
+    /** Percent for cpu/memory/disk (above fires); MiB of room (below fires); control plane: see METRICS_BY_TARGET */
     threshold: number;
     forSec: number;
     enabled: boolean;
@@ -34,10 +34,10 @@ export type list$return = {
 export type create$body = {
     name: string;
     target: {
-        kind: "server" | "project";
+        kind: "server" | "project" | "controlPlane";
         ref?: string | undefined;
     };
-    metric: "cpu" | "memory" | "disk" | "room" | "agentOffline" | "deployFailed";
+    metric: "cpu" | "memory" | "disk" | "room" | "agentOffline" | "deployFailed" | "cpCpu" | "cpMemory" | "cpPollLatency" | "cpErrorRate" | "cpPollsMissing";
     /** Percent for cpu/memory/disk, MiB for room; a default when omitted */
     threshold?: number | undefined;
     forSec?: number | undefined;
@@ -57,10 +57,10 @@ export type update$params = {
 export type update$body = {
     name: string;
     target: {
-        kind: "server" | "project";
+        kind: "server" | "project" | "controlPlane";
         ref?: string | undefined;
     };
-    metric: "cpu" | "memory" | "disk" | "room" | "agentOffline" | "deployFailed";
+    metric: "cpu" | "memory" | "disk" | "room" | "agentOffline" | "deployFailed" | "cpCpu" | "cpMemory" | "cpPollLatency" | "cpErrorRate" | "cpPollsMissing";
     /** Percent for cpu/memory/disk, MiB for room; a default when omitted */
     threshold?: number | undefined;
     forSec?: number | undefined;

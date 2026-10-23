@@ -42,6 +42,9 @@ import {
 export const syncDeployIndexes = async () => {
   await Promise.all([
     controlPlaneSampleModel.createIndex({ at: 1 }, { name: "at" }),
+    controlPlaneSampleModel.createIndex({ instance: 1, at: 1 }, {
+      name: "instance_at",
+    }),
     controlPlaneSampleModel.createIndex(
       { expiresAt: 1 },
       { name: "ttl", expireAfterSeconds: 0 },

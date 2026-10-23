@@ -1433,10 +1433,71 @@ export declare class ThunderSDK extends BaseSDK {
     static controlPlane: {
         readonly type: {
             overview$query: import("./modules/controlPlane.js").overview$query;
+            createRuleHandler$body: import("./modules/controlPlane.js").createRuleHandler$body;
+            createRuleHandler$return: import("./modules/controlPlane.js").createRuleHandler$return;
+            updateRuleHandler$params: import("./modules/controlPlane.js").updateRuleHandler$params;
+            updateRuleHandler$body: import("./modules/controlPlane.js").updateRuleHandler$body;
+            deleteRuleHandler$params: import("./modules/controlPlane.js").deleteRuleHandler$params;
+            alerts$query: import("./modules/controlPlane.js").alerts$query;
         };
         readonly overview: (data: {
             params?: undefined;
             query: import("./modules/controlPlane.js").overview$query;
+            body?: undefined;
+        } & import("./types.js").TRequestOptions<unknown>) => {
+            readonly raw: Promise<import("axios").AxiosResponse<unknown, any, {}, any>>;
+            readonly data: Promise<unknown>;
+            then: <TResult1 = unknown, TResult2 = never>(onfulfilled?: ((value: unknown) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+            catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<unknown>;
+            finally: (onfinally?: (() => void) | null | undefined) => Promise<unknown>;
+        };
+        readonly rules: (data?: {
+            params?: undefined;
+            query?: undefined;
+            body?: undefined;
+        } & import("./types.js").TRequestOptions<unknown>) => {
+            readonly raw: Promise<import("axios").AxiosResponse<unknown, any, {}, any>>;
+            readonly data: Promise<unknown>;
+            then: <TResult1 = unknown, TResult2 = never>(onfulfilled?: ((value: unknown) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+            catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<unknown>;
+            finally: (onfinally?: (() => void) | null | undefined) => Promise<unknown>;
+        };
+        readonly createRuleHandler: (data: {
+            params?: undefined;
+            query?: undefined;
+            body: import("./modules/controlPlane.js").createRuleHandler$body;
+        } & import("./types.js").TRequestOptions<import("./modules/controlPlane.js").createRuleHandler$return>) => {
+            readonly raw: Promise<import("axios").AxiosResponse<import("./modules/controlPlane.js").createRuleHandler$return, any, {}, any>>;
+            readonly data: Promise<import("./modules/controlPlane.js").createRuleHandler$return>;
+            then: <TResult1 = import("./modules/controlPlane.js").createRuleHandler$return, TResult2 = never>(onfulfilled?: ((value: import("./modules/controlPlane.js").createRuleHandler$return) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+            catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<import("./modules/controlPlane.js").createRuleHandler$return | TResult>;
+            finally: (onfinally?: (() => void) | null | undefined) => Promise<import("./modules/controlPlane.js").createRuleHandler$return>;
+        };
+        readonly updateRuleHandler: (data: {
+            params: import("./modules/controlPlane.js").updateRuleHandler$params;
+            query?: undefined;
+            body: import("./modules/controlPlane.js").updateRuleHandler$body;
+        } & import("./types.js").TRequestOptions<unknown>) => {
+            readonly raw: Promise<import("axios").AxiosResponse<unknown, any, {}, any>>;
+            readonly data: Promise<unknown>;
+            then: <TResult1 = unknown, TResult2 = never>(onfulfilled?: ((value: unknown) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+            catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<unknown>;
+            finally: (onfinally?: (() => void) | null | undefined) => Promise<unknown>;
+        };
+        readonly deleteRuleHandler: (data: {
+            params: import("./modules/controlPlane.js").deleteRuleHandler$params;
+            query?: undefined;
+            body?: undefined;
+        } & import("./types.js").TRequestOptions<unknown>) => {
+            readonly raw: Promise<import("axios").AxiosResponse<unknown, any, {}, any>>;
+            readonly data: Promise<unknown>;
+            then: <TResult1 = unknown, TResult2 = never>(onfulfilled?: ((value: unknown) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+            catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<unknown>;
+            finally: (onfinally?: (() => void) | null | undefined) => Promise<unknown>;
+        };
+        readonly alerts: (data: {
+            params?: undefined;
+            query: import("./modules/controlPlane.js").alerts$query;
             body?: undefined;
         } & import("./types.js").TRequestOptions<unknown>) => {
             readonly raw: Promise<import("axios").AxiosResponse<unknown, any, {}, any>>;

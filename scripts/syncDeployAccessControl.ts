@@ -34,6 +34,11 @@ export const syncDeployAccessControl = async () => {
     "networks",
     "alertRules",
     "alertEvents",
+    // The workspace's wallet, read-only: plan payments come out of it.
+    // Transfers and overdraft limits stay with admins.
+    "wallets.get",
+    "wallets.metadata",
+    "walletLedgers.get",
   ]);
   // Older setups granted every stream handler through `deploy`.
   await ACManager.denyFromPolicy("deploy", ["streams"]);

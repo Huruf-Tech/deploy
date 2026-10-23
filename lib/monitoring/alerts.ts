@@ -28,10 +28,11 @@ const log = (text: string) => Logger.warn(`[alerts] ${text}`);
 /** A channel secret's encryption context: bound to its rule. */
 export const channelContext = (rule: ObjectId) => `alert:${rule}`;
 
-type TSubject = { server?: ObjectId; project?: ObjectId };
+type TSubject = { server?: ObjectId; project?: ObjectId; instance?: string };
 
 const keyOf = (rule: ObjectId, subject: TSubject) =>
-  [rule, subject.server, subject.project].filter(Boolean).join(":");
+  [rule, subject.server, subject.project, subject.instance].filter(Boolean)
+    .join(":");
 
 const isId = (hex?: string): hex is string =>
   !!hex && /^[a-f0-9]{24}$/.test(hex);
@@ -39,7 +40,7 @@ const isId = (hex?: string): hex is string =>
 let nextCheckAt = 0;
 
 /** Opens an episode; a repeat while one is open is ignored (dedupe). */
-async function openEvent(
+export async function openEvent(
   rule: WithId<TAlertRule>,
   subject: TSubject,
   opts: { firedAt?: Date; value?: number; detail?: string },
@@ -214,7 +215,15 @@ export async function onAutoscale(
   });
 }
 
-const percentMetrics = ["cpu", "memory", "disk"];
+const percentMetrics = [
+  "cpu",
+  "memory",
+  "disk",
+  "cpCpu",
+  "cpMemory",
+  "cpErrorRate",
+  "cpPollsMissing",
+];
 const LABEL: Record<TAlertRule["metric"], string> = {
   cpu: "CPU",
   memory: "Memory",
@@ -222,6 +231,11 @@ const LABEL: Record<TAlertRule["metric"], string> = {
   room: "Memory room",
   agentOffline: "Server offline",
   deployFailed: "Deploy failed",
+  cpCpu: "Control plane CPU",
+  cpMemory: "Control plane host memory",
+  cpPollLatency: "Agent poll time (p95)",
+  cpErrorRate: "Control plane errors",
+  cpPollsMissing: "Agent polls arriving",
 };
 
 const time = (d: Date) =>
@@ -232,13 +246,21 @@ export function noticeOf(
   event: WithId<TAlertEvent>,
   names: { server?: string; project?: string },
 ): TNotice {
-  const subject = [names.project, names.server && `on ${names.server}`]
-    .filter(Boolean).join(" ") || "your workspace";
+  const subject = event.instance
+    ? event.instance === "all"
+      ? "the control plane"
+      : `control plane instance ${event.instance}`
+    : [names.project, names.server && `on ${names.server}`]
+      .filter(Boolean).join(" ") || "your workspace";
   const resolved = event.delivery.notice === "resolved";
   const value = event.value === undefined
     ? ""
+    : event.metric === "cpPollsMissing"
+    ? `${event.value}% of the expected polls (fires below ${event.threshold}%)`
     : percentMetrics.includes(event.metric)
     ? `${event.value}% (threshold ${event.threshold}%)`
+    : event.metric === "cpPollLatency"
+    ? `${event.value} ms (threshold ${event.threshold} ms)`
     : `${event.value} MiB (threshold ${event.threshold} MiB)`;
   const what = event.metric === "agentOffline"
     ? `${names.server ?? "A server"} stopped reporting`
@@ -263,6 +285,7 @@ export function noticeOf(
       value: event.value,
       server: event.server && { id: event.server, name: names.server },
       project: event.project && { id: event.project, name: names.project },
+      instance: event.instance,
       detail: event.detail,
       firedAt: event.firedAt,
       resolvedAt: event.resolvedAt,

@@ -11,6 +11,10 @@ import {
 import { serverLeaseModel } from "@/schemas/infrastructure/serverLease.ts";
 import { serverModel } from "@/schemas/infrastructure/server.ts";
 import { agentCommandModel } from "@/schemas/infrastructure/agentCommand.ts";
+import {
+  evaluateControlPlane,
+  instanceLabel,
+} from "@/lib/monitoring/controlPlaneAlerts.ts";
 
 /**
  * Control plane metrics: each instance counts its requests and database
@@ -222,9 +226,14 @@ export function flush() {
     ...resources(),
     expiresAt: new Date(now + RETENTION_MS),
   };
-  return controlPlaneSampleModel.insertOne(sample).catch((error) =>
-    Logger.error("Control plane metrics: writing a sample failed", error)
-  );
+  return controlPlaneSampleModel.insertOne(sample)
+    .then(() => evaluateControlPlane(INSTANCE, instanceLabel(HOST, INSTANCE)))
+    .catch((error) =>
+      Logger.error(
+        "Control plane metrics: a sample or its alerts failed",
+        error,
+      )
+    );
 }
 
 /**
