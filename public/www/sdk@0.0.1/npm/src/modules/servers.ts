@@ -137,6 +137,8 @@ export type cleanup$params = {
 export type cleanup$body = {
     dryRun: boolean;
     purgeData: boolean;
+    keep?: string[] | undefined;
+    remove?: string[] | undefined;
 };
 export type cleanup$return = {
     command: string;

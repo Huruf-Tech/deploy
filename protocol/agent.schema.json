@@ -2217,6 +2217,22 @@
         },
         "purgeData": {
           "type": "boolean"
+        },
+        "keep": {
+          "maxItems": 50,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 40
+          }
+        },
+        "remove": {
+          "maxItems": 50,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 40
+          }
         }
       },
       "required": [

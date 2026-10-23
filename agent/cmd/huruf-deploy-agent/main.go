@@ -18,6 +18,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -50,6 +51,8 @@ const (
 	caddyAdmin     = "http://127.0.0.1:2019"
 	// tmpfs on every systemd host: `file` variables never touch the disk.
 	secretsDir = "/run/huruf-deploy/secrets"
+	// Written when the dashboard removes the server; the uninstall deletes it.
+	uninstallingMarker = "uninstalling"
 )
 
 func main() {
@@ -68,6 +71,15 @@ func main() {
 		return
 	}
 	ledger.Path = filepath.Join(*stateDir, "ledger.jsonl")
+	// Removed from the dashboard: wait for the scheduled uninstall to stop
+	// this service instead of polling (a poll would register it again).
+	if _, err := os.Stat(filepath.Join(*stateDir, uninstallingMarker)); err == nil {
+		fmt.Println("uninstalling: not connecting to the control plane")
+		wait := make(chan os.Signal, 1)
+		signal.Notify(wait, os.Interrupt, syscall.SIGTERM)
+		<-wait
+		return
+	}
 
 	log := slog.New(slog.NewTextHandler(os.Stdout, nil))
 	if *url == "" || *tenant == "" {
@@ -157,18 +169,36 @@ func main() {
 	// The dashboard's "Remove server": the plan, and with dryRun false the
 	// uninstall runs in its own unit, so stopping this service doesn't stop it.
 	a.Commands["host.cleanup"] = commands.Typed(func(ctx context.Context, p protocol.HostCleanupPayload) (map[string]any, error) {
-		steps := cleanup.Plan(ctx, cleanup.Options{StateDir: *stateDir, PurgeData: p.PurgeData, Teardown: network.Teardown})
+		steps := cleanup.Plan(ctx, cleanup.Options{
+			StateDir: *stateDir, Keep: p.Keep, Remove: p.Remove, PurgeData: p.PurgeData, Teardown: network.Teardown,
+		})
 		if p.DryRun {
 			return map[string]any{"steps": steps}, nil
 		}
-		args := []string{"--unit", "huruf-deploy-uninstall", "--collect", "--on-active", "10",
+		// From here on the agent must not poll: the server is being removed,
+		// and a poll after that would register it again as a new one.
+		if err := os.WriteFile(filepath.Join(*stateDir, uninstallingMarker), nil, 0o600); err != nil {
+			return nil, err
+		}
+		args := []string{"--unit", "huruf-deploy-uninstall", "--collect", "--on-active", "2",
 			cleanup.Binary, "uninstall", "-yes", "-state-dir", *stateDir}
+		if len(p.Keep) > 0 {
+			args = append(args, "-keep", strings.Join(p.Keep, ","))
+		}
+		if len(p.Remove) > 0 {
+			args = append(args, "-remove", strings.Join(p.Remove, ","))
+		}
 		if p.PurgeData {
 			args = append(args, "-purge-data")
 		}
 		if out, err := exec.CommandContext(ctx, "systemd-run", args...).CombinedOutput(); err != nil {
+			_ = os.Remove(filepath.Join(*stateDir, uninstallingMarker))
 			return nil, fmt.Errorf("scheduling the uninstall: %w: %s", err, out)
 		}
+		log.Info("uninstalling: stopping now; the uninstall starts in 2 s")
+		// Once this result is queued (after the handler returns), Run stops
+		// and flushes it on the way out: no more polls.
+		time.AfterFunc(500*time.Millisecond, stop)
 		return map[string]any{"steps": steps, "scheduled": true}, nil
 	})
 	network.Emit = func(event protocol.MeshStatusEvent) {

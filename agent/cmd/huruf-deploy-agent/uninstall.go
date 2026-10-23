@@ -20,6 +20,8 @@ func uninstall(args []string) int {
 	yes := flags.Bool("yes", false, "remove (otherwise only show the plan)")
 	purgeData := flags.Bool("purge-data", false, "also delete project data volumes")
 	stateDir := flags.String("state-dir", "/var/lib/huruf-deploy-agent", "the agent's state directory")
+	keep := flags.String("keep", "", "comma-separated step ids to keep although planned")
+	remove := flags.String("remove", "", "comma-separated step ids to remove although kept")
 	_ = flags.Parse(args)
 
 	if os.Geteuid() != 0 {
@@ -36,23 +38,29 @@ func uninstall(args []string) int {
 	ledger.Path = filepath.Join(*stateDir, "ledger.jsonl")
 	ctx := context.Background()
 	network := &mesh.Mesh{Dir: *stateDir}
-	steps := cleanup.Plan(ctx, cleanup.Options{StateDir: *stateDir, PurgeData: *purgeData, Teardown: network.Teardown})
+	steps := cleanup.Plan(ctx, cleanup.Options{
+		StateDir: *stateDir, Keep: ids(*keep), Remove: ids(*remove), PurgeData: *purgeData, Teardown: network.Teardown,
+	})
 
 	fmt.Println("Will remove:")
 	for _, s := range steps {
 		if s.Remove {
-			fmt.Println("  - " + s.Item)
+			fmt.Printf("  - [%s] %s\n", s.ID, s.Item)
 		}
 	}
 	fmt.Println("Will keep:")
 	for _, s := range steps {
 		if !s.Remove {
-			fmt.Printf("  - %s (%s)\n", s.Item, s.Reason)
+			reason := s.Reason
+			if reason == "" {
+				reason = "your choice"
+			}
+			fmt.Printf("  - [%s] %s (%s)\n", s.ID, s.Item, reason)
 		}
 	}
 	if !*yes {
-		fmt.Println("\nNothing was changed. Run again with -yes to remove" +
-			map[bool]string{true: " (data volumes included).", false: "; add -purge-data to delete project data volumes too."}[*purgeData])
+		fmt.Println("\nNothing was changed. Run again with -yes to remove. Change the plan with" +
+			" -keep id,id (keep planned removals) and -remove id,id (e.g. -remove data-volumes).")
 		return 0
 	}
 
@@ -70,6 +78,16 @@ func uninstall(args []string) int {
 	}
 	fmt.Println("\nHuruf Deploy is uninstalled.")
 	return 0
+}
+
+func ids(list string) []string {
+	var out []string
+	for _, id := range strings.Split(list, ",") {
+		if id = strings.TrimSpace(id); id != "" {
+			out = append(out, id)
+		}
+	}
+	return out
 }
 
 func insideAgent() bool {

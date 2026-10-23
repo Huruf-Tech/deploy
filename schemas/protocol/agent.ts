@@ -120,6 +120,9 @@ export const $registryDeletePayload = z.object({
 export const $hostCleanupPayload = z.object({
   dryRun: z.boolean(),
   purgeData: z.boolean(),
+  /** Step ids to keep although planned, and to remove although kept. */
+  keep: z.array(z.string().max(40)).max(50).optional(),
+  remove: z.array(z.string().max(40)).max(50).optional(),
 });
 
 /** `agent.update`: replace the binary with a verified download, then restart. */

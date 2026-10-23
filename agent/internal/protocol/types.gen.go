@@ -739,4 +739,8 @@ type HostCleanupPayload struct {
 	DryRun bool `json:"dryRun"`
 
 	PurgeData bool `json:"purgeData"`
+
+	Keep []string `json:"keep,omitempty"`
+
+	Remove []string `json:"remove,omitempty"`
 }

@@ -1,7 +1,10 @@
 package cleanup
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
+	"strings"
 	"testing"
 
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/ledger"
@@ -72,5 +75,44 @@ func TestProjectVolumePattern(t *testing.T) {
 		if projectVolume.MatchString(name) {
 			t.Fatalf("%s matched", name)
 		}
+	}
+}
+
+// The user's choices flip optional steps only: the service always stops,
+// Docker is never offered.
+func TestPlanAppliesChoices(t *testing.T) {
+	ledger.Path = ""
+	fake := func(_ context.Context, name string, args ...string) (string, error) {
+		if name != "docker" {
+			return "", nil
+		}
+		switch args[0] {
+		case "ps":
+			return "shop-app-1\n", nil
+		case "volume":
+			return "huruf-6adb97c6e67447ba4bf232fc-data local\nhuruf-tech-redis local\n", nil
+		case "plugin", "images", "network":
+			return "", errors.New("none")
+		}
+		return "", nil
+	}
+	steps := Plan(context.Background(), Options{
+		StateDir: t.TempDir(),
+		Keep:     []string{"containers", "service", "docker"},
+		Remove:   []string{"data-volumes", "docker"},
+		Run:      fake,
+	})
+	byID := map[string]Step{}
+	for _, s := range steps {
+		byID[s.ID] = s
+	}
+	if !byID["service"].Remove || byID["containers"].Remove || !byID["data-volumes"].Remove {
+		t.Fatalf("choices not applied: %+v", steps)
+	}
+	if byID["docker"].Remove || byID["docker"].Choice {
+		t.Fatal("Docker must never be removable")
+	}
+	if strings.Contains(byID["data-volumes"].Item, "huruf-tech") {
+		t.Fatal("another tool's volume listed")
 	}
 }
