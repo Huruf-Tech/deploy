@@ -37,9 +37,12 @@ const (
 )
 
 type Mesh struct {
-	Dir  string // state directory: the WireGuard key lives here
-	Log  *slog.Logger
-	Emit func(protocol.MeshStatusEvent)
+	Dir string // state directory: a key from before KeyDir existed is moved from here
+	// KeyDir holds the WireGuard key; /etc/wireguard when empty. Ubuntu 25.04+
+	// confines `wg` with AppArmor to reading keys under /etc/wireguard only.
+	KeyDir string
+	Log    *slog.Logger
+	Emit   func(protocol.MeshStatusEvent)
 
 	mu       sync.Mutex
 	last     *protocol.DesiredSpec // retried while it fails
@@ -63,10 +66,26 @@ func (m *Mesh) PublicKey() (string, error) {
 	return base64.StdEncoding.EncodeToString(key.PublicKey().Bytes()), nil
 }
 
-func (m *Mesh) keyPath() string { return filepath.Join(m.Dir, "wireguard.key") }
+func (m *Mesh) keyPath() string {
+	dir := m.KeyDir
+	if dir == "" {
+		dir = "/etc/wireguard"
+	}
+	return filepath.Join(dir, "huruf-deploy.key")
+}
 
 func (m *Mesh) privateKey() ([]byte, error) {
 	raw, err := os.ReadFile(m.keyPath())
+	if errors.Is(err, os.ErrNotExist) {
+		// The key used to live in the state directory: keep it, so the public
+		// key (and every peer's config) stays the same.
+		raw, err = os.ReadFile(filepath.Join(m.Dir, "wireguard.key"))
+		if err == nil {
+			if err := m.saveKey(raw); err != nil {
+				return nil, err
+			}
+		}
+	}
 	if err == nil {
 		return base64.StdEncoding.DecodeString(strings.TrimSpace(string(raw)))
 	}
@@ -78,7 +97,14 @@ func (m *Mesh) privateKey() ([]byte, error) {
 		return nil, err
 	}
 	encoded := base64.StdEncoding.EncodeToString(key.Bytes())
-	return key.Bytes(), os.WriteFile(m.keyPath(), []byte(encoded+"\n"), 0o600)
+	return key.Bytes(), m.saveKey([]byte(encoded + "\n"))
+}
+
+func (m *Mesh) saveKey(raw []byte) error {
+	if err := os.MkdirAll(filepath.Dir(m.keyPath()), 0o700); err != nil {
+		return err
+	}
+	return os.WriteFile(m.keyPath(), raw, 0o600)
 }
 
 // Apply makes the interface, peers, routes and registry match the spec. A nil
