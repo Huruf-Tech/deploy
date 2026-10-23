@@ -31,7 +31,7 @@ import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 import { errorMessage } from "@/lib/utils"
 
-/** Which variables: the account's, the workspace's, or one project's. */
+/** Which variables: global (the account's), the tenant's, or one project's. */
 export type TScope = {
   scope: "global" | "tenant" | "project"
   project?: string

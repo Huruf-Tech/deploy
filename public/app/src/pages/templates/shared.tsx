@@ -68,7 +68,7 @@ export const slugify = (name: string) =>
     .replace(/^-+|-+$/g, "")
     .slice(0, 60)
 
-/** Name + slug, for cloning a template into the workspace. */
+/** Name + slug, for cloning a template into the tenant. */
 export function CloneDialog({
   template,
   onOpenChange,
@@ -124,7 +124,7 @@ export function CloneDialog({
             </DialogTitle>
             <DialogDescription>
               {t(
-                "Copies the latest version into this workspace, where you can edit it. The original is unchanged."
+                "Copies the latest version into this tenant, where you can edit it. The original is unchanged."
               )}
             </DialogDescription>
           </DialogHeader>

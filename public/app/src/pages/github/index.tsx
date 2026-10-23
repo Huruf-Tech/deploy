@@ -211,7 +211,7 @@ function IntegrationCard({
         </CardTitle>
         <CardDescription>
           {t("Owned by {{login}}", { login: integration.account.login })}
-          {!integration.isOwner && ` · ${t("shared with this workspace")}`}
+          {!integration.isOwner && ` · ${t("shared with this tenant")}`}
         </CardDescription>
         <CardAction className="flex gap-1">
           <Button
@@ -315,7 +315,7 @@ function IntegrationCard({
           <Field orientation="horizontal">
             <FieldContent>
               <FieldLabel htmlFor={`share-${integration._id}`}>
-                {t("Share with this workspace")}
+                {t("Share with this tenant")}
               </FieldLabel>
               <FieldDescription>
                 {t("Other members can deploy from these repositories.")}

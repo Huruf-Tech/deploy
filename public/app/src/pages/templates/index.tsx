@@ -100,7 +100,7 @@ function Section({
   templates: TTemplate[]
   onClone: (template: TTemplate) => void
   empty?: string
-  /** Only the workspace's own templates can be deleted, so only they select. */
+  /** Only the tenant's own templates can be deleted, so only they select. */
   selection?: TSelection
 }) {
   const { t } = useTranslation()
@@ -141,7 +141,7 @@ function Section({
   )
 }
 
-/** Templates (PLAN §9.1): the workspace's own first, then the built-in ones to start from. */
+/** Templates (PLAN §9.1): the tenant's own first, then the built-in ones to start from. */
 export default function TemplatesPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
@@ -177,7 +177,7 @@ export default function TemplatesPage() {
       ) : (
         <>
           <Section
-            title={t("This workspace")}
+            title={t("This tenant")}
             description={t(
               "Your own templates. Every save becomes a new version."
             )}

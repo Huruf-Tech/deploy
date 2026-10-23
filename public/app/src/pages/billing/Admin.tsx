@@ -101,7 +101,7 @@ function GrantDialog({
             </DialogDescription>
           </DialogHeader>
           <Field>
-            <FieldLabel htmlFor="grant-tenant">{t("Workspace ID")}</FieldLabel>
+            <FieldLabel htmlFor="grant-tenant">{t("Tenant ID")}</FieldLabel>
             <Input
               id="grant-tenant"
               name="tenant"
@@ -159,7 +159,7 @@ function GrantDialog({
   )
 }
 
-/** Admin → Billing (PLAN §22.6): every workspace's subscription, and grants. */
+/** Admin → Billing (PLAN §22.6): every tenant's subscription, and grants. */
 export default function BillingAdmin() {
   const { t } = useTranslation()
   const request = ThunderSDK.useCaching(
@@ -178,7 +178,7 @@ export default function BillingAdmin() {
           <h1 className="text-xl font-semibold">{t("Billing")}</h1>
           <p className="text-sm text-muted-foreground">
             {t(
-              "Subscriptions across workspaces. Plans are edited under Admin → Plans."
+              "Subscriptions across tenants. Plans are edited under Admin → Plans."
             )}
           </p>
         </div>
@@ -193,14 +193,14 @@ export default function BillingAdmin() {
         <Skeleton className="h-40 rounded-3xl" />
       ) : !data.length ? (
         <p className="rounded-3xl border border-dashed p-6 text-center text-sm text-muted-foreground">
-          {t("No subscriptions yet: every workspace is on Free.")}
+          {t("No subscriptions yet: every tenant is on Free.")}
         </p>
       ) : (
         <div className="overflow-x-auto rounded-2xl border">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>{t("Workspace")}</TableHead>
+                <TableHead>{t("Tenant")}</TableHead>
                 <TableHead>{t("Plan")}</TableHead>
                 <TableHead>{t("Status")}</TableHead>
                 <TableHead>{t("Period ends")}</TableHead>

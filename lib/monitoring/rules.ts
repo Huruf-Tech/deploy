@@ -134,7 +134,7 @@ async function sealChannels(
         throw Response.badRequest(
           isPlatform(tenant)
             ? `${target} isn't a platform admin; control plane alerts go to admins only`
-            : `${target} isn't a member of this workspace; alerts go to members only`,
+            : `${target} isn't a member of this tenant; alerts go to members only`,
         );
       }
       return { type, target: email };

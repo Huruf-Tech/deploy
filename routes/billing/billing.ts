@@ -77,7 +77,7 @@ export default new Router("/api", function billing(router) {
   const ownerOnly = async (req: Request) => {
     const ctx = await withTenant(req);
     if (!ctx.user._id.equals(ctx.owner._id)) {
-      throw Response.forbidden("Only the workspace owner can change its plan");
+      throw Response.forbidden("Only the tenant owner can change its plan");
     }
     return ctx;
   };

@@ -55,7 +55,7 @@ async function notifyPastDue(tenant: ObjectId, plan: WithId<TPlan>) {
       `We couldn't renew the ${plan.name} plan of ${
         doc!.name
       }: the wallet doesn't have enough ${plan.price.currency.toUpperCase()}.\n\n` +
-      `The workspace is on Free until it renews; nothing is deleted and your apps keep running. ` +
+      `The tenant is on Free until it renews; nothing is deleted and your apps keep running. ` +
       `We try again every hour. Add funds or pick a plan on the Plan & usage page.`,
   });
 }

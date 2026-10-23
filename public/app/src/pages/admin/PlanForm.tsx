@@ -181,10 +181,10 @@ export default function PlanForm() {
             <CardDescription>
               {plan.isFree
                 ? t(
-                    "The default plan every workspace starts on. It can't be made paid or deleted."
+                    "The default plan every tenant starts on. It can't be made paid or deleted."
                   )
                 : t(
-                    "Edits apply to subscribed workspaces from their next period."
+                    "Edits apply to subscribed tenants from their next period."
                   )}
             </CardDescription>
           </CardHeader>
@@ -363,8 +363,8 @@ export default function PlanForm() {
               <Label htmlFor="plan-visibility">{t("Visibility")}</Label>
               <Select
                 items={[
-                  { value: "public", label: t("Public: every workspace") },
-                  { value: "private", label: t("Private: chosen workspaces") },
+                  { value: "public", label: t("Public: every tenant") },
+                  { value: "private", label: t("Private: chosen tenants") },
                 ]}
                 value={plan.visibility}
                 disabled={plan.isFree}
@@ -377,10 +377,10 @@ export default function PlanForm() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="public">
-                    {t("Public: every workspace")}
+                    {t("Public: every tenant")}
                   </SelectItem>
                   <SelectItem value="private">
-                    {t("Private: chosen workspaces")}
+                    {t("Private: chosen tenants")}
                   </SelectItem>
                 </SelectContent>
               </Select>
@@ -399,7 +399,7 @@ export default function PlanForm() {
             </div>
             {plan.visibility === "private" && (
               <div className="flex flex-col gap-2 sm:col-span-2">
-                <Label htmlFor="plan-tenants">{t("Workspaces")}</Label>
+                <Label htmlFor="plan-tenants">{t("Tenants")}</Label>
                 <RefSelect
                   id="plan-tenants"
                   field={tenantsField}
@@ -420,7 +420,7 @@ export default function PlanForm() {
                 {t("Active")}
                 <span className="block text-xs text-muted-foreground">
                   {t(
-                    "Inactive plans can't be picked; subscribed workspaces keep them."
+                    "Inactive plans can't be picked; subscribed tenants keep them."
                   )}
                 </span>
               </span>

@@ -165,10 +165,10 @@ function ConfirmDialog({
           <DialogDescription>
             {plan?.isFree
               ? t(
-                  "Your current plan stays until its period ends, then the workspace moves to Free. Nothing is deleted; anything beyond Free's limits can't grow."
+                  "Your current plan stays until its period ends, then the tenant moves to Free. Nothing is deleted; anything beyond Free's limits can't grow."
                 )
               : t(
-                  "Upgrades start now with a full period, paid from the workspace wallet; there's no proration for what's left of the current one. A cheaper plan starts when the current period ends."
+                  "Upgrades start now with a full period, paid from the tenant wallet; there's no proration for what's left of the current one. A cheaper plan starts when the current period ends."
                 )}
           </DialogDescription>
         </DialogHeader>
@@ -217,7 +217,7 @@ export default function BillingPage() {
   const cancel = async () => {
     if (
       !confirm(
-        t("Cancel at the end of this period? The workspace then moves to Free.")
+        t("Cancel at the end of this period? The tenant then moves to Free.")
       )
     )
       return
@@ -241,7 +241,7 @@ export default function BillingPage() {
       <div>
         <h1 className="text-xl font-semibold">{t("Plan & usage")}</h1>
         <p className="text-sm text-muted-foreground">
-          {t("What this workspace can use, and what it uses now.")}
+          {t("What this tenant can use, and what it uses now.")}
         </p>
       </div>
 
@@ -251,7 +251,7 @@ export default function BillingPage() {
           <AlertTitle>{t("Your plan couldn't be renewed")}</AlertTitle>
           <AlertDescription>
             {t(
-              "The workspace is on Free until the renewal goes through. We try again every hour; add funds to the wallet or pick a plan below."
+              "The tenant is on Free until the renewal goes through. We try again every hour; add funds to the wallet or pick a plan below."
             )}
             {sub.lastError && (
               <span className="block text-xs">{sub.lastError}</span>
@@ -306,7 +306,7 @@ export default function BillingPage() {
                         : t("Until {{date}}", {
                             date: day(overview.period.periodEnd),
                           })
-                  : t("Every workspace starts here.")}
+                  : t("Every tenant starts here.")}
               </p>
             </div>
             {overview.isOwner &&
@@ -330,7 +330,7 @@ export default function BillingPage() {
         </h2>
         {overview && !overview.isOwner && (
           <p className="text-sm text-muted-foreground">
-            {t("Only the workspace owner can change the plan.")}
+            {t("Only the tenant owner can change the plan.")}
           </p>
         )}
         {overview?.isOwner && !overview.paymentsReady && (

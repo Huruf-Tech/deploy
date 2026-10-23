@@ -43,7 +43,7 @@ export default {
       const allowed = await safetyLimit("SAFETY_TENANTS_OWNED_PER_USER");
       if (await tenantModel.countDocuments({ createdBy: user }) >= allowed) {
         return Response.forbidden(
-          `You can own up to ${allowed} workspaces`,
+          `You can own up to ${allowed} tenants`,
         );
       }
     }

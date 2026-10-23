@@ -1077,7 +1077,7 @@ export default function ProjectDetail() {
         <TabsContent value="variables" className="flex flex-col gap-3 pt-4">
           <p className="text-sm text-muted-foreground">
             {t(
-              "Variables apply on the next deploy; they override workspace and account variables."
+              "Variables apply on the next deploy; they override tenant and global variables."
             )}
           </p>
           <VariableTable scope={{ scope: "project", project: project._id }} />

@@ -82,7 +82,7 @@ export default new Router("/api", function billingAdmin(router) {
         const body = $body.parse(await bodyAsJson(req));
         const { user } = await withAuthSession(req);
         if (!await tenantModel.countDocuments({ _id: body.tenant })) {
-          throw Response.notFound("Workspace not found");
+          throw Response.notFound("Tenant not found");
         }
         await billing.grantComplimentary({ ...body, by: user._id });
         return Response.json({ ok: true });

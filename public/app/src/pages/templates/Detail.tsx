@@ -433,7 +433,7 @@ export default function TemplateDetail() {
           <h1 className="text-xl font-semibold">{template.name}</h1>
           <div className="mt-1 flex flex-wrap items-center gap-1">
             <Badge variant="secondary">
-              {template.scope === "system" ? t("Built-in") : t("Workspace")}
+              {template.scope === "system" ? t("Built-in") : t("Tenant")}
             </Badge>
             <Badge variant="outline">
               {template.kind === "app" ? t("App") : t("Service")}

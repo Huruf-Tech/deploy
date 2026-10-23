@@ -140,7 +140,7 @@ async function assertFits(opts: {
     ).toArray(),
   ]);
   if (servers.length !== opts.servers.length) {
-    throw Response.badRequest("Pick active servers of this workspace");
+    throw Response.badRequest("Pick active servers of this tenant");
   }
 
   for (const server of servers) {

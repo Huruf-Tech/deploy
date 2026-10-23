@@ -251,7 +251,7 @@ export function noticeOf(
       ? "the control plane"
       : `control plane instance ${event.instance}`
     : [names.project, names.server && `on ${names.server}`]
-      .filter(Boolean).join(" ") || "your workspace";
+      .filter(Boolean).join(" ") || "your tenant";
   const resolved = event.delivery.notice === "resolved";
   const value = event.value === undefined
     ? ""

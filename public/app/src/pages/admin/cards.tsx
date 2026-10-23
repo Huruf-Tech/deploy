@@ -51,7 +51,7 @@ export function PlanCards(props: TCardProps) {
             {plan.isFree && <Badge variant="secondary">{t("Default")}</Badge>}
             {plan.visibility === "private" && (
               <Badge variant="outline">
-                {t("Private · {{count}} workspaces", {
+                {t("Private · {{count}} tenants", {
                   count: plan.allowedTenants?.length ?? 0,
                 })}
               </Badge>

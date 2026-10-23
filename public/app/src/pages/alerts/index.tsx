@@ -343,7 +343,7 @@ function RuleDialog({
             <FieldLegend variant="label">{t("Send to")}</FieldLegend>
             <FieldDescription>
               {t(
-                "Email goes to workspace members only. Webhook and Slack URLs are stored encrypted and shown masked."
+                "Email goes to tenant members only. Webhook and Slack URLs are stored encrypted and shown masked."
               )}
             </FieldDescription>
             {channels.map((c, i) => (

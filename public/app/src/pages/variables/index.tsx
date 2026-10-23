@@ -211,11 +211,11 @@ export function VariableTable({ scope }: { scope: TScope }) {
             <EmptyDescription>
               {scope.scope === "project"
                 ? t(
-                    "Only this project gets them; they override workspace variables."
+                    "Only this project gets them; they override tenant variables."
                   )
                 : scope.scope === "tenant"
-                  ? t("Shared by everyone in this workspace and its apps.")
-                  : t("Yours alone. Every workspace you own uses them.")}
+                  ? t("Shared by everyone in this tenant and its apps.")
+                  : t("Yours alone. Every tenant you own uses them.")}
             </EmptyDescription>
           </EmptyHeader>
           <EmptyContent>{add}</EmptyContent>
@@ -388,7 +388,7 @@ function ScriptAccess() {
         </CardTitle>
         <CardDescription>
           {t(
-            "Returns this workspace's resolved variables (references expanded) as env and files. Create an API key with the variableApi scope so it can read nothing else."
+            "Returns this tenant's resolved variables (references expanded) as env and files. Create an API key with the variableApi scope so it can read nothing else."
           )}
         </CardDescription>
       </CardHeader>
@@ -416,7 +416,7 @@ function ScriptAccess() {
   )
 }
 
-/** Variables (PLAN §12, §15.6): workspace and account scopes, plus script access. */
+/** Variables (PLAN §12, §15.6): tenant and global scopes, plus script access. */
 export default function VariablesPage() {
   const { t } = useTranslation()
 
@@ -426,15 +426,15 @@ export default function VariablesPage() {
         <h1 className="text-xl font-semibold">{t("Variables")}</h1>
         <p className="text-sm text-muted-foreground">
           {t(
-            "Encrypted settings for your apps. When a key exists in both scopes, the workspace value wins."
+            "Encrypted settings for your apps. When a key exists in both scopes, the tenant value wins."
           )}
         </p>
       </div>
 
       <Tabs defaultValue="tenant">
         <TabsList>
-          <TabsTrigger value="tenant">{t("Workspace")}</TabsTrigger>
-          <TabsTrigger value="global">{t("My account")}</TabsTrigger>
+          <TabsTrigger value="tenant">{t("Tenant")}</TabsTrigger>
+          <TabsTrigger value="global">{t("Global")}</TabsTrigger>
         </TabsList>
         <TabsContent value="tenant" className="pt-2">
           <VariableTable scope={{ scope: "tenant" }} />

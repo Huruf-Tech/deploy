@@ -724,7 +724,7 @@ export default function NewProject() {
                         {x.name}
                       </span>
                       <span className="block text-xs text-muted-foreground">
-                        {x.scope === "system" ? t("Built-in") : t("Workspace")}{" "}
+                        {x.scope === "system" ? t("Built-in") : t("Tenant")}{" "}
                         · v{x.latestVersion}
                       </span>
                     </span>
@@ -989,7 +989,7 @@ export default function NewProject() {
         >
           <p className="text-sm text-muted-foreground">
             {t(
-              "Optional. Paste or drop the project's .env; you can add more later under Variables. Workspace variables apply too, and these override them."
+              "Optional. Paste or drop the project's .env; you can add more later under Variables. Tenant variables apply too, and these override them."
             )}
           </p>
           <EnvEditor value={variables} onChange={setVariables} />

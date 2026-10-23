@@ -66,7 +66,7 @@ export default new Router("/api", function storages(router) {
             MAX_STORAGES
         ) {
           throw Response.badRequest(
-            `A workspace can have ${MAX_STORAGES} storage connections`,
+            `A tenant can have ${MAX_STORAGES} storage connections`,
           );
         }
         if (body.provider !== "aws" && !body.endpoint) {

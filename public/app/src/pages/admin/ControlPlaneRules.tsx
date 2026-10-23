@@ -332,7 +332,7 @@ function RuleDialog({
 
 /**
  * Alerts on the control plane itself (CPU, memory, poll time, errors, polls
- * missing), delivered through the same channels as workspace alerts.
+ * missing), delivered through the same channels as tenant alerts.
  */
 export function ControlPlaneRules() {
   const { t } = useTranslation()

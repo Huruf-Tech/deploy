@@ -53,7 +53,7 @@ export default new Router("/api", function plans(router) {
         );
         if (used) {
           throw Response.badRequest(
-            "Workspaces are subscribed to this plan: deactivate it instead",
+            "Tenants are subscribed to this plan: deactivate it instead",
           );
         }
       },
