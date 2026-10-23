@@ -54,3 +54,16 @@ func TestMeshRegistryIsTrustedOnce(t *testing.T) {
 		t.Fatal("a second merge changed the config")
 	}
 }
+
+// Docker won't start in swarm mode with live-restore (Dokploy hosts are swarm nodes).
+func TestMergeDaemonConfigDropsLiveRestoreOnSwarm(t *testing.T) {
+	p := payload
+	p.Swarm = true
+	merged, changed, err := MergeDaemonConfig([]byte(`{"live-restore": true}`), p)
+	if err != nil || !changed {
+		t.Fatalf("changed=%v err=%v", changed, err)
+	}
+	if strings.Contains(string(merged), "live-restore") {
+		t.Fatalf("live-restore kept on a swarm node: %s", merged)
+	}
+}

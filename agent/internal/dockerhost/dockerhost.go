@@ -34,7 +34,12 @@ type Payload struct {
 	Network    string `json:"network"`
 	Subnet     string `json:"subnet,omitempty"`
 	MeshCidr   string `json:"meshCidr,omitempty"`
+	// Set by Ensure, not the control plane: the host is a Docker Swarm node.
+	Swarm bool `json:"-"`
 }
+
+// swarmState exists while the node is in a swarm, even when Docker is down.
+const swarmState = "/var/lib/docker/swarm/state.json"
 
 // The mesh interface; traffic from it may reach containers directly (Docker 28+
 // otherwise drops routed traffic to unpublished container ports).
@@ -79,8 +84,11 @@ func Ensure(ctx context.Context, p Payload) (map[string]any, error) {
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return result(), err
 	}
+	// Docker refuses to start in swarm mode with live-restore on (e.g. Dokploy hosts).
+	_, statErr := os.Stat(swarmState)
+	p.Swarm = statErr == nil
 	// With live-restore already on, restarting Docker keeps containers running.
-	liveRestore := bytes.Contains(existing, []byte(`"live-restore": true`))
+	liveRestore := !p.Swarm && bytes.Contains(existing, []byte(`"live-restore": true`))
 	merged, changed, err := MergeDaemonConfig(existing, p)
 	if err != nil {
 		return result(), fmt.Errorf("%s is not valid JSON: %w", daemonConfigPath, err)
@@ -107,6 +115,17 @@ func Ensure(ctx context.Context, p Payload) (map[string]any, error) {
 		// built-in registry needs. Log limits wait for the next restart.
 		if out, _ := run(ctx, "docker", "ps", "-q"); liveRestore || strings.TrimSpace(out) == "" {
 			if _, err := run(ctx, "systemctl", "restart", "docker"); err != nil {
+				// Never leave Docker down over our settings: put the old file back.
+				if changed {
+					if existing == nil {
+						_ = os.Remove(daemonConfigPath)
+					} else {
+						_ = os.WriteFile(daemonConfigPath, existing, 0o644)
+					}
+					if _, again := run(ctx, "systemctl", "restart", "docker"); again == nil {
+						return result(), fmt.Errorf("Docker didn't start with the new settings, so %s was restored: %w", daemonConfigPath, err)
+					}
+				}
 				return result(), fmt.Errorf("restarting Docker: %w", err)
 			}
 		} else if _, err := run(ctx, "systemctl", "reload", "docker"); err == nil {
@@ -151,8 +170,13 @@ func MergeDaemonConfig(existing []byte, p Payload) (merged []byte, changed bool,
 
 	config["log-driver"] = "local"
 	config["log-opts"] = map[string]any{"max-size": p.LogMaxSize, "max-file": strconv.Itoa(p.LogMaxFile)}
-	// Containers keep running while the Docker daemon restarts or upgrades.
-	config["live-restore"] = true
+	// Containers keep running while the Docker daemon restarts or upgrades;
+	// swarm mode refuses it, so Docker wouldn't start at all.
+	if p.Swarm {
+		delete(config, "live-restore")
+	} else {
+		config["live-restore"] = true
+	}
 	// The built-in registry speaks plain HTTP over the WireGuard-encrypted mesh.
 	if p.MeshCidr != "" {
 		registries, _ := config["insecure-registries"].([]any)
