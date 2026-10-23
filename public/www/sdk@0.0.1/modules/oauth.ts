@@ -1,10 +1,5 @@
 import type { 
     TRequestOptions,
-    TFilterValue,
-    TFilterExpression,
-    TMultiFilters,
-    TFilters,
-    TPagination,
 } from "../types.ts";
 import type { BaseSDK } from "../base.ts";
 
@@ -31,7 +26,9 @@ export type consent$query = {
     redirect_uri: string;
 };
 export type consent$body = {
-    resourceGrant: Record<string, string[]>;
+    resourceGrant: {
+        [K in string]: string[];
+    };
 };
 export type consent$return = {
     _id: string;
@@ -82,7 +79,7 @@ export const oauthModule = (sdk: typeof BaseSDK) => {
             const toPath = compile("oauth/authorize");
             const requestPayload = {
                 method,
-                url: toPath(data?.params),
+                url: toPath(sdk.resolvePathParams(data?.params)),
                 params: data?.query,
                 data: data?.body,
                 signal: data?.signal,
@@ -110,7 +107,7 @@ export const oauthModule = (sdk: typeof BaseSDK) => {
             const toPath = compile("oauth/consent");
             const requestPayload = {
                 method,
-                url: toPath(data?.params),
+                url: toPath(sdk.resolvePathParams(data?.params)),
                 params: data?.query,
                 data: data?.body,
                 signal: data?.signal,
@@ -138,7 +135,7 @@ export const oauthModule = (sdk: typeof BaseSDK) => {
             const toPath = compile("oauth/token");
             const requestPayload = {
                 method,
-                url: toPath(data?.params),
+                url: toPath(sdk.resolvePathParams(data?.params)),
                 params: data?.query,
                 data: data?.body,
                 signal: data?.signal,
@@ -166,7 +163,7 @@ export const oauthModule = (sdk: typeof BaseSDK) => {
             const toPath = compile("oauth/revoke");
             const requestPayload = {
                 method,
-                url: toPath(data?.params),
+                url: toPath(sdk.resolvePathParams(data?.params)),
                 params: data?.query,
                 data: data?.body,
                 signal: data?.signal,
@@ -194,7 +191,7 @@ export const oauthModule = (sdk: typeof BaseSDK) => {
             const toPath = compile("oauth/jwks");
             const requestPayload = {
                 method,
-                url: toPath(data?.params),
+                url: toPath(sdk.resolvePathParams(data?.params)),
                 params: data?.query,
                 data: data?.body,
                 signal: data?.signal,

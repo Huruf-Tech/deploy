@@ -208,9 +208,7 @@ export function MoreSheet({
           {/* change language */}
           <Button
             variant="ghost"
-            onClick={() =>
-              i18next.changeLanguage(i18next.language === "en" ? "ar" : "en")
-            }
+            onClick={() => i18next.changeLanguage(i18next.language === "en" ? "ar" : "en")}
             className="justify-between"
           >
             <div className="flex items-center gap-3">
@@ -234,7 +232,9 @@ export function MoreSheet({
               <IconMoon className="size-5 shrink-0" />
             )}
             <span>
-              {resolvedTheme === "dark" ? t("Light mode") : t("Dark mode")}
+              {resolvedTheme === "dark"
+                ? t("Light mode")
+                : t("Dark mode")}
             </span>
           </Button>
         </div>
@@ -248,7 +248,7 @@ export function MoreSheet({
             onClick={logout}
             aria-label="Logout"
           >
-            <IconLogout className="size-4" /> {t("Log out")}
+            <IconLogout className="size-4" />   {t("Log out")}
           </Button>
         </div>
       </SheetContent>

@@ -18,7 +18,9 @@ export function ViewPage({ group, name }: IViewPageProps) {
     <Navigate
       to={
         getLocalUrl(
-          [groupPath(group), name, "form", id].filter(Boolean).join("/")
+          [groupPath(group), name, "form", id]
+            .filter(Boolean)
+            .join("/")
         ).pathname
       }
     />

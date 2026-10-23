@@ -10,7 +10,7 @@ export const projectGroupsModule = (sdk) => {
                 const toPath = compile("projectGroups/api/");
                 const requestPayload = {
                     method,
-                    url: toPath(data?.params),
+                    url: toPath(sdk.resolvePathParams(data?.params)),
                     params: data?.query,
                     data: data?.body,
                     signal: data?.signal,
@@ -30,7 +30,7 @@ export const projectGroupsModule = (sdk) => {
                 const toPath = compile("projectGroups/api/count");
                 const requestPayload = {
                     method,
-                    url: toPath(data?.params),
+                    url: toPath(sdk.resolvePathParams(data?.params)),
                     params: data?.query,
                     data: data?.body,
                     signal: data?.signal,
@@ -50,7 +50,7 @@ export const projectGroupsModule = (sdk) => {
                 const toPath = compile("projectGroups/api{/:id}");
                 const requestPayload = {
                     method,
-                    url: toPath(data?.params),
+                    url: toPath(sdk.resolvePathParams(data?.params)),
                     params: data?.query,
                     data: data?.body,
                     signal: data?.signal,
@@ -70,7 +70,7 @@ export const projectGroupsModule = (sdk) => {
                 const toPath = compile("projectGroups/api/:id");
                 const requestPayload = {
                     method,
-                    url: toPath(data?.params),
+                    url: toPath(sdk.resolvePathParams(data?.params)),
                     params: data?.query,
                     data: data?.body,
                     signal: data?.signal,
@@ -90,7 +90,7 @@ export const projectGroupsModule = (sdk) => {
                 const toPath = compile("projectGroups/api/:id");
                 const requestPayload = {
                     method,
-                    url: toPath(data?.params),
+                    url: toPath(sdk.resolvePathParams(data?.params)),
                     params: data?.query,
                     data: data?.body,
                     signal: data?.signal,

@@ -1,10 +1,5 @@
 import type { 
     TRequestOptions,
-    TFilterValue,
-    TFilterExpression,
-    TMultiFilters,
-    TFilters,
-    TPagination,
 } from "../types.ts";
 import type { BaseSDK } from "../base.ts";
 
@@ -19,7 +14,9 @@ export type branding$return = {
     homepageURL?: string | undefined;
     termsURL?: string | undefined;
     privacyURL?: string | undefined;
-    theme: Record<string, string>;
+    theme: {
+        [K in string]: string;
+    };
     hidePoweredBy?: boolean | undefined;
 };
 export type capabilities$return = {
@@ -54,7 +51,7 @@ export const authModule = (sdk: typeof BaseSDK) => {
             const toPath = compile("auth/branding");
             const requestPayload = {
                 method,
-                url: toPath(data?.params),
+                url: toPath(sdk.resolvePathParams(data?.params)),
                 params: data?.query,
                 data: data?.body,
                 signal: data?.signal,
@@ -82,7 +79,7 @@ export const authModule = (sdk: typeof BaseSDK) => {
             const toPath = compile("auth/api/capabilities");
             const requestPayload = {
                 method,
-                url: toPath(data?.params),
+                url: toPath(sdk.resolvePathParams(data?.params)),
                 params: data?.query,
                 data: data?.body,
                 signal: data?.signal,
@@ -110,7 +107,7 @@ export const authModule = (sdk: typeof BaseSDK) => {
             const toPath = compile("auth/api{/*endpoint}");
             const requestPayload = {
                 method,
-                url: toPath(data?.params),
+                url: toPath(sdk.resolvePathParams(data?.params)),
                 params: data?.query,
                 data: data?.body,
                 signal: data?.signal,
@@ -138,7 +135,7 @@ export const authModule = (sdk: typeof BaseSDK) => {
             const toPath = compile("auth{/*endpoint}");
             const requestPayload = {
                 method,
-                url: toPath(data?.params),
+                url: toPath(sdk.resolvePathParams(data?.params)),
                 params: data?.query,
                 data: data?.body,
                 signal: data?.signal,

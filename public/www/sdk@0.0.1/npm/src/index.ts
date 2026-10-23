@@ -88,43 +88,43 @@ export class ThunderSDK extends BaseSDK {
         "wallets",
     ];
     
-    static projectGroups = projectGroupsModule(this);
-    static projects = projectsModule(this);
-    static billing = billingModule(this);
-    static billingAdmin = billingAdminModule(this);
-    static plans = plansModule(this);
-    static gitIntegrations = gitIntegrationsModule(this);
-    static githubHooks = githubHooksModule(this);
-    static templates = templatesModule(this);
-    static variables = variablesModule(this);
-    static home = homeModule(this);
-    static index = indexModule(this);
-    static agents = agentsModule(this);
-    static networks = networksModule(this);
-    static registries = registriesModule(this);
-    static servers = serversModule(this);
-    static storages = storagesModule(this);
-    static streams = streamsModule(this);
-    static alertEvents = alertEventsModule(this);
-    static alertRules = alertRulesModule(this);
-    static controlPlane = controlPlaneModule(this);
-    static wellKnown = wellKnownModule(this);
-    static accessControl = accessControlModule(this);
-    static accessControlPolicies = accessControlPoliciesModule(this);
-    static apiKeys = apiKeysModule(this);
-    static auth = authModule(this);
-    static envs = envsModule(this);
-    static imageKit = imageKitModule(this);
-    static me = meModule(this);
-    static oauth = oauthModule(this);
-    static oauthClients = oauthClientsModule(this);
-    static tenantInvites = tenantInvitesModule(this);
-    static tenantMembers = tenantMembersModule(this);
-    static tenantMemberships = tenantMembershipsModule(this);
-    static tenants = tenantsModule(this);
-    static users = usersModule(this);
-    static walletLedgers = walletLedgersModule(this);
-    static wallets = walletsModule(this);
+    static projectGroups: ReturnType<typeof projectGroupsModule> = projectGroupsModule(this);
+    static projects: ReturnType<typeof projectsModule> = projectsModule(this);
+    static billing: ReturnType<typeof billingModule> = billingModule(this);
+    static billingAdmin: ReturnType<typeof billingAdminModule> = billingAdminModule(this);
+    static plans: ReturnType<typeof plansModule> = plansModule(this);
+    static gitIntegrations: ReturnType<typeof gitIntegrationsModule> = gitIntegrationsModule(this);
+    static githubHooks: ReturnType<typeof githubHooksModule> = githubHooksModule(this);
+    static templates: ReturnType<typeof templatesModule> = templatesModule(this);
+    static variables: ReturnType<typeof variablesModule> = variablesModule(this);
+    static home: ReturnType<typeof homeModule> = homeModule(this);
+    static index: ReturnType<typeof indexModule> = indexModule(this);
+    static agents: ReturnType<typeof agentsModule> = agentsModule(this);
+    static networks: ReturnType<typeof networksModule> = networksModule(this);
+    static registries: ReturnType<typeof registriesModule> = registriesModule(this);
+    static servers: ReturnType<typeof serversModule> = serversModule(this);
+    static storages: ReturnType<typeof storagesModule> = storagesModule(this);
+    static streams: ReturnType<typeof streamsModule> = streamsModule(this);
+    static alertEvents: ReturnType<typeof alertEventsModule> = alertEventsModule(this);
+    static alertRules: ReturnType<typeof alertRulesModule> = alertRulesModule(this);
+    static controlPlane: ReturnType<typeof controlPlaneModule> = controlPlaneModule(this);
+    static wellKnown: ReturnType<typeof wellKnownModule> = wellKnownModule(this);
+    static accessControl: ReturnType<typeof accessControlModule> = accessControlModule(this);
+    static accessControlPolicies: ReturnType<typeof accessControlPoliciesModule> = accessControlPoliciesModule(this);
+    static apiKeys: ReturnType<typeof apiKeysModule> = apiKeysModule(this);
+    static auth: ReturnType<typeof authModule> = authModule(this);
+    static envs: ReturnType<typeof envsModule> = envsModule(this);
+    static imageKit: ReturnType<typeof imageKitModule> = imageKitModule(this);
+    static me: ReturnType<typeof meModule> = meModule(this);
+    static oauth: ReturnType<typeof oauthModule> = oauthModule(this);
+    static oauthClients: ReturnType<typeof oauthClientsModule> = oauthClientsModule(this);
+    static tenantInvites: ReturnType<typeof tenantInvitesModule> = tenantInvitesModule(this);
+    static tenantMembers: ReturnType<typeof tenantMembersModule> = tenantMembersModule(this);
+    static tenantMemberships: ReturnType<typeof tenantMembershipsModule> = tenantMembershipsModule(this);
+    static tenants: ReturnType<typeof tenantsModule> = tenantsModule(this);
+    static users: ReturnType<typeof usersModule> = usersModule(this);
+    static walletLedgers: ReturnType<typeof walletLedgersModule> = walletLedgersModule(this);
+    static wallets: ReturnType<typeof walletsModule> = walletsModule(this);
 
     static override plugins = {
         essentials: essentialsEntry,
@@ -208,8 +208,8 @@ export class ThunderSDK extends BaseSDK {
             const unpackModules: string[] = [];
 
             this.getModuleNames().forEach((name) => {
-                Object.keys(this.getModule(name)).forEach((action) => {
-                    unpackModules.push(`${name}.${action}`);
+                Object.entries(this.getModule(name)).forEach(([action, fn]) => {
+                    if (typeof fn === "function") unpackModules.push(`${name}.${action}`);
                 });
             });
 

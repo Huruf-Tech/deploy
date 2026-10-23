@@ -1,10 +1,5 @@
 import type { 
     TRequestOptions,
-    TFilterValue,
-    TFilterExpression,
-    TMultiFilters,
-    TFilters,
-    TPagination,
 } from "../types.ts";
 import type { BaseSDK } from "../base.ts";
 
@@ -99,7 +94,7 @@ export const alertRulesModule = (sdk: typeof BaseSDK) => {
             const toPath = compile("alertRules/api/");
             const requestPayload = {
                 method,
-                url: toPath(data?.params),
+                url: toPath(sdk.resolvePathParams(data?.params)),
                 params: data?.query,
                 data: data?.body,
                 signal: data?.signal,
@@ -127,7 +122,7 @@ export const alertRulesModule = (sdk: typeof BaseSDK) => {
             const toPath = compile("alertRules/api/");
             const requestPayload = {
                 method,
-                url: toPath(data?.params),
+                url: toPath(sdk.resolvePathParams(data?.params)),
                 params: data?.query,
                 data: data?.body,
                 signal: data?.signal,
@@ -155,7 +150,7 @@ export const alertRulesModule = (sdk: typeof BaseSDK) => {
             const toPath = compile("alertRules/api/:id");
             const requestPayload = {
                 method,
-                url: toPath(data?.params),
+                url: toPath(sdk.resolvePathParams(data?.params)),
                 params: data?.query,
                 data: data?.body,
                 signal: data?.signal,
@@ -183,7 +178,7 @@ export const alertRulesModule = (sdk: typeof BaseSDK) => {
             const toPath = compile("alertRules/api/:id");
             const requestPayload = {
                 method,
-                url: toPath(data?.params),
+                url: toPath(sdk.resolvePathParams(data?.params)),
                 params: data?.query,
                 data: data?.body,
                 signal: data?.signal,

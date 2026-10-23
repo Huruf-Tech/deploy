@@ -1,10 +1,10 @@
-"use client"
+"use client";
 
-import { IconTrendingDown3, IconTrendingUp3 } from "@tabler/icons-react"
-import { AnimatePresence, motion, useReducedMotion } from "motion/react"
-import { useEffect, useRef, useState } from "react"
-import { EASE_OUT } from "@/core/lib/ease"
-import { cn } from "@/lib/utils"
+import { IconTrendingDown3 , IconTrendingUp3  } from "@tabler/icons-react";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
+import { useEffect, useRef, useState } from "react";
+import { EASE_OUT } from "@/core/lib/ease";
+import { cn } from "@/lib/utils";
 
 /**
  * A transient change indicator for the balance: a tinted pill with a trend
@@ -15,24 +15,24 @@ export function BalanceDelta({
   balance,
   initialChange,
 }: {
-  balance: number
-  initialChange?: number
+  balance: number;
+  initialChange?: number;
 }) {
-  const reduce = useReducedMotion()
-  const prevRef = useRef(balance)
+  const reduce = useReducedMotion();
+  const prevRef = useRef(balance);
   const [delta, setDelta] = useState<{ id: number; amount: number } | null>(
-    initialChange ? { id: 0, amount: initialChange } : null
-  )
+    initialChange ? { id: 0, amount: initialChange } : null,
+  );
 
   // Persist the last change until the balance moves again — don't auto-hide.
   useEffect(() => {
-    const diff = balance - prevRef.current
-    prevRef.current = balance
-    if (diff === 0) return
-    setDelta({ id: Date.now(), amount: diff })
-  }, [balance])
+    const diff = balance - prevRef.current;
+    prevRef.current = balance;
+    if (diff === 0) return;
+    setDelta({ id: Date.now(), amount: diff });
+  }, [balance]);
 
-  const up = (delta?.amount ?? 0) > 0
+  const up = (delta?.amount ?? 0) > 0;
 
   return (
     <div className="mt-2 flex h-7 items-center justify-center">
@@ -48,7 +48,7 @@ export function BalanceDelta({
               "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold tabular-nums",
               up
                 ? "bg-success/15 text-success"
-                : "bg-destructive/15 text-destructive"
+                : "bg-destructive/15 text-destructive",
             )}
           >
             {up ? (
@@ -65,5 +65,5 @@ export function BalanceDelta({
         ) : null}
       </AnimatePresence>
     </div>
-  )
+  );
 }

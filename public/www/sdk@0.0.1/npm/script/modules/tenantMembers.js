@@ -13,7 +13,7 @@ const tenantMembersModule = (sdk) => {
                 const toPath = (0, path_to_regexp_1.compile)("tenantMembers/api/count");
                 const requestPayload = {
                     method,
-                    url: toPath(data?.params),
+                    url: toPath(sdk.resolvePathParams(data?.params)),
                     params: data?.query,
                     data: data?.body,
                     signal: data?.signal,
@@ -33,7 +33,7 @@ const tenantMembersModule = (sdk) => {
                 const toPath = (0, path_to_regexp_1.compile)("tenantMembers/api{/:id}");
                 const requestPayload = {
                     method,
-                    url: toPath(data?.params),
+                    url: toPath(sdk.resolvePathParams(data?.params)),
                     params: data?.query,
                     data: data?.body,
                     signal: data?.signal,
@@ -53,7 +53,7 @@ const tenantMembersModule = (sdk) => {
                 const toPath = (0, path_to_regexp_1.compile)("tenantMembers/api/:id");
                 const requestPayload = {
                     method,
-                    url: toPath(data?.params),
+                    url: toPath(sdk.resolvePathParams(data?.params)),
                     params: data?.query,
                     data: data?.body,
                     signal: data?.signal,
@@ -73,7 +73,7 @@ const tenantMembersModule = (sdk) => {
                 const toPath = (0, path_to_regexp_1.compile)("tenantMembers/api/:id");
                 const requestPayload = {
                     method,
-                    url: toPath(data?.params),
+                    url: toPath(sdk.resolvePathParams(data?.params)),
                     params: data?.query,
                     data: data?.body,
                     signal: data?.signal,
@@ -93,7 +93,7 @@ const tenantMembersModule = (sdk) => {
                 const toPath = (0, path_to_regexp_1.compile)("tenantMembers/api/");
                 const requestPayload = {
                     method,
-                    url: toPath(data?.params),
+                    url: toPath(sdk.resolvePathParams(data?.params)),
                     params: data?.query,
                     data: data?.body,
                     signal: data?.signal,
@@ -113,7 +113,7 @@ const tenantMembersModule = (sdk) => {
     methods.del.__scope = "tenantMembers";
     methods.create.__scope = "tenantMembers";
     sdk["_moduleGroup"].set(methods, "IAM");
-    sdk["_moduleMetadata"].set(methods, { "crud": { "schema": { "$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object", "properties": { "tenant": { "tsType": "string" }, "user": { "tsType": "string" }, "email": { "type": "string" }, "role": { "type": "string" }, "isOwner": { "type": "boolean" }, "expiresAt": { "type": "string", "format": "date-time" }, "createdBy": { "tsType": "string" }, "createdAt": { "default": "2026-10-23T21:05:39.767Z", "type": "string", "format": "date-time" } }, "required": ["tenant", "user", "isOwner", "createdBy", "createdAt"], "additionalProperties": false }, "insertSchema": { "$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object", "properties": { "invite": { "tsType": "string" } }, "required": ["invite"] }, "updateSchema": { "$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object", "properties": { "role": { "type": "string" }, "expiresAt": { "type": "string", "format": "date-time" } } } } });
+    sdk["_moduleMetadata"].set(methods, { "crud": { "schema": { "$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object", "properties": { "tenant": { "tsType": "string" }, "user": { "tsType": "string" }, "email": { "type": "string" }, "role": { "type": "string" }, "isOwner": { "type": "boolean" }, "expiresAt": { "type": "string", "format": "date-time" }, "createdBy": { "tsType": "string" }, "createdAt": { "default": "2026-10-23T23:02:48.505Z", "type": "string", "format": "date-time" } }, "required": ["tenant", "user", "isOwner", "createdBy", "createdAt"], "additionalProperties": false }, "insertSchema": { "$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object", "properties": { "invite": { "tsType": "string" } }, "required": ["invite"] }, "updateSchema": { "$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object", "properties": { "role": { "type": "string" }, "expiresAt": { "type": "string", "format": "date-time" } } } } });
     return methods;
 };
 exports.tenantMembersModule = tenantMembersModule;

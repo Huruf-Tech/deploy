@@ -1,8 +1,5 @@
 import type { 
     TRequestOptions,
-    TFilterValue,
-    TFilterExpression,
-    TMultiFilters,
     TFilters,
     TPagination,
 } from "../types.ts";
@@ -95,7 +92,7 @@ export const accessControlPoliciesModule = (sdk: typeof BaseSDK) => {
             const toPath = compile("accessControlPolicies/api/me");
             const requestPayload = {
                 method,
-                url: toPath(data?.params),
+                url: toPath(sdk.resolvePathParams(data?.params)),
                 params: data?.query,
                 data: data?.body,
                 signal: data?.signal,
@@ -123,7 +120,7 @@ export const accessControlPoliciesModule = (sdk: typeof BaseSDK) => {
             const toPath = compile("accessControlPolicies/api/");
             const requestPayload = {
                 method,
-                url: toPath(data?.params),
+                url: toPath(sdk.resolvePathParams(data?.params)),
                 params: data?.query,
                 data: data?.body,
                 signal: data?.signal,
@@ -151,7 +148,7 @@ export const accessControlPoliciesModule = (sdk: typeof BaseSDK) => {
             const toPath = compile("accessControlPolicies/api/count");
             const requestPayload = {
                 method,
-                url: toPath(data?.params),
+                url: toPath(sdk.resolvePathParams(data?.params)),
                 params: data?.query,
                 data: data?.body,
                 signal: data?.signal,
@@ -179,7 +176,7 @@ export const accessControlPoliciesModule = (sdk: typeof BaseSDK) => {
             const toPath = compile("accessControlPolicies/api{/:id}");
             const requestPayload = {
                 method,
-                url: toPath(data?.params),
+                url: toPath(sdk.resolvePathParams(data?.params)),
                 params: data?.query,
                 data: data?.body,
                 signal: data?.signal,
@@ -207,7 +204,7 @@ export const accessControlPoliciesModule = (sdk: typeof BaseSDK) => {
             const toPath = compile("accessControlPolicies/api/:id");
             const requestPayload = {
                 method,
-                url: toPath(data?.params),
+                url: toPath(sdk.resolvePathParams(data?.params)),
                 params: data?.query,
                 data: data?.body,
                 signal: data?.signal,
@@ -235,7 +232,7 @@ export const accessControlPoliciesModule = (sdk: typeof BaseSDK) => {
             const toPath = compile("accessControlPolicies/api/:id");
             const requestPayload = {
                 method,
-                url: toPath(data?.params),
+                url: toPath(sdk.resolvePathParams(data?.params)),
                 params: data?.query,
                 data: data?.body,
                 signal: data?.signal,
@@ -262,7 +259,7 @@ export const accessControlPoliciesModule = (sdk: typeof BaseSDK) => {
 
     sdk["_moduleGroup"].set(methods, "IAM");
 
-    sdk["_moduleMetadata"].set(methods, {"crud":{"schema":{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","properties":{"name":{"type":"string","maxLength":100,"description":"The name of the access control policy"},"permissions":{"type":"array","items":{"type":"string"},"description":"The permissions associated with the access control policy"},"createdAt":{"default":"2026-10-23T21:05:39.702Z","type":"string","format":"date-time"},"updatedAt":{"default":"2026-10-23T21:05:39.702Z","type":"string","format":"date-time"}},"required":["name","permissions","createdAt","updatedAt"],"additionalProperties":false},"insertSchema":{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","properties":{"name":{"type":"string","maxLength":100,"description":"The name of the access control policy"},"permissions":{"type":"array","items":{"type":"string"},"description":"The permissions associated with the access control policy"}},"required":["name","permissions"]}}});
+    sdk["_moduleMetadata"].set(methods, {"crud":{"schema":{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","properties":{"name":{"type":"string","maxLength":100,"description":"The name of the access control policy"},"permissions":{"type":"array","items":{"type":"string"},"description":"The permissions associated with the access control policy"},"createdAt":{"default":"2026-10-23T23:02:48.410Z","type":"string","format":"date-time"},"updatedAt":{"default":"2026-10-23T23:02:48.410Z","type":"string","format":"date-time"}},"required":["name","permissions","createdAt","updatedAt"],"additionalProperties":false},"insertSchema":{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","properties":{"name":{"type":"string","maxLength":100,"description":"The name of the access control policy"},"permissions":{"type":"array","items":{"type":"string"},"description":"The permissions associated with the access control policy"}},"required":["name","permissions"]}}});
 
     return methods;
 };

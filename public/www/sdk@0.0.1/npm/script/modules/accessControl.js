@@ -13,7 +13,7 @@ const accessControlModule = (sdk) => {
                 const toPath = (0, path_to_regexp_1.compile)("accessControl/api/");
                 const requestPayload = {
                     method,
-                    url: toPath(data?.params),
+                    url: toPath(sdk.resolvePathParams(data?.params)),
                     params: data?.query,
                     data: data?.body,
                     signal: data?.signal,
@@ -33,7 +33,7 @@ const accessControlModule = (sdk) => {
                 const toPath = (0, path_to_regexp_1.compile)("accessControl/api/count");
                 const requestPayload = {
                     method,
-                    url: toPath(data?.params),
+                    url: toPath(sdk.resolvePathParams(data?.params)),
                     params: data?.query,
                     data: data?.body,
                     signal: data?.signal,
@@ -53,7 +53,7 @@ const accessControlModule = (sdk) => {
                 const toPath = (0, path_to_regexp_1.compile)("accessControl/api{/:id}");
                 const requestPayload = {
                     method,
-                    url: toPath(data?.params),
+                    url: toPath(sdk.resolvePathParams(data?.params)),
                     params: data?.query,
                     data: data?.body,
                     signal: data?.signal,
@@ -73,7 +73,7 @@ const accessControlModule = (sdk) => {
                 const toPath = (0, path_to_regexp_1.compile)("accessControl/api/:id");
                 const requestPayload = {
                     method,
-                    url: toPath(data?.params),
+                    url: toPath(sdk.resolvePathParams(data?.params)),
                     params: data?.query,
                     data: data?.body,
                     signal: data?.signal,
@@ -93,7 +93,7 @@ const accessControlModule = (sdk) => {
                 const toPath = (0, path_to_regexp_1.compile)("accessControl/api/:id");
                 const requestPayload = {
                     method,
-                    url: toPath(data?.params),
+                    url: toPath(sdk.resolvePathParams(data?.params)),
                     params: data?.query,
                     data: data?.body,
                     signal: data?.signal,
@@ -113,7 +113,7 @@ const accessControlModule = (sdk) => {
     methods.update.__scope = "accessControl";
     methods.del.__scope = "accessControl";
     sdk["_moduleGroup"].set(methods, "IAM");
-    sdk["_moduleMetadata"].set(methods, { "crud": { "schema": { "$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object", "properties": { "role": { "type": "string", "maxLength": 100, "description": "The name of the role" }, "skipIntersection": { "type": "boolean" }, "policies": { "type": "array", "items": { "tsType": "string", "ref": "accessControlPolicies" }, "description": "The policies associated with the role" }, "subRoles": { "type": "array", "items": { "type": "string", "maxLength": 100 } }, "createdAt": { "default": "2026-10-23T21:05:39.696Z", "type": "string", "format": "date-time" }, "updatedAt": { "default": "2026-10-23T21:05:39.696Z", "type": "string", "format": "date-time" } }, "required": ["role", "policies", "createdAt", "updatedAt"], "additionalProperties": false }, "insertSchema": { "$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object", "properties": { "role": { "type": "string", "maxLength": 100, "description": "The name of the role" }, "skipIntersection": { "type": "boolean" }, "policies": { "type": "array", "items": { "tsType": "string", "ref": "accessControlPolicies" }, "description": "The policies associated with the role" }, "subRoles": { "type": "array", "items": { "type": "string", "maxLength": 100 } } }, "required": ["role", "policies"] } } });
+    sdk["_moduleMetadata"].set(methods, { "crud": { "schema": { "$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object", "properties": { "role": { "type": "string", "maxLength": 100, "description": "The name of the role" }, "skipIntersection": { "type": "boolean" }, "policies": { "type": "array", "items": { "tsType": "string", "ref": "accessControlPolicies" }, "description": "The policies associated with the role" }, "subRoles": { "type": "array", "items": { "type": "string", "maxLength": 100 } }, "createdAt": { "default": "2026-10-23T23:02:48.402Z", "type": "string", "format": "date-time" }, "updatedAt": { "default": "2026-10-23T23:02:48.402Z", "type": "string", "format": "date-time" } }, "required": ["role", "policies", "createdAt", "updatedAt"], "additionalProperties": false }, "insertSchema": { "$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object", "properties": { "role": { "type": "string", "maxLength": 100, "description": "The name of the role" }, "skipIntersection": { "type": "boolean" }, "policies": { "type": "array", "items": { "tsType": "string", "ref": "accessControlPolicies" }, "description": "The policies associated with the role" }, "subRoles": { "type": "array", "items": { "type": "string", "maxLength": 100 } } }, "required": ["role", "policies"] } } });
     return methods;
 };
 exports.accessControlModule = accessControlModule;

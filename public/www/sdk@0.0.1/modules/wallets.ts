@@ -1,8 +1,5 @@
 import type { 
     TRequestOptions,
-    TFilterValue,
-    TFilterExpression,
-    TMultiFilters,
     TFilters,
     TPagination,
 } from "../types.ts";
@@ -18,7 +15,9 @@ export type signTransfer$query = {
     receiver: string;
     amount: number;
     description?: string | undefined;
-    metadata?: Record<string, string | number | boolean> | undefined;
+    metadata?: {
+        [K in string]: string | number | boolean;
+    } | undefined;
     currency?: string | undefined;
 };
 export type signTransfer$return = {
@@ -50,7 +49,9 @@ export type signTransfer$return = {
             }[];
         };
         description?: string | undefined;
-        metadata?: Record<string, string | number | boolean> | undefined;
+        metadata?: {
+            [K in string]: string | number | boolean;
+        } | undefined;
     };
     challenge: {
         token: string;
@@ -141,7 +142,7 @@ export const walletsModule = (sdk: typeof BaseSDK) => {
             const toPath = compile("wallets/api/metadata");
             const requestPayload = {
                 method,
-                url: toPath(data?.params),
+                url: toPath(sdk.resolvePathParams(data?.params)),
                 params: data?.query,
                 data: data?.body,
                 signal: data?.signal,
@@ -169,7 +170,7 @@ export const walletsModule = (sdk: typeof BaseSDK) => {
             const toPath = compile("wallets/api/transfer/sign");
             const requestPayload = {
                 method,
-                url: toPath(data?.params),
+                url: toPath(sdk.resolvePathParams(data?.params)),
                 params: data?.query,
                 data: data?.body,
                 signal: data?.signal,
@@ -197,7 +198,7 @@ export const walletsModule = (sdk: typeof BaseSDK) => {
             const toPath = compile("wallets/api/transfer");
             const requestPayload = {
                 method,
-                url: toPath(data?.params),
+                url: toPath(sdk.resolvePathParams(data?.params)),
                 params: data?.query,
                 data: data?.body,
                 signal: data?.signal,
@@ -225,7 +226,7 @@ export const walletsModule = (sdk: typeof BaseSDK) => {
             const toPath = compile("wallets/api/update/overdraft-limit");
             const requestPayload = {
                 method,
-                url: toPath(data?.params),
+                url: toPath(sdk.resolvePathParams(data?.params)),
                 params: data?.query,
                 data: data?.body,
                 signal: data?.signal,
@@ -253,7 +254,7 @@ export const walletsModule = (sdk: typeof BaseSDK) => {
             const toPath = compile("wallets/api/overdraft-limit");
             const requestPayload = {
                 method,
-                url: toPath(data?.params),
+                url: toPath(sdk.resolvePathParams(data?.params)),
                 params: data?.query,
                 data: data?.body,
                 signal: data?.signal,
@@ -281,7 +282,7 @@ export const walletsModule = (sdk: typeof BaseSDK) => {
             const toPath = compile("wallets/api/count");
             const requestPayload = {
                 method,
-                url: toPath(data?.params),
+                url: toPath(sdk.resolvePathParams(data?.params)),
                 params: data?.query,
                 data: data?.body,
                 signal: data?.signal,
@@ -309,7 +310,7 @@ export const walletsModule = (sdk: typeof BaseSDK) => {
             const toPath = compile("wallets/api{/:id}");
             const requestPayload = {
                 method,
-                url: toPath(data?.params),
+                url: toPath(sdk.resolvePathParams(data?.params)),
                 params: data?.query,
                 data: data?.body,
                 signal: data?.signal,
@@ -336,7 +337,7 @@ export const walletsModule = (sdk: typeof BaseSDK) => {
     (methods.get as any).__scope = "wallets";
 
 
-    sdk["_moduleMetadata"].set(methods, {"crud":{"schema":{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","properties":{"currency":{"type":"string","minLength":3},"balance":{"default":0,"type":"integer","minimum":-9007199254740991,"maximum":9007199254740991},"overdraftLimit":{"default":0,"type":"integer","minimum":-9007199254740991,"maximum":9007199254740991},"previousBalance":{"default":0,"type":"integer","minimum":-9007199254740991,"maximum":9007199254740991},"lastRef":{"type":"string"},"user":{"tsType":"string"},"tenant":{"tsType":"string"},"negativeAt":{"anyOf":[{"type":"string","format":"date-time"},{"type":"null"}]},"createdAt":{"default":"2026-10-23T21:05:39.794Z","type":"string","format":"date-time"},"updatedAt":{"default":"2026-10-23T21:05:39.794Z","type":"string","format":"date-time"}},"required":["currency","balance","overdraftLimit","previousBalance","user","tenant","createdAt","updatedAt"],"additionalProperties":false}}});
+    sdk["_moduleMetadata"].set(methods, {"crud":{"schema":{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","properties":{"currency":{"type":"string","minLength":3},"balance":{"default":0,"type":"integer","minimum":-9007199254740991,"maximum":9007199254740991},"overdraftLimit":{"default":0,"type":"integer","minimum":-9007199254740991,"maximum":9007199254740991},"previousBalance":{"default":0,"type":"integer","minimum":-9007199254740991,"maximum":9007199254740991},"lastRef":{"type":"string"},"user":{"tsType":"string"},"tenant":{"tsType":"string"},"negativeAt":{"anyOf":[{"type":"string","format":"date-time"},{"type":"null"}]},"createdAt":{"default":"2026-10-23T23:02:48.559Z","type":"string","format":"date-time"},"updatedAt":{"default":"2026-10-23T23:02:48.559Z","type":"string","format":"date-time"}},"required":["currency","balance","overdraftLimit","previousBalance","user","tenant","createdAt","updatedAt"],"additionalProperties":false}}});
 
     return methods;
 };

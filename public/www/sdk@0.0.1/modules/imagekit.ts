@@ -1,10 +1,5 @@
 import type { 
     TRequestOptions,
-    TFilterValue,
-    TFilterExpression,
-    TMultiFilters,
-    TFilters,
-    TPagination,
 } from "../types.ts";
 import type { BaseSDK } from "../base.ts";
 
@@ -36,7 +31,7 @@ export const imageKitModule = (sdk: typeof BaseSDK) => {
             const toPath = compile("imagekit/api/auth");
             const requestPayload = {
                 method,
-                url: toPath(data?.params),
+                url: toPath(sdk.resolvePathParams(data?.params)),
                 params: data?.query,
                 data: data?.body,
                 signal: data?.signal,

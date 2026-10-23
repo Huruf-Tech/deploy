@@ -15,7 +15,7 @@ type DebounceOptions = {
 export function debounce<T extends (...args: any[]) => any>(
   func: T,
   wait: number,
-  options: DebounceOptions = {}
+  options: DebounceOptions = {},
 ): ((...args: Parameters<T>) => ReturnType<T> | undefined) & ControlFunctions {
   const { leading = false, trailing = true, maxWait } = options
   let timeout: ReturnType<typeof setTimeout> | null = null
@@ -52,7 +52,7 @@ export function debounce<T extends (...args: any[]) => any>(
 
   function startTimer(
     pendingFunc: () => void,
-    waitTime: number
+    waitTime: number,
   ): ReturnType<typeof setTimeout> {
     return setTimeout(pendingFunc, waitTime)
   }

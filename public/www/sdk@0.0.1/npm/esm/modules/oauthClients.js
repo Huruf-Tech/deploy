@@ -10,7 +10,7 @@ export const oauthClientsModule = (sdk) => {
                 const toPath = compile("oauthClients/api/");
                 const requestPayload = {
                     method,
-                    url: toPath(data?.params),
+                    url: toPath(sdk.resolvePathParams(data?.params)),
                     params: data?.query,
                     data: data?.body,
                     signal: data?.signal,
@@ -30,7 +30,7 @@ export const oauthClientsModule = (sdk) => {
                 const toPath = compile("oauthClients/api/count");
                 const requestPayload = {
                     method,
-                    url: toPath(data?.params),
+                    url: toPath(sdk.resolvePathParams(data?.params)),
                     params: data?.query,
                     data: data?.body,
                     signal: data?.signal,
@@ -50,7 +50,7 @@ export const oauthClientsModule = (sdk) => {
                 const toPath = compile("oauthClients/api{/:id}");
                 const requestPayload = {
                     method,
-                    url: toPath(data?.params),
+                    url: toPath(sdk.resolvePathParams(data?.params)),
                     params: data?.query,
                     data: data?.body,
                     signal: data?.signal,
@@ -70,7 +70,7 @@ export const oauthClientsModule = (sdk) => {
                 const toPath = compile("oauthClients/api/:id");
                 const requestPayload = {
                     method,
-                    url: toPath(data?.params),
+                    url: toPath(sdk.resolvePathParams(data?.params)),
                     params: data?.query,
                     data: data?.body,
                     signal: data?.signal,
@@ -90,7 +90,7 @@ export const oauthClientsModule = (sdk) => {
                 const toPath = compile("oauthClients/api/:id");
                 const requestPayload = {
                     method,
-                    url: toPath(data?.params),
+                    url: toPath(sdk.resolvePathParams(data?.params)),
                     params: data?.query,
                     data: data?.body,
                     signal: data?.signal,
@@ -110,6 +110,6 @@ export const oauthClientsModule = (sdk) => {
     methods.update.__scope = "oauthClients";
     methods.del.__scope = "oauthClients";
     sdk["_moduleGroup"].set(methods, "OAuth");
-    sdk["_moduleMetadata"].set(methods, { "crud": { "schema": { "$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object", "properties": { "name": { "type": "string", "minLength": 1, "maxLength": 100 }, "description": { "type": "string", "maxLength": 300 }, "logo": { "type": "string", "format": "uri" }, "type": { "type": "string", "enum": ["confidential", "public"] }, "secret": { "type": "hidden" }, "allowedScopes": { "default": [], "type": "array", "items": { "type": "string", "minLength": 1, "maxLength": 255 } }, "redirectUris": { "default": [], "type": "array", "items": { "type": "string", "format": "uri" } }, "disabled": { "type": "boolean" }, "createdBy": { "tsType": "string" }, "createdAt": { "default": "2026-10-23T21:05:39.756Z", "type": "string", "format": "date-time" }, "updatedAt": { "default": "2026-10-23T21:05:39.756Z", "type": "string", "format": "date-time" } }, "required": ["name", "type", "allowedScopes", "redirectUris", "createdBy", "createdAt", "updatedAt"], "additionalProperties": false }, "insertSchema": { "$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object", "properties": { "name": { "type": "string", "minLength": 1, "maxLength": 100 }, "description": { "type": "string", "maxLength": 300 }, "logo": { "type": "string", "format": "uri" }, "type": { "type": "string", "enum": ["confidential", "public"] }, "secret": { "type": "hidden" }, "allowedScopes": { "default": [], "type": "array", "items": { "type": "string", "minLength": 1, "maxLength": 255 } }, "redirectUris": { "default": [], "type": "array", "items": { "type": "string", "format": "uri" } }, "disabled": { "type": "boolean" } }, "required": ["name", "type"] } } });
+    sdk["_moduleMetadata"].set(methods, { "crud": { "schema": { "$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object", "properties": { "name": { "type": "string", "minLength": 1, "maxLength": 100 }, "description": { "type": "string", "maxLength": 300 }, "logo": { "type": "string", "format": "uri" }, "type": { "type": "string", "enum": ["confidential", "public"] }, "secret": { "type": "hidden" }, "allowedScopes": { "default": [], "type": "array", "items": { "type": "string", "minLength": 1, "maxLength": 255 } }, "redirectUris": { "default": [], "type": "array", "items": { "type": "string", "format": "uri" } }, "disabled": { "type": "boolean" }, "createdBy": { "tsType": "string" }, "createdAt": { "default": "2026-10-23T23:02:48.480Z", "type": "string", "format": "date-time" }, "updatedAt": { "default": "2026-10-23T23:02:48.480Z", "type": "string", "format": "date-time" } }, "required": ["name", "type", "allowedScopes", "redirectUris", "createdBy", "createdAt", "updatedAt"], "additionalProperties": false }, "insertSchema": { "$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object", "properties": { "name": { "type": "string", "minLength": 1, "maxLength": 100 }, "description": { "type": "string", "maxLength": 300 }, "logo": { "type": "string", "format": "uri" }, "type": { "type": "string", "enum": ["confidential", "public"] }, "secret": { "type": "hidden" }, "allowedScopes": { "default": [], "type": "array", "items": { "type": "string", "minLength": 1, "maxLength": 255 } }, "redirectUris": { "default": [], "type": "array", "items": { "type": "string", "format": "uri" } }, "disabled": { "type": "boolean" } }, "required": ["name", "type"] } } });
     return methods;
 };

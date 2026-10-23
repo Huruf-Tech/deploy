@@ -29,7 +29,7 @@ export default function RenderArray({ name, field }: TRenderArrayProp) {
   const {
     control,
     formState: { errors },
-    watch,
+    watch
   } = useFormContext()
   const { fields, append, remove } = useFieldArray({
     control,
@@ -40,8 +40,7 @@ export default function RenderArray({ name, field }: TRenderArrayProp) {
   })
 
   const getError = React.useCallback(
-    (name?: string) =>
-      String(findFieldError(errors, name)?.root?.message ?? ""),
+    (name?: string) => String(findFieldError(errors, name)?.root?.message ?? ""),
     [errors]
   )
 

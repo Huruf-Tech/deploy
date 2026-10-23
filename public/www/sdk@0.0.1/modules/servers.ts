@@ -1,8 +1,5 @@
 import type { 
     TRequestOptions,
-    TFilterValue,
-    TFilterExpression,
-    TMultiFilters,
     TFilters,
     TPagination,
 } from "../types.ts";
@@ -27,7 +24,9 @@ export type get$return = {
     results: {
         name: string;
         /** Free-form key/value tags, e.g. region=eu, builder=true */
-        labels: Record<string, string>;
+        labels: {
+            [K in string]: string;
+        };
         tenant: string;
         status: "pending" | "active" | "rejected";
         identity: {
@@ -81,7 +80,9 @@ export type get$return = {
             enabled: boolean;
             publicKey?: string | undefined;
             endpoint?: string | undefined;
-            peers?: Record<string, boolean> | undefined;
+            peers?: {
+                [K in string]: boolean;
+            } | undefined;
             error?: string | undefined;
             reportedAt?: Date | undefined;
         } | undefined;
@@ -96,14 +97,18 @@ export type update$params = {
 };
 export type update$body = {
     name?: string | undefined;
-    labels?: Record<string, string> | undefined;
+    labels?: {
+        [K in string]: string;
+    } | undefined;
 };
 export type del$params = {
     id: string;
 };
 export type agentRelease$return = {
     /** arch -> SHA-256 */
-    sums: Record<string, string>;
+    sums: {
+        [K in string]: string;
+    };
 };
 export type updateAgent$params = {
     id?: string;
@@ -149,7 +154,9 @@ export type command$params = {
 };
 export type command$return = {
     status: "pending" | "delivered" | "done" | "failed";
-    result?: Record<string, unknown> | undefined;
+    result?: {
+        [K in string]: unknown;
+    } | undefined;
     error?: string | undefined;
 };
 export type bootstrap$body = {
@@ -231,7 +238,7 @@ export const serversModule = (sdk: typeof BaseSDK) => {
             const toPath = compile("servers/api/count");
             const requestPayload = {
                 method,
-                url: toPath(data?.params),
+                url: toPath(sdk.resolvePathParams(data?.params)),
                 params: data?.query,
                 data: data?.body,
                 signal: data?.signal,
@@ -259,7 +266,7 @@ export const serversModule = (sdk: typeof BaseSDK) => {
             const toPath = compile("servers/api{/:id}");
             const requestPayload = {
                 method,
-                url: toPath(data?.params),
+                url: toPath(sdk.resolvePathParams(data?.params)),
                 params: data?.query,
                 data: data?.body,
                 signal: data?.signal,
@@ -287,7 +294,7 @@ export const serversModule = (sdk: typeof BaseSDK) => {
             const toPath = compile("servers/api/:id");
             const requestPayload = {
                 method,
-                url: toPath(data?.params),
+                url: toPath(sdk.resolvePathParams(data?.params)),
                 params: data?.query,
                 data: data?.body,
                 signal: data?.signal,
@@ -315,7 +322,7 @@ export const serversModule = (sdk: typeof BaseSDK) => {
             const toPath = compile("servers/api/:id");
             const requestPayload = {
                 method,
-                url: toPath(data?.params),
+                url: toPath(sdk.resolvePathParams(data?.params)),
                 params: data?.query,
                 data: data?.body,
                 signal: data?.signal,
@@ -343,7 +350,7 @@ export const serversModule = (sdk: typeof BaseSDK) => {
             const toPath = compile("servers/api/agent/latest");
             const requestPayload = {
                 method,
-                url: toPath(data?.params),
+                url: toPath(sdk.resolvePathParams(data?.params)),
                 params: data?.query,
                 data: data?.body,
                 signal: data?.signal,
@@ -371,7 +378,7 @@ export const serversModule = (sdk: typeof BaseSDK) => {
             const toPath = compile("servers/api/:id/updateAgent");
             const requestPayload = {
                 method,
-                url: toPath(data?.params),
+                url: toPath(sdk.resolvePathParams(data?.params)),
                 params: data?.query,
                 data: data?.body,
                 signal: data?.signal,
@@ -399,7 +406,7 @@ export const serversModule = (sdk: typeof BaseSDK) => {
             const toPath = compile("servers/api/:id/accept");
             const requestPayload = {
                 method,
-                url: toPath(data?.params),
+                url: toPath(sdk.resolvePathParams(data?.params)),
                 params: data?.query,
                 data: data?.body,
                 signal: data?.signal,
@@ -427,7 +434,7 @@ export const serversModule = (sdk: typeof BaseSDK) => {
             const toPath = compile("servers/api/:id/reject");
             const requestPayload = {
                 method,
-                url: toPath(data?.params),
+                url: toPath(sdk.resolvePathParams(data?.params)),
                 params: data?.query,
                 data: data?.body,
                 signal: data?.signal,
@@ -455,7 +462,7 @@ export const serversModule = (sdk: typeof BaseSDK) => {
             const toPath = compile("servers/api/:id/prepare");
             const requestPayload = {
                 method,
-                url: toPath(data?.params),
+                url: toPath(sdk.resolvePathParams(data?.params)),
                 params: data?.query,
                 data: data?.body,
                 signal: data?.signal,
@@ -483,7 +490,7 @@ export const serversModule = (sdk: typeof BaseSDK) => {
             const toPath = compile("servers/api/:id/ping");
             const requestPayload = {
                 method,
-                url: toPath(data?.params),
+                url: toPath(sdk.resolvePathParams(data?.params)),
                 params: data?.query,
                 data: data?.body,
                 signal: data?.signal,
@@ -511,7 +518,7 @@ export const serversModule = (sdk: typeof BaseSDK) => {
             const toPath = compile("servers/api/:id/cleanup");
             const requestPayload = {
                 method,
-                url: toPath(data?.params),
+                url: toPath(sdk.resolvePathParams(data?.params)),
                 params: data?.query,
                 data: data?.body,
                 signal: data?.signal,
@@ -539,7 +546,7 @@ export const serversModule = (sdk: typeof BaseSDK) => {
             const toPath = compile("servers/api/:id/commands/:command");
             const requestPayload = {
                 method,
-                url: toPath(data?.params),
+                url: toPath(sdk.resolvePathParams(data?.params)),
                 params: data?.query,
                 data: data?.body,
                 signal: data?.signal,
@@ -567,7 +574,7 @@ export const serversModule = (sdk: typeof BaseSDK) => {
             const toPath = compile("servers/api/bootstrap");
             const requestPayload = {
                 method,
-                url: toPath(data?.params),
+                url: toPath(sdk.resolvePathParams(data?.params)),
                 params: data?.query,
                 data: data?.body,
                 signal: data?.signal,
@@ -595,7 +602,7 @@ export const serversModule = (sdk: typeof BaseSDK) => {
             const toPath = compile("servers/api/bootstrap/:id");
             const requestPayload = {
                 method,
-                url: toPath(data?.params),
+                url: toPath(sdk.resolvePathParams(data?.params)),
                 params: data?.query,
                 data: data?.body,
                 signal: data?.signal,
@@ -623,7 +630,7 @@ export const serversModule = (sdk: typeof BaseSDK) => {
             const toPath = compile("servers/api/install/command");
             const requestPayload = {
                 method,
-                url: toPath(data?.params),
+                url: toPath(sdk.resolvePathParams(data?.params)),
                 params: data?.query,
                 data: data?.body,
                 signal: data?.signal,
@@ -651,7 +658,7 @@ export const serversModule = (sdk: typeof BaseSDK) => {
             const toPath = compile("servers/api/live/status");
             const requestPayload = {
                 method,
-                url: toPath(data?.params),
+                url: toPath(sdk.resolvePathParams(data?.params)),
                 params: data?.query,
                 data: data?.body,
                 signal: data?.signal,

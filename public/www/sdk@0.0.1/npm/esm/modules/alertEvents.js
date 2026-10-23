@@ -10,7 +10,7 @@ export const alertEventsModule = (sdk) => {
                 const toPath = compile("alertEvents/api/");
                 const requestPayload = {
                     method,
-                    url: toPath(data?.params),
+                    url: toPath(sdk.resolvePathParams(data?.params)),
                     params: data?.query,
                     data: data?.body,
                     signal: data?.signal,

@@ -1,10 +1,5 @@
 import type { 
     TRequestOptions,
-    TFilterValue,
-    TFilterExpression,
-    TMultiFilters,
-    TFilters,
-    TPagination,
 } from "../types.ts";
 import type { BaseSDK } from "../base.ts";
 
@@ -96,8 +91,12 @@ export type resolve$query = {
     project?: string | undefined;
 };
 export type resolve$return = {
-    env: Record<string, string>;
-    files: Record<string, string>;
+    env: {
+        [K in string]: string;
+    };
+    files: {
+        [K in string]: string;
+    };
 };
 
 export const variablesModule = (sdk: typeof BaseSDK) => {
@@ -133,7 +132,7 @@ export const variablesModule = (sdk: typeof BaseSDK) => {
             const toPath = compile("variables/api/");
             const requestPayload = {
                 method,
-                url: toPath(data?.params),
+                url: toPath(sdk.resolvePathParams(data?.params)),
                 params: data?.query,
                 data: data?.body,
                 signal: data?.signal,
@@ -161,7 +160,7 @@ export const variablesModule = (sdk: typeof BaseSDK) => {
             const toPath = compile("variables/api/");
             const requestPayload = {
                 method,
-                url: toPath(data?.params),
+                url: toPath(sdk.resolvePathParams(data?.params)),
                 params: data?.query,
                 data: data?.body,
                 signal: data?.signal,
@@ -189,7 +188,7 @@ export const variablesModule = (sdk: typeof BaseSDK) => {
             const toPath = compile("variables/api/import");
             const requestPayload = {
                 method,
-                url: toPath(data?.params),
+                url: toPath(sdk.resolvePathParams(data?.params)),
                 params: data?.query,
                 data: data?.body,
                 signal: data?.signal,
@@ -217,7 +216,7 @@ export const variablesModule = (sdk: typeof BaseSDK) => {
             const toPath = compile("variables/api/:id");
             const requestPayload = {
                 method,
-                url: toPath(data?.params),
+                url: toPath(sdk.resolvePathParams(data?.params)),
                 params: data?.query,
                 data: data?.body,
                 signal: data?.signal,
@@ -245,7 +244,7 @@ export const variablesModule = (sdk: typeof BaseSDK) => {
             const toPath = compile("variables/api/:id");
             const requestPayload = {
                 method,
-                url: toPath(data?.params),
+                url: toPath(sdk.resolvePathParams(data?.params)),
                 params: data?.query,
                 data: data?.body,
                 signal: data?.signal,
@@ -273,7 +272,7 @@ export const variablesModule = (sdk: typeof BaseSDK) => {
             const toPath = compile("variables/api/:id/reveal");
             const requestPayload = {
                 method,
-                url: toPath(data?.params),
+                url: toPath(sdk.resolvePathParams(data?.params)),
                 params: data?.query,
                 data: data?.body,
                 signal: data?.signal,
@@ -301,7 +300,7 @@ export const variablesModule = (sdk: typeof BaseSDK) => {
             const toPath = compile("variables/api/resolve");
             const requestPayload = {
                 method,
-                url: toPath(data?.params),
+                url: toPath(sdk.resolvePathParams(data?.params)),
                 params: data?.query,
                 data: data?.body,
                 signal: data?.signal,

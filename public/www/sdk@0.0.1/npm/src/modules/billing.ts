@@ -1,10 +1,5 @@
 import type { 
     TRequestOptions,
-    TFilterValue,
-    TFilterExpression,
-    TMultiFilters,
-    TFilters,
-    TPagination,
 } from "../types.js";
 import type { BaseSDK } from "../base.js";
 
@@ -53,7 +48,9 @@ export type get$return = {
         lastError?: string | undefined;
         nextPlan?: string | undefined;
     } | undefined;
-    usage: Record<string, number>;
+    usage: {
+        [K in string]: number;
+    };
     overLimitSince?: Date | undefined;
     graceDays: number;
     wallets: {
@@ -145,7 +142,7 @@ export const billingModule = (sdk: typeof BaseSDK) => {
             const toPath = compile("billing/api/");
             const requestPayload = {
                 method,
-                url: toPath(data?.params),
+                url: toPath(sdk.resolvePathParams(data?.params)),
                 params: data?.query,
                 data: data?.body,
                 signal: data?.signal,
@@ -173,7 +170,7 @@ export const billingModule = (sdk: typeof BaseSDK) => {
             const toPath = compile("billing/api/plans");
             const requestPayload = {
                 method,
-                url: toPath(data?.params),
+                url: toPath(sdk.resolvePathParams(data?.params)),
                 params: data?.query,
                 data: data?.body,
                 signal: data?.signal,
@@ -201,7 +198,7 @@ export const billingModule = (sdk: typeof BaseSDK) => {
             const toPath = compile("billing/api/periods");
             const requestPayload = {
                 method,
-                url: toPath(data?.params),
+                url: toPath(sdk.resolvePathParams(data?.params)),
                 params: data?.query,
                 data: data?.body,
                 signal: data?.signal,
@@ -229,7 +226,7 @@ export const billingModule = (sdk: typeof BaseSDK) => {
             const toPath = compile("billing/api/subscribe");
             const requestPayload = {
                 method,
-                url: toPath(data?.params),
+                url: toPath(sdk.resolvePathParams(data?.params)),
                 params: data?.query,
                 data: data?.body,
                 signal: data?.signal,
@@ -257,7 +254,7 @@ export const billingModule = (sdk: typeof BaseSDK) => {
             const toPath = compile("billing/api/cancel");
             const requestPayload = {
                 method,
-                url: toPath(data?.params),
+                url: toPath(sdk.resolvePathParams(data?.params)),
                 params: data?.query,
                 data: data?.body,
                 signal: data?.signal,

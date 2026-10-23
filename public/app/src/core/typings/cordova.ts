@@ -1,8 +1,8 @@
 declare global {
   interface Window {
-    cordova: any
+    cordova: any;
   }
 
-  const cordova: any
+  const cordova: any;
 }
-export {}
+export {};

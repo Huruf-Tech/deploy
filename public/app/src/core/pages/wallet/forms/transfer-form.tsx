@@ -1,175 +1,122 @@
-"use client"
-import { useState, useEffect } from "react"
-import { useForm } from "react-hook-form"
-import { Keyboard } from "@capacitor/keyboard"
-import { ThunderSDK } from "thunder-sdk"
-import { IconCheck, IconCopy, IconArrowNarrowUp } from "@tabler/icons-react"
-import { useTranslation } from "react-i18next"
-import {
-  Drawer,
-  DrawerContent,
-  DrawerHeader,
-  DrawerTitle,
-} from "@/components/ui/drawer"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Textarea } from "@/components/ui/textarea"
-import { Spinner } from "@/components/ui/spinner"
-import {
-  Field,
-  FieldLabel,
-  FieldError,
-  FieldGroup,
-} from "@/components/ui/field"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { toast } from "sonner"
-import { getInitials } from "@/core/lib/utils"
-import { invalidateWallets } from "@/core/endpoints/wallet"
-import { defaultCurrency } from "@/core/lib/constants"
+"use client";
+import { useState, useEffect } from "react";
+import { useForm } from "react-hook-form";
+import { Keyboard } from "@capacitor/keyboard";
+import { ThunderSDK } from "thunder-sdk";
+import { IconCheck, IconCopy, IconArrowNarrowUp } from "@tabler/icons-react";
+import { useTranslation } from "react-i18next";
+import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from "@/components/ui/drawer";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Spinner } from "@/components/ui/spinner";
+import { Field, FieldLabel, FieldError, FieldGroup } from "@/components/ui/field";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { toast } from "sonner";
+import { getInitials } from "@/core/lib/utils";
+import { invalidateWallets } from "@/core/endpoints/wallet";
+import { defaultCurrency } from "@/core/lib/constants";
 
 const CURRENCY_LABELS_AR: Record<string, string> = {
   LYD: "د.ل",
-}
+};
 
 function getCurrencyLabel(currency: string, lang: string) {
-  const code = (currency || defaultCurrency).toUpperCase()
+  const code = (currency || defaultCurrency).toUpperCase();
   if (lang?.startsWith("ar")) {
-    return CURRENCY_LABELS_AR[code] ?? code
+    return CURRENCY_LABELS_AR[code] ?? code;
   }
-  return code
+  return code;
 }
 
-type TSendForm = { receiver: string; amount: string; description: string }
-export function SendForm({
-  open,
-  onOpenChange,
-}: {
-  open: boolean
-  onOpenChange: (o: boolean) => void
-}) {
-  const { t, i18n } = useTranslation()
-  const [step, setStep] = useState<"input" | "review" | "success">("input")
-  const [signData, setSignData] = useState<any>(null)
-  const [ref, setRef] = useState<string>("")
-  const [error, setError] = useState("")
-  const [kbHeight, setKbHeight] = useState(0)
+type TSendForm = { receiver: string; amount: string; description: string };
+export function SendForm({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
+  const { t, i18n } = useTranslation();
+  const [step, setStep] = useState<"input" | "review" | "success">("input");
+  const [signData, setSignData] = useState<any>(null);
+  const [ref, setRef] = useState<string>("");
+  const [error, setError] = useState("");
+  const [kbHeight, setKbHeight] = useState(0);
 
   useEffect(() => {
-    let showListener: any
-    let hideListener: any
+    let showListener: any;
+    let hideListener: any;
 
     const setupKeyboard = async () => {
       try {
-        showListener = await Keyboard.addListener(
-          "keyboardWillShow",
-          (info) => {
-            setKbHeight(info.keyboardHeight)
-          }
-        )
+        showListener = await Keyboard.addListener("keyboardWillShow", (info) => {
+          setKbHeight(info.keyboardHeight);
+        });
         hideListener = await Keyboard.addListener("keyboardWillHide", () => {
-          setKbHeight(0)
-        })
+          setKbHeight(0);
+        });
       } catch {
         // Ignore if plugin not available on web
       }
-    }
+    };
 
-    setupKeyboard()
+    setupKeyboard();
 
     return () => {
-      if (showListener) showListener.remove()
-      if (hideListener) hideListener.remove()
-    }
-  }, [])
+      if (showListener) showListener.remove();
+      if (hideListener) hideListener.remove();
+    };
+  }, []);
 
-  const {
-    register,
-    handleSubmit,
-    formState: { errors, isSubmitting },
-    reset,
-  } = useForm<TSendForm>()
+  const { register, handleSubmit, formState: { errors, isSubmitting }, reset } = useForm<TSendForm>();
 
   const close = () => {
-    onOpenChange(false)
-    setTimeout(() => {
-      setStep("input")
-      setSignData(null)
-      setRef("")
-      setError("")
-      reset()
-    }, 300)
-  }
+    onOpenChange(false);
+    setTimeout(() => { setStep("input"); setSignData(null); setRef(""); setError(""); reset(); }, 300);
+  };
 
   const onSubmit = async (vals: TSendForm) => {
-    setError("")
+    setError("");
     try {
       const res = await ThunderSDK.wallets.signTransfer({
-        query: {
-          receiver: vals.receiver,
-          amount: Number(vals.amount) * 100,
-          description: vals.description || undefined,
-        },
-      })
-      setSignData(res)
-      setStep("review")
+        query: { receiver: vals.receiver, amount: Number(vals.amount) * 100, description: vals.description || undefined },
+      });
+      setSignData(res);
+      setStep("review");
     } catch (err: any) {
-      setError(err.message)
-      toast.error("Failed to sign transfer")
+      setError(err.message);
+      toast.error("Failed to sign transfer");
     }
-  }
+  };
 
   const confirm = async () => {
-    setError("")
+    setError("");
     try {
-      const res = await ThunderSDK.wallets.transfer({
-        body: { token: signData.challenge.token },
-      })
-      setRef(res.transaction.reference)
-      setStep("success")
-      await invalidateWallets()
+      const res = await ThunderSDK.wallets.transfer({ body: { token: signData.challenge.token } });
+      setRef(res.transaction.reference);
+      setStep("success");
+      await invalidateWallets();
     } catch (err: any) {
-      setError(err.message)
-      toast.error("Transfer failed")
+      setError(err.message);
+      toast.error("Transfer failed");
     }
-  }
+  };
 
   return (
     <Drawer open={open} onOpenChange={close}>
-      <DrawerContent
-        className="mx-auto w-full max-w-md p-4 transition-[padding] duration-300 ease-out"
-        style={{
-          paddingBottom:
-            kbHeight > 0 ? `calc(1rem + ${kbHeight}px)` : undefined,
-        }}
+      <DrawerContent 
+        className="mx-auto w-full max-w-md p-4 transition-[padding] duration-300 ease-out" 
+        style={{ paddingBottom: kbHeight > 0 ? `calc(1rem + ${kbHeight}px)` : undefined }}
       >
-        <DrawerHeader className="px-0 pt-0">
-          <DrawerTitle>{t("Send Money")}</DrawerTitle>
-        </DrawerHeader>
-
+        <DrawerHeader className="px-0 pt-0"><DrawerTitle>{t("Send Money")}</DrawerTitle></DrawerHeader>
+        
         {step === "input" && (
-          <form
-            onSubmit={handleSubmit(onSubmit)}
-            className="flex flex-col gap-4"
-          >
+          <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
             <FieldGroup>
               <Field>
                 <FieldLabel>{t("Add Recipient")}</FieldLabel>
-                <Input
-                  placeholder={t("Email or Phone")}
-                  {...register("receiver", { required: true })}
-                />
+                <Input placeholder={t("Email or Phone")} {...register("receiver", { required: true })} />
                 {errors.receiver && <FieldError>{t("Required")}</FieldError>}
               </Field>
               <Field>
                 <FieldLabel>{t("Amount")}</FieldLabel>
-                <Input
-                  type="number"
-                  placeholder="0"
-                  {...register("amount", { required: true, min: 1 })}
-                />
-                {errors.amount && (
-                  <FieldError>{t("Invalid amount")}</FieldError>
-                )}
+                <Input type="number" placeholder="0" {...register("amount", { required: true, min: 1 })} />
+                {errors.amount && <FieldError>{t("Invalid amount")}</FieldError>}
               </Field>
               <Field>
                 <FieldLabel>{t("Description (Optional)")}</FieldLabel>
@@ -188,16 +135,10 @@ export function SendForm({
             <div className="flex items-center justify-center gap-4">
               <div className="flex flex-col items-center gap-1.5">
                 <Avatar size="lg">
-                  {signData.sender.image && (
-                    <AvatarImage src={signData.sender.image} />
-                  )}
-                  <AvatarFallback>
-                    {getInitials(signData.sender.name)}
-                  </AvatarFallback>
+                  {signData.sender.image && <AvatarImage src={signData.sender.image} />}
+                  <AvatarFallback>{getInitials(signData.sender.name)}</AvatarFallback>
                 </Avatar>
-                <span className="text-xs font-medium">
-                  {signData.sender.name}
-                </span>
+                <span className="text-xs font-medium">{signData.sender.name}</span>
               </div>
               <div className="flex flex-col items-center gap-0.5 pb-5">
                 <div className="h-px w-12 bg-border" />
@@ -205,89 +146,39 @@ export function SendForm({
               </div>
               <div className="flex flex-col items-center gap-1.5">
                 <Avatar size="lg">
-                  {signData.receiver.image && (
-                    <AvatarImage src={signData.receiver.image} />
-                  )}
-                  <AvatarFallback>
-                    {getInitials(signData.receiver.name)}
-                  </AvatarFallback>
+                  {signData.receiver.image && <AvatarImage src={signData.receiver.image} />}
+                  <AvatarFallback>{getInitials(signData.receiver.name)}</AvatarFallback>
                 </Avatar>
-                <span className="text-xs font-medium">
-                  {signData.receiver.name}
-                </span>
+                <span className="text-xs font-medium">{signData.receiver.name}</span>
               </div>
             </div>
 
-            <div className="flex flex-col gap-2 rounded-xl border p-3 text-sm">
-              <div className="flex justify-between">
-                <span>{t("Amount")}</span>
-                <span className="font-medium">
-                  {signData.transactionDetails.amount / 100}{" "}
-                  {getCurrencyLabel(
-                    signData.transactionDetails.currency,
-                    i18n.language
-                  )}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span>{t("Fee")}</span>
-                <span className="font-medium">
-                  {signData.transactionDetails.fee > 0
-                    ? `${signData.transactionDetails.fee / 100} ${getCurrencyLabel(signData.transactionDetails.currency, i18n.language)}`
-                    : t("Free")}
-                </span>
-              </div>
+            <div className="rounded-xl border p-3 text-sm flex flex-col gap-2">
+              <div className="flex justify-between"><span>{t("Amount")}</span><span className="font-medium">{signData.transactionDetails.amount / 100} {getCurrencyLabel(signData.transactionDetails.currency, i18n.language)}</span></div>
+              <div className="flex justify-between"><span>{t("Fee")}</span><span className="font-medium">{signData.transactionDetails.fee > 0 ? `${signData.transactionDetails.fee / 100} ${getCurrencyLabel(signData.transactionDetails.currency, i18n.language)}` : t("Free")}</span></div>
               <hr className="my-1 border-border" />
-              <div className="flex justify-between font-bold">
-                <span>{t("Total")}</span>
-                <span>
-                  {(signData.transactionDetails.amount +
-                    signData.transactionDetails.fee) /
-                    100}{" "}
-                  {getCurrencyLabel(
-                    signData.transactionDetails.currency,
-                    i18n.language
-                  )}
-                </span>
-              </div>
+              <div className="flex justify-between font-bold"><span>{t("Total")}</span><span>{(signData.transactionDetails.amount + signData.transactionDetails.fee) / 100} {getCurrencyLabel(signData.transactionDetails.currency, i18n.language)}</span></div>
             </div>
             {error && <FieldError>{error}</FieldError>}
             <div className="flex gap-2">
-              <Button
-                variant="outline"
-                className="flex-1"
-                onClick={() => setStep("input")}
-              >
-                {t("Back")}
-              </Button>
-              <Button className="flex-1" onClick={confirm}>
-                {t("Confirm")}
-              </Button>
+              <Button variant="outline" className="flex-1" onClick={() => setStep("input")}>{t("Back")}</Button>
+              <Button className="flex-1" onClick={confirm}>{t("Confirm")}</Button>
             </div>
           </div>
         )}
 
         {step === "success" && (
           <div className="flex flex-col items-center gap-4 py-6 text-center">
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
-              <IconCheck />
-            </div>
-            <h3 className="text-lg font-semibold">
-              {t("Transfer Successful")}
-            </h3>
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary"><IconCheck /></div>
+            <h3 className="text-lg font-semibold">{t("Transfer Successful")}</h3>
             <div className="flex items-center gap-2 rounded-lg bg-muted px-3 py-2 text-sm">
               <span className="font-mono">{ref}</span>
-              <IconCopy
-                className="h-4 w-4 cursor-pointer text-muted-foreground hover:text-foreground"
-                onClick={() => navigator.clipboard.writeText(ref)}
-              />
+              <IconCopy className="h-4 w-4 cursor-pointer text-muted-foreground hover:text-foreground" onClick={() => navigator.clipboard.writeText(ref)} />
             </div>
-            <Button className="mt-4 w-full" onClick={close}>
-              {t("Done")}
-            </Button>
+            <Button className="w-full mt-4" onClick={close}>{t("Done")}</Button>
           </div>
         )}
       </DrawerContent>
     </Drawer>
-  )
+  );
 }

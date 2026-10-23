@@ -10,7 +10,7 @@ export const indexModule = (sdk) => {
                 const toPath = compile("index/app{/*endpoint}");
                 const requestPayload = {
                     method,
-                    url: toPath(data?.params),
+                    url: toPath(sdk.resolvePathParams(data?.params)),
                     params: data?.query,
                     data: data?.body,
                     signal: data?.signal,
@@ -30,7 +30,7 @@ export const indexModule = (sdk) => {
                 const toPath = compile("index{/*endpoint}");
                 const requestPayload = {
                     method,
-                    url: toPath(data?.params),
+                    url: toPath(sdk.resolvePathParams(data?.params)),
                     params: data?.query,
                     data: data?.body,
                     signal: data?.signal,

@@ -10,7 +10,7 @@ export const streamsModule = (sdk) => {
                 const toPath = compile("streams/api/logs");
                 const requestPayload = {
                     method,
-                    url: toPath(data?.params),
+                    url: toPath(sdk.resolvePathParams(data?.params)),
                     params: data?.query,
                     data: data?.body,
                     signal: data?.signal,
@@ -30,7 +30,7 @@ export const streamsModule = (sdk) => {
                 const toPath = compile("streams/api/build");
                 const requestPayload = {
                     method,
-                    url: toPath(data?.params),
+                    url: toPath(sdk.resolvePathParams(data?.params)),
                     params: data?.query,
                     data: data?.body,
                     signal: data?.signal,
@@ -50,7 +50,7 @@ export const streamsModule = (sdk) => {
                 const toPath = compile("streams/api/metrics");
                 const requestPayload = {
                     method,
-                    url: toPath(data?.params),
+                    url: toPath(sdk.resolvePathParams(data?.params)),
                     params: data?.query,
                     data: data?.body,
                     signal: data?.signal,
@@ -70,7 +70,7 @@ export const streamsModule = (sdk) => {
                 const toPath = compile("streams/api/capacity");
                 const requestPayload = {
                     method,
-                    url: toPath(data?.params),
+                    url: toPath(sdk.resolvePathParams(data?.params)),
                     params: data?.query,
                     data: data?.body,
                     signal: data?.signal,
@@ -90,7 +90,7 @@ export const streamsModule = (sdk) => {
                 const toPath = compile("streams/api/exec");
                 const requestPayload = {
                     method,
-                    url: toPath(data?.params),
+                    url: toPath(sdk.resolvePathParams(data?.params)),
                     params: data?.query,
                     data: data?.body,
                     signal: data?.signal,
@@ -110,7 +110,7 @@ export const streamsModule = (sdk) => {
                 const toPath = compile("streams/api/terminal");
                 const requestPayload = {
                     method,
-                    url: toPath(data?.params),
+                    url: toPath(sdk.resolvePathParams(data?.params)),
                     params: data?.query,
                     data: data?.body,
                     signal: data?.signal,
@@ -130,7 +130,7 @@ export const streamsModule = (sdk) => {
                 const toPath = compile("streams/api/terminal/host");
                 const requestPayload = {
                     method,
-                    url: toPath(data?.params),
+                    url: toPath(sdk.resolvePathParams(data?.params)),
                     params: data?.query,
                     data: data?.body,
                     signal: data?.signal,
@@ -150,7 +150,7 @@ export const streamsModule = (sdk) => {
                 const toPath = compile("streams/api/:id/input");
                 const requestPayload = {
                     method,
-                    url: toPath(data?.params),
+                    url: toPath(sdk.resolvePathParams(data?.params)),
                     params: data?.query,
                     data: data?.body,
                     signal: data?.signal,
@@ -170,7 +170,7 @@ export const streamsModule = (sdk) => {
                 const toPath = compile("streams/api/:id/chunks");
                 const requestPayload = {
                     method,
-                    url: toPath(data?.params),
+                    url: toPath(sdk.resolvePathParams(data?.params)),
                     params: data?.query,
                     data: data?.body,
                     signal: data?.signal,
@@ -190,7 +190,7 @@ export const streamsModule = (sdk) => {
                 const toPath = compile("streams/api/:id/close");
                 const requestPayload = {
                     method,
-                    url: toPath(data?.params),
+                    url: toPath(sdk.resolvePathParams(data?.params)),
                     params: data?.query,
                     data: data?.body,
                     signal: data?.signal,

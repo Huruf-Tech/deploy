@@ -64,7 +64,9 @@ export type poll$body = {
         diskFree: number;
     } | undefined;
     /** Open terminals: session -> highest input seq applied. Only sent while one is open */
-    streams?: Record<string, number> | undefined;
+    streams?: {
+        [K in string]: number;
+    } | undefined;
 };
 export type poll$return = {
     nextPollMs: number;
@@ -72,15 +74,19 @@ export type poll$return = {
     commands: {
         seq: number;
         type: "ping" | "docker.ensure" | "stream.open" | "stream.close" | "build.run" | "server.prune" | "agent.update" | "registry.delete" | "host.cleanup";
-        payload: Record<string, unknown>;
+        payload: {
+            [K in string]: unknown;
+        };
     }[];
     /** New terminal input per session, after the cursors in `streams` */
-    streamInput?: Record<string, {
-        seq: number;
-        data?: string | undefined;
-        cols?: number | undefined;
-        rows?: number | undefined;
-    }[]> | undefined;
+    streamInput?: {
+        [K in string]: {
+            seq: number;
+            data?: string | undefined;
+            cols?: number | undefined;
+            rows?: number | undefined;
+        }[];
+    } | undefined;
     /** The agent's cursor is ahead of this server's commands (state from an earlier registration): forget received commands and the stored desired state */
     resetCommands?: boolean | undefined;
     /** Only when the version is newer than appliedVersion */
@@ -120,7 +126,9 @@ export type events$body = {
         data: {
             seq: number;
             ok: boolean;
-            result?: Record<string, unknown> | undefined;
+            result?: {
+                [K in string]: unknown;
+            } | undefined;
             error?: string | undefined;
         };
     } | {
@@ -152,7 +160,9 @@ export type events$body = {
         data: {
             publicKey: string;
             /** server -> reachable (a WireGuard handshake in the last 3 minutes) */
-            peers: Record<string, boolean>;
+            peers: {
+                [K in string]: boolean;
+            };
             error?: string | undefined;
         };
     } | {

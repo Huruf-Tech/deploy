@@ -1,10 +1,5 @@
 import type { 
     TRequestOptions,
-    TFilterValue,
-    TFilterExpression,
-    TMultiFilters,
-    TFilters,
-    TPagination,
 } from "../types.js";
 import type { BaseSDK } from "../base.js";
 
@@ -67,7 +62,7 @@ export const networksModule = (sdk: typeof BaseSDK) => {
             const toPath = compile("networks/api/");
             const requestPayload = {
                 method,
-                url: toPath(data?.params),
+                url: toPath(sdk.resolvePathParams(data?.params)),
                 params: data?.query,
                 data: data?.body,
                 signal: data?.signal,
@@ -95,7 +90,7 @@ export const networksModule = (sdk: typeof BaseSDK) => {
             const toPath = compile("networks/api/servers/:id");
             const requestPayload = {
                 method,
-                url: toPath(data?.params),
+                url: toPath(sdk.resolvePathParams(data?.params)),
                 params: data?.query,
                 data: data?.body,
                 signal: data?.signal,
@@ -123,7 +118,7 @@ export const networksModule = (sdk: typeof BaseSDK) => {
             const toPath = compile("networks/api/primary");
             const requestPayload = {
                 method,
-                url: toPath(data?.params),
+                url: toPath(sdk.resolvePathParams(data?.params)),
                 params: data?.query,
                 data: data?.body,
                 signal: data?.signal,

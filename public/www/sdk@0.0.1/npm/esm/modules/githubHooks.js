@@ -10,7 +10,7 @@ export const githubHooksModule = (sdk) => {
                 const toPath = compile("githubHooks/api/manifest");
                 const requestPayload = {
                     method,
-                    url: toPath(data?.params),
+                    url: toPath(sdk.resolvePathParams(data?.params)),
                     params: data?.query,
                     data: data?.body,
                     signal: data?.signal,
@@ -30,7 +30,7 @@ export const githubHooksModule = (sdk) => {
                 const toPath = compile("githubHooks/api/setup");
                 const requestPayload = {
                     method,
-                    url: toPath(data?.params),
+                    url: toPath(sdk.resolvePathParams(data?.params)),
                     params: data?.query,
                     data: data?.body,
                     signal: data?.signal,
@@ -50,7 +50,7 @@ export const githubHooksModule = (sdk) => {
                 const toPath = compile("githubHooks/api/webhook/:id");
                 const requestPayload = {
                     method,
-                    url: toPath(data?.params),
+                    url: toPath(sdk.resolvePathParams(data?.params)),
                     params: data?.query,
                     data: data?.body,
                     signal: data?.signal,

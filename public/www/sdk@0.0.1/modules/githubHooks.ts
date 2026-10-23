@@ -1,10 +1,5 @@
 import type { 
     TRequestOptions,
-    TFilterValue,
-    TFilterExpression,
-    TMultiFilters,
-    TFilters,
-    TPagination,
 } from "../types.ts";
 import type { BaseSDK } from "../base.ts";
 
@@ -29,7 +24,7 @@ export const githubHooksModule = (sdk: typeof BaseSDK) => {
             const toPath = compile("githubHooks/api/manifest");
             const requestPayload = {
                 method,
-                url: toPath(data?.params),
+                url: toPath(sdk.resolvePathParams(data?.params)),
                 params: data?.query,
                 data: data?.body,
                 signal: data?.signal,
@@ -57,7 +52,7 @@ export const githubHooksModule = (sdk: typeof BaseSDK) => {
             const toPath = compile("githubHooks/api/setup");
             const requestPayload = {
                 method,
-                url: toPath(data?.params),
+                url: toPath(sdk.resolvePathParams(data?.params)),
                 params: data?.query,
                 data: data?.body,
                 signal: data?.signal,
@@ -85,7 +80,7 @@ export const githubHooksModule = (sdk: typeof BaseSDK) => {
             const toPath = compile("githubHooks/api/webhook/:id");
             const requestPayload = {
                 method,
-                url: toPath(data?.params),
+                url: toPath(sdk.resolvePathParams(data?.params)),
                 params: data?.query,
                 data: data?.body,
                 signal: data?.signal,

@@ -1,10 +1,5 @@
 import type { 
     TRequestOptions,
-    TFilterValue,
-    TFilterExpression,
-    TMultiFilters,
-    TFilters,
-    TPagination,
 } from "../types.js";
 import type { BaseSDK } from "../base.js";
 
@@ -53,7 +48,7 @@ export const meModule = (sdk: typeof BaseSDK) => {
             const toPath = compile("me/api/");
             const requestPayload = {
                 method,
-                url: toPath(data?.params),
+                url: toPath(sdk.resolvePathParams(data?.params)),
                 params: data?.query,
                 data: data?.body,
                 signal: data?.signal,
@@ -81,7 +76,7 @@ export const meModule = (sdk: typeof BaseSDK) => {
             const toPath = compile("me/api/phone-number");
             const requestPayload = {
                 method,
-                url: toPath(data?.params),
+                url: toPath(sdk.resolvePathParams(data?.params)),
                 params: data?.query,
                 data: data?.body,
                 signal: data?.signal,
@@ -109,7 +104,7 @@ export const meModule = (sdk: typeof BaseSDK) => {
             const toPath = compile("me/api/phone-number/verify");
             const requestPayload = {
                 method,
-                url: toPath(data?.params),
+                url: toPath(sdk.resolvePathParams(data?.params)),
                 params: data?.query,
                 data: data?.body,
                 signal: data?.signal,

@@ -166,10 +166,14 @@ export type render$params = {
 };
 export type render$body = {
     version?: number | undefined;
-    inputs?: Record<string, unknown>;
+    inputs?: {
+        [K in string]: unknown;
+    };
 };
 export type render$return = {
-    files: Record<string, string>;
+    files: {
+        [K in string]: string;
+    };
     generated: string[];
 };
 export declare const templatesModule: (sdk: typeof BaseSDK) => {

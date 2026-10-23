@@ -2,7 +2,9 @@ import type { TRequestOptions, TFilters, TPagination } from "../types.js";
 import type { BaseSDK } from "../base.js";
 export type create$body = {
     name: string;
-    resourceGrant: Record<string, string[]>;
+    resourceGrant: {
+        [K in string]: string[];
+    };
     secret: string;
     scopes?: string[] | undefined;
     expiresAt?: Date | undefined;
@@ -26,7 +28,9 @@ export type get$query = TPagination;
 export type get$return = {
     results: {
         name: string;
-        resourceGrant: Record<string, string[]>;
+        resourceGrant: {
+            [K in string]: string[];
+        };
         secret: string;
         scopes?: string[] | undefined;
         expiresAt?: Date | undefined;
@@ -43,7 +47,9 @@ export type update$params = {
 };
 export type update$body = {
     name?: string | undefined;
-    resourceGrant?: Record<string, string[]> | undefined;
+    resourceGrant?: {
+        [K in string]: string[];
+    } | undefined;
     secret?: string | undefined;
     scopes?: (string[] | undefined) | undefined;
     expiresAt?: (Date | undefined) | undefined;

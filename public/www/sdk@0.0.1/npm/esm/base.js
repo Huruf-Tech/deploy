@@ -14,6 +14,17 @@ export class BaseSDK {
         return config;
     }
     ;
+    static resolvePathParams(params) {
+        if (!params)
+            return params;
+        // path-to-regexp only accepts strings (e.g. z.coerce.number() params are numbers)
+        return Object.fromEntries(Object.entries(params)
+            .filter(([, value]) => value !== undefined && value !== null)
+            .map(([key, value]) => [
+            key,
+            value instanceof Array ? value.map(String) : String(value),
+        ]));
+    }
     static log(...args) {
         if (this._options?.logs) {
             console.log("Thunder SDK::", ...args);
@@ -34,12 +45,15 @@ export class BaseSDK {
                 await plugin.clean();
             }
         }));
-        await this.clearCache();
+        // Cache is optional (and keys() is optional within it)
+        if (this._options?.cache?.delete && this._options.cache.keys) {
+            await this.clearCache();
+        }
         delete this._options;
         delete this._axios;
         this._useCachingMethods = new Map();
         this._cachingActivity = new Map();
-        this._cacheNamespaces = this._cacheNamespacesDefault;
+        this._cacheNamespaces = { ...this._cacheNamespacesDefault };
     }
     static checkPermission(scope, action) {
         if (!this.isPermitted(scope, action))
@@ -137,13 +151,22 @@ export class BaseSDK {
                     resultPromise,
                     timestamp: Date.now(),
                 });
-                const result = await resultPromise;
-                this._cachingActivity.delete(resolvedCacheKey);
-                return result;
+                try {
+                    return await resultPromise;
+                }
+                finally {
+                    if (this._cachingActivity.get(resolvedCacheKey)?.resultPromise === resultPromise) {
+                        this._cachingActivity.delete(resolvedCacheKey);
+                    }
+                }
             }, {
                 cacheKey,
                 ...options,
             });
+        };
+        const isSubKey = (key, baseKey) => {
+            const prefix = this.resolveCacheKey(baseKey);
+            return key === prefix || key.startsWith(prefix + ":");
         };
         const expireCallbacks = new Set();
         const onExpire = (callback) => {
@@ -157,7 +180,7 @@ export class BaseSDK {
                 const baseKey = cacheKey instanceof Array ? cacheKey[0] : cacheKey;
                 const cacheKeys = Array.from(this._useCachingMethods.keys());
                 await Promise.all(cacheKeys.map(async (key) => {
-                    if (resolvedCacheKey !== key && new RegExp(`^${this.resolveCacheKey(baseKey)}($|:.*)`).test(key)) {
+                    if (resolvedCacheKey !== key && isSubKey(key, baseKey)) {
                         const cachingMethods = this._useCachingMethods.get(key);
                         await cachingMethods.expire({ stopPropagation: true });
                     }
@@ -182,13 +205,13 @@ export class BaseSDK {
                 const baseKey = cacheKey instanceof Array ? cacheKey[0] : cacheKey;
                 const cacheKeys = Array.from(this._useCachingMethods.keys());
                 await Promise.all(cacheKeys.map(async (key) => {
-                    if (resolvedCacheKey !== key && new RegExp(`^${this.resolveCacheKey(baseKey)}($|:.*)`).test(key)) {
+                    if (resolvedCacheKey !== key && isSubKey(key, baseKey)) {
                         const cachingMethods = this._useCachingMethods.get(key);
                         await cachingMethods.invalidate({ stopPropagation: true });
                     }
                 }));
             }
-            await expire();
+            await expire({ stopPropagation: true });
             const data = await get();
             for (const callback of invalidateCallbacks) {
                 callback(data);
@@ -209,6 +232,7 @@ export class BaseSDK {
     static resolveAxiosResponse(executor, options) {
         if (!this._axios)
             throw new Error("Axios not initialized!");
+        const sdk = this;
         const executors = {
             get raw() {
                 return executor();
@@ -220,7 +244,7 @@ export class BaseSDK {
                         .catch((err) => reject(err));
                 });
                 if (options?.cacheKey)
-                    return _a.useCache(callback, options);
+                    return sdk.useCache(callback, options);
                 return callback();
             },
             then: ((resolve, reject) => {
@@ -273,7 +297,7 @@ Object.defineProperty(BaseSDK, "_cacheNamespaces", {
     enumerable: true,
     configurable: true,
     writable: true,
-    value: _a._cacheNamespacesDefault
+    value: { ..._a._cacheNamespacesDefault }
 });
 Object.defineProperty(BaseSDK, "plugins", {
     enumerable: true,

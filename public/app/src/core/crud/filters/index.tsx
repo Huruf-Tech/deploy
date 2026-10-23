@@ -65,7 +65,7 @@ export function useFilters() {
 
 export function Filters({ filters, fields, onChange, multiLiner }: TFilter) {
   if (!fields.length) return <></>
-
+  
   return (
     <FiltersContext.Provider value={{ filters, fields, onChange }}>
       <div className="flex min-w-0 grow items-center gap-2">

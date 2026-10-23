@@ -1,8 +1,5 @@
 import type { 
     TRequestOptions,
-    TFilterValue,
-    TFilterExpression,
-    TMultiFilters,
     TFilters,
     TPagination,
 } from "../types.js";
@@ -80,7 +77,7 @@ export const envsModule = (sdk: typeof BaseSDK) => {
             const toPath = compile("envs/api/");
             const requestPayload = {
                 method,
-                url: toPath(data?.params),
+                url: toPath(sdk.resolvePathParams(data?.params)),
                 params: data?.query,
                 data: data?.body,
                 signal: data?.signal,
@@ -108,7 +105,7 @@ export const envsModule = (sdk: typeof BaseSDK) => {
             const toPath = compile("envs/api/count");
             const requestPayload = {
                 method,
-                url: toPath(data?.params),
+                url: toPath(sdk.resolvePathParams(data?.params)),
                 params: data?.query,
                 data: data?.body,
                 signal: data?.signal,
@@ -136,7 +133,7 @@ export const envsModule = (sdk: typeof BaseSDK) => {
             const toPath = compile("envs/api{/:id}");
             const requestPayload = {
                 method,
-                url: toPath(data?.params),
+                url: toPath(sdk.resolvePathParams(data?.params)),
                 params: data?.query,
                 data: data?.body,
                 signal: data?.signal,
@@ -164,7 +161,7 @@ export const envsModule = (sdk: typeof BaseSDK) => {
             const toPath = compile("envs/api/:id");
             const requestPayload = {
                 method,
-                url: toPath(data?.params),
+                url: toPath(sdk.resolvePathParams(data?.params)),
                 params: data?.query,
                 data: data?.body,
                 signal: data?.signal,
@@ -192,7 +189,7 @@ export const envsModule = (sdk: typeof BaseSDK) => {
             const toPath = compile("envs/api/:id");
             const requestPayload = {
                 method,
-                url: toPath(data?.params),
+                url: toPath(sdk.resolvePathParams(data?.params)),
                 params: data?.query,
                 data: data?.body,
                 signal: data?.signal,

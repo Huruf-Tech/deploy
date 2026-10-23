@@ -8,71 +8,78 @@ const listeners = new Set<() => void>()
 let target: CssVarTarget | null = null
 
 function getTarget() {
-  if (typeof document === "undefined") return null
-  return target ?? document.documentElement
+    if (typeof document === "undefined") return null
+    return target ?? document.documentElement
 }
 
 function notify() {
-  listeners.forEach((listener) => listener())
+    listeners.forEach((listener) => listener())
 }
 
-export function configureCssVars(options?: { target?: CssVarTarget }) {
-  target = options?.target ?? null
-  notify()
+export function configureCssVars(options?: {
+    target?: CssVarTarget
+}) {
+    target = options?.target ?? null
+    notify()
 }
 
 export function getCssVar(
-  name: `--${string}`,
-  fallback = "",
-  element?: CssVarTarget
+    name: `--${string}`,
+    fallback = "",
+    element?: CssVarTarget,
 ) {
-  if (typeof window === "undefined") return fallback
+    if (typeof window === "undefined") return fallback
 
-  const targetElement = element ?? getTarget()
+    const targetElement = element ?? getTarget()
 
-  if (!targetElement) return fallback
+    if (!targetElement) return fallback
 
-  const value = getComputedStyle(targetElement).getPropertyValue(name).trim()
+    const value = getComputedStyle(targetElement)
+        .getPropertyValue(name)
+        .trim()
 
-  return value || fallback
+    return value || fallback
 }
 
 export function setCssVar(
-  name: `--${string}`,
-  value: string,
-  element?: CssVarTarget
+    name: `--${string}`,
+    value: string,
+    element?: CssVarTarget,
 ) {
-  if (typeof document === "undefined") return
+    if (typeof document === "undefined") return
 
-  const targetElement = element ?? getTarget()
+    const targetElement = element ?? getTarget()
 
-  if (!targetElement) return
+    if (!targetElement) return
 
-  targetElement.style.setProperty(name, value)
-  notify()
+    targetElement.style.setProperty(name, value)
+    notify()
 }
 
-export function removeCssVar(name: `--${string}`, element?: CssVarTarget) {
-  if (typeof document === "undefined") return
+export function removeCssVar(
+    name: `--${string}`,
+    element?: CssVarTarget,
+) {
+    if (typeof document === "undefined") return
 
-  const targetElement = element ?? getTarget()
+    const targetElement = element ?? getTarget()
 
-  if (!targetElement) return
+    if (!targetElement) return
 
-  targetElement.style.removeProperty(name)
-  notify()
+    targetElement.style.removeProperty(name)
+    notify()
 }
 
 export function subscribeCssVars(listener: () => void) {
-  listeners.add(listener)
+    listeners.add(listener)
 
-  return () => {
-    listeners.delete(listener)
-  }
+    return () => {
+        listeners.delete(listener)
+    }
 }
 
 export function refreshCssVars() {
-  notify()
+    notify()
 }
 
 export function useCssVar(
@@ -81,7 +88,7 @@ export function useCssVar(
     fallback?: string
     target?: HTMLElement | null
     watchTheme?: boolean
-  }
+  },
 ) {
   const { fallback = "", target = null, watchTheme = true } = options ?? {}
 
@@ -92,7 +99,9 @@ export function useCssVar(
 
     const element = target ?? document.documentElement
 
-    const nextValue = getComputedStyle(element).getPropertyValue(name).trim()
+    const nextValue = getComputedStyle(element)
+      .getPropertyValue(name)
+      .trim()
 
     setValue(nextValue || fallback)
   }, [name, fallback, target])

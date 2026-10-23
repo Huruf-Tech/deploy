@@ -363,9 +363,9 @@ export function RefSelect({
                   <CommandItem
                     key={String(option.value)}
                     value={String(option.value)}
-                    data-checked={selected
-                      .map(String)
-                      .includes(String(option.value))}
+                    data-checked={selected.map(String).includes(
+                      String(option.value)
+                    )}
                     onSelect={() => toggle(option)}
                   >
                     {option.label}

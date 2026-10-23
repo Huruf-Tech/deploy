@@ -86,8 +86,12 @@ export type resolve$query = {
     project?: string | undefined;
 };
 export type resolve$return = {
-    env: Record<string, string>;
-    files: Record<string, string>;
+    env: {
+        [K in string]: string;
+    };
+    files: {
+        [K in string]: string;
+    };
 };
 export declare const variablesModule: (sdk: typeof BaseSDK) => {
     readonly type: {

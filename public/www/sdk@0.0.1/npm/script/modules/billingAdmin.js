@@ -13,7 +13,7 @@ const billingAdminModule = (sdk) => {
                 const toPath = (0, path_to_regexp_1.compile)("billingAdmin/api/subscriptions");
                 const requestPayload = {
                     method,
-                    url: toPath(data?.params),
+                    url: toPath(sdk.resolvePathParams(data?.params)),
                     params: data?.query,
                     data: data?.body,
                     signal: data?.signal,
@@ -33,7 +33,7 @@ const billingAdminModule = (sdk) => {
                 const toPath = (0, path_to_regexp_1.compile)("billingAdmin/api/grant");
                 const requestPayload = {
                     method,
-                    url: toPath(data?.params),
+                    url: toPath(sdk.resolvePathParams(data?.params)),
                     params: data?.query,
                     data: data?.body,
                     signal: data?.signal,

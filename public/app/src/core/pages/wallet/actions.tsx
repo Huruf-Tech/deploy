@@ -1,23 +1,19 @@
-"use client"
+"use client";
 
-import {
-  IconArrowDownDashed,
-  IconArrowNarrowUp,
-  IconCreditCardPay,
-  IconQrcode,
-  // IconRepeat
-} from "@tabler/icons-react"
-import { motion, useReducedMotion } from "motion/react"
-import type { ComponentType } from "react"
-import { useTranslation } from "react-i18next"
-import { SPRING_PRESS } from "@/core/lib/ease"
+import { IconArrowDownDashed , IconArrowNarrowUp , IconCreditCardPay , IconQrcode ,
+  // IconRepeat 
+ } from "@tabler/icons-react";
+import { motion, useReducedMotion } from "motion/react";
+import type { ComponentType } from "react";
+import { useTranslation } from "react-i18next";
+import { SPRING_PRESS } from "@/core/lib/ease";
 
 type WalletAction = {
-  key: string
-  label: string
-  icon: ComponentType<{ className?: string }>
-  onClick?: () => void
-}
+  key: string;
+  label: string;
+  icon: ComponentType<{ className?: string }>;
+  onClick?: () => void;
+};
 
 /**
  * Row of primary wallet actions rendered icon-over-label, with a spring press.
@@ -29,32 +25,22 @@ export function WalletActions({
   // onSwap,
   onBuy,
 }: {
-  onReceive?: () => void
-  onSend?: () => void
-  onDeposit?: () => void
+  onReceive?: () => void;
+  onSend?: () => void;
+  onDeposit?: () => void;
   // onSwap?: () => void;
-  onBuy?: () => void
+  onBuy?: () => void;
 }) {
-  const reduce = useReducedMotion()
-  const { t } = useTranslation()
+  const reduce = useReducedMotion();
+  const { t } = useTranslation();
 
   const actions: WalletAction[] = [
-    {
-      key: "receive",
-      label: t("Receive"),
-      icon: IconQrcode,
-      onClick: onReceive,
-    },
+    { key: "receive", label: t("Receive"), icon: IconQrcode, onClick: onReceive },
     { key: "send", label: t("Send"), icon: IconArrowNarrowUp, onClick: onSend },
-    {
-      key: "deposit",
-      label: t("Deposit"),
-      icon: IconArrowDownDashed,
-      onClick: onDeposit,
-    },
+    { key: "deposit", label: t("Deposit"), icon: IconArrowDownDashed, onClick: onDeposit },
     // { key: "swap", label: t("Swap"), icon: IconRepeat, onClick: onSwap },
     { key: "buy", label: t("Buy"), icon: IconCreditCardPay, onClick: onBuy },
-  ]
+  ];
 
   return (
     <div className="flex items-start justify-between gap-2">
@@ -76,5 +62,5 @@ export function WalletActions({
         </motion.button>
       ))}
     </div>
-  )
+  );
 }

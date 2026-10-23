@@ -47,16 +47,22 @@ export type TFilterExpression = {
     $all?: TFilterValue[] | undefined;
 };
 export type TMultiFilters = {
-    $and?: Record<string, {
-        $not: TFilterExpression;
-    } | TFilterExpression>[] | undefined;
-    $or?: Record<string, {
-        $not: TFilterExpression;
-    } | TFilterExpression>[] | undefined;
+    $and?: {
+        [K in string]: {
+            $not: TFilterExpression;
+        } | TFilterExpression;
+    }[] | undefined;
+    $or?: {
+        [K in string]: {
+            $not: TFilterExpression;
+        } | TFilterExpression;
+    }[] | undefined;
 };
-export type TFilters = Record<string, {
-    $not: TFilterExpression;
-} | TFilterExpression> | TMultiFilters;
+export type TFilters = {
+    [K in string]: {
+        $not: TFilterExpression;
+    } | TFilterExpression;
+} | TMultiFilters;
 export type TPagination = {
     /** Client side filters */
     filters?: TFilters | undefined;
@@ -65,12 +71,16 @@ export type TPagination = {
     offset?: number;
     limit?: number;
     /** Provide a sorting information in mongodb sort object format */
-    sort?: Record<string, number>;
+    sort?: {
+        [K in string]: number;
+    };
     /** Provide a projection information in mongodb project object format */
-    project?: Record<string, number | {
-        $slice: number | [
-            number,
-            number
-        ];
-    }> | undefined;
+    project?: {
+        [K in string]: number | {
+            $slice: number | [
+                number,
+                number
+            ];
+        };
+    } | undefined;
 };

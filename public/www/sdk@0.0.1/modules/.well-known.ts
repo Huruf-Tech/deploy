@@ -1,10 +1,5 @@
 import type { 
     TRequestOptions,
-    TFilterValue,
-    TFilterExpression,
-    TMultiFilters,
-    TFilters,
-    TPagination,
 } from "../types.ts";
 import type { BaseSDK } from "../base.ts";
 
@@ -37,7 +32,7 @@ export const wellKnownModule = (sdk: typeof BaseSDK) => {
             const toPath = compile(".well-known/oauth-authorization-server{/*endpoint}");
             const requestPayload = {
                 method,
-                url: toPath(data?.params),
+                url: toPath(sdk.resolvePathParams(data?.params)),
                 params: data?.query,
                 data: data?.body,
                 signal: data?.signal,
@@ -65,7 +60,7 @@ export const wellKnownModule = (sdk: typeof BaseSDK) => {
             const toPath = compile(".well-known/openid-configuration{/*endpoint}");
             const requestPayload = {
                 method,
-                url: toPath(data?.params),
+                url: toPath(sdk.resolvePathParams(data?.params)),
                 params: data?.query,
                 data: data?.body,
                 signal: data?.signal,

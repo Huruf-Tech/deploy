@@ -13,7 +13,7 @@ const networksModule = (sdk) => {
                 const toPath = (0, path_to_regexp_1.compile)("networks/api/");
                 const requestPayload = {
                     method,
-                    url: toPath(data?.params),
+                    url: toPath(sdk.resolvePathParams(data?.params)),
                     params: data?.query,
                     data: data?.body,
                     signal: data?.signal,
@@ -33,7 +33,7 @@ const networksModule = (sdk) => {
                 const toPath = (0, path_to_regexp_1.compile)("networks/api/servers/:id");
                 const requestPayload = {
                     method,
-                    url: toPath(data?.params),
+                    url: toPath(sdk.resolvePathParams(data?.params)),
                     params: data?.query,
                     data: data?.body,
                     signal: data?.signal,
@@ -53,7 +53,7 @@ const networksModule = (sdk) => {
                 const toPath = (0, path_to_regexp_1.compile)("networks/api/primary");
                 const requestPayload = {
                     method,
-                    url: toPath(data?.params),
+                    url: toPath(sdk.resolvePathParams(data?.params)),
                     params: data?.query,
                     data: data?.body,
                     signal: data?.signal,

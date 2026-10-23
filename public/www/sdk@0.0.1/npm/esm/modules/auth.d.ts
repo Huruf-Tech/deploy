@@ -9,7 +9,9 @@ export type branding$return = {
     homepageURL?: string | undefined;
     termsURL?: string | undefined;
     privacyURL?: string | undefined;
-    theme: Record<string, string>;
+    theme: {
+        [K in string]: string;
+    };
     hidePoweredBy?: boolean | undefined;
 };
 export type capabilities$return = {

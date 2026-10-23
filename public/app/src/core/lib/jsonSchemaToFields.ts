@@ -39,7 +39,7 @@ export type TField = {
   pattern?: string
   example?: string
   ref?: string
-  refFilters?: TFilters
+  refFilters?: TFilters;
   refLabel?: string | string[]
   refValue?: string
   fieldHint?: string

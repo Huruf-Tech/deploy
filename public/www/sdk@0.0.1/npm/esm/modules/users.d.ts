@@ -5,7 +5,9 @@ export type create$body = {
     password?: string | undefined;
     name: string;
     role?: string | undefined;
-    metadata?: Record<string, any> | undefined;
+    metadata?: {
+        [K in string]: any;
+    } | undefined;
 };
 export type create$return = {
     _id: string;
@@ -17,7 +19,9 @@ export type update$body = {
     email: string;
     name: string;
     role?: string | undefined;
-    metadata?: Record<string, any> | undefined;
+    metadata?: {
+        [K in string]: any;
+    } | undefined;
 };
 export type ban$params = {
     id?: string;

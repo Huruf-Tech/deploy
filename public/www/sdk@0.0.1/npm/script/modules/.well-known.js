@@ -13,7 +13,7 @@ const wellKnownModule = (sdk) => {
                 const toPath = (0, path_to_regexp_1.compile)(".well-known/oauth-authorization-server{/*endpoint}");
                 const requestPayload = {
                     method,
-                    url: toPath(data?.params),
+                    url: toPath(sdk.resolvePathParams(data?.params)),
                     params: data?.query,
                     data: data?.body,
                     signal: data?.signal,
@@ -33,7 +33,7 @@ const wellKnownModule = (sdk) => {
                 const toPath = (0, path_to_regexp_1.compile)(".well-known/openid-configuration{/*endpoint}");
                 const requestPayload = {
                     method,
-                    url: toPath(data?.params),
+                    url: toPath(sdk.resolvePathParams(data?.params)),
                     params: data?.query,
                     data: data?.body,
                     signal: data?.signal,

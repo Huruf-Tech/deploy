@@ -16,7 +16,9 @@ export type get$query = TPagination;
 export type get$return = {
     results: {
         type: "credit" | "debit";
-        description?: (string | Record<string, string>) | undefined;
+        description?: (string | {
+            [K in string]: string;
+        }) | undefined;
         purpose?: string | undefined;
         foreignRefType?: string | undefined;
         foreignRef?: string | undefined;
@@ -37,7 +39,9 @@ export type get$return = {
         oppositeWallet: string;
         executorUser?: string | undefined;
         tags?: string[] | undefined;
-        metadata?: Record<string, any> | undefined;
+        metadata?: {
+            [K in string]: any;
+        } | undefined;
         createdAt: Date | undefined;
         updatedAt: Date | undefined;
         _id: string;

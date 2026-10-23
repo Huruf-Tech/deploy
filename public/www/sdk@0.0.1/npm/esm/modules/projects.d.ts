@@ -70,7 +70,9 @@ export type create$body = {
         version?: number | undefined;
     } | undefined;
     /** Template inputs; secret ones become project secret variables */
-    inputs?: Record<string, unknown>;
+    inputs?: {
+        [K in string]: unknown;
+    };
     /** The compose file, for the `compose` source */
     compose?: string | undefined;
     /** Project variables to create with it (e.g. a pasted .env) */
@@ -124,7 +126,9 @@ export type create$return = {
 export type placementInfo$return = {
     server: string;
     name: string;
-    labels: Record<string, string>;
+    labels: {
+        [K in string]: string;
+    };
     online: boolean;
     cpuCores: number;
     memoryMb: number;
@@ -176,7 +180,9 @@ export type get$return = {
         template: string;
         version: number;
     } | undefined;
-    templateInputs: Record<string, string | number | boolean>;
+    templateInputs: {
+        [K in string]: string | number | boolean;
+    };
     runtime: {
         /** Port the app listens on inside the container */
         port?: number | undefined;
@@ -284,7 +290,9 @@ export type update$body = {
     registry?: (string | null) | undefined;
     branch?: string | undefined;
     templateVersion?: number | undefined;
-    inputs?: Record<string, string | number | boolean> | undefined;
+    inputs?: {
+        [K in string]: string | number | boolean;
+    } | undefined;
     compose?: string | undefined;
     volumes?: {
         name: string;

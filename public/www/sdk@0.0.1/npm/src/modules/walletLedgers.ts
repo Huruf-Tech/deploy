@@ -1,8 +1,5 @@
 import type { 
     TRequestOptions,
-    TFilterValue,
-    TFilterExpression,
-    TMultiFilters,
     TFilters,
     TPagination,
 } from "../types.js";
@@ -26,7 +23,9 @@ export type get$query = TPagination;
 export type get$return = {
     results: {
         type: "credit" | "debit";
-        description?: (string | Record<string, string>) | undefined;
+        description?: (string | {
+            [K in string]: string;
+        }) | undefined;
         purpose?: string | undefined;
         foreignRefType?: string | undefined;
         foreignRef?: string | undefined;
@@ -47,7 +46,9 @@ export type get$return = {
         oppositeWallet: string;
         executorUser?: string | undefined;
         tags?: string[] | undefined;
-        metadata?: Record<string, any> | undefined;
+        metadata?: {
+            [K in string]: any;
+        } | undefined;
         createdAt: Date | undefined;
         updatedAt: Date | undefined;
         _id: string;
@@ -77,7 +78,7 @@ export const walletLedgersModule = (sdk: typeof BaseSDK) => {
             const toPath = compile("walletLedgers/api/count");
             const requestPayload = {
                 method,
-                url: toPath(data?.params),
+                url: toPath(sdk.resolvePathParams(data?.params)),
                 params: data?.query,
                 data: data?.body,
                 signal: data?.signal,
@@ -105,7 +106,7 @@ export const walletLedgersModule = (sdk: typeof BaseSDK) => {
             const toPath = compile("walletLedgers/api{/:id}");
             const requestPayload = {
                 method,
-                url: toPath(data?.params),
+                url: toPath(sdk.resolvePathParams(data?.params)),
                 params: data?.query,
                 data: data?.body,
                 signal: data?.signal,
@@ -127,7 +128,7 @@ export const walletLedgersModule = (sdk: typeof BaseSDK) => {
     (methods.get as any).__scope = "walletLedgers";
 
 
-    sdk["_moduleMetadata"].set(methods, {"crud":{"schema":{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","properties":{"type":{"type":"string","enum":["credit","debit"],"canFilter":true,"label":"Type"},"description":{"anyOf":[{"type":"string"},{"type":"object","propertyNames":{"type":"string"},"additionalProperties":{"type":"string"}}]},"purpose":{"type":"string"},"foreignRefType":{"type":"string"},"foreignRef":{"type":"string"},"reference":{"type":"string","canFilter":true,"label":"Reference"},"isRefund":{"type":"boolean"},"refundedReference":{"description":"Reference to the original transaction if this is a refund","type":"string"},"isRefunded":{"type":"boolean"},"refundReference":{"description":"Reference to the refund transaction if this transaction has been refunded","type":"string"},"idempotencyKey":{"type":"string"},"currency":{"type":"string","minLength":3},"amount":{"type":"integer","minimum":-9007199254740991,"maximum":9007199254740991,"canFilter":true,"label":"Amount"},"previousBalance":{"type":"integer","minimum":-9007199254740991,"maximum":9007199254740991},"tenant":{"tsType":"string"},"wallet":{"tsType":"string"},"oppositeTenant":{"tsType":"string"},"oppositeWallet":{"tsType":"string"},"executorUser":{"tsType":"string"},"tags":{"type":"array","items":{"type":"string"}},"metadata":{"type":"object","propertyNames":{"type":"string"},"additionalProperties":{}},"createdAt":{"default":"2026-10-23T21:05:39.788Z","canFilter":true,"label":"Created At","type":"string","format":"date-time"},"updatedAt":{"default":"2026-10-23T21:05:39.788Z","canFilter":true,"label":"Updated At","type":"string","format":"date-time"}},"required":["type","reference","idempotencyKey","currency","amount","previousBalance","tenant","wallet","oppositeTenant","oppositeWallet","createdAt","updatedAt"],"additionalProperties":false}}});
+    sdk["_moduleMetadata"].set(methods, {"crud":{"schema":{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","properties":{"type":{"type":"string","enum":["credit","debit"],"canFilter":true,"label":"Type"},"description":{"anyOf":[{"type":"string"},{"type":"object","propertyNames":{"type":"string"},"additionalProperties":{"type":"string"}}]},"purpose":{"type":"string"},"foreignRefType":{"type":"string"},"foreignRef":{"type":"string"},"reference":{"type":"string","canFilter":true,"label":"Reference"},"isRefund":{"type":"boolean"},"refundedReference":{"description":"Reference to the original transaction if this is a refund","type":"string"},"isRefunded":{"type":"boolean"},"refundReference":{"description":"Reference to the refund transaction if this transaction has been refunded","type":"string"},"idempotencyKey":{"type":"string"},"currency":{"type":"string","minLength":3},"amount":{"type":"integer","minimum":-9007199254740991,"maximum":9007199254740991,"canFilter":true,"label":"Amount"},"previousBalance":{"type":"integer","minimum":-9007199254740991,"maximum":9007199254740991},"tenant":{"tsType":"string"},"wallet":{"tsType":"string"},"oppositeTenant":{"tsType":"string"},"oppositeWallet":{"tsType":"string"},"executorUser":{"tsType":"string"},"tags":{"type":"array","items":{"type":"string"}},"metadata":{"type":"object","propertyNames":{"type":"string"},"additionalProperties":{}},"createdAt":{"default":"2026-10-23T23:02:48.546Z","canFilter":true,"label":"Created At","type":"string","format":"date-time"},"updatedAt":{"default":"2026-10-23T23:02:48.546Z","canFilter":true,"label":"Updated At","type":"string","format":"date-time"}},"required":["type","reference","idempotencyKey","currency","amount","previousBalance","tenant","wallet","oppositeTenant","oppositeWallet","createdAt","updatedAt"],"additionalProperties":false}}});
 
     return methods;
 };

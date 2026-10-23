@@ -13,7 +13,7 @@ const tenantInvitesModule = (sdk) => {
                 const toPath = (0, path_to_regexp_1.compile)("tenantInvites/api/");
                 const requestPayload = {
                     method,
-                    url: toPath(data?.params),
+                    url: toPath(sdk.resolvePathParams(data?.params)),
                     params: data?.query,
                     data: data?.body,
                     signal: data?.signal,
@@ -33,7 +33,7 @@ const tenantInvitesModule = (sdk) => {
                 const toPath = (0, path_to_regexp_1.compile)("tenantInvites/api/count");
                 const requestPayload = {
                     method,
-                    url: toPath(data?.params),
+                    url: toPath(sdk.resolvePathParams(data?.params)),
                     params: data?.query,
                     data: data?.body,
                     signal: data?.signal,
@@ -53,7 +53,7 @@ const tenantInvitesModule = (sdk) => {
                 const toPath = (0, path_to_regexp_1.compile)("tenantInvites/api{/:id}");
                 const requestPayload = {
                     method,
-                    url: toPath(data?.params),
+                    url: toPath(sdk.resolvePathParams(data?.params)),
                     params: data?.query,
                     data: data?.body,
                     signal: data?.signal,
@@ -73,7 +73,7 @@ const tenantInvitesModule = (sdk) => {
                 const toPath = (0, path_to_regexp_1.compile)("tenantInvites/api/:id");
                 const requestPayload = {
                     method,
-                    url: toPath(data?.params),
+                    url: toPath(sdk.resolvePathParams(data?.params)),
                     params: data?.query,
                     data: data?.body,
                     signal: data?.signal,
@@ -93,7 +93,7 @@ const tenantInvitesModule = (sdk) => {
                 const toPath = (0, path_to_regexp_1.compile)("tenantInvites/api/:id");
                 const requestPayload = {
                     method,
-                    url: toPath(data?.params),
+                    url: toPath(sdk.resolvePathParams(data?.params)),
                     params: data?.query,
                     data: data?.body,
                     signal: data?.signal,
@@ -113,7 +113,7 @@ const tenantInvitesModule = (sdk) => {
     methods.update.__scope = "tenantInvites";
     methods.del.__scope = "tenantInvites";
     sdk["_moduleGroup"].set(methods, "IAM");
-    sdk["_moduleMetadata"].set(methods, { "crud": { "schema": { "$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object", "properties": { "email": { "type": "string", "format": "email", "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$" }, "role": { "type": "string" }, "url": { "type": "string", "format": "uri" }, "membershipExpiresAt": { "type": "string", "format": "date-time" }, "tenant": { "tsType": "string" }, "createdBy": { "tsType": "string" }, "createdAt": { "default": "2026-10-23T21:05:39.762Z", "type": "string", "format": "date-time" } }, "required": ["email", "role", "url", "tenant", "createdBy", "createdAt"], "additionalProperties": false }, "insertSchema": { "$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object", "properties": { "email": { "type": "string", "format": "email", "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$" }, "role": { "type": "string" }, "url": { "type": "string", "format": "uri" }, "membershipExpiresAt": { "type": "string", "format": "date-time" } }, "required": ["email", "role", "url"] } } });
+    sdk["_moduleMetadata"].set(methods, { "crud": { "schema": { "$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object", "properties": { "email": { "type": "string", "format": "email", "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$" }, "role": { "type": "string" }, "url": { "type": "string", "format": "uri" }, "membershipExpiresAt": { "type": "string", "format": "date-time" }, "tenant": { "tsType": "string" }, "createdBy": { "tsType": "string" }, "createdAt": { "default": "2026-10-23T23:02:48.493Z", "type": "string", "format": "date-time" } }, "required": ["email", "role", "url", "tenant", "createdBy", "createdAt"], "additionalProperties": false }, "insertSchema": { "$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object", "properties": { "email": { "type": "string", "format": "email", "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$" }, "role": { "type": "string" }, "url": { "type": "string", "format": "uri" }, "membershipExpiresAt": { "type": "string", "format": "date-time" } }, "required": ["email", "role", "url"] } } });
     return methods;
 };
 exports.tenantInvitesModule = tenantInvitesModule;

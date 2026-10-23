@@ -10,7 +10,7 @@ export const gitIntegrationsModule = (sdk) => {
                 const toPath = compile("gitIntegrations/api/");
                 const requestPayload = {
                     method,
-                    url: toPath(data?.params),
+                    url: toPath(sdk.resolvePathParams(data?.params)),
                     params: data?.query,
                     data: data?.body,
                     signal: data?.signal,
@@ -30,7 +30,7 @@ export const gitIntegrationsModule = (sdk) => {
                 const toPath = compile("gitIntegrations/api/connect");
                 const requestPayload = {
                     method,
-                    url: toPath(data?.params),
+                    url: toPath(sdk.resolvePathParams(data?.params)),
                     params: data?.query,
                     data: data?.body,
                     signal: data?.signal,
@@ -50,7 +50,7 @@ export const gitIntegrationsModule = (sdk) => {
                 const toPath = compile("gitIntegrations/api/:id");
                 const requestPayload = {
                     method,
-                    url: toPath(data?.params),
+                    url: toPath(sdk.resolvePathParams(data?.params)),
                     params: data?.query,
                     data: data?.body,
                     signal: data?.signal,
@@ -70,7 +70,7 @@ export const gitIntegrationsModule = (sdk) => {
                 const toPath = compile("gitIntegrations/api/:id");
                 const requestPayload = {
                     method,
-                    url: toPath(data?.params),
+                    url: toPath(sdk.resolvePathParams(data?.params)),
                     params: data?.query,
                     data: data?.body,
                     signal: data?.signal,
@@ -90,7 +90,7 @@ export const gitIntegrationsModule = (sdk) => {
                 const toPath = compile("gitIntegrations/api/:id/refresh");
                 const requestPayload = {
                     method,
-                    url: toPath(data?.params),
+                    url: toPath(sdk.resolvePathParams(data?.params)),
                     params: data?.query,
                     data: data?.body,
                     signal: data?.signal,
@@ -110,7 +110,7 @@ export const gitIntegrationsModule = (sdk) => {
                 const toPath = compile("gitIntegrations/api/:id/installations/:installation/repositories");
                 const requestPayload = {
                     method,
-                    url: toPath(data?.params),
+                    url: toPath(sdk.resolvePathParams(data?.params)),
                     params: data?.query,
                     data: data?.body,
                     signal: data?.signal,
@@ -130,7 +130,7 @@ export const gitIntegrationsModule = (sdk) => {
                 const toPath = compile("gitIntegrations/api/:id/installations/:installation/branches");
                 const requestPayload = {
                     method,
-                    url: toPath(data?.params),
+                    url: toPath(sdk.resolvePathParams(data?.params)),
                     params: data?.query,
                     data: data?.body,
                     signal: data?.signal,

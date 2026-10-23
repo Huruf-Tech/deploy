@@ -1,7 +1,7 @@
-import { Container } from "@/core/custom/Container"
-import { Skeleton } from "@/components/ui/skeleton"
-import { Button } from "@/components/ui/button"
-import { IconArrowLeft } from "@tabler/icons-react"
+import { Container } from '@/core/custom/Container'
+import { Skeleton } from '@/components/ui/skeleton';
+import { Button } from '@/components/ui/button';
+import { IconArrowLeft } from '@tabler/icons-react';
 
 export function UserDetailSkeleton() {
   return (
@@ -13,13 +13,13 @@ export function UserDetailSkeleton() {
         <Skeleton className="h-8 w-40" />
       </div>
 
-      <div className="flex flex-col items-center space-y-4 rounded-3xl border border-border/50 bg-gradient-to-br from-primary/10 via-primary/5 to-transparent p-8 text-center">
+      <div className="bg-gradient-to-br from-primary/10 via-primary/5 to-transparent rounded-3xl p-8 flex flex-col items-center text-center space-y-4 border border-border/50">
         <Skeleton className="size-24 rounded-full" />
-        <div className="flex flex-col items-center space-y-2">
+        <div className="space-y-2 flex flex-col items-center">
           <Skeleton className="h-8 w-48" />
           <Skeleton className="h-4 w-32" />
         </div>
-        <div className="mt-2 flex items-center gap-2">
+        <div className="flex items-center gap-2 mt-2">
           <Skeleton className="h-6 w-20 rounded-full" />
           <Skeleton className="h-6 w-20 rounded-full" />
         </div>
@@ -30,16 +30,13 @@ export function UserDetailSkeleton() {
       </div>
 
       <div className="space-y-6">
-        <div className="overflow-hidden rounded-3xl border border-border bg-card">
-          <div className="border-b border-border bg-muted/30 px-4 py-3">
+        <div className="bg-card rounded-3xl border border-border overflow-hidden">
+          <div className="px-4 py-3 bg-muted/30 border-b border-border">
             <Skeleton className="h-5 w-32" />
           </div>
           <div className="divide-y divide-border">
             {[1, 2, 3, 4].map((i) => (
-              <div
-                key={i}
-                className="flex flex-col justify-between gap-2 p-4 sm:flex-row sm:items-center"
-              >
+              <div key={i} className="flex flex-col sm:flex-row sm:items-center justify-between p-4 gap-2">
                 <div className="flex items-center gap-3">
                   <Skeleton className="size-5 rounded-md" />
                   <Skeleton className="h-4 w-24" />
@@ -50,16 +47,13 @@ export function UserDetailSkeleton() {
           </div>
         </div>
 
-        <div className="overflow-hidden rounded-3xl border border-border bg-card">
-          <div className="border-b border-border bg-muted/30 px-4 py-3">
+        <div className="bg-card rounded-3xl border border-border overflow-hidden">
+          <div className="px-4 py-3 bg-muted/30 border-b border-border">
             <Skeleton className="h-5 w-24" />
           </div>
           <div className="divide-y divide-border">
             {[1, 2].map((i) => (
-              <div
-                key={i}
-                className="flex flex-col justify-between gap-2 p-4 sm:flex-row sm:items-center"
-              >
+              <div key={i} className="flex flex-col sm:flex-row sm:items-center justify-between p-4 gap-2">
                 <div className="flex items-center gap-3">
                   <Skeleton className="size-5 rounded-md" />
                   <Skeleton className="h-4 w-24" />
@@ -71,5 +65,5 @@ export function UserDetailSkeleton() {
         </div>
       </div>
     </Container>
-  )
+  );
 }

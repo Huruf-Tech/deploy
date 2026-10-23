@@ -25,16 +25,12 @@ import {
 } from "@tabler/icons-react"
 import { formatDistanceToNow } from "date-fns"
 import { triggersBaseUrl, triggersTenantId } from "@/core/lib/constants"
-import {
-  fetchNotifications,
-  markNotificationAsRead,
-} from "@/core/endpoints/notification"
+import { fetchNotifications, markNotificationAsRead } from "@/core/endpoints/notification"
 import { useRegisterPushNotification } from "@/core/hooks/useRegisterPushNotification"
 import { PushNotifications } from "@capacitor/push-notifications"
 import { ThunderSDK } from "thunder-sdk"
 
-export type NotificationType =
-  "order" | "payment" | "delivery" | "alert" | "info"
+export type NotificationType = "order" | "payment" | "delivery" | "alert" | "info"
 
 export type TNotification = {
   id: string
@@ -47,53 +43,16 @@ export type TNotification = {
 
 const TYPE_CONFIG: Record<
   NotificationType,
-  {
-    icon: typeof IconBell
-    bg: string
-    color: string
-    border: string
-    label: string
-  }
+  { icon: typeof IconBell; bg: string; color: string; border: string; label: string }
 > = {
-  order: {
-    icon: IconPackage,
-    bg: "bg-primary/10",
-    color: "text-primary",
-    border: "border-l-primary",
-    label: "Orders",
-  },
-  payment: {
-    icon: IconCash,
-    bg: "bg-success/10",
-    color: "text-success",
-    border: "border-l-success",
-    label: "Payments",
-  },
-  delivery: {
-    icon: IconTruckDelivery,
-    bg: "bg-blue-500/10",
-    color: "text-blue-500",
-    border: "border-l-blue-500",
-    label: "Deliveries",
-  },
-  alert: {
-    icon: IconAlertCircle,
-    bg: "bg-destructive/10",
-    color: "text-destructive",
-    border: "border-l-destructive",
-    label: "Alerts",
-  },
-  info: {
-    icon: IconInfoCircle,
-    bg: "bg-muted",
-    color: "text-muted-foreground",
-    border: "border-l-muted-foreground/40",
-    label: "Info",
-  },
+  order: { icon: IconPackage, bg: "bg-primary/10", color: "text-primary", border: "border-l-primary", label: "Orders" },
+  payment: { icon: IconCash, bg: "bg-success/10", color: "text-success", border: "border-l-success", label: "Payments" },
+  delivery: { icon: IconTruckDelivery, bg: "bg-blue-500/10", color: "text-blue-500", border: "border-l-blue-500", label: "Deliveries" },
+  alert: { icon: IconAlertCircle, bg: "bg-destructive/10", color: "text-destructive", border: "border-l-destructive", label: "Alerts" },
+  info: { icon: IconInfoCircle, bg: "bg-muted", color: "text-muted-foreground", border: "border-l-muted-foreground/40", label: "Info" },
 }
 
-const timeAgo = (dateStr: string) =>
-  formatDistanceToNow(new Date(dateStr), { addSuffix: true })
+const timeAgo = (dateStr: string) => formatDistanceToNow(new Date(dateStr), { addSuffix: true })
 
 type NotificationSidebarProps = {
   userId?: string
@@ -120,21 +79,17 @@ export function NotificationSidebar({
   const { registerPushNotification } = useRegisterPushNotification()
 
   React.useEffect(() => {
-    let listenerHandle: Awaited<
-      ReturnType<typeof PushNotifications.addListener>
-    > | null = null
+
+    let listenerHandle: Awaited<ReturnType<typeof PushNotifications.addListener>> | null = null
 
     const setup = async () => {
-      listenerHandle = await PushNotifications.addListener(
-        "registration",
-        async (token) => {
-          try {
-            await ThunderSDK.users.addFcmToken({ body: { token: token.value } })
-          } catch (err) {
-            console.error("Failed to save FCM token", err)
-          }
+      listenerHandle = await PushNotifications.addListener("registration", async (token) => {
+        try {
+          await ThunderSDK.users.addFcmToken({ body: { token: token.value } })
+        } catch (err) {
+          console.error("Failed to save FCM token", err)
         }
-      )
+      })
 
       await registerPushNotification()
     }
@@ -163,12 +118,7 @@ export function NotificationSidebar({
     }
 
     try {
-      await markNotificationAsRead(
-        triggersBaseUrl,
-        triggersTenantId,
-        userId,
-        id
-      )
+      await markNotificationAsRead(triggersBaseUrl, triggersTenantId, userId, id)
       if (onRefreshUnread) onRefreshUnread()
     } catch (err) {
       console.error("Failed to mark notification as read", err)
@@ -253,9 +203,7 @@ export function NotificationSidebar({
           <div className="flex flex-col gap-2 p-3">
             {loading ? (
               <div className="flex flex-col items-center justify-center py-10 text-center">
-                <p className="text-sm text-muted-foreground">
-                  {t("Loading...")}
-                </p>
+                <p className="text-sm text-muted-foreground">{t("Loading...")}</p>
               </div>
             ) : error ? (
               <div className="flex flex-col items-center justify-center py-10 text-center">
@@ -276,7 +224,7 @@ export function NotificationSidebar({
                   <Card
                     key={n.id}
                     className={cn(
-                      "cursor-pointer border-l-[3px] p-2 shadow-none transition-all duration-150 hover:shadow-sm",
+                      "border-l-[3px] p-2 shadow-none transition-all duration-150 hover:shadow-sm cursor-pointer",
                       cfg.border,
                       !n.read && "bg-primary/3"
                     )}

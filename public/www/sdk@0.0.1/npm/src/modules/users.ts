@@ -1,8 +1,5 @@
 import type { 
     TRequestOptions,
-    TFilterValue,
-    TFilterExpression,
-    TMultiFilters,
     TFilters,
     TPagination,
 } from "../types.js";
@@ -15,7 +12,9 @@ export type create$body = {
     password?: string | undefined;
     name: string;
     role?: string | undefined;
-    metadata?: Record<string, any> | undefined;
+    metadata?: {
+        [K in string]: any;
+    } | undefined;
 };
 export type create$return = {
     _id: string;
@@ -27,7 +26,9 @@ export type update$body = {
     email: string;
     name: string;
     role?: string | undefined;
-    metadata?: Record<string, any> | undefined;
+    metadata?: {
+        [K in string]: any;
+    } | undefined;
 };
 export type ban$params = {
     id?: string;
@@ -113,7 +114,7 @@ export const usersModule = (sdk: typeof BaseSDK) => {
             const toPath = compile("users/api/");
             const requestPayload = {
                 method,
-                url: toPath(data?.params),
+                url: toPath(sdk.resolvePathParams(data?.params)),
                 params: data?.query,
                 data: data?.body,
                 signal: data?.signal,
@@ -141,7 +142,7 @@ export const usersModule = (sdk: typeof BaseSDK) => {
             const toPath = compile("users/api/:id");
             const requestPayload = {
                 method,
-                url: toPath(data?.params),
+                url: toPath(sdk.resolvePathParams(data?.params)),
                 params: data?.query,
                 data: data?.body,
                 signal: data?.signal,
@@ -169,7 +170,7 @@ export const usersModule = (sdk: typeof BaseSDK) => {
             const toPath = compile("users/api/ban/:id");
             const requestPayload = {
                 method,
-                url: toPath(data?.params),
+                url: toPath(sdk.resolvePathParams(data?.params)),
                 params: data?.query,
                 data: data?.body,
                 signal: data?.signal,
@@ -197,7 +198,7 @@ export const usersModule = (sdk: typeof BaseSDK) => {
             const toPath = compile("users/api/add/fcm-token");
             const requestPayload = {
                 method,
-                url: toPath(data?.params),
+                url: toPath(sdk.resolvePathParams(data?.params)),
                 params: data?.query,
                 data: data?.body,
                 signal: data?.signal,
@@ -225,7 +226,7 @@ export const usersModule = (sdk: typeof BaseSDK) => {
             const toPath = compile("users/api/:id/tenants");
             const requestPayload = {
                 method,
-                url: toPath(data?.params),
+                url: toPath(sdk.resolvePathParams(data?.params)),
                 params: data?.query,
                 data: data?.body,
                 signal: data?.signal,
@@ -253,7 +254,7 @@ export const usersModule = (sdk: typeof BaseSDK) => {
             const toPath = compile("users/api/count");
             const requestPayload = {
                 method,
-                url: toPath(data?.params),
+                url: toPath(sdk.resolvePathParams(data?.params)),
                 params: data?.query,
                 data: data?.body,
                 signal: data?.signal,
@@ -281,7 +282,7 @@ export const usersModule = (sdk: typeof BaseSDK) => {
             const toPath = compile("users/api{/:id}");
             const requestPayload = {
                 method,
-                url: toPath(data?.params),
+                url: toPath(sdk.resolvePathParams(data?.params)),
                 params: data?.query,
                 data: data?.body,
                 signal: data?.signal,

@@ -13,7 +13,7 @@ const billingModule = (sdk) => {
                 const toPath = (0, path_to_regexp_1.compile)("billing/api/");
                 const requestPayload = {
                     method,
-                    url: toPath(data?.params),
+                    url: toPath(sdk.resolvePathParams(data?.params)),
                     params: data?.query,
                     data: data?.body,
                     signal: data?.signal,
@@ -33,7 +33,7 @@ const billingModule = (sdk) => {
                 const toPath = (0, path_to_regexp_1.compile)("billing/api/plans");
                 const requestPayload = {
                     method,
-                    url: toPath(data?.params),
+                    url: toPath(sdk.resolvePathParams(data?.params)),
                     params: data?.query,
                     data: data?.body,
                     signal: data?.signal,
@@ -53,7 +53,7 @@ const billingModule = (sdk) => {
                 const toPath = (0, path_to_regexp_1.compile)("billing/api/periods");
                 const requestPayload = {
                     method,
-                    url: toPath(data?.params),
+                    url: toPath(sdk.resolvePathParams(data?.params)),
                     params: data?.query,
                     data: data?.body,
                     signal: data?.signal,
@@ -73,7 +73,7 @@ const billingModule = (sdk) => {
                 const toPath = (0, path_to_regexp_1.compile)("billing/api/subscribe");
                 const requestPayload = {
                     method,
-                    url: toPath(data?.params),
+                    url: toPath(sdk.resolvePathParams(data?.params)),
                     params: data?.query,
                     data: data?.body,
                     signal: data?.signal,
@@ -93,7 +93,7 @@ const billingModule = (sdk) => {
                 const toPath = (0, path_to_regexp_1.compile)("billing/api/cancel");
                 const requestPayload = {
                     method,
-                    url: toPath(data?.params),
+                    url: toPath(sdk.resolvePathParams(data?.params)),
                     params: data?.query,
                     data: data?.body,
                     signal: data?.signal,

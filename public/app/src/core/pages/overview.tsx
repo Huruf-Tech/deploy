@@ -22,9 +22,7 @@ export default function Overview() {
         </EmptyMedia>
         <EmptyTitle>
           {t("Welcome to")}{" "}
-          <span className="text-base font-semibold capitalize">
-            {appName()}
-          </span>
+          <span className="text-base font-semibold capitalize">{appName()}</span>
         </EmptyTitle>
         <EmptyDescription>
           {t(

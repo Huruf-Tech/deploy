@@ -8,7 +8,9 @@ export type signTransfer$query = {
     receiver: string;
     amount: number;
     description?: string | undefined;
-    metadata?: Record<string, string | number | boolean> | undefined;
+    metadata?: {
+        [K in string]: string | number | boolean;
+    } | undefined;
     currency?: string | undefined;
 };
 export type signTransfer$return = {
@@ -40,7 +42,9 @@ export type signTransfer$return = {
             }[];
         };
         description?: string | undefined;
-        metadata?: Record<string, string | number | boolean> | undefined;
+        metadata?: {
+            [K in string]: string | number | boolean;
+        } | undefined;
     };
     challenge: {
         token: string;

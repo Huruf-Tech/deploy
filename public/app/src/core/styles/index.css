@@ -349,18 +349,10 @@
  * the blur has to mean losing the transparency with it.
  */
 @utility glass {
-  background-color: color-mix(
-    in oklab,
-    var(--color-background) 92%,
-    transparent
-  );
+  background-color: color-mix(in oklab, var(--color-background) 92%, transparent);
 
   @supports (backdrop-filter: blur(1px)) {
-    background-color: color-mix(
-      in oklab,
-      var(--color-background) 70%,
-      transparent
-    );
+    background-color: color-mix(in oklab, var(--color-background) 70%, transparent);
     backdrop-filter: blur(20px) saturate(180%);
   }
 

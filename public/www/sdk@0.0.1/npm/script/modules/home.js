@@ -13,7 +13,7 @@ const homeModule = (sdk) => {
                 const toPath = (0, path_to_regexp_1.compile)("home/api/");
                 const requestPayload = {
                     method,
-                    url: toPath(data?.params),
+                    url: toPath(sdk.resolvePathParams(data?.params)),
                     params: data?.query,
                     data: data?.body,
                     signal: data?.signal,

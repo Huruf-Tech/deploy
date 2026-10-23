@@ -20,7 +20,12 @@
     ]
   },
   "lint": {
-    "exclude": ["core/", "plugins/", "public/", "_temp/"],
+    "exclude": [
+      "core/",
+      "plugins/",
+      "public/",
+      "_temp/"
+    ],
     "rules": {
       "include": [
         "no-eval"

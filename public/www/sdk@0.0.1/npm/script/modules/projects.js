@@ -13,7 +13,7 @@ const projectsModule = (sdk) => {
                 const toPath = (0, path_to_regexp_1.compile)("projects/api/");
                 const requestPayload = {
                     method,
-                    url: toPath(data?.params),
+                    url: toPath(sdk.resolvePathParams(data?.params)),
                     params: data?.query,
                     data: data?.body,
                     signal: data?.signal,
@@ -33,7 +33,7 @@ const projectsModule = (sdk) => {
                 const toPath = (0, path_to_regexp_1.compile)("projects/api/");
                 const requestPayload = {
                     method,
-                    url: toPath(data?.params),
+                    url: toPath(sdk.resolvePathParams(data?.params)),
                     params: data?.query,
                     data: data?.body,
                     signal: data?.signal,
@@ -53,7 +53,7 @@ const projectsModule = (sdk) => {
                 const toPath = (0, path_to_regexp_1.compile)("projects/api/placement");
                 const requestPayload = {
                     method,
-                    url: toPath(data?.params),
+                    url: toPath(sdk.resolvePathParams(data?.params)),
                     params: data?.query,
                     data: data?.body,
                     signal: data?.signal,
@@ -73,7 +73,7 @@ const projectsModule = (sdk) => {
                 const toPath = (0, path_to_regexp_1.compile)("projects/api/:id");
                 const requestPayload = {
                     method,
-                    url: toPath(data?.params),
+                    url: toPath(sdk.resolvePathParams(data?.params)),
                     params: data?.query,
                     data: data?.body,
                     signal: data?.signal,
@@ -93,7 +93,7 @@ const projectsModule = (sdk) => {
                 const toPath = (0, path_to_regexp_1.compile)("projects/api/:id");
                 const requestPayload = {
                     method,
-                    url: toPath(data?.params),
+                    url: toPath(sdk.resolvePathParams(data?.params)),
                     params: data?.query,
                     data: data?.body,
                     signal: data?.signal,
@@ -113,7 +113,7 @@ const projectsModule = (sdk) => {
                 const toPath = (0, path_to_regexp_1.compile)("projects/api/:id");
                 const requestPayload = {
                     method,
-                    url: toPath(data?.params),
+                    url: toPath(sdk.resolvePathParams(data?.params)),
                     params: data?.query,
                     data: data?.body,
                     signal: data?.signal,
@@ -133,7 +133,7 @@ const projectsModule = (sdk) => {
                 const toPath = (0, path_to_regexp_1.compile)("projects/api/:id/deploy");
                 const requestPayload = {
                     method,
-                    url: toPath(data?.params),
+                    url: toPath(sdk.resolvePathParams(data?.params)),
                     params: data?.query,
                     data: data?.body,
                     signal: data?.signal,
@@ -153,7 +153,7 @@ const projectsModule = (sdk) => {
                 const toPath = (0, path_to_regexp_1.compile)("projects/api/:id/rollback");
                 const requestPayload = {
                     method,
-                    url: toPath(data?.params),
+                    url: toPath(sdk.resolvePathParams(data?.params)),
                     params: data?.query,
                     data: data?.body,
                     signal: data?.signal,
@@ -173,7 +173,7 @@ const projectsModule = (sdk) => {
                 const toPath = (0, path_to_regexp_1.compile)("projects/api/:id/clearCache");
                 const requestPayload = {
                     method,
-                    url: toPath(data?.params),
+                    url: toPath(sdk.resolvePathParams(data?.params)),
                     params: data?.query,
                     data: data?.body,
                     signal: data?.signal,
@@ -193,7 +193,7 @@ const projectsModule = (sdk) => {
                 const toPath = (0, path_to_regexp_1.compile)("projects/api/:id/releases");
                 const requestPayload = {
                     method,
-                    url: toPath(data?.params),
+                    url: toPath(sdk.resolvePathParams(data?.params)),
                     params: data?.query,
                     data: data?.body,
                     signal: data?.signal,
@@ -213,7 +213,7 @@ const projectsModule = (sdk) => {
                 const toPath = (0, path_to_regexp_1.compile)("projects/api/:id/deployments");
                 const requestPayload = {
                     method,
-                    url: toPath(data?.params),
+                    url: toPath(sdk.resolvePathParams(data?.params)),
                     params: data?.query,
                     data: data?.body,
                     signal: data?.signal,
@@ -233,7 +233,7 @@ const projectsModule = (sdk) => {
                 const toPath = (0, path_to_regexp_1.compile)("projects/api/deployments/:deployment");
                 const requestPayload = {
                     method,
-                    url: toPath(data?.params),
+                    url: toPath(sdk.resolvePathParams(data?.params)),
                     params: data?.query,
                     data: data?.body,
                     signal: data?.signal,
@@ -253,7 +253,7 @@ const projectsModule = (sdk) => {
                 const toPath = (0, path_to_regexp_1.compile)("projects/api/deployments/:deployment/cancel");
                 const requestPayload = {
                     method,
-                    url: toPath(data?.params),
+                    url: toPath(sdk.resolvePathParams(data?.params)),
                     params: data?.query,
                     data: data?.body,
                     signal: data?.signal,

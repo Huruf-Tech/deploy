@@ -13,7 +13,7 @@ const streamsModule = (sdk) => {
                 const toPath = (0, path_to_regexp_1.compile)("streams/api/logs");
                 const requestPayload = {
                     method,
-                    url: toPath(data?.params),
+                    url: toPath(sdk.resolvePathParams(data?.params)),
                     params: data?.query,
                     data: data?.body,
                     signal: data?.signal,
@@ -33,7 +33,7 @@ const streamsModule = (sdk) => {
                 const toPath = (0, path_to_regexp_1.compile)("streams/api/build");
                 const requestPayload = {
                     method,
-                    url: toPath(data?.params),
+                    url: toPath(sdk.resolvePathParams(data?.params)),
                     params: data?.query,
                     data: data?.body,
                     signal: data?.signal,
@@ -53,7 +53,7 @@ const streamsModule = (sdk) => {
                 const toPath = (0, path_to_regexp_1.compile)("streams/api/metrics");
                 const requestPayload = {
                     method,
-                    url: toPath(data?.params),
+                    url: toPath(sdk.resolvePathParams(data?.params)),
                     params: data?.query,
                     data: data?.body,
                     signal: data?.signal,
@@ -73,7 +73,7 @@ const streamsModule = (sdk) => {
                 const toPath = (0, path_to_regexp_1.compile)("streams/api/capacity");
                 const requestPayload = {
                     method,
-                    url: toPath(data?.params),
+                    url: toPath(sdk.resolvePathParams(data?.params)),
                     params: data?.query,
                     data: data?.body,
                     signal: data?.signal,
@@ -93,7 +93,7 @@ const streamsModule = (sdk) => {
                 const toPath = (0, path_to_regexp_1.compile)("streams/api/exec");
                 const requestPayload = {
                     method,
-                    url: toPath(data?.params),
+                    url: toPath(sdk.resolvePathParams(data?.params)),
                     params: data?.query,
                     data: data?.body,
                     signal: data?.signal,
@@ -113,7 +113,7 @@ const streamsModule = (sdk) => {
                 const toPath = (0, path_to_regexp_1.compile)("streams/api/terminal");
                 const requestPayload = {
                     method,
-                    url: toPath(data?.params),
+                    url: toPath(sdk.resolvePathParams(data?.params)),
                     params: data?.query,
                     data: data?.body,
                     signal: data?.signal,
@@ -133,7 +133,7 @@ const streamsModule = (sdk) => {
                 const toPath = (0, path_to_regexp_1.compile)("streams/api/terminal/host");
                 const requestPayload = {
                     method,
-                    url: toPath(data?.params),
+                    url: toPath(sdk.resolvePathParams(data?.params)),
                     params: data?.query,
                     data: data?.body,
                     signal: data?.signal,
@@ -153,7 +153,7 @@ const streamsModule = (sdk) => {
                 const toPath = (0, path_to_regexp_1.compile)("streams/api/:id/input");
                 const requestPayload = {
                     method,
-                    url: toPath(data?.params),
+                    url: toPath(sdk.resolvePathParams(data?.params)),
                     params: data?.query,
                     data: data?.body,
                     signal: data?.signal,
@@ -173,7 +173,7 @@ const streamsModule = (sdk) => {
                 const toPath = (0, path_to_regexp_1.compile)("streams/api/:id/chunks");
                 const requestPayload = {
                     method,
-                    url: toPath(data?.params),
+                    url: toPath(sdk.resolvePathParams(data?.params)),
                     params: data?.query,
                     data: data?.body,
                     signal: data?.signal,
@@ -193,7 +193,7 @@ const streamsModule = (sdk) => {
                 const toPath = (0, path_to_regexp_1.compile)("streams/api/:id/close");
                 const requestPayload = {
                     method,
-                    url: toPath(data?.params),
+                    url: toPath(sdk.resolvePathParams(data?.params)),
                     params: data?.query,
                     data: data?.body,
                     signal: data?.signal,

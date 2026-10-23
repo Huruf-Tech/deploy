@@ -13,7 +13,7 @@ const authModule = (sdk) => {
                 const toPath = (0, path_to_regexp_1.compile)("auth/branding");
                 const requestPayload = {
                     method,
-                    url: toPath(data?.params),
+                    url: toPath(sdk.resolvePathParams(data?.params)),
                     params: data?.query,
                     data: data?.body,
                     signal: data?.signal,
@@ -33,7 +33,7 @@ const authModule = (sdk) => {
                 const toPath = (0, path_to_regexp_1.compile)("auth/api/capabilities");
                 const requestPayload = {
                     method,
-                    url: toPath(data?.params),
+                    url: toPath(sdk.resolvePathParams(data?.params)),
                     params: data?.query,
                     data: data?.body,
                     signal: data?.signal,
@@ -53,7 +53,7 @@ const authModule = (sdk) => {
                 const toPath = (0, path_to_regexp_1.compile)("auth/api{/*endpoint}");
                 const requestPayload = {
                     method,
-                    url: toPath(data?.params),
+                    url: toPath(sdk.resolvePathParams(data?.params)),
                     params: data?.query,
                     data: data?.body,
                     signal: data?.signal,
@@ -73,7 +73,7 @@ const authModule = (sdk) => {
                 const toPath = (0, path_to_regexp_1.compile)("auth{/*endpoint}");
                 const requestPayload = {
                     method,
-                    url: toPath(data?.params),
+                    url: toPath(sdk.resolvePathParams(data?.params)),
                     params: data?.query,
                     data: data?.body,
                     signal: data?.signal,

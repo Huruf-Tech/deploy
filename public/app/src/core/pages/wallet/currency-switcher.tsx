@@ -1,12 +1,14 @@
-"use client"
+"use client";
 
-import { IconCheck, IconChevronDown } from "@tabler/icons-react"
-import { AnimatePresence, motion, useReducedMotion } from "motion/react"
-import { useCallback, useEffect, useId, useRef, useState } from "react"
-import { cn } from "@/lib/utils"
+import { IconCheck, IconChevronDown  } from "@tabler/icons-react";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { cn } from "@/lib/utils";
 
-import { HEAD, ITEM, LIST, MORPH } from "../../lib/constants"
-import { CopyButton } from "../../../components/ui/copy-button"
+import { HEAD, ITEM, LIST, MORPH } from "../../lib/constants";
+import { CopyButton } from "../../../components/ui/copy-button";
+
+
 
 /**
  * Currency switcher whose trigger morphs into a panel that grows rightward to
@@ -15,56 +17,56 @@ import { CopyButton } from "../../../components/ui/copy-button"
  */
 
 export type WalletCurrency = {
-  id: string
-  name: string
-  symbol: string
-}
+  id: string;
+  name: string;
+  symbol: string;
+};
+
 
 export function CurrencySwitcher({
   currencies,
   activeCurrency,
   onSelect,
 }: {
-  currencies: WalletCurrency[]
-  activeCurrency: WalletCurrency | undefined
-  onSelect: (id: string) => void
+  currencies: WalletCurrency[];
+  activeCurrency: WalletCurrency | undefined;
+  onSelect: (id: string) => void;
 }) {
-  const reduce = useReducedMotion() ?? false
-  const layoutId = `${useId()}-currency`
-  const rootRef = useRef<HTMLDivElement>(null)
-  const [open, setOpen] = useState(false)
+  const reduce = useReducedMotion() ?? false;
+  const layoutId = `${useId()}-currency`;
+  const rootRef = useRef<HTMLDivElement>(null);
+  const [open, setOpen] = useState(false);
   // Hover only arms after the morph settles — otherwise the panel expands under
   // the cursor and flashes a phantom hover bg on whatever item it lands on.
-  const [armed, setArmed] = useState(false)
-  const close = useCallback(() => setOpen(false), [])
+  const [armed, setArmed] = useState(false);
+  const close = useCallback(() => setOpen(false), []);
 
   useEffect(() => {
-    if (!open) return
+    if (!open) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") close()
-    }
+      if (e.key === "Escape") close();
+    };
     const onPointer = (e: PointerEvent) => {
-      if (rootRef.current && !rootRef.current.contains(e.target as Node))
-        close()
-    }
-    window.addEventListener("keydown", onKey)
-    window.addEventListener("pointerdown", onPointer)
+      if (rootRef.current && !rootRef.current.contains(e.target as Node)) close();
+    };
+    window.addEventListener("keydown", onKey);
+    window.addEventListener("pointerdown", onPointer);
     return () => {
-      window.removeEventListener("keydown", onKey)
-      window.removeEventListener("pointerdown", onPointer)
-    }
-  }, [open, close])
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("pointerdown", onPointer);
+    };
+  }, [open, close]);
 
   useEffect(() => {
     if (!open) {
-      setArmed(false)
-      return
+      setArmed(false);
+      return;
     }
-    const t = window.setTimeout(() => setArmed(true), reduce ? 0 : 280)
-    return () => window.clearTimeout(t)
-  }, [open, reduce])
+    const t = window.setTimeout(() => setArmed(true), reduce ? 0 : 280);
+    return () => window.clearTimeout(t);
+  }, [open, reduce]);
 
-  const morph = reduce ? { duration: 0 } : MORPH
+  const morph = reduce ? { duration: 0 } : MORPH;
 
   return (
     // static (not relative) so the absolute trigger + panel anchor to the
@@ -79,7 +81,7 @@ export function CurrencySwitcher({
           {currencies.map((currency) => (
             <span
               key={currency.id}
-              className="col-start-1 row-start-1 text-sm font-medium whitespace-nowrap"
+              className="col-start-1 row-start-1 whitespace-nowrap text-sm font-medium"
             >
               {currency.name}
             </span>
@@ -103,7 +105,7 @@ export function CurrencySwitcher({
               HEAD,
               // shifted left by the padding so the avatar sits flush with the
               // card content edge (aligned with the balance + buttons below).
-              "absolute top-0 -left-2 z-20 max-w-full transition-colors outline-none hover:bg-muted/60"
+              "absolute top-0 -left-2 z-20 max-w-full outline-none transition-colors hover:bg-muted/60",
             )}
           >
             {activeCurrency ? (
@@ -114,10 +116,7 @@ export function CurrencySwitcher({
                 >
                   {activeCurrency.name}
                 </motion.span>
-                <motion.span
-                  layout="position"
-                  className="text-muted-foreground"
-                >
+                <motion.span layout="position" className="text-muted-foreground">
                   <IconChevronDown className="h-4 w-4" />
                 </motion.span>
               </>
@@ -141,6 +140,7 @@ export function CurrencySwitcher({
               onClick={() => setOpen(false)}
               className={cn(HEAD, "w-full outline-none")}
             >
+
               <motion.span
                 layout="position"
                 className="min-w-0 flex-1 truncate text-sm font-medium text-foreground"
@@ -163,11 +163,11 @@ export function CurrencySwitcher({
               variants={reduce ? undefined : LIST}
               className={cn(
                 "max-h-64 overflow-y-auto p-1.5",
-                armed ? "" : "pointer-events-none"
+                armed ? "" : "pointer-events-none",
               )}
             >
               {currencies.map((currency) => {
-                const selected = currency.id === activeCurrency?.id
+                const selected = currency.id === activeCurrency?.id;
                 return (
                   <motion.li
                     key={currency.id}
@@ -178,8 +178,8 @@ export function CurrencySwitcher({
                         ? "bg-muted text-foreground"
                         : cn(
                             "text-muted-foreground",
-                            armed && "hover:bg-muted hover:text-foreground"
-                          )
+                            armed && "hover:bg-muted hover:text-foreground",
+                          ),
                     )}
                   >
                     <button
@@ -187,11 +187,12 @@ export function CurrencySwitcher({
                       role="option"
                       aria-selected={selected}
                       onClick={() => {
-                        onSelect(currency.id)
-                        setOpen(false)
+                        onSelect(currency.id);
+                        setOpen(false);
                       }}
                       className="flex min-w-0 flex-1 items-center gap-2.5 rounded-xl px-2 py-2 text-left outline-none"
                     >
+
                       <span className="flex min-w-0 flex-1 flex-col">
                         <span className="truncate font-medium">
                           {currency.name}
@@ -206,12 +207,12 @@ export function CurrencySwitcher({
                     </button>
                     <CopyButton value={currency.symbol} />
                   </motion.li>
-                )
+                );
               })}
             </motion.ul>
           </motion.div>
         ) : null}
       </AnimatePresence>
     </div>
-  )
+  );
 }

@@ -10,11 +10,14 @@ export declare class BaseSDK {
         timestamp: number;
     }>;
     protected static _cacheNamespacesDefault: Record<string, string | null>;
-    protected static _cacheNamespaces: Record<string, string | null>;
+    protected static _cacheNamespaces: {
+        [x: string]: string | null;
+    };
     static _options?: TSDKOptions;
     static _axios?: AxiosInstance;
     static plugins: Record<string, any>;
     static resolveAxiosConfig(config: AxiosRequestConfig): AxiosRequestConfig<any, any>;
+    static resolvePathParams(params?: Record<string, unknown>): Record<string, string | string[]> | undefined;
     static log(...args: unknown[]): void;
     static init(options?: TSDKOptions): Promise<void>;
     static clean(): Promise<void>;

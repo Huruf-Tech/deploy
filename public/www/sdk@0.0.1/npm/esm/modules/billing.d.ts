@@ -43,7 +43,9 @@ export type get$return = {
         lastError?: string | undefined;
         nextPlan?: string | undefined;
     } | undefined;
-    usage: Record<string, number>;
+    usage: {
+        [K in string]: number;
+    };
     overLimitSince?: Date | undefined;
     graceDays: number;
     wallets: {

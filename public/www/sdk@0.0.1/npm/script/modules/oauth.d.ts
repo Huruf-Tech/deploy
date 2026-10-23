@@ -21,7 +21,9 @@ export type consent$query = {
     redirect_uri: string;
 };
 export type consent$body = {
-    resourceGrant: Record<string, string[]>;
+    resourceGrant: {
+        [K in string]: string[];
+    };
 };
 export type consent$return = {
     _id: string;

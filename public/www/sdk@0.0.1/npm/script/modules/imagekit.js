@@ -13,7 +13,7 @@ const imageKitModule = (sdk) => {
                 const toPath = (0, path_to_regexp_1.compile)("imagekit/api/auth");
                 const requestPayload = {
                     method,
-                    url: toPath(data?.params),
+                    url: toPath(sdk.resolvePathParams(data?.params)),
                     params: data?.query,
                     data: data?.body,
                     signal: data?.signal,

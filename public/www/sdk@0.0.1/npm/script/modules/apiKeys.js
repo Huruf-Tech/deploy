@@ -13,7 +13,7 @@ const apiKeysModule = (sdk) => {
                 const toPath = (0, path_to_regexp_1.compile)("apiKeys/api/");
                 const requestPayload = {
                     method,
-                    url: toPath(data?.params),
+                    url: toPath(sdk.resolvePathParams(data?.params)),
                     params: data?.query,
                     data: data?.body,
                     signal: data?.signal,
@@ -33,7 +33,7 @@ const apiKeysModule = (sdk) => {
                 const toPath = (0, path_to_regexp_1.compile)("apiKeys/api/count");
                 const requestPayload = {
                     method,
-                    url: toPath(data?.params),
+                    url: toPath(sdk.resolvePathParams(data?.params)),
                     params: data?.query,
                     data: data?.body,
                     signal: data?.signal,
@@ -53,7 +53,7 @@ const apiKeysModule = (sdk) => {
                 const toPath = (0, path_to_regexp_1.compile)("apiKeys/api{/:id}");
                 const requestPayload = {
                     method,
-                    url: toPath(data?.params),
+                    url: toPath(sdk.resolvePathParams(data?.params)),
                     params: data?.query,
                     data: data?.body,
                     signal: data?.signal,
@@ -73,7 +73,7 @@ const apiKeysModule = (sdk) => {
                 const toPath = (0, path_to_regexp_1.compile)("apiKeys/api/:id");
                 const requestPayload = {
                     method,
-                    url: toPath(data?.params),
+                    url: toPath(sdk.resolvePathParams(data?.params)),
                     params: data?.query,
                     data: data?.body,
                     signal: data?.signal,
@@ -93,7 +93,7 @@ const apiKeysModule = (sdk) => {
                 const toPath = (0, path_to_regexp_1.compile)("apiKeys/api/:id");
                 const requestPayload = {
                     method,
-                    url: toPath(data?.params),
+                    url: toPath(sdk.resolvePathParams(data?.params)),
                     params: data?.query,
                     data: data?.body,
                     signal: data?.signal,
@@ -113,7 +113,7 @@ const apiKeysModule = (sdk) => {
     methods.update.__scope = "apiKeys";
     methods.del.__scope = "apiKeys";
     sdk["_moduleGroup"].set(methods, "Developer");
-    sdk["_moduleMetadata"].set(methods, { "crud": { "schema": { "$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object", "properties": { "name": { "type": "string", "minLength": 2, "maxLength": 100 }, "resourceGrant": { "type": "object", "propertyNames": { "type": "string" }, "additionalProperties": { "type": "array", "items": { "type": "string" } } }, "secret": {}, "scopes": { "type": "array", "items": { "type": "string", "maxLength": 100 } }, "expiresAt": { "type": "string", "format": "date-time" }, "lastAccessAt": { "type": "string", "format": "date-time" }, "accessCount": { "default": 0, "type": "number" }, "createdBy": { "tsType": "string" }, "createdAt": { "default": "2026-10-23T21:05:39.708Z", "type": "string", "format": "date-time" }, "updatedAt": { "default": "2026-10-23T21:05:39.708Z", "type": "string", "format": "date-time" } }, "required": ["name", "resourceGrant", "secret", "accessCount", "createdBy", "createdAt", "updatedAt"], "additionalProperties": false }, "insertSchema": { "$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object", "properties": { "name": { "type": "string", "minLength": 2, "maxLength": 100 }, "resourceGrant": { "type": "object", "propertyNames": { "type": "string" }, "additionalProperties": { "type": "array", "items": { "type": "string" } } }, "secret": { "type": "string", "minLength": 8, "maxLength": 100 }, "scopes": { "type": "array", "items": { "type": "string", "maxLength": 100 } }, "expiresAt": { "type": "string", "format": "date-time" } }, "required": ["name", "resourceGrant", "secret"] } } });
+    sdk["_moduleMetadata"].set(methods, { "crud": { "schema": { "$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object", "properties": { "name": { "type": "string", "minLength": 2, "maxLength": 100 }, "resourceGrant": { "type": "object", "propertyNames": { "type": "string" }, "additionalProperties": { "type": "array", "items": { "type": "string" } } }, "secret": {}, "scopes": { "type": "array", "items": { "type": "string", "maxLength": 100 } }, "expiresAt": { "type": "string", "format": "date-time" }, "lastAccessAt": { "type": "string", "format": "date-time" }, "accessCount": { "default": 0, "type": "number" }, "createdBy": { "tsType": "string" }, "createdAt": { "default": "2026-10-23T23:02:48.417Z", "type": "string", "format": "date-time" }, "updatedAt": { "default": "2026-10-23T23:02:48.417Z", "type": "string", "format": "date-time" } }, "required": ["name", "resourceGrant", "secret", "accessCount", "createdBy", "createdAt", "updatedAt"], "additionalProperties": false }, "insertSchema": { "$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object", "properties": { "name": { "type": "string", "minLength": 2, "maxLength": 100 }, "resourceGrant": { "type": "object", "propertyNames": { "type": "string" }, "additionalProperties": { "type": "array", "items": { "type": "string" } } }, "secret": { "type": "string", "minLength": 8, "maxLength": 100 }, "scopes": { "type": "array", "items": { "type": "string", "maxLength": 100 } }, "expiresAt": { "type": "string", "format": "date-time" } }, "required": ["name", "resourceGrant", "secret"] } } });
     return methods;
 };
 exports.apiKeysModule = apiKeysModule;

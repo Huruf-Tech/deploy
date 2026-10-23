@@ -102,8 +102,9 @@ class ThunderSDK extends base_js_1.BaseSDK {
                 return this._actionsList;
             const unpackModules = [];
             this.getModuleNames().forEach((name) => {
-                Object.keys(this.getModule(name)).forEach((action) => {
-                    unpackModules.push(`${name}.${action}`);
+                Object.entries(this.getModule(name)).forEach(([action, fn]) => {
+                    if (typeof fn === "function")
+                        unpackModules.push(`${name}.${action}`);
                 });
             });
             return this._actionsList = unpackModules;
