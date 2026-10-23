@@ -299,6 +299,15 @@ func (m *Mesh) Run(ctx context.Context, interval func() time.Duration) {
 				_ = m.Apply(ctx, *last) // e.g. wireguard-tools arrived with host setup
 				continue
 			}
+			// The registry container can vanish (a prune, a failed Docker
+			// restart); applyRegistry is a no-op `docker start` while it exists.
+			if last != nil && last.Registry != nil {
+				if err := m.applyRegistry(ctx, last.Registry); err != nil {
+					m.mu.Lock()
+					m.lastErr = err.Error()
+					m.mu.Unlock()
+				}
+			}
 			m.report(false)
 		}
 	}
