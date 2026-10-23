@@ -64,6 +64,7 @@ import {
   type TClassFootprint,
 } from "@/lib/capacity"
 import { cn } from "@/lib/utils"
+import { ControlPlaneSummary } from "@/pages/admin/ControlPlaneSummary"
 
 const MiB = 1024 * 1024
 
@@ -474,6 +475,9 @@ export default function Overview() {
           </EmptyContent>
         </Empty>
         <QuickActions />
+        {ThunderSDK.isPermitted("controlPlane", "overview") && (
+          <ControlPlaneSummary />
+        )}
       </Page>
     )
   }
@@ -692,6 +696,11 @@ export default function Overview() {
       )}
 
       <QuickActions />
+
+      {/* Platform admins: the control plane's health at a glance. */}
+      {ThunderSDK.isPermitted("controlPlane", "overview") && (
+        <ControlPlaneSummary />
+      )}
 
       {!servers ? (
         <Skeleton className="h-40 rounded-3xl" />

@@ -798,5 +798,11 @@
   "{{price}} per {{interval}}. Wallet balance: {{balance}}.": "{{price}} لكل {{interval}}. رصيد المحفظة: {{balance}}.",
   "{{server}}: {{n}} replicas now ({{reason}})": "{{server}}: {{n}} نسخ الآن ({{reason}})",
   "{{used}} of {{limit}}": "{{used}} من {{limit}}",
-  "Global": "عام"
+  "Global": "عام",
+  "Last hour, across every instance.": "آخر ساعة، عبر جميع النسخ.",
+  "about {{n}} expected": "المتوقع نحو {{n}}",
+  "budget {{n}} ms": "الحد المستهدف {{n}} ms",
+  "busiest at {{pct}}% CPU": "الأكثر انشغالًا عند {{pct}}% من المعالج",
+  "{{n}} more on the control plane page": "{{n}} أخرى في صفحة لوحة التحكم",
+  "{{pct}}% errors": "أخطاء {{pct}}%"
 }

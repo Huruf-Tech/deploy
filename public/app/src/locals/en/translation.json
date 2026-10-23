@@ -798,5 +798,11 @@
   "{{price}} per {{interval}}. Wallet balance: {{balance}}.": "{{price}} per {{interval}}. Wallet balance: {{balance}}.",
   "{{server}}: {{n}} replicas now ({{reason}})": "{{server}}: {{n}} replicas now ({{reason}})",
   "{{used}} of {{limit}}": "{{used}} of {{limit}}",
-  "Global": "Global"
+  "Global": "Global",
+  "Last hour, across every instance.": "Last hour, across every instance.",
+  "about {{n}} expected": "about {{n}} expected",
+  "budget {{n}} ms": "budget {{n}} ms",
+  "busiest at {{pct}}% CPU": "busiest at {{pct}}% CPU",
+  "{{n}} more on the control plane page": "{{n}} more on the control plane page",
+  "{{pct}}% errors": "{{pct}}% errors"
 }
