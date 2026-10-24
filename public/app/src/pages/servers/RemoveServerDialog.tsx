@@ -18,7 +18,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { errorMessage } from "@/lib/utils"
-import { forgetCache } from "@/lib/forget-cache"
 import type { TServer } from "./server"
 
 /** One line of the agent's plan (agent/internal/cleanup). */
@@ -98,7 +97,7 @@ export function RemoveServerDialog({
 
   const forget = async () => {
     await ThunderSDK.servers.del({ params: { id: server._id } })
-    await forgetCache(server._id)
+    await ThunderSDK.forgetCache(["servers", server._id], { subKeys: true })
     onOpenChange(false)
     navigate("..", { relative: "path" })
   }
