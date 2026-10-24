@@ -16,7 +16,8 @@
       "**/*.md",
       "deploy.docker-compose.yml",
       "deployment-logs.json",
-      "sdk-plugins/"
+      "sdk-plugins/",
+      "deno.json"
     ]
   },
   "lint": {
