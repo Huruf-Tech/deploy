@@ -724,8 +724,8 @@ export default function NewProject() {
                         {x.name}
                       </span>
                       <span className="block text-xs text-muted-foreground">
-                        {x.scope === "system" ? t("Built-in") : t("Tenant")}{" "}
-                        · v{x.latestVersion}
+                        {x.scope === "system" ? t("Built-in") : t("Tenant")} · v
+                        {x.latestVersion}
                       </span>
                     </span>
                   </button>

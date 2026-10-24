@@ -40,6 +40,7 @@ import {
 } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { errorMessage } from "@/lib/utils"
+import { useFresh } from "@/hooks/use-fresh"
 
 type TMetric =
   "cpCpu" | "cpMemory" | "cpPollLatency" | "cpErrorRate" | "cpPollsMissing"
@@ -352,6 +353,7 @@ export function ControlPlaneRules() {
   )
   const { data: list } = use(rules)
   const { data: recent } = use(events)
+  useFresh(rules, events)
 
   const reload = () => {
     rules.invalidate()

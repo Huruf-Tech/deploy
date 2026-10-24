@@ -48,6 +48,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
 import { errorMessage } from "@/lib/utils"
 import { CloneDialog, TemplateIcon } from "./shared"
+import { useFresh } from "@/hooks/use-fresh"
 
 type TDetail = Awaited<ReturnType<typeof ThunderSDK.templates.get>>
 type TContent = TDetail["content"]
@@ -396,6 +397,7 @@ export default function TemplateDetail() {
       await ThunderSDK.templates.versions({ signal, params: { id } })
   )
   const { data: history } = use(versions)
+  useFresh(request, versions)
   useBreadcrumbTitle(data?.template.name)
 
   if (!data) {

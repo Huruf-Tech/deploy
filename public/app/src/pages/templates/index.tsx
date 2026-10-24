@@ -18,6 +18,7 @@ import {
 } from "@/components/selection-bar"
 import { cn } from "@/lib/utils"
 import { CloneDialog, TemplateIcon, type TTemplate } from "./shared"
+import { useFresh } from "@/hooks/use-fresh"
 
 function TemplateCard({
   template,
@@ -152,6 +153,7 @@ export default function TemplatesPage() {
     async ({ signal }) => await ThunderSDK.templates.list({ signal })
   )
   const { data, isLoading } = use(request)
+  useFresh(request)
   const selection = useSelection()
 
   const own = (data ?? []).filter((x) => x.scope === "tenant")

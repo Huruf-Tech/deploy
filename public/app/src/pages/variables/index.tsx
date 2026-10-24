@@ -63,6 +63,7 @@ import {
 import { errorMessage } from "@/lib/utils"
 import { VariableDialog, type TScope, type TVariable } from "./VariableDialog"
 import { ImportEnvDialog } from "./ImportEnvDialog"
+import { useFresh } from "@/hooks/use-fresh"
 
 function SecretValue({
   variable,
@@ -177,6 +178,7 @@ export function VariableTable({ scope }: { scope: TScope }) {
       await ThunderSDK.variables.list({ signal, query: scope })
   )
   const { data, isLoading } = use(request)
+  useFresh(request)
   const reload = () => request.invalidate()
   const selection = useSelection()
 

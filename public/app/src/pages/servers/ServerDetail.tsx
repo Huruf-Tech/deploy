@@ -61,6 +61,7 @@ import {
   STATE_STYLE,
   type TLiveness,
 } from "./server"
+import { useFresh } from "@/hooks/use-fresh"
 
 /** 24 h of history plus ~30 min of live samples, bounded (PLAN §20.4). */
 const MAX_SAMPLES = 2_400
@@ -423,6 +424,7 @@ export default function ServerDetail() {
       }
   )
   const { data } = use(request)
+  useFresh(request)
   // Newer copy fetched while host setup runs (see the polling below).
   const [latest, setLatest] = React.useState<unknown>()
   const server = React.useMemo(() => {

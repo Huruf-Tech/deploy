@@ -41,6 +41,7 @@ import {
   useSelection,
 } from "@/components/selection-bar"
 import { cn, errorMessage } from "@/lib/utils"
+import { useFresh } from "@/hooks/use-fresh"
 
 function AddRegistryDialog({
   open,
@@ -198,6 +199,7 @@ export default function RegistriesPage() {
     async ({ signal }) => await ThunderSDK.registries.list({ signal })
   )
   const { data, isLoading } = use(request)
+  useFresh(request)
   const selection = useSelection()
 
   const act = async (fn: () => PromiseLike<unknown>, failure: string) => {

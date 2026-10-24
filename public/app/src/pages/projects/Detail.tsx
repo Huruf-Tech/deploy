@@ -74,6 +74,7 @@ import {
   type TDeploymentSummary,
   type TProject,
 } from "./shared"
+import { useFresh } from "@/hooks/use-fresh"
 
 const TerminalSheet = React.lazy(() => import("@/pages/servers/TerminalSheet"))
 
@@ -818,6 +819,7 @@ export default function ProjectDetail() {
       })
   )
   const { data: deployments } = use(history)
+  useFresh(request, history)
   useBreadcrumbTitle(project?.name)
 
   const refresh = () => {

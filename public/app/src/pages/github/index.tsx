@@ -59,6 +59,7 @@ import {
 } from "@/components/selection-bar"
 import { cn, errorMessage } from "@/lib/utils"
 import { RepositoriesSheet, type TRepoTarget } from "./RepositoriesSheet"
+import { useFresh } from "@/hooks/use-fresh"
 
 type TIntegration = Awaited<
   ReturnType<typeof ThunderSDK.gitIntegrations.list>
@@ -400,6 +401,7 @@ export default function GitHubPage() {
     async ({ signal }) => await ThunderSDK.gitIntegrations.list({ signal })
   )
   const { data, isLoading } = use(request)
+  useFresh(request)
   const selection = useSelection()
   const owned = (data ?? []).filter((i) => i.isOwner).map((i) => i._id)
 

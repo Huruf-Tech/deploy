@@ -21,6 +21,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { errorMessage } from "@/lib/utils"
 import { ServerLabels } from "./ServerLabels"
 import { serverSchema } from "./server"
+import { useFresh } from "@/hooks/use-fresh"
 
 /**
  * Edit server: the generic form shows `labels` (a record) as a JSON textarea,
@@ -42,6 +43,7 @@ export default function ServerForm() {
       }
   )
   const { data, isLoading } = use(request)
+  useFresh(request)
   const server = React.useMemo(() => {
     const parsed = serverSchema.safeParse(data?.results?.[0])
     return parsed.success ? parsed.data : undefined
