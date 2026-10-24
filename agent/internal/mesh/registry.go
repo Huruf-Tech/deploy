@@ -17,8 +17,6 @@ const manifestTypes = "application/vnd.oci.image.index.v1+json, application/vnd.
 // (`registry.delete`), then garbage-collects to free their space. A digest
 // still used by a tag that isn't being deleted is left alone, so rollbacks to
 // kept releases keep working.
-// ponytail: garbage collection runs while the registry serves; a push racing
-// it can fail and needs a redeploy. Use a read-only maintenance window if that shows up.
 func (m *Mesh) DeleteTags(ctx context.Context, tags []string) (map[string]any, error) {
 	m.mu.Lock()
 	reg := m.registry
@@ -73,7 +71,7 @@ func (m *Mesh) DeleteTags(ctx context.Context, tags []string) (map[string]any, e
 	if deleted > 0 {
 		collect := m.collect
 		if collect == nil {
-			collect = garbageCollect
+			collect = func(ctx context.Context) error { return garbageCollect(ctx, reg.Image) }
 		}
 		if err := collect(ctx); err != nil {
 			return nil, err
@@ -82,9 +80,22 @@ func (m *Mesh) DeleteTags(ctx context.Context, tags []string) (map[string]any, e
 	return map[string]any{"deleted": deleted}, nil
 }
 
-func garbageCollect(ctx context.Context) error {
-	_, err := run(ctx, "docker", "exec", registryName,
-		"registry", "garbage-collect", "--delete-untagged", "/etc/docker/registry/config.yml")
+// garbageCollect frees deleted images' blobs with the registry stopped.
+// Collecting while it serves is unsafe: a push in flight (a redeploy right
+// after a failed deploy) can lose blobs it relies on, leaving an image whose
+// layers can't be pulled ("unexpected EOF"). Stopped, an overlapping push
+// fails plainly instead, and the restart also drops the registry's in-memory
+// record of which blobs exist.
+func garbageCollect(ctx context.Context, image string) error {
+	if _, err := run(ctx, "docker", "stop", "-t", "10", registryName); err != nil {
+		return err
+	}
+	// Always serve again, even if collecting fails.
+	defer func() { _, _ = run(context.Background(), "docker", "start", registryName) }()
+	_, err := run(ctx, "docker", "run", "--rm",
+		"-v", "huruf-registry-data:/var/lib/registry",
+		"--entrypoint", "registry",
+		image, "garbage-collect", "--delete-untagged", "/etc/docker/registry/config.yml")
 	return err
 }
 
