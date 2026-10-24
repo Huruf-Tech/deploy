@@ -216,18 +216,34 @@ func (d *Docker) Remove(ctx context.Context, c reconcile.Container) error {
 	return err
 }
 
+// Pull attempts: a download cut mid-way ("unexpected EOF") usually succeeds
+// on the next try, which resumes from the layers already downloaded.
+var pullBackoff = []time.Duration{3 * time.Second, 10 * time.Second}
+
 func (d *Docker) EnsureImage(ctx context.Context, image string, pull *protocol.RegistryAuth) error {
-	if _, err := run(ctx, nil, "docker", "image", "inspect", image); err == nil {
-		return nil
+	var err error
+	for attempt := 0; ; attempt++ {
+		if _, inspect := run(ctx, nil, "docker", "image", "inspect", image); inspect == nil {
+			return nil // here already, or another pass pulled it meanwhile
+		}
+		if pull == nil {
+			_, err = run(ctx, nil, "docker", "pull", image)
+		} else {
+			err = WithLogin(ctx, *pull, func(config string) error {
+				_, err := run(ctx, nil, "docker", "--config", config, "pull", image)
+				return err
+			})
+		}
+		if err == nil || ctx.Err() != nil || attempt == len(pullBackoff) {
+			return err
+		}
+		d.Log.Warn("pulling the image failed; retrying", "image", image, "attempt", attempt+1, "error", err)
+		select {
+		case <-ctx.Done():
+			return err
+		case <-time.After(pullBackoff[attempt]):
+		}
 	}
-	if pull == nil {
-		_, err := run(ctx, nil, "docker", "pull", image)
-		return err
-	}
-	return WithLogin(ctx, *pull, func(config string) error {
-		_, err := run(ctx, nil, "docker", "--config", config, "pull", image)
-		return err
-	})
 }
 
 // WithLogin runs fn with a throwaway Docker config logged in to the registry,
@@ -367,7 +383,10 @@ func Gateway(ctx context.Context, network string) (string, error) {
 }
 
 // run executes a command; `env` is added to the agent's environment.
-func run(ctx context.Context, env []string, name string, args ...string) (string, error) {
+// run executes a command; tests replace it.
+var run = runCommand
+
+func runCommand(ctx context.Context, env []string, name string, args ...string) (string, error) {
 	cmd := exec.CommandContext(ctx, name, args...)
 	if env != nil {
 		cmd.Env = append(os.Environ(), env...)
