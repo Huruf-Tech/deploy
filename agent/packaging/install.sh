@@ -101,14 +101,19 @@ if [ -n "$JOIN_TOKEN" ]; then
 fi
 
 echo "Agent installed. Waiting for the pairing code..."
-for _ in 1 2 3 4 5 6 7 8 9 10; do
-  CODE="$(journalctl -u huruf-deploy-agent -n 50 --no-pager -o cat 2>/dev/null | grep -o 'pairingCode=[A-Z2-7]*' | tail -1 | cut -d= -f2)"
-  [ -n "$CODE" ] && break
+# Only this run's log: an earlier install on this machine logged its own
+# (now wrong) code, and the journal keeps it.
+for _ in $(seq 1 15); do
+  RUN="$(systemctl show -p InvocationID --value huruf-deploy-agent 2>/dev/null)"
+  if [ -n "$RUN" ]; then
+    CODE="$(journalctl "_SYSTEMD_INVOCATION_ID=$RUN" --no-pager -o cat 2>/dev/null | grep -o 'pairingCode=[A-Z2-7]*' | tail -1 | cut -d= -f2)"
+  fi
+  [ -n "${CODE:-}" ] && break
   sleep 1
 done
 
 if [ -n "${CODE:-}" ]; then
   echo "Pairing code: $CODE  (accept the server in the dashboard with this code)"
 else
-  echo "Check the pairing code with: journalctl -u huruf-deploy-agent -n 20"
+  echo "Check the pairing code with: journalctl -u huruf-deploy-agent --since -5min | grep pairingCode"
 fi
