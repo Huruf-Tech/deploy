@@ -60,6 +60,10 @@ var mu sync.Mutex
 func Ensure(ctx context.Context, p Payload) (map[string]any, error) {
 	mu.Lock()
 	defer mu.Unlock()
+	// A step that hangs (a stuck docker call) must end as a failure the
+	// dashboard shows, not "Preparing…" forever; installing Docker takes ≤15 min.
+	ctx, cancel := context.WithTimeout(ctx, 20*time.Minute)
+	defer cancel()
 
 	checks := Preflight()
 	notes := []string{}

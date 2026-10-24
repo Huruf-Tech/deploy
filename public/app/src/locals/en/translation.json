@@ -806,5 +806,6 @@
   "{{n}} more on the control plane page": "{{n}} more on the control plane page",
   "{{pct}}% errors": "{{pct}}% errors",
   "Server accepted: the code belongs to its newer installation": "Server accepted: the code belongs to its newer installation",
-  "{{n}} older registration(s) of this machine were removed.": "{{n}} older registration(s) of this machine were removed."
+  "{{n}} older registration(s) of this machine were removed.": "{{n}} older registration(s) of this machine were removed.",
+  "Still running after {{n}} minutes. On the server, this shows what it's doing:": "Still running after {{n}} minutes. On the server, this shows what it's doing:"
 }

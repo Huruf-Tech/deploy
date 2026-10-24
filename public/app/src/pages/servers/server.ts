@@ -35,6 +35,8 @@ export const serverSchema = z.object({
         .nullish(),
       notes: z.array(z.string()).nullish(),
       error: z.string().nullish(),
+      // When setup started (pending) or finished.
+      updatedAt: z.coerce.date().nullish(),
     })
     .nullish(),
 })

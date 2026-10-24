@@ -42,6 +42,15 @@ export function HostSetup({
   const warnings = setup?.checks?.filter((c) => !c.ok) ?? []
   const passed = setup?.checks?.filter((c) => c.ok) ?? []
   const section = React.useRef<HTMLDivElement>(null)
+  // Minutes host setup has been running, once it's unusually long (≥ 3).
+  const startedAt = setup?.updatedAt ? new Date(setup.updatedAt).getTime() : 0
+  const [now, setNow] = React.useState(() => Date.now())
+  React.useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 30_000)
+    return () => clearInterval(timer)
+  }, [])
+  const minutes = startedAt ? Math.floor((now - startedAt) / 60_000) : 0
+  const slow = minutes >= 3 ? minutes : 0
 
   // Opened from a card's "host warnings" badge: bring this section into view.
   React.useEffect(() => {
@@ -99,6 +108,17 @@ export function HostSetup({
         </CardAction>
       </CardHeader>
       <CardContent className="flex flex-col gap-3 text-sm">
+        {setup?.status === "pending" && slow && (
+          <p className="rounded-xl bg-warning/10 p-3">
+            {t(
+              "Still running after {{n}} minutes. On the server, this shows what it's doing:",
+              { n: slow }
+            )}
+            <code className="mt-1 block font-mono text-xs break-all">
+              sudo journalctl -u huruf-deploy-agent -n 50 --no-pager
+            </code>
+          </p>
+        )}
         {setup?.error && (
           <p className="rounded-xl bg-destructive/10 p-3 text-destructive">
             {setup.error}

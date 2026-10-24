@@ -422,21 +422,38 @@ export default function ServerDetail() {
         results: unknown[]
       }
   )
-  const { data, isLoading } = use(request)
+  const { data } = use(request)
+  // Newer copy fetched while host setup runs (see the polling below).
+  const [latest, setLatest] = React.useState<unknown>()
   const server = React.useMemo(() => {
-    const parsed = serverSchema.safeParse(data?.results?.[0])
+    const parsed = serverSchema.safeParse(latest ?? data?.results?.[0])
     return parsed.success ? parsed.data : undefined
-  }, [data])
+  }, [data, latest])
   useBreadcrumbTitle(server?.name)
+  // A reload of the cached request (labels, rename) supersedes the copy.
+  React.useEffect(() => setLatest(undefined), [data])
 
   usePolling(() => {
     ThunderSDK.servers
       .liveness({})
       .then((rows) => setLive(rows.find((r) => r.server === id)))
       .catch(() => {})
+    // Host setup reports when it's done: follow it here, without reloading
+    // the cached request (which would swap the page for a skeleton).
+    if (
+      server?.status === "active" &&
+      server.setup?.status !== "ready" &&
+      server.setup?.status !== "failed"
+    ) {
+      ThunderSDK.servers
+        .get({ params: { id }, query: {} })
+        .then((res) => setLatest((res as { results: unknown[] }).results?.[0]))
+        .catch(() => {})
+    }
   }, 5_000)
 
-  if (isLoading || !server)
+  // Only before the first load: a refetch keeps showing what's there.
+  if (!server)
     return (
       <Page className="flex flex-col gap-4 py-4">
         <Skeleton className="h-20 rounded-4xl" />

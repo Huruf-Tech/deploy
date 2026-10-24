@@ -806,5 +806,6 @@
   "{{n}} more on the control plane page": "{{n}} أخرى في صفحة لوحة التحكم",
   "{{pct}}% errors": "أخطاء {{pct}}%",
   "Server accepted: the code belongs to its newer installation": "تم قبول الخادم: الرمز يخص تثبيته الأحدث",
-  "{{n}} older registration(s) of this machine were removed.": "تمت إزالة {{n}} من التسجيلات الأقدم لهذا الجهاز."
+  "{{n}} older registration(s) of this machine were removed.": "تمت إزالة {{n}} من التسجيلات الأقدم لهذا الجهاز.",
+  "Still running after {{n}} minutes. On the server, this shows what it's doing:": "لا يزال الإعداد قيد التشغيل بعد {{n}} دقيقة. على الخادم، يعرض هذا ما يفعله:"
 }
