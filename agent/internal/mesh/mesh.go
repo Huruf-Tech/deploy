@@ -247,6 +247,10 @@ func prefixOf(address string) string {
 	return parts[0] + "." + parts[1] + ".0.0/16"
 }
 
+// htpasswdVersion changes when the registry's password file must be
+// regenerated (2: bcrypt cost 10 instead of Caddy's default 14).
+const htpasswdVersion = "2"
+
 // applyRegistry runs the registry on the primary server, bound to its mesh
 // address only, with basic auth (PLAN §8.4).
 func (m *Mesh) applyRegistry(ctx context.Context, spec *protocol.DesiredSpecRegistry) error {
@@ -258,14 +262,24 @@ func (m *Mesh) applyRegistry(ctx context.Context, spec *protocol.DesiredSpecRegi
 		return nil
 	}
 
-	sum := sha256.Sum256([]byte(spec.Listen + "\x00" + spec.Username + "\x00" + spec.Password + "\x00" + spec.Image))
+	// htpasswdVersion is part of it, so a change in how the password is hashed
+	// recreates registries set up before it.
+	sum := sha256.Sum256([]byte(spec.Listen + "\x00" + spec.Username + "\x00" + spec.Password + "\x00" + spec.Image + "\x00" + htpasswdVersion))
 	fingerprint := hex.EncodeToString(sum[:8])
 	if err == nil && strings.TrimSpace(state) == fingerprint {
 		_, _ = run(ctx, "docker", "start", registryName) // no-op when running
 		return nil
 	}
 
-	hash, err := run(ctx, "docker", "exec", "huruf-edge", "caddy", "hash-password", "--plaintext", spec.Password)
+	// The registry checks this hash on every request (each layer of a pull):
+	// Caddy's default bcrypt cost 14 takes seconds per check on a small
+	// server, enough to stall pulls. Cost 10 is 16 times cheaper and still
+	// bcrypt; older Caddy without the flag falls back to its default.
+	hash, err := run(ctx, "docker", "exec", "huruf-edge", "caddy", "hash-password",
+		"--plaintext", spec.Password, "--bcrypt-cost", "10")
+	if err != nil {
+		hash, err = run(ctx, "docker", "exec", "huruf-edge", "caddy", "hash-password", "--plaintext", spec.Password)
+	}
 	if err != nil {
 		return fmt.Errorf("hashing the registry password: %w", err)
 	}
