@@ -278,11 +278,42 @@ export const acceptServer = async (opts: {
 }) => {
   await assertCanAddServers(opts.user);
 
-  const server = await serverModel.findOne(
+  const code = opts.pairingCode.trim().toUpperCase();
+  let server = await serverModel.findOne(
     { _id: opts.server, tenant: opts.tenant, status: "pending" },
-    { projection: { pairingCode: 1, pairingExpiresAt: 1 } },
+    {
+      projection: {
+        pairingCode: 1,
+        pairingExpiresAt: 1,
+        name: 1,
+        "inventory.hostname": 1,
+        createdAt: 1,
+      },
+    },
   );
   if (!server) throw Response.notFound("No pending server with this id");
+
+  // The code is derived from the agent's key, so it names one registration.
+  // A reinstalled machine registers again (a new key) next to its old entry,
+  // which then can't match: accept the registration the code belongs to.
+  if (server.pairingCode !== code) {
+    const owner = await serverModel.findOne(
+      { tenant: opts.tenant, status: "pending", pairingCode: code },
+      {
+        projection: {
+          pairingCode: 1,
+          pairingExpiresAt: 1,
+          name: 1,
+          "inventory.hostname": 1,
+          createdAt: 1,
+        },
+      },
+    );
+    if (owner) {
+      server = owner;
+      opts = { ...opts, server: owner._id };
+    }
+  }
 
   if (!server.pairingExpiresAt || server.pairingExpiresAt < new Date()) {
     throw Response.badRequest(
@@ -290,7 +321,7 @@ export const acceptServer = async (opts: {
     );
   }
 
-  if (server.pairingCode !== opts.pairingCode.trim().toUpperCase()) {
+  if (server.pairingCode !== code) {
     throw Response.badRequest("The pairing code does not match");
   }
 
@@ -314,6 +345,24 @@ export const acceptServer = async (opts: {
 
   await openLease(opts.server, opts.tenant);
   await prepareHost(opts.server, opts.tenant, opts.user._id);
+
+  // Earlier registrations of this machine (installed again since) can never
+  // be accepted: their agents are gone. Reject them so they stop showing.
+  const { modifiedCount: superseded } = await serverModel.updateMany(
+    {
+      tenant: opts.tenant,
+      status: "pending",
+      _id: { $ne: opts.server },
+      "inventory.hostname": server.inventory.hostname,
+      createdAt: { $lt: server.createdAt },
+    },
+    {
+      $set: { status: "rejected" },
+      $unset: { pairingCode: "", pairingExpiresAt: "" },
+    },
+  );
+
+  return { server: opts.server, name: server.name, superseded };
 };
 
 export const rejectServer = async (server: ObjectId, tenant: ObjectId) => {

@@ -96,13 +96,18 @@ export default new Router("/api", function servers(router) {
         const { pairingCode } = $body.parse(await bodyAsJson(req));
         const { tenant, user } = await withTenant(req);
 
-        await acceptServer({
+        const accepted = await acceptServer({
           server: id,
           tenant: tenant._id,
           user,
           pairingCode,
         });
-        return Response.json({ ok: true });
+        return Response.json({
+          ok: true,
+          server: accepted.server.toString(),
+          name: accepted.name,
+          superseded: accepted.superseded,
+        });
       },
     };
   });

@@ -804,5 +804,7 @@
   "budget {{n}} ms": "budget {{n}} ms",
   "busiest at {{pct}}% CPU": "busiest at {{pct}}% CPU",
   "{{n}} more on the control plane page": "{{n}} more on the control plane page",
-  "{{pct}}% errors": "{{pct}}% errors"
+  "{{pct}}% errors": "{{pct}}% errors",
+  "Server accepted: the code belongs to its newer installation": "Server accepted: the code belongs to its newer installation",
+  "{{n}} older registration(s) of this machine were removed.": "{{n}} older registration(s) of this machine were removed."
 }

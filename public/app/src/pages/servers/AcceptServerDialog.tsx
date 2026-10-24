@@ -38,11 +38,25 @@ export function AcceptServerDialog({
     setError(null)
 
     try {
-      await ThunderSDK.servers.accept({
+      const accepted = (await ThunderSDK.servers.accept({
         params: { id: server._id },
         body: { pairingCode: code },
-      })
-      toast.success(t("Server accepted"))
+      })) as { server?: string; superseded?: number }
+      // The code may belong to a newer registration of the same machine (it
+      // was installed again): that one is accepted, the old entries go.
+      toast.success(
+        accepted.server && accepted.server !== server._id
+          ? t("Server accepted: the code belongs to its newer installation")
+          : t("Server accepted"),
+        accepted.superseded
+          ? {
+              description: t(
+                "{{n}} older registration(s) of this machine were removed.",
+                { n: accepted.superseded }
+              ),
+            }
+          : undefined
+      )
       onOpenChange(false)
       onAccepted()
     } catch (e) {
