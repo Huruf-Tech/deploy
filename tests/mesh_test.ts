@@ -157,6 +157,7 @@ Deno.test({
       );
 
       let shop = "";
+      let repo = "";
       await t.step(
         "a deploy to servers that reach the primary builds once and pushes there",
         async () => {
@@ -178,6 +179,7 @@ Deno.test({
           });
           assertEquals(created.status, 200, JSON.stringify(created.json));
           shop = created.json._id;
+          repo = `shop-${shop.slice(-6)}`;
           const before = agents.map((a) => a.builds.length);
           await call("POST", `/projects/api/${shop}/deploy`, {});
           await pollAll();
@@ -188,7 +190,7 @@ Deno.test({
             `builds per server: ${built}`,
           );
           const payload = agents.flatMap((a) => a.builds).at(-1)!;
-          assertEquals(payload.push?.image, "10.209.0.1:5000/shop:1");
+          assertEquals(payload.push?.image, `10.209.0.1:5000/${repo}:1`);
           assertEquals(payload.push?.registry, "10.209.0.1:5000");
           await pollAll();
           await pollAll();
@@ -197,7 +199,7 @@ Deno.test({
           const release = other.spec!.workloads.find((w) =>
             w.name === "shop"
           )!.releases[0];
-          assertEquals(release.image, "10.209.0.1:5000/shop:1");
+          assertEquals(release.image, `10.209.0.1:5000/${repo}:1`);
           assertEquals(release.pull?.registry, "10.209.0.1:5000");
         },
       );
@@ -214,11 +216,14 @@ Deno.test({
             .find({ tenant: tenantId, type: "registry.delete" }).toArray();
           assertEquals(
             commands.map((c) => [String(c.server), c.payload.tags]),
-            [[ids[0], ["shop:1"]]],
+            [[ids[0], [`${repo}:1`]]],
           );
           const keep = agents[1].spec!.keepImages;
-          assert(keep.includes("10.209.0.1:5000/shop:6"), keep.join(", "));
-          assert(!keep.includes("10.209.0.1:5000/shop:1"), "pruned image kept");
+          assert(keep.includes(`10.209.0.1:5000/${repo}:6`), keep.join(", "));
+          assert(
+            !keep.includes(`10.209.0.1:5000/${repo}:1`),
+            "pruned image kept",
+          );
         },
       );
 

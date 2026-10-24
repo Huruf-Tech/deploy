@@ -201,9 +201,12 @@ async function start(deployment: TDeploymentDoc) {
     { returnDocument: "after", projection: { releaseCounter: 1 } },
   );
   const number = counter!.releaseCounter;
-  const tag = `huruf/${project.slug}:${number}${
-    commit ? `-${commit.sha.slice(0, 7)}` : ""
-  }`;
+  // The project id's tail keeps names unique: a project deleted and created
+  // again with the same slug (and commit) would reuse release 1's name, and
+  // the old project's registry cleanup would then delete the new image.
+  const tag = `huruf/${project.slug}-${
+    String(project._id).slice(-6)
+  }:${number}${commit ? `-${commit.sha.slice(0, 7)}` : ""}`;
   const cacheKey = `${project._id}-${project.cacheEpoch}`;
 
   const { services, dockerfile } = await serviceSpecs(project, {

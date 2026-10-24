@@ -125,7 +125,7 @@ Deno.test({
             );
             assertEquals(build.buildEnv, { BUILD_TOKEN: "build-only" });
             assertMatch(build.dockerfile!, /--port=8000/);
-            assertMatch(build.image, /^huruf\/shop:1$/);
+            assertMatch(build.image, /^huruf\/shop-[0-9a-f]{6}:1$/);
           }
 
           let d = await deployment(first);
