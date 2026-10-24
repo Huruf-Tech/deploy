@@ -46,7 +46,7 @@ import { usePolling } from "@/hooks/use-polling"
 import { cn } from "@/lib/utils"
 import { AcceptServerDialog } from "./AcceptServerDialog"
 import { AddServerButton } from "./AddServerButton"
-import { onServersChanged } from "./events"
+import { isAddServerOpen, onServersChanged } from "./events"
 import { StatusPill } from "./StatusPill"
 import { LabelChips } from "./ServerLabels"
 import {
@@ -373,7 +373,24 @@ export default function ServerCards({
       .catch(() => {})
     // The list too: a server installed by hand (or from another tab) appears
     // as soon as its agent says hello, and pending ones flip to active.
-    refetch()
+    // Core's list page shows skeletons instead of the toolbar while an empty
+    // list reloads, which would close an open "Add server" dialog: hold off
+    // while it's open, and with nothing listed, reload only once a server exists.
+    if (isAddServerOpen()) return
+    if (servers.length) return refetch()
+    ThunderSDK.servers
+      .get({
+        params: {},
+        query: {
+          limit: 1,
+          project: { _id: 1 },
+          ...(label
+            ? { filters: { [`labels.${label[0]}`]: { $eq: label[1] } } }
+            : {}),
+        },
+      })
+      .then(({ results }) => results.length && refetch())
+      .catch(() => {})
   }, 5_000)
 
   const reject = async (server: TServer) => {
