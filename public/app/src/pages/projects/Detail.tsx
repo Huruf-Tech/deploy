@@ -75,6 +75,7 @@ import {
   type TProject,
 } from "./shared"
 import { useFresh } from "@/hooks/use-fresh"
+import { forgetCache } from "@/lib/forget-cache"
 
 const TerminalSheet = React.lazy(() => import("@/pages/servers/TerminalSheet"))
 
@@ -382,6 +383,9 @@ function Settings({
     setRemoving(true)
     try {
       await ThunderSDK.projects.del({ params: { id: project._id } })
+      // Its own entries (detail, deployments, releases) would refetch and 404
+      // when the list below is invalidated: drop them first.
+      await forgetCache(project._id)
       // The cached list still has it: refresh it (and the server pickers,
       // keyed under "projects") before going back, so it's gone there.
       // useCaching is the SDK's cache entry, not a React hook.
