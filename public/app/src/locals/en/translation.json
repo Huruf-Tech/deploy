@@ -807,5 +807,10 @@
   "{{pct}}% errors": "{{pct}}% errors",
   "Server accepted: the code belongs to its newer installation": "Server accepted: the code belongs to its newer installation",
   "{{n}} older registration(s) of this machine were removed.": "{{n}} older registration(s) of this machine were removed.",
-  "Still running after {{n}} minutes. On the server, this shows what it's doing:": "Still running after {{n}} minutes. On the server, this shows what it's doing:"
+  "Still running after {{n}} minutes. On the server, this shows what it's doing:": "Still running after {{n}} minutes. On the server, this shows what it's doing:",
+  "Updating {{n}} agent(s): each restarts in a few seconds, then host setup runs.": "Updating {{n}} agent(s): each restarts in a few seconds, then host setup runs.",
+  "{{n}} update(s) couldn't start.": "{{n}} update(s) couldn't start.",
+  "{{n}} of {{total}} selected can update their agent.": "{{n}} of {{total}} selected can update their agent.",
+  "The selected servers run the latest agent (or are offline).": "The selected servers run the latest agent (or are offline).",
+  "Update agent on {{n}}": "Update agent on {{n}}"
 }

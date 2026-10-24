@@ -8,6 +8,7 @@ import {
   IconActivityHeartbeat,
   IconAlertTriangle,
   IconBrandDocker,
+  IconCloudDownload,
   IconLoader2,
   IconRefresh,
   IconBrandUbuntu,
@@ -43,6 +44,8 @@ import {
 import { Skeleton } from "@/components/ui/skeleton"
 import { ResourceBar } from "@/components/resource-bar"
 import { usePolling } from "@/hooks/use-polling"
+import { useFresh } from "@/hooks/use-fresh"
+import { use } from "@/core/hooks/use"
 import { cn } from "@/lib/utils"
 import { AcceptServerDialog } from "./AcceptServerDialog"
 import { AddServerButton } from "./AddServerButton"
@@ -299,6 +302,86 @@ function ServerCard({
   )
 }
 
+/**
+ * Updates the agent on the selected servers that can take it: online, with
+ * a binary that differs from the published one for their architecture.
+ */
+function BulkAgentUpdate({
+  servers,
+  selectedIds,
+  liveness,
+}: {
+  servers: TServer[]
+  selectedIds: string[]
+  liveness: Map<string, TLiveness>
+}) {
+  const { t } = useTranslation()
+  const release = ThunderSDK.useCaching(
+    ["servers", "agentRelease"],
+    async ({ signal }) => await ThunderSDK.servers.agentRelease({ signal })
+  )
+  useFresh(release)
+  const { data } = use(release)
+  const [busy, setBusy] = React.useState(false)
+
+  const selected = servers.filter((s) => selectedIds.includes(s._id))
+  const outdated = selected.filter((s) => {
+    const latest = data?.sums[s.inventory.arch]
+    return (
+      stateOf(s, liveness.get(s._id)) === "online" &&
+      !!latest &&
+      latest !== s.inventory.agentSha256
+    )
+  })
+  if (!selected.length || !ThunderSDK.isPermitted("servers", "updateAgent"))
+    return null
+
+  const update = async () => {
+    setBusy(true)
+    const results = await Promise.allSettled(
+      outdated.map((s) =>
+        ThunderSDK.servers.updateAgent({ params: { id: s._id } })
+      )
+    )
+    const failed = results.filter((r) => r.status === "rejected").length
+    if (failed < outdated.length)
+      toast.success(
+        t(
+          "Updating {{n}} agent(s): each restarts in a few seconds, then host setup runs.",
+          { n: outdated.length - failed }
+        )
+      )
+    if (failed) toast.error(t("{{n}} update(s) couldn't start.", { n: failed }))
+    setBusy(false)
+  }
+
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border bg-muted/40 p-3 text-sm">
+      <span className="text-muted-foreground">
+        {outdated.length
+          ? t("{{n}} of {{total}} selected can update their agent.", {
+              n: outdated.length,
+              total: selected.length,
+            })
+          : t("The selected servers run the latest agent (or are offline).")}
+      </span>
+      <Button
+        size="sm"
+        variant="outline"
+        disabled={busy || !outdated.length}
+        onClick={update}
+      >
+        {busy ? (
+          <IconLoader2 className="animate-spin" aria-hidden />
+        ) : (
+          <IconCloudDownload aria-hidden />
+        )}
+        {t("Update agent on {{n}}", { n: outdated.length })}
+      </Button>
+    </div>
+  )
+}
+
 function AddServerHint() {
   const { t } = useTranslation()
 
@@ -431,6 +514,11 @@ export default function ServerCards({
           </span>
         </div>
       )}
+      <BulkAgentUpdate
+        servers={servers}
+        selectedIds={selectedIds}
+        liveness={liveness}
+      />
       {isLoading ? (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {[0, 1, 2].map((i) => (

@@ -807,5 +807,10 @@
   "{{pct}}% errors": "أخطاء {{pct}}%",
   "Server accepted: the code belongs to its newer installation": "تم قبول الخادم: الرمز يخص تثبيته الأحدث",
   "{{n}} older registration(s) of this machine were removed.": "تمت إزالة {{n}} من التسجيلات الأقدم لهذا الجهاز.",
-  "Still running after {{n}} minutes. On the server, this shows what it's doing:": "لا يزال الإعداد قيد التشغيل بعد {{n}} دقيقة. على الخادم، يعرض هذا ما يفعله:"
+  "Still running after {{n}} minutes. On the server, this shows what it's doing:": "لا يزال الإعداد قيد التشغيل بعد {{n}} دقيقة. على الخادم، يعرض هذا ما يفعله:",
+  "Updating {{n}} agent(s): each restarts in a few seconds, then host setup runs.": "جارٍ تحديث {{n}} من الوكلاء: يُعاد تشغيل كل منها خلال ثوانٍ، ثم يعمل إعداد المضيف.",
+  "{{n}} update(s) couldn't start.": "تعذّر بدء {{n}} من التحديثات.",
+  "{{n}} of {{total}} selected can update their agent.": "يمكن تحديث وكيل {{n}} من أصل {{total}} محددة.",
+  "The selected servers run the latest agent (or are offline).": "الخوادم المحددة تعمل بأحدث وكيل (أو غير متصلة).",
+  "Update agent on {{n}}": "تحديث الوكيل على {{n}}"
 }
