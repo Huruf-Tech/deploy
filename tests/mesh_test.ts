@@ -189,6 +189,8 @@ Deno.test({
             1,
             `builds per server: ${built}`,
           );
+          // The registry's server builds: its push stays local.
+          assertEquals(built, [1, 0, 0], `builds per server: ${built}`);
           const payload = agents.flatMap((a) => a.builds).at(-1)!;
           assertEquals(payload.push?.image, `10.209.0.1:5000/${repo}:1`);
           assertEquals(payload.push?.registry, "10.209.0.1:5000");

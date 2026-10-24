@@ -262,7 +262,7 @@ async function start(deployment: TDeploymentDoc) {
     ? "local"
     : "perServer";
   const builders = registry || builtin
-    ? [await pickBuilder(deployment.servers)]
+    ? [await pickBuilder(deployment.servers, builtin?.primary._id)]
     : deployment.servers;
   const name = tag.slice("huruf/".length);
   let push: TBuildRunPayload["push"];
@@ -500,27 +500,33 @@ async function builtinFor(tenant: ObjectId, targets: ObjectId[]) {
   return all ? registry : undefined;
 }
 
-/** The least loaded online target, preferring servers labelled builder=true (PLAN §8.4). */
-async function pickBuilder(servers: ObjectId[]) {
+/**
+ * Where a single build runs (PLAN §8.4): a target labelled builder=true
+ * (an explicit choice), else the built-in registry's server when it's
+ * online (its push stays local, and it's the same server every time), else
+ * the least loaded online target.
+ */
+async function pickBuilder(servers: ObjectId[], registryServer?: ObjectId) {
+  const candidates = registryServer ? [...servers, registryServer] : servers;
   const [docs, leases] = await Promise.all([
-    serverModel.find({ _id: { $in: servers } }, {
+    serverModel.find({ _id: { $in: candidates } }, {
       projection: { labels: 1, resources: 1 },
     }).toArray(),
-    serverLeaseModel.find({ _id: { $in: servers } }, {
+    serverLeaseModel.find({ _id: { $in: candidates } }, {
       projection: { aliveUntil: 1 },
     }).toArray(),
   ]);
-  const online = docs.filter((d) =>
-    leases.some((l) =>
-      l._id.equals(d._id) && l.aliveUntil.getTime() > Date.now()
-    )
-  );
-  const pool = online.length ? online : docs;
-  pool.sort((a, b) =>
-    Number(b.labels?.builder === "true") -
-      Number(a.labels?.builder === "true") ||
-    (a.resources?.cpu ?? 1) - (b.resources?.cpu ?? 1)
-  );
+  const isOnline = (id: ObjectId) =>
+    leases.some((l) => l._id.equals(id) && l.aliveUntil.getTime() > Date.now());
+  const targets = docs.filter((d) => servers.some((s) => s.equals(d._id)));
+  const online = targets.filter((d) => isOnline(d._id));
+
+  const labelled = online.find((d) => d.labels?.builder === "true");
+  if (labelled) return labelled._id;
+  if (registryServer && isOnline(registryServer)) return registryServer;
+
+  const pool = online.length ? online : targets;
+  pool.sort((a, b) => (a.resources?.cpu ?? 1) - (b.resources?.cpu ?? 1));
   return pool[0]._id;
 }
 
