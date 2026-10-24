@@ -169,3 +169,4 @@ export declare const usersModule: (sdk: typeof BaseSDK) => {
         finally: (onfinally?: (() => void) | null | undefined) => Promise<get$return>;
     };
 };
+//# sourceMappingURL=users.d.ts.map

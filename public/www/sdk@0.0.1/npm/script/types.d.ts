@@ -84,3 +84,4 @@ export type TPagination = {
         };
     } | undefined;
 };
+//# sourceMappingURL=types.d.ts.map

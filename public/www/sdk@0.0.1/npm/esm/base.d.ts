@@ -36,6 +36,13 @@ export declare class BaseSDK {
     } | null>;
     static expireCache(keys: TCacheKey): Promise<boolean>;
     static delCache(keys: TCacheKey): Promise<boolean>;
+    /**
+     * Forgets the entry for `keys`; with `subKeys`, every registered entry under
+     * that prefix too. Returns the resolved keys it removed.
+     */
+    static forgetCache(keys: TCacheKey, options?: {
+        subKeys?: boolean;
+    }): Promise<string[]>;
     static clearCache(): Promise<void>;
     static cacheKeys(startsWith?: string): Promise<string[]>;
     static useCache<T>(callback: () => T | Promise<T>, options?: TCacheOptions<T>): Promise<T>;
@@ -48,6 +55,7 @@ export declare class BaseSDK {
             stopPropagation?: boolean;
         }) => Promise<boolean>;
         del: () => Promise<boolean>;
+        forget: () => Promise<boolean>;
         invalidate: (options?: {
             stopPropagation?: boolean;
         }) => Promise<T>;
@@ -67,3 +75,4 @@ export declare class BaseSDK {
         finally: Promise<T>["finally"];
     };
 }
+//# sourceMappingURL=base.d.ts.map

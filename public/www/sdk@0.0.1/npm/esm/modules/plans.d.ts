@@ -210,3 +210,4 @@ export declare const plansModule: (sdk: typeof BaseSDK) => {
         finally: (onfinally?: (() => void) | null | undefined) => Promise<unknown>;
     };
 };
+//# sourceMappingURL=plans.d.ts.map

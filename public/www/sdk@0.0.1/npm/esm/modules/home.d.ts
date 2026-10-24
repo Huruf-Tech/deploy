@@ -14,3 +14,4 @@ export declare const homeModule: (sdk: typeof BaseSDK) => {
         finally: (onfinally?: (() => void) | null | undefined) => Promise<unknown>;
     };
 };
+//# sourceMappingURL=home.d.ts.map

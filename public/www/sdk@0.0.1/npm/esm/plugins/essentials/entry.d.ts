@@ -18,3 +18,4 @@ export declare class essentialsEntry {
     static unregisterPermissions(): void;
     static clean(): void;
 }
+//# sourceMappingURL=entry.d.ts.map

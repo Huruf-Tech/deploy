@@ -111,3 +111,4 @@ export declare const tenantMembersModule: (sdk: typeof BaseSDK) => {
         finally: (onfinally?: (() => void) | null | undefined) => Promise<create$return>;
     };
 };
+//# sourceMappingURL=tenantMembers.d.ts.map

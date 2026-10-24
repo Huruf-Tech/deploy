@@ -257,3 +257,4 @@ export declare const agentsModule: (sdk: typeof BaseSDK) => {
         finally: (onfinally?: (() => void) | null | undefined) => Promise<events$return>;
     };
 };
+//# sourceMappingURL=agents.d.ts.map

@@ -299,3 +299,4 @@ export declare const templatesModule: (sdk: typeof BaseSDK) => {
         finally: (onfinally?: (() => void) | null | undefined) => Promise<render$return>;
     };
 };
+//# sourceMappingURL=templates.d.ts.map

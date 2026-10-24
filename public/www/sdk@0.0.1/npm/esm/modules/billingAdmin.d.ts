@@ -51,3 +51,4 @@ export declare const billingAdminModule: (sdk: typeof BaseSDK) => {
         finally: (onfinally?: (() => void) | null | undefined) => Promise<unknown>;
     };
 };
+//# sourceMappingURL=billingAdmin.d.ts.map

@@ -46,3 +46,4 @@ export declare const alertEventsModule: (sdk: typeof BaseSDK) => {
         finally: (onfinally?: (() => void) | null | undefined) => Promise<list$return>;
     };
 };
+//# sourceMappingURL=alertEvents.d.ts.map

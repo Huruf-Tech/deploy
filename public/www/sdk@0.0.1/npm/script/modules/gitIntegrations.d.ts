@@ -180,3 +180,4 @@ export declare const gitIntegrationsModule: (sdk: typeof BaseSDK) => {
         finally: (onfinally?: (() => void) | null | undefined) => Promise<branches$return>;
     };
 };
+//# sourceMappingURL=gitIntegrations.d.ts.map

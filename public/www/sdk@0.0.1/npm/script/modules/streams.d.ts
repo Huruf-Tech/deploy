@@ -218,3 +218,4 @@ export declare const streamsModule: (sdk: typeof BaseSDK) => {
         finally: (onfinally?: (() => void) | null | undefined) => Promise<unknown>;
     };
 };
+//# sourceMappingURL=streams.d.ts.map

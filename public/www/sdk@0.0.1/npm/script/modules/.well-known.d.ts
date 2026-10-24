@@ -34,3 +34,4 @@ export declare const wellKnownModule: (sdk: typeof BaseSDK) => {
         finally: (onfinally?: (() => void) | null | undefined) => Promise<unknown>;
     };
 };
+//# sourceMappingURL=.well-known.d.ts.map

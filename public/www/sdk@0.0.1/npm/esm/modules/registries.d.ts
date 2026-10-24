@@ -85,3 +85,4 @@ export declare const registriesModule: (sdk: typeof BaseSDK) => {
         finally: (onfinally?: (() => void) | null | undefined) => Promise<unknown>;
     };
 };
+//# sourceMappingURL=registries.d.ts.map

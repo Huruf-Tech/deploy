@@ -94,3 +94,4 @@ export declare class ThunderSDK extends BaseSDK {
     static hasGroup(module: object | string): boolean;
     static listActions(moduleName?: string): string[];
 }
+//# sourceMappingURL=index.d.ts.map

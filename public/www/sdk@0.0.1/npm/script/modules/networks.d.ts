@@ -75,3 +75,4 @@ export declare const networksModule: (sdk: typeof BaseSDK) => {
         finally: (onfinally?: (() => void) | null | undefined) => Promise<unknown>;
     };
 };
+//# sourceMappingURL=networks.d.ts.map

@@ -41,3 +41,4 @@ export declare const tenantMembershipsModule: (sdk: typeof BaseSDK) => {
         finally: (onfinally?: (() => void) | null | undefined) => Promise<get$return>;
     };
 };
+//# sourceMappingURL=tenantMemberships.d.ts.map

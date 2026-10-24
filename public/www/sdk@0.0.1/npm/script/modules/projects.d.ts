@@ -580,3 +580,4 @@ export declare const projectsModule: (sdk: typeof BaseSDK) => {
         finally: (onfinally?: (() => void) | null | undefined) => Promise<unknown>;
     };
 };
+//# sourceMappingURL=projects.d.ts.map

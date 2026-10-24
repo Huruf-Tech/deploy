@@ -110,3 +110,4 @@ export declare const envsModule: (sdk: typeof BaseSDK) => {
         finally: (onfinally?: (() => void) | null | undefined) => Promise<unknown>;
     };
 };
+//# sourceMappingURL=envs.d.ts.map

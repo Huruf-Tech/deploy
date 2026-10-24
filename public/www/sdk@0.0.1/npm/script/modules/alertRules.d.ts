@@ -118,3 +118,4 @@ export declare const alertRulesModule: (sdk: typeof BaseSDK) => {
         finally: (onfinally?: (() => void) | null | undefined) => Promise<unknown>;
     };
 };
+//# sourceMappingURL=alertRules.d.ts.map

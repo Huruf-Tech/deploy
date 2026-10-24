@@ -197,3 +197,4 @@ export declare const walletsModule: (sdk: typeof BaseSDK) => {
         finally: (onfinally?: (() => void) | null | undefined) => Promise<get$return>;
     };
 };
+//# sourceMappingURL=wallets.d.ts.map

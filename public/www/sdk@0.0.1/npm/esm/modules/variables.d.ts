@@ -189,3 +189,4 @@ export declare const variablesModule: (sdk: typeof BaseSDK) => {
         finally: (onfinally?: (() => void) | null | undefined) => Promise<resolve$return>;
     };
 };
+//# sourceMappingURL=variables.d.ts.map

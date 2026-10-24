@@ -36,3 +36,4 @@ export declare const githubHooksModule: (sdk: typeof BaseSDK) => {
         finally: (onfinally?: (() => void) | null | undefined) => Promise<unknown>;
     };
 };
+//# sourceMappingURL=githubHooks.d.ts.map

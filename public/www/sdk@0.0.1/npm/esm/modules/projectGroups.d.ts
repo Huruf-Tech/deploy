@@ -107,3 +107,4 @@ export declare const projectGroupsModule: (sdk: typeof BaseSDK) => {
         finally: (onfinally?: (() => void) | null | undefined) => Promise<unknown>;
     };
 };
+//# sourceMappingURL=projectGroups.d.ts.map

@@ -109,3 +109,4 @@ export declare const tenantsModule: (sdk: typeof BaseSDK) => {
         finally: (onfinally?: (() => void) | null | undefined) => Promise<create$return>;
     };
 };
+//# sourceMappingURL=tenants.d.ts.map

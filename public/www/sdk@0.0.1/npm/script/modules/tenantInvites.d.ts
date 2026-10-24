@@ -115,3 +115,4 @@ export declare const tenantInvitesModule: (sdk: typeof BaseSDK) => {
         finally: (onfinally?: (() => void) | null | undefined) => Promise<unknown>;
     };
 };
+//# sourceMappingURL=tenantInvites.d.ts.map

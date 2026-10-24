@@ -127,3 +127,4 @@ export declare const oauthClientsModule: (sdk: typeof BaseSDK) => {
         finally: (onfinally?: (() => void) | null | undefined) => Promise<unknown>;
     };
 };
+//# sourceMappingURL=oauthClients.d.ts.map

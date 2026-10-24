@@ -78,3 +78,4 @@ export declare const walletLedgersModule: (sdk: typeof BaseSDK) => {
         finally: (onfinally?: (() => void) | null | undefined) => Promise<get$return>;
     };
 };
+//# sourceMappingURL=walletLedgers.d.ts.map

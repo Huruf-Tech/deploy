@@ -34,3 +34,4 @@ export declare const indexModule: (sdk: typeof BaseSDK) => {
         finally: (onfinally?: (() => void) | null | undefined) => Promise<unknown>;
     };
 };
+//# sourceMappingURL=index.d.ts.map

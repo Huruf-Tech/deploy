@@ -22,3 +22,4 @@ export declare const imageKitModule: (sdk: typeof BaseSDK) => {
         finally: (onfinally?: (() => void) | null | undefined) => Promise<auth$return>;
     };
 };
+//# sourceMappingURL=imagekit.d.ts.map

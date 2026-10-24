@@ -26,5 +26,5 @@
   "devDependencies": {
     "@types/node": "^20.9.0"
   },
-  "_generatedBy": "dnt@0.44.0"
+  "_generatedBy": "dnt@dev"
 }

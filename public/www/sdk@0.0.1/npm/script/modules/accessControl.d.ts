@@ -118,3 +118,4 @@ export declare const accessControlModule: (sdk: typeof BaseSDK) => {
         finally: (onfinally?: (() => void) | null | undefined) => Promise<unknown>;
     };
 };
+//# sourceMappingURL=accessControl.d.ts.map
