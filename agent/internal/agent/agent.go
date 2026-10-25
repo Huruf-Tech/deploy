@@ -122,6 +122,12 @@ func (a *Agent) step(ctx context.Context) (wait time.Duration, stop bool, err er
 
 	applied, _ := a.Store.Spec()
 	request := protocol.PollRequest{CommandCursor: a.Store.Cursor(), AppliedVersion: &applied}
+	// Long polling (PLAN Phase 13): the control plane holds the poll until
+	// there's something for us, when it says it can.
+	waiting := a.config != nil && a.config.Poll.WaitMs != nil && *a.config.Poll.WaitMs > 0
+	if waiting {
+		request.Wait = &waiting
+	}
 	if a.Streams != nil {
 		request.Streams = a.Streams.InputCursors() // nil (omitted) unless a terminal is open
 	}
@@ -183,6 +189,9 @@ func (a *Agent) step(ctx context.Context) (wait time.Duration, stop bool, err er
 		}
 	}
 
+	if waiting && status == http.StatusOK && response.NextPollMs == 0 {
+		return 0, false, nil // an empty hold: wait again right away
+	}
 	return a.jitter(time.Duration(response.NextPollMs) * time.Millisecond), false, nil
 }
 

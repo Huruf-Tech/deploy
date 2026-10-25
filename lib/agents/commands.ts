@@ -8,6 +8,7 @@ import { agentCommandModel } from "@/schemas/infrastructure/agentCommand.ts";
 import { ensureMeshIndex } from "@/lib/network/mesh.ts";
 import { MESH_CIDR, subnetOf } from "@/schemas/infrastructure/network.ts";
 import type { $commandType, $hostCheck } from "@/schemas/protocol/agent.ts";
+import { serverWakeups } from "@/lib/agents/wakeups.ts";
 import type z from "zod";
 
 const COMMAND_TTL_MS = 6 * 60 * 60_000;
@@ -53,6 +54,7 @@ export const issueCommand = async (opts: {
     expiresAt: new Date(now.getTime() + COMMAND_TTL_MS),
   });
 
+  serverWakeups.wake(opts.server.toHexString()); // its held poll, if here
   return { command: insertedId, seq: lease.commandSeq };
 };
 

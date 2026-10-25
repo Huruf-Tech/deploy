@@ -1152,7 +1152,11 @@ Each phase ends with a **review checkpoint** (demo + code review + approval). Ph
   3. A build broken on purpose (wrong start command) is fixed by "Fix with AI" in one proposal.
   4. A tenant over its monthly limit, or on a plan without the feature, is refused before any provider call.
 
-### Phase 13 — Long polling (planned, D44)
+### Phase 13 — Long polling (built, pending review, D44)
+- **Built:** agents that send `wait` (from this agent version on) are held up to `AGENT_LONG_POLL_MS` (25 s; 0 turns it off). A held poll answers on a new command, desired state or terminal input; after an empty hold `nextPollMs` is 0, after a delivery it's the safety minimum (100 ms), since the next poll waits anyway. Browser stream reads take `wait=true` (held up to 15 s), and the dashboard reads on as soon as one returns.
+- **Wakes:** same-instance writes wake directly, after the document is written; one change stream per instance (commands, specs, terminal input, stream output — the documents, not the lease counters bumped before them) wakes polls held on other instances. Without change streams, only cross-instance wakes fall back to the timeout.
+- **Trade-off:** a held poll extends the lease by the hold, so a dead long-polling server is flagged offline after up to ~35 s instead of ~10 s. Traefik's health checks still take it out of routing within seconds.
+- **Measured** (tests, one machine): terminal echo 22–58 ms through held polls and reads; a command or a write from another instance wakes a held poll in ~150 ms.
 - **Agent polls:**
   - A poll with nothing to deliver waits at the control plane, up to `AGENT_LONG_POLL_MS` (≈ 25 s, below the AWS load balancer's 60 s idle timeout). It answers the moment a command, a new desired spec or terminal input arrives for that server.
   - **The lease covers the wait:** the poll renews `aliveUntil` for the wait plus the usual lease, so a waiting server is never flagged offline.

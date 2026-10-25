@@ -122,6 +122,9 @@ export default new Router("/api", function streams(router) {
   router.get("/:id/chunks", function read() {
     const $query = z.object({
       after: z.coerce.number().int().min(0).default(0),
+      wait: z.stringbool().optional().describe(
+        "Hold the read until there's new output (up to 15 s)",
+      ),
     });
     const $return = z.object({
       chunks: z.array(z.object({
@@ -139,9 +142,9 @@ export default new Router("/api", function streams(router) {
       shape: () => ({ params: $params, query: $query, return: $return }),
       handler: async (req) => {
         const { id } = $params.parse(paramsAsJson(req));
-        const { after } = $query.parse(queryAsJson(req));
+        const { after, wait } = $query.parse(queryAsJson(req));
         const { tenant } = await withTenant(req);
-        return Response.json(await readStream(id, tenant._id, after));
+        return Response.json(await readStream(id, tenant._id, after, wait));
       },
     };
   });

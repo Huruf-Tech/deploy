@@ -12,6 +12,8 @@ export const AGENT_CONFIG_DEFAULTS = {
   AGENT_POLL_IDLE_MS: 5_000,
   AGENT_POLL_ACTIVE_MS: 1_000,
   AGENT_POLL_TERMINAL_MS: 150,
+  /** Long polling (PLAN Phase 13): 0 turns it off. At most 25 s (HTTP and load balancer timeouts). */
+  AGENT_LONG_POLL_MS: 25_000,
   AGENT_POLL_JITTER_PERCENT: 20,
   AGENT_SUMMARY_INTERVAL_MS: 60_000,
   AGENT_MAX_BACKOFF_MS: 60_000,
@@ -32,7 +34,15 @@ export const getAgentConfig = cache(async () => {
   const idleMs = Math.max(activeMs, await setting("AGENT_POLL_IDLE_MS"));
 
   const config: TAgentConfig = {
-    poll: { idleMs, activeMs, terminalMs },
+    poll: {
+      idleMs,
+      activeMs,
+      terminalMs,
+      waitMs: Math.min(
+        25_000,
+        Math.max(0, await setting("AGENT_LONG_POLL_MS")),
+      ),
+    },
     jitterPercent: Math.min(
       50,
       Math.max(0, await setting("AGENT_POLL_JITTER_PERCENT")),

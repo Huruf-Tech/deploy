@@ -23,6 +23,7 @@ import {
   registryModel,
   serverSpecModel,
 } from "@/schemas/infrastructure/serverSpec.ts";
+import { serverWakeups } from "@/lib/agents/wakeups.ts";
 import type {
   TAlertSpec,
   TDesiredSpec,
@@ -427,6 +428,7 @@ export async function refreshSpecs(servers: ObjectId[]) {
     } catch (error) {
       if (!isDuplicateKeyError(error)) throw error;
     }
+    serverWakeups.wake(server.toHexString()); // its held poll, if here
     versions.set(server.toHexString(), version);
   }
   return versions;

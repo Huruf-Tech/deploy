@@ -215,9 +215,12 @@ export class SimAgent {
   }
 
   /** One poll. `cursor` overrides the stored cursor (tests replay lost responses). */
-  async poll(opts: { cursor?: number; summary?: boolean } = {}) {
+  async poll(
+    opts: { cursor?: number; summary?: boolean; wait?: boolean } = {},
+  ) {
     const response = await this.request("/agents/api/poll", {
       commandCursor: opts.cursor ?? this.state.commandCursor,
+      ...(opts.wait ? { wait: true } : {}),
       appliedVersion: this.spec?.version ?? 0,
       summary: opts.summary
         ? {

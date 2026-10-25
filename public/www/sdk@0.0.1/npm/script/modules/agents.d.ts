@@ -32,6 +32,8 @@ export type hello$return = {
             idleMs: number;
             activeMs: number;
             terminalMs: number;
+            /** Long polling (PLAN Phase 13): how long the control plane may hold a poll that sends `wait`; 0 or absent = don't send it */
+            waitMs?: number | undefined;
         };
         jitterPercent: number;
         summaryIntervalMs: number;
@@ -55,6 +57,8 @@ export type hello$return = {
 };
 export type poll$body = {
     commandCursor: number;
+    /** Hold this poll until there's something for the agent (up to `waitMs`); then `nextPollMs` 0 means poll again now */
+    wait?: boolean | undefined;
     appliedVersion?: number;
     /** Sent at most every 60 s, or on a >10% change */
     summary?: {
@@ -103,6 +107,8 @@ export type config$return = {
             idleMs: number;
             activeMs: number;
             terminalMs: number;
+            /** Long polling (PLAN Phase 13): how long the control plane may hold a poll that sends `wait`; 0 or absent = don't send it */
+            waitMs?: number | undefined;
         };
         jitterPercent: number;
         summaryIntervalMs: number;

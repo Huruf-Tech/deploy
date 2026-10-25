@@ -58,6 +58,9 @@ export const $agentConfig = z.object({
     idleMs: z.number().int(),
     activeMs: z.number().int(),
     terminalMs: z.number().int(),
+    waitMs: z.number().int().min(0).optional().describe(
+      "Long polling (PLAN Phase 13): how long the control plane may hold a poll that sends `wait`; 0 or absent = don't send it",
+    ),
   }),
   jitterPercent: z.number().min(0).max(50),
   summaryIntervalMs: z.number().int(),
@@ -416,6 +419,9 @@ export const $command = z.object({
 
 export const $pollRequest = z.object({
   commandCursor: z.number().int().min(0),
+  wait: z.boolean().optional().describe(
+    "Hold this poll until there's something for the agent (up to `waitMs`); then `nextPollMs` 0 means poll again now",
+  ),
   appliedVersion: z.number().int().min(0).default(0),
   summary: $resourceSummary.optional().describe(
     "Sent at most every 60 s, or on a >10% change",

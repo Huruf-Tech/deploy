@@ -16,6 +16,7 @@ import type {
   $terminalInput,
 } from "@/schemas/protocol/agent.ts";
 import { serverLeaseModel } from "@/schemas/infrastructure/serverLease.ts";
+import { serverWakeups, sessionWakeups } from "@/lib/agents/wakeups.ts";
 import type z from "zod";
 
 const SESSION_MAX_MS = 60 * 60_000;
@@ -97,6 +98,7 @@ export const writeTerminalInput = async (
     // A retried batch hits the unique (session, seq) index: already stored.
     if (error?.code !== 11000 && !error?.writeErrors) throw error;
   });
+  serverWakeups.wake(owner.server); // the agent's held poll, if here
 
   const key = session.toHexString();
   const now = Date.now();
@@ -211,18 +213,40 @@ export const openStream = async (opts: {
   return insertedId;
 };
 
-/** `GET /streams/api/:id/chunks?after=` — one indexed range read in the common case. */
+/** How long a read with `wait` may be held: well under SAFETY_STREAM_IDLE_SEC. */
+export const READ_WAIT_MS = 15_000;
+
+/**
+ * `GET /streams/api/:id/chunks?after=` — one indexed range read in the common
+ * case. With `wait` (PLAN Phase 13), a read that finds nothing new is held
+ * until output arrives (up to READ_WAIT_MS), then read once more.
+ */
 export const readStream = async (
   session: ObjectId,
   tenant: ObjectId,
   after: number,
+  wait = false,
 ) => {
   const key = session.toHexString();
   const owner = await ownerOf(session);
   if (owner.tenant !== tenant.toHexString()) {
     throw Response.notFound("Unknown stream");
   }
+  // Registered before reading, so output landing in between isn't missed.
+  const waiter = wait ? sessionWakeups.register(key) : undefined;
+  try {
+    return await read(session, key, after, waiter);
+  } finally {
+    waiter?.cancel();
+  }
+};
 
+const read = async (
+  session: ObjectId,
+  key: string,
+  after: number,
+  waiter?: ReturnType<typeof sessionWakeups.register>,
+) => {
   // The periodic lastReadAt write doubles as the liveness check: it only
   // matches an open session, so no match means the server closed it (idle,
   // e.g. while the tab was hidden) and the reader should reopen.
@@ -236,13 +260,18 @@ export const readStream = async (
     if (!matchedCount) closedSessions.set(key, true);
   }
 
-  const chunks = await streamChunkModel
-    .find({ session, seq: { $gt: after } }, {
-      sort: { seq: 1 },
-      limit: READ_LIMIT,
-      projection: { _id: 0, seq: 1, data: 1, done: 1, error: 1 },
-    })
-    .toArray();
+  const fetch = () =>
+    streamChunkModel
+      .find({ session, seq: { $gt: after } }, {
+        sort: { seq: 1 },
+        limit: READ_LIMIT,
+        projection: { _id: 0, seq: 1, data: 1, done: 1, error: 1 },
+      })
+      .toArray();
+  let chunks = await fetch();
+  if (!chunks.length && waiter && !closedSessions.get(key)) {
+    if (await waiter.wait(READ_WAIT_MS)) chunks = await fetch();
+  }
 
   return closedSessions.get(key) ? { chunks, closed: true } : { chunks };
 };
@@ -341,6 +370,10 @@ export const ingestChunks = async (
       // Retried batches hit the unique (session, seq) index: already stored.
       if (error?.code !== 11000 && !error?.writeErrors) throw error;
     });
+    // Browser reads held here; others hear it from their change stream.
+    for (const id of new Set(stored.map((e) => e.data.session))) {
+      sessionWakeups.wake(id);
+    }
   }
 
   const finished = accepted.filter((e) => e.data.done).map((e) =>

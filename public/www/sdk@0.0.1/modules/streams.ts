@@ -75,6 +75,8 @@ export type read$params = {
 };
 export type read$query = {
     after?: number;
+    /** Hold the read until there's new output (up to 15 s) */
+    wait?: string | undefined;
 };
 export type read$return = {
     chunks: {

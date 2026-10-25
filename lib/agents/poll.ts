@@ -29,8 +29,11 @@ import {
 } from "@/lib/monitoring/alerts.ts";
 import { refreshSpecs } from "@/lib/deploy/specs.ts";
 import { serverSpecModel } from "@/schemas/infrastructure/serverSpec.ts";
+import { serverWakeups } from "@/lib/agents/wakeups.ts";
 
 const COMMAND_BATCH = 50;
+/** Tests shorten the hold; production uses AGENT_LONG_POLL_MS. */
+export const longPollOptions: { maxHoldMs?: number } = {};
 /** Servers beyond the plan's quota after the grace poll this slowly (PLAN §22.5). */
 const THROTTLED_POLL_MS = 60_000;
 const EVENT_TTL_MS = 60 * 60_000;
@@ -55,7 +58,7 @@ export const pollAgent = async (
 ): Promise<TPollResult> => {
   const key = identity.server.toHexString();
   const nowMs = Date.now();
-  const { config, version: configVersion, leaseMs } = await getAgentConfig();
+  const { config, version: configVersion } = await getAgentConfig();
   const minInterval = await safetyLimit("SAFETY_MIN_POLL_INTERVAL_MS");
   const previous = lastPollAt.get(key);
   lastPollAt.set(key, nowMs);
@@ -71,6 +74,40 @@ export const pollAgent = async (
     };
   }
 
+  // Long polling (PLAN Phase 13): only agents that ask are held.
+  const holdMs = request.wait
+    ? Math.min(config.poll.waitMs ?? 0, longPollOptions.maxHoldMs ?? Infinity)
+    : 0;
+  // Registered before anything is read, so a wake in between isn't lost.
+  const waiter = holdMs ? serverWakeups.register(key) : undefined;
+  try {
+    return await poll(identity, fingerprint, request, {
+      nowMs,
+      holdMs,
+      waiter,
+      minIntervalMs: minInterval,
+    });
+  } finally {
+    waiter?.cancel();
+  }
+};
+
+const poll = async (
+  identity: TAgentIdentity,
+  fingerprint: string,
+  request: TPollRequest,
+  opts: {
+    nowMs: number;
+    holdMs: number;
+    waiter?: ReturnType<typeof serverWakeups.register>;
+    minIntervalMs: number;
+  },
+): Promise<TPollResult> => {
+  const { nowMs, holdMs, waiter } = opts;
+  const { config, version: configVersion, leaseMs: baseLeaseMs } =
+    await getAgentConfig();
+  // A held poll keeps the server alive for as long as it may be held.
+  const leaseMs = baseLeaseMs + holdMs;
   const now = new Date(nowMs);
   const cursor = request.commandCursor;
   // Every idle poll renews; faster polls renew at most every ~0.8 idle intervals.
@@ -127,16 +164,30 @@ export const pollAgent = async (
   if (lease.offline) await onServerBack(identity.server);
 
   const applied = request.appliedVersion ?? 0;
-  const [commands, , , , , streamInput, desired] = await Promise.all([
-    lease.commandSeq > cursor
-      ? agentCommandModel
-        .find({ server: identity.server, seq: { $gt: cursor } }, {
-          sort: { seq: 1 },
-          limit: COMMAND_BATCH,
-          projection: { _id: 0, seq: 1, type: 1, payload: 1 },
-        })
-        .toArray() as Promise<TCommand[]>
-      : [],
+  /** What's waiting for the agent: commands, terminal input, a newer spec. */
+  const collect = (counters: { commandSeq: number; desiredVersion?: number }) =>
+    Promise.all([
+      counters.commandSeq > cursor
+        ? agentCommandModel
+          .find({ server: identity.server, seq: { $gt: cursor } }, {
+            sort: { seq: 1 },
+            limit: COMMAND_BATCH,
+            projection: { _id: 0, seq: 1, type: 1, payload: 1 },
+          })
+          .toArray() as Promise<TCommand[]>
+        : [],
+      // Only an agent with an open terminal sends cursors: idle polls skip this.
+      request.streams && pendingTerminalInput(identity.server, request.streams),
+      // A newer desired state: one read of the precomputed, sealed spec (PLAN §4.4).
+      (counters.desiredVersion ?? 0) > applied &&
+      serverSpecModel.findOne(
+        { _id: identity.server, version: { $gt: applied } },
+        { projection: { _id: 0, version: 1, sealed: 1 } },
+      ),
+    ]);
+
+  let [[commands, streamInput, desired]] = await Promise.all([
+    collect(lease),
     cursor > lease.deliveredSeq &&
     agentCommandModel.updateMany(
       {
@@ -152,21 +203,36 @@ export const pollAgent = async (
     }),
     offlineSweep.tick(lease.shard ?? shardOf(identity.server)),
     offlineSweep.tickRandom(),
-    // Only an agent with an open terminal sends cursors: idle polls skip this.
-    request.streams && pendingTerminalInput(identity.server, request.streams),
-    // A newer desired state: one read of the precomputed, sealed spec (PLAN §4.4).
-    (lease.desiredVersion ?? 0) > applied &&
-    serverSpecModel.findOne(
-      { _id: identity.server, version: { $gt: applied } },
-      { projection: { _id: 0, version: 1, sealed: 1 } },
-    ),
   ]);
+
+  // Nothing to deliver: wait for a wake (a command, a spec, terminal input).
+  const reset = cursor > lease.commandSeq;
+  let held = false;
+  if (
+    waiter && !lease.throttled && !reset && !commands.length && !streamInput &&
+    !desired
+  ) {
+    held = true;
+    if (await waiter.wait(holdMs)) {
+      const counters = await serverLeaseModel.findOne(
+        { _id: identity.server },
+        { projection: { commandSeq: 1, desiredVersion: 1 } },
+      );
+      if (counters) [commands, streamInput, desired] = await collect(counters);
+    }
+  }
+  const delivered = commands.length || streamInput || desired;
 
   return {
     status: 200,
     body: {
+      // After an empty hold the agent comes straight back to wait again.
       nextPollMs: lease.throttled
         ? THROTTLED_POLL_MS
+        // A waiting agent comes straight back (its next poll waits anyway):
+        // at once after an empty hold, after the minimum after a delivery.
+        : waiter
+        ? (held && !delivered ? 0 : opts.minIntervalMs)
         : lease.terminalUntil && lease.terminalUntil > now
         ? config.poll.terminalMs
         : commands.length || desired ||
@@ -178,7 +244,7 @@ export const pollAgent = async (
       ...(streamInput ? { streamInput } : {}),
       ...(desired ? { desired } : {}),
       // A cursor past every command came from an earlier registration of this agent.
-      ...(cursor > lease.commandSeq ? { resetCommands: true } : {}),
+      ...(reset ? { resetCommands: true } : {}),
     },
   };
 };

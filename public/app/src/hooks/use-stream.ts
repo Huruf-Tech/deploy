@@ -12,7 +12,9 @@ export type TStreamChunk = {
 
 /**
  * One live view (PLAN §3.6, §23.5): opens a stream session, reads new chunks
- * every second while the page is visible, and closes the session on unmount.
+ * while the page is visible, and closes the session on unmount. Reads wait
+ * at the control plane for new output (PLAN Phase 13), and the next one
+ * starts as soon as one returns; `intervalMs` is the fallback pace.
  * `open` must be stable (useCallback); pass null to stay closed. To view a
  * different stream, remount the component (`key`) so its state starts fresh.
  */
@@ -65,39 +67,54 @@ export function useStream(
     }
   }, [open, generation])
 
-  usePolling(() => {
-    const id = session.current
-    if (!id || reading.current || status !== "open") return
-    reading.current = true
+  const readRef = React.useRef<() => void>(() => {})
+  // Assigned after render (refs aren't touched during it); sees current state.
+  React.useEffect(() => {
+    readRef.current = () => {
+      const id = session.current
+      if (!id || reading.current || status !== "open") return
+      reading.current = true
+      const started = Date.now()
+      let again = false
 
-    ThunderSDK.streams
-      .read({ params: { id }, query: { after: after.current } })
-      .then(({ chunks, closed }) => {
-        let ended = false
-        for (const chunk of chunks) {
-          after.current = chunk.seq
-          handler.current(chunk)
-          if (chunk.done) {
-            ended = true
-            setStatus(chunk.error ? "error" : "done")
-            if (chunk.error) setError(chunk.error)
+      ThunderSDK.streams
+        .read({ params: { id }, query: { after: after.current, wait: "true" } })
+        .then(({ chunks, closed }) => {
+          // Read on at once, unless the server answered empty without waiting.
+          again =
+            !closed &&
+            (chunks.length > 0 || Date.now() - started > 1_000) &&
+            document.visibilityState === "visible"
+          let ended = false
+          for (const chunk of chunks) {
+            after.current = chunk.seq
+            handler.current(chunk)
+            if (chunk.done) {
+              ended = true
+              setStatus(chunk.error ? "error" : "done")
+              if (chunk.error) setError(chunk.error)
+            }
           }
-        }
-        if (closed && !ended && session.current === id) {
-          if (reopen) {
-            setStatus("idle")
-            setGeneration((g) => g + 1)
-          } else {
-            setStatus("done")
-            setError("Session ended")
+          if (ended) again = false
+          if (closed && !ended && session.current === id) {
+            if (reopen) {
+              setStatus("idle")
+              setGeneration((g) => g + 1)
+            } else {
+              setStatus("done")
+              setError("Session ended")
+            }
           }
-        }
-      })
-      .catch(() => {})
-      .finally(() => {
-        reading.current = false
-      })
-  }, intervalMs)
+        })
+        .catch(() => {})
+        .finally(() => {
+          reading.current = false
+          if (again && session.current === id)
+            setTimeout(() => readRef.current())
+        })
+    }
+  })
+  usePolling(() => readRef.current(), intervalMs)
 
   return { status, error }
 }

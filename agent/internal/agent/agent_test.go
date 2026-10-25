@@ -157,3 +157,79 @@ func TestEventsAreSentWithoutAWakeUp(t *testing.T) {
 		t.Fatal("event was not sent on the regular tick")
 	}
 }
+
+// Long polling (PLAN Phase 13): with waitMs advertised, every poll asks to be
+// held, and after an empty hold (nextPollMs 0) the next poll comes at once,
+// not after the idle interval.
+func TestLongPollAsksToWaitAndComesStraightBack(t *testing.T) {
+	seed := make([]byte, 32)
+	id := identity.FromSeed(seed)
+	wait := int64(25_000)
+	slow := protocol.AgentConfig{
+		Poll:              protocol.AgentConfigPoll{IdleMs: 2_000, ActiveMs: 2_000, TerminalMs: 2_000, WaitMs: &wait},
+		SummaryIntervalMs: 60_000,
+		MaxBackoffMs:      10,
+	}
+	var mu sync.Mutex
+	var asked []bool
+	var at []time.Time
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		reply := func(status int, v any) {
+			w.WriteHeader(status)
+			_ = json.NewEncoder(w).Encode(v)
+		}
+		switch r.URL.Path {
+		case "/agents/api/hello":
+			reply(200, protocol.HelloResponse{Server: "s1", Status: "active", Config: slow, Version: "v1", NextPollMs: 5})
+		case "/agents/api/poll":
+			var request protocol.PollRequest
+			_ = json.Unmarshal(body, &request)
+			mu.Lock()
+			asked = append(asked, request.Wait != nil && *request.Wait)
+			at = append(at, time.Now())
+			n := len(asked)
+			mu.Unlock()
+			if n > 3 {
+				reply(403, protocol.PollRefusal{Status: "rejected", NextPollMs: 5, ConfigVersion: "v1"})
+				return
+			}
+			reply(200, protocol.PollResponse{NextPollMs: 0, ConfigVersion: "v1", Commands: []protocol.Command{}})
+		default:
+			reply(200, map[string]int{"applied": 0})
+		}
+	}))
+	defer server.Close()
+
+	store, err := state.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := &Agent{
+		Tenant: "t1", Version: "test", Identity: id,
+		Client:   transport.New(server.URL, id),
+		Store:    store,
+		Commands: commands.Default(context.Background(), &streams.Manager{}, &build.Builder{Dir: t.TempDir()}, id.Open, func() {}),
+		Log:      slog.New(slog.NewTextHandler(io.Discard, nil)),
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := a.Run(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if len(asked) != 4 {
+		t.Fatalf("polls = %d, want 4", len(asked))
+	}
+	for i, w := range asked {
+		if !w {
+			t.Fatalf("poll %d didn't ask to wait", i+1)
+		}
+	}
+	// The idle interval is 2 s: polls 2-4 came back without it.
+	if gap := at[3].Sub(at[1]); gap > time.Second {
+		t.Fatalf("empty holds were followed by a %v pause", gap)
+	}
+}

@@ -25,7 +25,8 @@ func New(baseURL string, id *identity.Identity) *Client {
 	return &Client{
 		baseURL:  strings.TrimRight(baseURL, "/"),
 		identity: id,
-		http:     &http.Client{Timeout: 30 * time.Second},
+		// Above the longest held poll (25 s, PLAN Phase 13), with room for a slow network.
+		http: &http.Client{Timeout: 45 * time.Second},
 	}
 }
 

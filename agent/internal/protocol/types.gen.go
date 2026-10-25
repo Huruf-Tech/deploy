@@ -96,6 +96,9 @@ type AgentConfigPoll struct {
 	ActiveMs int64 `json:"activeMs"`
 
 	TerminalMs int64 `json:"terminalMs"`
+
+	// Long polling (PLAN Phase 13): how long the control plane may hold a poll that sends `wait`; 0 or absent = don't send it
+	WaitMs *int64 `json:"waitMs,omitempty"`
 }
 
 type AgentConfigCapacity struct {
@@ -114,6 +117,9 @@ type AgentConfigResponse struct {
 
 type PollRequest struct {
 	CommandCursor int64 `json:"commandCursor"`
+
+	// Hold this poll until there's something for the agent (up to `waitMs`); then `nextPollMs` 0 means poll again now
+	Wait *bool `json:"wait,omitempty"`
 
 	AppliedVersion *int64 `json:"appliedVersion,omitempty"`
 
