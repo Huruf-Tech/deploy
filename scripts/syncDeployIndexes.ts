@@ -45,6 +45,10 @@ import {
 
 /** Every Huruf Deploy index lives here (PLAN §6). Run by setup, never at startup. */
 export const syncDeployIndexes = async () => {
+  // The first version left `project` out: projects of one tenant couldn't
+  // share a variable name. Replaced by uniqueKeyPerScopeOwner.
+  await variableModel.dropIndex("uniqueKeyPerOwner").catch(() => {});
+
   await Promise.all([
     controlPlaneSampleModel.createIndex({ at: 1 }, { name: "at" }),
     controlPlaneSampleModel.createIndex({ instance: 1, at: 1 }, {
@@ -160,10 +164,11 @@ export const syncDeployIndexes = async () => {
       { name: "ttl", expireAfterSeconds: 0 },
     ),
 
-    // One key per scope owner; also serves listing (sorted by key) and the quota count.
+    // One key per scope owner (a project is its own owner); also serves
+    // listing (sorted by key) and the quota count.
     variableModel.createIndex(
-      { scope: 1, user: 1, tenant: 1, key: 1 },
-      { name: "uniqueKeyPerOwner", unique: true },
+      { scope: 1, user: 1, tenant: 1, project: 1, key: 1 },
+      { name: "uniqueKeyPerScopeOwner", unique: true },
     ),
 
     gitIntegrationModel.createIndex(
