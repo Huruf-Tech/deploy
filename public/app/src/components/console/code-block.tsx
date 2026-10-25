@@ -6,10 +6,13 @@ export function CodeBlock({
   code,
   wrap,
   label,
+  maxHeight,
   className,
 }: {
   code: string
   wrap?: boolean
+  /** Scrolls the code past this height (e.g. "18rem"); the copy button stays put. */
+  maxHeight?: string
   label?: React.ReactNode
   className?: string
 }) {
@@ -22,8 +25,9 @@ export function CodeBlock({
       )}
       <pre
         dir="ltr"
+        style={maxHeight ? { maxHeight } : undefined}
         className={cn(
-          "overflow-x-auto p-3 pe-10 font-mono text-xs leading-relaxed",
+          "overflow-auto p-3 pe-10 font-mono text-xs leading-relaxed",
           wrap ? "break-all whitespace-pre-wrap" : "whitespace-pre"
         )}
       >

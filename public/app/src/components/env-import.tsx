@@ -89,7 +89,7 @@ export function EnvEditor({
           readFile(e.dataTransfer.files[0])
         }}
         className={cn(
-          "flex flex-col gap-2 rounded-2xl border border-dashed p-3 transition-colors",
+          "flex flex-col gap-2 rounded-lg border border-dashed p-3 transition-colors",
           dragging && "border-primary bg-primary/5"
         )}
       >
@@ -155,11 +155,11 @@ export function EnvEditor({
 
       {!!value.length && (
         <ul
-          className="flex min-w-0 flex-col divide-y rounded-2xl border"
+          className="flex min-w-0 flex-col divide-y rounded-lg border text-[13px]"
           aria-label={t("Variables to add")}
         >
           {value.map((v) => (
-            <li key={v.key} className="flex items-center gap-2 px-3 py-2">
+            <li key={v.key} className="flex items-center gap-2 px-3 py-1.5">
               <span className="min-w-0 flex-1">
                 <span className="flex items-center gap-2">
                   <span

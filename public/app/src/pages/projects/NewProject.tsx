@@ -37,6 +37,10 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Panel } from "@/components/console/panel"
+import { PageHeader } from "@/components/console/page-header"
+import { KeyValue } from "@/components/console/key-value"
+import { StatusBadge } from "@/components/console/status"
 import { getLocalPath } from "@/core/lib/utils"
 import { useCapacity } from "@/hooks/use-capacity"
 import { type TVolume, VolumesEditor } from "./VolumesEditor"
@@ -92,25 +96,37 @@ const SOURCES: {
   },
 ]
 
+/** One step of the form: a Panel titled with its number. */
 function Section({
   step,
   title,
+  description,
   children,
 }: {
   step: number
   title: string
+  description?: string
   children: React.ReactNode
 }) {
   return (
-    <section className="flex flex-col gap-4 rounded-3xl border p-4 sm:p-6">
-      <h2 className="flex items-center gap-3 font-medium">
-        <span className="flex size-7 items-center justify-center rounded-full bg-primary text-xs text-primary-foreground">
-          {step}
+    <Panel
+      aria-label={title}
+      title={
+        <span className="flex items-center gap-2">
+          <span
+            aria-hidden
+            className="flex size-5 items-center justify-center rounded-full border text-[11px] text-muted-foreground tabular-nums"
+          >
+            {step}
+          </span>
+          {title}
         </span>
-        {title}
-      </h2>
+      }
+      description={description}
+      bodyClassName="flex flex-col gap-4"
+    >
       {children}
-    </section>
+    </Panel>
   )
 }
 
@@ -185,7 +201,7 @@ export function GitHubPicker({
       .catch(() => setBranches([]))
   }, [value.integration, value.installation, value.repo])
 
-  if (integrations.isLoading) return <Skeleton className="h-10 rounded-2xl" />
+  if (integrations.isLoading) return <Skeleton className="h-8 rounded-lg" />
   if (!installations.length) {
     return (
       <Alert>
@@ -242,7 +258,10 @@ export function GitHubPicker({
           <FieldLabel htmlFor="repo-filter">{t("Repository")}</FieldLabel>
           {value.repo ? (
             <div className="flex items-center gap-2">
-              <span className="min-w-0 flex-1 truncate font-mono text-sm">
+              <span
+                dir="ltr"
+                className="min-w-0 flex-1 truncate font-mono text-xs"
+              >
                 {value.repo}
               </span>
               <Button
@@ -263,13 +282,13 @@ export function GitHubPicker({
                 onChange={(e) => setFilter(e.target.value)}
                 placeholder={t("Filter repositories")}
               />
-              <ul className="max-h-48 overflow-y-auto rounded-2xl border">
+              <ul className="max-h-48 overflow-y-auto rounded-lg border">
                 {!repos ? (
                   <li className="p-3">
                     <Skeleton className="h-5" />
                   </li>
                 ) : shown.length === 0 ? (
-                  <li className="p-3 text-sm text-muted-foreground">
+                  <li className="p-3 text-[13px] text-muted-foreground">
                     {t("No repositories")}
                   </li>
                 ) : (
@@ -277,7 +296,8 @@ export function GitHubPicker({
                     <li key={r.id}>
                       <button
                         type="button"
-                        className="w-full truncate px-3 py-2 text-start text-sm hover:bg-muted"
+                        className="w-full truncate px-3 py-1.5 text-start font-mono text-xs hover:bg-muted focus-visible:bg-muted focus-visible:outline-none"
+                        dir="ltr"
                         onClick={() =>
                           onChange({
                             ...value,
@@ -563,21 +583,33 @@ export default function NewProject() {
   const ready =
     sourceReady && buildReady && !!name && !!slug && servers.length > 0
 
-  return (
-    <Page className="flex max-w-3xl flex-col gap-6 py-4">
-      <div>
-        <h1 className="text-xl font-semibold">{t("New project")}</h1>
-        <p className="text-sm text-muted-foreground">
-          {t("Deploys start as soon as it's created.")}
-        </p>
-      </div>
+  const hasBuild = kind !== "image" && kind !== "compose"
+  const step = (n: number) => (hasBuild ? n : n - 1)
+  const sourceLabel = t(SOURCES.find((s) => s.kind === kind)!.title)
+  const sourceValue =
+    kind === "github"
+      ? github.repo && `${github.repo}@${github.branch ?? ""}`
+      : kind === "git"
+        ? gitUrl && `${gitUrl}@${gitBranch}`
+        : kind === "image"
+          ? image
+          : kind === "compose"
+            ? compose.trim() && t("Compose file")
+            : template?.template.name
 
-      <form onSubmit={submit} className="flex flex-col gap-6">
+  return (
+    <Page className="flex max-w-[720px] flex-col gap-4 py-5">
+      <PageHeader
+        title={t("New project")}
+        description={t("Deploys start as soon as it's created.")}
+      />
+
+      <form onSubmit={submit} className="flex flex-col gap-4">
         <Section step={1} title={t("Source")}>
           <div
             role="radiogroup"
             aria-label={t("Source")}
-            className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5"
+            className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-5"
           >
             {SOURCES.map((s) => (
               <button
@@ -591,12 +623,12 @@ export default function NewProject() {
                   setMode(s.kind === "template" ? "compose" : "template")
                 }}
                 className={cn(
-                  "flex flex-col items-start gap-1 rounded-2xl border p-3 text-start transition-colors hover:bg-muted",
+                  "flex flex-col items-start gap-1 rounded-lg border p-2.5 text-start transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
                   kind === s.kind && "border-primary bg-primary/5"
                 )}
               >
-                <s.icon className="size-5" aria-hidden />
-                <span className="text-sm font-medium">{t(s.title)}</span>
+                <s.icon className="size-4" aria-hidden />
+                <span className="text-[13px] font-medium">{t(s.title)}</span>
                 <span className="text-xs text-muted-foreground">
                   {t(s.hint)}
                 </span>
@@ -608,7 +640,7 @@ export default function NewProject() {
             <GitHubPicker value={github} onChange={setGithub} />
           )}
           {kind === "git" && (
-            <div className="grid gap-4 sm:grid-cols-[1fr_12rem]">
+            <div className="grid gap-4 sm:grid-cols-[1fr_10rem]">
               <Field>
                 <FieldLabel htmlFor="git-url">{t("Repository URL")}</FieldLabel>
                 <Input
@@ -617,6 +649,7 @@ export default function NewProject() {
                   onChange={(e) => setGitUrl(e.target.value)}
                   placeholder="https://gitlab.com/acme/shop.git"
                   required
+                  dir="ltr"
                   className="font-mono"
                 />
                 <FieldDescription>
@@ -632,6 +665,8 @@ export default function NewProject() {
                   value={gitBranch}
                   onChange={(e) => setGitBranch(e.target.value)}
                   required
+                  dir="ltr"
+                  className="font-mono"
                 />
               </Field>
             </div>
@@ -645,6 +680,7 @@ export default function NewProject() {
                 onChange={(e) => setImage(e.target.value)}
                 placeholder="ghcr.io/acme/api:1.4"
                 required
+                dir="ltr"
                 className="font-mono"
               />
             </Field>
@@ -658,6 +694,7 @@ export default function NewProject() {
                 onChange={(e) => setCompose(e.target.value)}
                 rows={14}
                 spellCheck={false}
+                dir="ltr"
                 placeholder={`services:\n  web:\n    image: nginx:1.27-alpine\n    ports: ["8080:80"]`}
                 className="font-mono text-xs"
               />
@@ -670,7 +707,7 @@ export default function NewProject() {
           )}
         </Section>
 
-        {kind !== "image" && kind !== "compose" && (
+        {hasBuild && (
           <Section
             step={2}
             title={kind === "template" ? t("Service") : t("Build")}
@@ -714,13 +751,13 @@ export default function NewProject() {
                     aria-pressed={templateId === x._id}
                     onClick={() => setTemplateId(x._id)}
                     className={cn(
-                      "flex items-center gap-3 rounded-2xl border p-3 text-start transition-colors hover:bg-muted",
+                      "flex items-center gap-2.5 rounded-lg border p-2.5 text-start transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
                       templateId === x._id && "border-primary bg-primary/5"
                     )}
                   >
-                    <TemplateIcon icon={x.icon} className="size-5 shrink-0" />
+                    <TemplateIcon icon={x.icon} className="size-4 shrink-0" />
                     <span className="min-w-0">
-                      <span className="block truncate text-sm font-medium">
+                      <span className="block truncate text-[13px] font-medium">
                         {x.name}
                       </span>
                       <span className="block text-xs text-muted-foreground">
@@ -763,6 +800,7 @@ export default function NewProject() {
                     id="root-dir"
                     value={rootDir}
                     onChange={(e) => setRootDir(e.target.value)}
+                    dir="ltr"
                     className="font-mono"
                   />
                 </Field>
@@ -775,6 +813,7 @@ export default function NewProject() {
                       id="dockerfile"
                       value={dockerfilePath}
                       onChange={(e) => setDockerfilePath(e.target.value)}
+                      dir="ltr"
                       className="font-mono"
                     />
                   </Field>
@@ -784,10 +823,7 @@ export default function NewProject() {
           </Section>
         )}
 
-        <Section
-          step={kind === "image" || kind === "compose" ? 2 : 3}
-          title={t("Where it runs")}
-        >
+        <Section step={step(3)} title={t("Settings")}>
           <div className="grid gap-4 sm:grid-cols-2">
             <Field>
               <FieldLabel htmlFor="project-name">{t("Name")}</FieldLabel>
@@ -811,6 +847,7 @@ export default function NewProject() {
                   setSlug(slugify(e.target.value).slice(0, 39))
                 }}
                 required
+                dir="ltr"
                 className="font-mono"
               />
               <FieldDescription>
@@ -821,125 +858,7 @@ export default function NewProject() {
             </Field>
           </div>
 
-          <FieldSet>
-            <FieldLegend variant="label">{t("Servers")}</FieldLegend>
-            {placement.isLoading && !placement.data ? (
-              <Skeleton className="h-16 rounded-2xl" />
-            ) : !placement.data?.length ? (
-              <Alert>
-                <IconAlertTriangle />
-                <AlertDescription>
-                  {t("Add a server first.")}{" "}
-                  <Link
-                    to={getLocalPath("infrastructure/servers")}
-                    className="font-medium underline"
-                  >
-                    {t("Servers")}
-                  </Link>
-                </AlertDescription>
-              </Alert>
-            ) : (
-              <div className="flex flex-col gap-2">
-                {placement.data.map((s) => {
-                  const fits = s.cpuFree >= needCpu && s.memFreeMb >= needMem
-                  const after = fitAfter(s.server)
-                  const checked = servers.includes(s.server)
-                  return (
-                    <label
-                      key={s.server}
-                      className={cn(
-                        "flex cursor-pointer items-center gap-3 rounded-2xl border p-3",
-                        checked && "border-primary bg-primary/5"
-                      )}
-                    >
-                      <Checkbox
-                        checked={checked}
-                        onCheckedChange={(on) =>
-                          setServers((c) =>
-                            on
-                              ? [...c, s.server]
-                              : c.filter((x) => x !== s.server)
-                          )
-                        }
-                      />
-                      <span className="min-w-0 flex-1">
-                        <span className="block text-sm font-medium">
-                          {s.name}{" "}
-                          {!s.online && (
-                            <span className="text-xs text-muted-foreground">
-                              ({t("offline")})
-                            </span>
-                          )}
-                        </span>
-                        <LabelChips labels={s.labels} />
-                        <span className="block text-xs text-muted-foreground">
-                          {t(
-                            "{{cpu}} of {{cores}} CPU and {{mem}} MiB free to allocate",
-                            {
-                              cpu: s.cpuFree.toFixed(1),
-                              cores: s.cpuCores,
-                              mem: s.memFreeMb,
-                            }
-                          )}
-                        </span>
-                        {after !== undefined && (
-                          <span
-                            className={cn(
-                              "block text-xs",
-                              after < 0
-                                ? "text-destructive"
-                                : "text-muted-foreground"
-                            )}
-                          >
-                            {after < 0
-                              ? t(
-                                  "By what runs there now, it's short on memory or disk."
-                                )
-                              : t(
-                                  "After this, room for ≈ {{n}} more like it ({{mem}} MB each, {{how}}).",
-                                  {
-                                    n: after,
-                                    mem: Math.round(footprint.memMb),
-                                    how: footprint.samples
-                                      ? t("measured")
-                                      : t("reserved"),
-                                  }
-                                )}
-                          </span>
-                        )}
-                      </span>
-                      {!fits && (
-                        <span className="text-xs text-destructive">
-                          {t("Doesn't fit")}
-                        </span>
-                      )}
-                    </label>
-                  )
-                })}
-              </div>
-            )}
-          </FieldSet>
-
-          {!composeLike && (
-            <VolumesEditor slug={slug} value={volumes} onChange={setVolumes} />
-          )}
-
-          <div className="grid gap-4 sm:grid-cols-4">
-            <Field>
-              <FieldLabel htmlFor="replicas">
-                {t("Replicas per server")}
-              </FieldLabel>
-              <Input
-                id="replicas"
-                type="number"
-                min={1}
-                max={20}
-                value={replicas}
-                onChange={(e) =>
-                  setReplicas(Math.max(1, Number(e.target.value) || 1))
-                }
-              />
-            </Field>
+          <div className="grid gap-4 sm:grid-cols-3">
             {kind !== "template" && kind !== "compose" && (
               <Field>
                 <FieldLabel htmlFor="port">{t("App port")}</FieldLabel>
@@ -976,6 +895,7 @@ export default function NewProject() {
                   value={healthPath}
                   onChange={(e) => setHealthPath(e.target.value)}
                   placeholder="/"
+                  dir="ltr"
                   className="font-mono"
                 />
               </Field>
@@ -983,11 +903,126 @@ export default function NewProject() {
           </div>
         </Section>
 
-        <Section
-          step={kind === "image" || kind === "compose" ? 3 : 4}
-          title={t("Variables")}
-        >
-          <p className="text-sm text-muted-foreground">
+        <Section step={step(4)} title={t("Where it runs")}>
+          <FieldSet>
+            <FieldLegend variant="label">{t("Servers")}</FieldLegend>
+            {placement.isLoading && !placement.data ? (
+              <Skeleton className="h-14 rounded-lg" />
+            ) : !placement.data?.length ? (
+              <Alert>
+                <IconAlertTriangle />
+                <AlertDescription>
+                  {t("Add a server first.")}{" "}
+                  <Link
+                    to={getLocalPath("infrastructure/servers")}
+                    className="font-medium text-brand-text underline"
+                  >
+                    {t("Servers")}
+                  </Link>
+                </AlertDescription>
+              </Alert>
+            ) : (
+              <div className="flex flex-col divide-y rounded-lg border">
+                {placement.data.map((s) => {
+                  const fits = s.cpuFree >= needCpu && s.memFreeMb >= needMem
+                  const after = fitAfter(s.server)
+                  const checked = servers.includes(s.server)
+                  return (
+                    <label
+                      key={s.server}
+                      className={cn(
+                        "flex cursor-pointer items-start gap-3 px-3 py-2.5 first:rounded-t-lg last:rounded-b-lg hover:bg-muted/50",
+                        checked && "bg-primary/5"
+                      )}
+                    >
+                      <Checkbox
+                        className="mt-0.5"
+                        checked={checked}
+                        onCheckedChange={(on) =>
+                          setServers((c) =>
+                            on
+                              ? [...c, s.server]
+                              : c.filter((x) => x !== s.server)
+                          )
+                        }
+                      />
+                      <span className="min-w-0 flex-1">
+                        <span className="flex flex-wrap items-center gap-2 text-[13px] font-medium">
+                          {s.name}
+                          {!s.online && (
+                            <StatusBadge state="offline" label={t("offline")} />
+                          )}
+                        </span>
+                        <LabelChips labels={s.labels} />
+                        <span className="block text-xs text-muted-foreground tabular-nums">
+                          {t(
+                            "{{cpu}} of {{cores}} CPU and {{mem}} MiB free to allocate",
+                            {
+                              cpu: s.cpuFree.toFixed(1),
+                              cores: s.cpuCores,
+                              mem: s.memFreeMb,
+                            }
+                          )}
+                        </span>
+                        {after !== undefined && (
+                          <span
+                            className={cn(
+                              "block text-xs",
+                              after < 0
+                                ? "text-destructive-foreground"
+                                : "text-muted-foreground"
+                            )}
+                          >
+                            {after < 0
+                              ? t(
+                                  "By what runs there now, it's short on memory or disk."
+                                )
+                              : t(
+                                  "After this, room for ≈ {{n}} more like it ({{mem}} MB each, {{how}}).",
+                                  {
+                                    n: after,
+                                    mem: Math.round(footprint.memMb),
+                                    how: footprint.samples
+                                      ? t("measured")
+                                      : t("reserved"),
+                                  }
+                                )}
+                          </span>
+                        )}
+                      </span>
+                      {!fits && (
+                        <StatusBadge state="failed" label={t("Doesn't fit")} />
+                      )}
+                    </label>
+                  )
+                })}
+              </div>
+            )}
+          </FieldSet>
+
+          <Field className="sm:max-w-48">
+            <FieldLabel htmlFor="replicas">
+              {t("Replicas per server")}
+            </FieldLabel>
+            <Input
+              id="replicas"
+              type="number"
+              min={1}
+              max={20}
+              value={replicas}
+              onChange={(e) =>
+                setReplicas(Math.max(1, Number(e.target.value) || 1))
+              }
+            />
+          </Field>
+
+          {!composeLike && (
+            <VolumesEditor slug={slug} value={volumes} onChange={setVolumes} />
+          )}
+        </Section>
+
+        <Section step={step(5)} title={t("Variables")}>
+          <p className="text-[13px] text-muted-foreground">
             {t(
               "Optional. Paste or drop the project's .env; you can add more later under Variables. Tenant variables apply too, and these override them."
             )}
@@ -995,12 +1030,74 @@ export default function NewProject() {
           <EnvEditor value={variables} onChange={setVariables} />
         </Section>
 
-        {error && <FieldError>{error}</FieldError>}
-        <div className="flex justify-end">
-          <Button type="submit" size="lg" disabled={!ready || busy}>
-            {busy ? t("Creating…") : t("Create and deploy")}
-          </Button>
-        </div>
+        <Section step={step(6)} title={t("Review")}>
+          <KeyValue
+            items={[
+              {
+                label: t("Source"),
+                value: (
+                  <span className="flex min-w-0 items-center gap-1.5">
+                    <span className="shrink-0">{sourceLabel}</span>
+                    {sourceValue && (
+                      <span
+                        dir="ltr"
+                        className="truncate font-mono text-xs text-muted-foreground"
+                      >
+                        {sourceValue}
+                      </span>
+                    )}
+                  </span>
+                ),
+              },
+              {
+                label: t("Name"),
+                value: name ? (
+                  <span>
+                    {name}{" "}
+                    <span
+                      dir="ltr"
+                      className="font-mono text-xs text-muted-foreground"
+                    >
+                      {slug}
+                    </span>
+                  </span>
+                ) : (
+                  "—"
+                ),
+              },
+              {
+                label: t("Servers"),
+                value: (
+                  <span className="tabular-nums">
+                    {t("{{count}} servers", { count: servers.length })} ·{" "}
+                    {t("Replicas per server")}: {replicas}
+                  </span>
+                ),
+              },
+              {
+                label: t("Public port"),
+                value: publicPort || t("Private"),
+              },
+              {
+                label: t("Variables"),
+                value: <span className="tabular-nums">{variables.length}</span>,
+              },
+            ]}
+          />
+          {!ready && (
+            <p className="text-xs text-muted-foreground" aria-live="polite">
+              {t(
+                "Pick a source, a name and at least one server to create the project."
+              )}
+            </p>
+          )}
+          {error && <FieldError>{error}</FieldError>}
+          <div className="flex justify-end">
+            <Button type="submit" disabled={!ready || busy}>
+              {busy ? t("Creating…") : t("Create and deploy")}
+            </Button>
+          </div>
+        </Section>
       </form>
     </Page>
   )

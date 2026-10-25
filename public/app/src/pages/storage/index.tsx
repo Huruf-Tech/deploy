@@ -5,6 +5,10 @@ import { toast } from "sonner"
 import { IconBucket, IconKey, IconPlus, IconTrash } from "@tabler/icons-react"
 
 import { Page } from "@/components/page"
+import { PageHeader } from "@/components/console/page-header"
+import { DataTable, type TColumn } from "@/components/console/data-table"
+import { EmptyState } from "@/components/console/empty-state"
+import { StatusBadge } from "@/components/console/status"
 import { use } from "@/core/hooks/use"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -16,14 +20,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import {
-  Empty,
-  EmptyContent,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyMedia,
-  EmptyTitle,
-} from "@/components/ui/empty"
 import {
   Field,
   FieldDescription,
@@ -38,7 +34,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Skeleton } from "@/components/ui/skeleton"
 import { useFresh } from "@/hooks/use-fresh"
 import {
   SelectAllCheckbox,
@@ -46,7 +41,7 @@ import {
   SelectionBar,
   useSelection,
 } from "@/components/selection-bar"
-import { cn, errorMessage } from "@/lib/utils"
+import { errorMessage } from "@/lib/utils"
 
 type TStorage = Awaited<ReturnType<typeof ThunderSDK.storages.list>>[number]
 type TProvider = TStorage["provider"]
@@ -277,94 +272,122 @@ export default function StoragePage() {
   }
 
   const add = (
-    <Button onClick={() => setDialog({ open: true, storage: null })}>
+    <Button size="sm" onClick={() => setDialog({ open: true, storage: null })}>
       <IconPlus aria-hidden /> {t("Connect storage")}
     </Button>
   )
 
-  return (
-    <Page className="flex flex-col gap-6 py-4">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="text-xl font-semibold">{t("Storage")}</h1>
-          <p className="max-w-3xl text-sm text-muted-foreground">
-            {t(
-              "S3 buckets your projects mount as volumes: files every server and replica share. Not for databases; give those a local volume."
-            )}
-          </p>
+  const columns: TColumn<TStorage>[] = [
+    {
+      id: "select",
+      header: (
+        <SelectAllCheckbox
+          selection={selection}
+          ids={(data ?? []).map((s) => s._id)}
+        />
+      ),
+      className: "w-10",
+      cell: (s) => (
+        <SelectCheckbox selection={selection} id={s._id} label={s.name} />
+      ),
+    },
+    {
+      id: "name",
+      header: t("Name"),
+      sortValue: (s) => s.name,
+      cell: (s) => (
+        <span className="flex items-center gap-2">
+          <IconBucket
+            className="size-4 shrink-0 text-muted-foreground"
+            aria-hidden
+          />
+          <span className="truncate font-medium">{s.name}</span>
+        </span>
+      ),
+    },
+    {
+      id: "bucket",
+      header: t("Bucket"),
+      sortValue: (s) => s.bucket,
+      cell: (s) => (
+        <span dir="ltr" className="block truncate font-mono text-xs">
+          {s.bucket}
+          <span className="text-muted-foreground">
+            {s.endpoint ? ` · ${s.endpoint}` : ` · ${s.region}`}
+          </span>
+        </span>
+      ),
+    },
+    {
+      id: "provider",
+      header: t("Provider"),
+      sortValue: (s) => s.provider,
+      className: "hidden md:table-cell",
+      cell: (s) => (
+        <Badge variant="secondary">
+          {PROVIDERS.find((p) => p.value === s.provider)?.label}
+        </Badge>
+      ),
+    },
+    {
+      id: "actions",
+      header: <span className="sr-only">{t("Actions")}</span>,
+      align: "end",
+      cell: (s) => (
+        <div className="flex justify-end gap-0.5">
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => setDialog({ open: true, storage: s })}
+          >
+            <IconKey aria-hidden /> {t("Replace keys")}
+          </Button>
+          <Button
+            size="icon-sm"
+            variant="ghost"
+            aria-label={t("Remove {{name}}", { name: s.name })}
+            onClick={() => remove(s)}
+          >
+            <IconTrash />
+          </Button>
         </div>
-        {!!data?.length && add}
-      </div>
+      ),
+    },
+  ]
 
-      {isLoading && !data ? (
-        <Skeleton className="h-32 rounded-3xl" />
-      ) : !data?.length ? (
-        <Empty className="border">
-          <EmptyHeader>
-            <EmptyMedia variant="icon">
-              <IconBucket />
-            </EmptyMedia>
-            <EmptyTitle>{t("No storage connected")}</EmptyTitle>
-            <EmptyDescription>
-              {t(
-                "Optional: volumes are kept on the server's own disk until you connect a bucket (AWS S3, Cloudflare R2, MinIO, B2…)."
-              )}
-            </EmptyDescription>
-          </EmptyHeader>
-          <EmptyContent>{add}</EmptyContent>
-        </Empty>
+  return (
+    <Page className="flex flex-col gap-4 py-5">
+      <PageHeader
+        title={t("Storage")}
+        status={
+          !!data?.length && (
+            <StatusBadge tone="success" label={t("Connected")} />
+          )
+        }
+        description={t(
+          "S3 buckets your projects mount as volumes: files every server and replica share. Not for databases; give those a local volume."
+        )}
+        actions={!!data?.length && add}
+      />
+
+      {!isLoading && !data?.length ? (
+        <EmptyState
+          icon={IconBucket}
+          title={t("No storage connected")}
+          description={t(
+            "Optional: volumes are kept on the server's own disk until you connect a bucket (AWS S3, Cloudflare R2, MinIO, B2…)."
+          )}
+          action={add}
+        />
       ) : (
-        <ul className="flex flex-col gap-2">
-          <li>
-            <label className="flex w-fit items-center gap-3 px-3 text-sm text-muted-foreground">
-              <SelectAllCheckbox
-                selection={selection}
-                ids={data.map((s) => s._id)}
-              />
-              {t("Select all")}
-            </label>
-          </li>
-          {data.map((s) => (
-            <li
-              key={s._id}
-              className={cn(
-                "flex flex-wrap items-center gap-3 rounded-2xl border p-3",
-                selection.has(s._id) && "ring-2 ring-primary"
-              )}
-            >
-              <SelectCheckbox selection={selection} id={s._id} label={s.name} />
-              <IconBucket
-                className="size-5 text-muted-foreground"
-                aria-hidden
-              />
-              <span className="min-w-0 flex-1">
-                <span className="block font-medium">{s.name}</span>
-                <span className="block truncate font-mono text-xs text-muted-foreground">
-                  {s.bucket}
-                  {s.endpoint ? ` · ${s.endpoint}` : ` · ${s.region}`}
-                </span>
-              </span>
-              <Badge variant="secondary">
-                {PROVIDERS.find((p) => p.value === s.provider)?.label}
-              </Badge>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => setDialog({ open: true, storage: s })}
-              >
-                <IconKey aria-hidden /> {t("Replace keys")}
-              </Button>
-              <Button
-                size="icon-sm"
-                variant="ghost"
-                aria-label={t("Remove {{name}}", { name: s.name })}
-                onClick={() => remove(s)}
-              >
-                <IconTrash />
-              </Button>
-            </li>
-          ))}
-        </ul>
+        <DataTable
+          label={t("Storage")}
+          columns={columns}
+          rows={data}
+          loading={isLoading}
+          rowId={(s) => s._id}
+          isSelected={(s) => selection.has(s._id)}
+        />
       )}
 
       <SelectionBar

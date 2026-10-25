@@ -5,16 +5,10 @@ import { ThunderSDK } from "thunder-sdk"
 import { toast } from "sonner"
 
 import { Page } from "@/components/page"
+import { PageHeader } from "@/components/console/page-header"
+import { Panel } from "@/components/console/panel"
 import { use } from "@/core/hooks/use"
 import { Button } from "@/components/ui/button"
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -72,54 +66,54 @@ export default function ServerForm() {
 
   if (isLoading || !server)
     return (
-      <Page className="py-4">
-        <Skeleton className="h-64 max-w-xl rounded-4xl" />
+      <Page className="py-5">
+        <Skeleton className="h-64 max-w-xl rounded-[10px]" />
       </Page>
     )
 
   return (
-    <Page className="py-4">
-      <form onSubmit={save} className="max-w-xl">
-        <Card>
-          <CardHeader>
-            <CardTitle>{t("Edit server")}</CardTitle>
-            <CardDescription className="font-mono text-xs">
-              {server.inventory.hostname}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-5">
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="server-name">{t("Name")}</Label>
-              <Input
-                id="server-name"
-                value={name ?? server.name}
-                maxLength={60}
-                required
-                onChange={(e) => setName(e.target.value)}
-              />
-            </div>
-            <div className="flex flex-col gap-2">
-              <Label>{t("Labels")}</Label>
-              {/* Saved as you add or remove them. */}
-              <ServerLabels
-                server={id}
-                labels={server.labels}
-                onSaved={() => request.invalidate()}
-              />
-            </div>
-          </CardContent>
-          <CardFooter className="justify-end gap-2 border-t">
-            <Button type="button" variant="ghost" onClick={() => navigate(-1)}>
-              {t("Cancel")}
-            </Button>
-            <Button
-              type="submit"
-              disabled={busy || !(name ?? server.name).trim()}
-            >
-              {t("Save")}
-            </Button>
-          </CardFooter>
-        </Card>
+    <Page className="flex flex-col gap-4 py-5">
+      <PageHeader
+        title={t("Edit server")}
+        description={
+          <span dir="ltr" className="font-mono text-xs">
+            {server.inventory.hostname}
+          </span>
+        }
+      />
+      <form onSubmit={save} className="flex max-w-xl flex-col gap-3">
+        <Panel bodyClassName="flex flex-col gap-5">
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="server-name">{t("Name")}</Label>
+            <Input
+              id="server-name"
+              value={name ?? server.name}
+              maxLength={60}
+              required
+              onChange={(e) => setName(e.target.value)}
+            />
+          </div>
+          <div className="flex flex-col gap-2">
+            <Label>{t("Labels")}</Label>
+            {/* Saved as you add or remove them. */}
+            <ServerLabels
+              server={id}
+              labels={server.labels}
+              onSaved={() => request.invalidate()}
+            />
+          </div>
+        </Panel>
+        <div className="flex justify-end gap-2">
+          <Button type="button" variant="ghost" onClick={() => navigate(-1)}>
+            {t("Cancel")}
+          </Button>
+          <Button
+            type="submit"
+            disabled={busy || !(name ?? server.name).trim()}
+          >
+            {t("Save")}
+          </Button>
+        </div>
       </form>
     </Page>
   )

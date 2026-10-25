@@ -120,7 +120,7 @@ export function AiFixButton({
 
   return (
     <>
-      <Button variant="outline" onClick={ask} disabled={!!busy}>
+      <Button size="sm" variant="outline" onClick={ask} disabled={!!busy}>
         {busy === "ask" ? (
           <IconLoader2 className="animate-spin" aria-hidden />
         ) : (
@@ -133,7 +133,7 @@ export function AiFixButton({
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <IconSparkles className="size-5 text-primary" aria-hidden />
+              <IconSparkles className="size-4 text-brand-text" aria-hidden />
               {t("Proposed fix")}
             </DialogTitle>
             <DialogDescription>{fix?.explanation}</DialogDescription>
@@ -142,15 +142,17 @@ export function AiFixButton({
           {fix?.content ? (
             <pre
               dir="ltr"
-              className="max-h-96 min-w-0 overflow-auto rounded-2xl bg-muted/50 p-3 font-mono text-xs leading-relaxed"
+              tabIndex={0}
+              aria-label={t("Proposed fix")}
+              className="max-h-96 min-w-0 overflow-auto rounded-lg border bg-muted/50 p-3 font-mono text-xs leading-relaxed focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
             >
               {lineDiff(before, after).map((d, i) => (
                 <div
                   key={i}
                   className={cn(
-                    d.kind === "+" && "bg-success/15 text-success",
+                    d.kind === "+" && "bg-success-soft text-success-foreground",
                     d.kind === "-" &&
-                      "bg-destructive/10 text-destructive line-through"
+                      "bg-destructive-soft text-destructive-foreground line-through"
                   )}
                 >
                   {d.kind} {d.line}
@@ -158,7 +160,7 @@ export function AiFixButton({
               ))}
             </pre>
           ) : (
-            <p className="text-sm text-muted-foreground">
+            <p className="text-[13px] text-muted-foreground">
               {t(
                 "The fix isn't in a template this project uses, so apply it yourself and deploy again."
               )}

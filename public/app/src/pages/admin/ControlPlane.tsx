@@ -2,33 +2,24 @@ import * as React from "react"
 import { ThunderSDK } from "thunder-sdk"
 import { useTranslation } from "react-i18next"
 import { format } from "date-fns"
-import { CartesianGrid, Line, LineChart, XAxis, YAxis } from "recharts"
 import { IconHeartbeat } from "@tabler/icons-react"
 
 import { Page } from "@/components/page"
 import { use } from "@/core/hooks/use"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import {
-  ChartContainer,
-  ChartLegend,
-  ChartLegendContent,
-  ChartTooltip,
-  ChartTooltipContent,
-  type ChartConfig,
-} from "@/components/ui/chart"
 import { Skeleton } from "@/components/ui/skeleton"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
+import { PageHeader } from "@/components/console/page-header"
+import { Panel } from "@/components/console/panel"
+import { DataTable } from "@/components/console/data-table"
+import { TimeSeries, type TSeries } from "@/components/charts/presets"
 import { usePolling } from "@/hooks/use-polling"
 import { ControlPlaneRules } from "./ControlPlaneRules"
-import { ClusterMeters, HealthHero, InstanceMeters } from "./ControlPlaneHealth"
+import {
+  ClusterMeters,
+  HealthBadge,
+  HealthHero,
+  InstanceMeters,
+} from "./ControlPlaneHealth"
 import {
   findings,
   num,
@@ -37,87 +28,68 @@ import {
   type TRange,
 } from "./control-plane"
 
+/** Charts draw at most this many points; older buckets are thinned out. */
+const CHART_POINTS = 240
+
+function thin<T>(rows: T[]) {
+  const step = Math.ceil(rows.length / CHART_POINTS)
+  return step <= 1
+    ? rows
+    : rows.filter((_, i) => i % step === 0 || i === rows.length - 1)
+}
+
+type TKey = Exclude<keyof TPoint, "at">
+
+/**
+ * Chart rows: `date` plus every series. A bucket without the figure (no
+ * requests, say) carries the previous one forward, as recharts'
+ * `connectNulls` drew it.
+ */
+function toRows(points: TPoint[], keys: TKey[]) {
+  const prev: Partial<Record<TKey, number>> = {}
+  return thin(points).map((p) => {
+    const row: Record<string, unknown> = { date: new Date(p.at) }
+    for (const key of keys) {
+      const v = p[key]
+      if (v != null) prev[key] = v
+      row[key] = prev[key] ?? 0
+    }
+    return row
+  })
+}
+
 function SeriesChart({
   title,
   data,
-  config,
+  series,
   unit,
-  stepMs,
 }: {
   title: string
   data: TPoint[]
-  config: ChartConfig
+  series: (TSeries & { key: TKey })[]
   unit: string
-  stepMs: number
 }) {
-  const keys = Object.keys(config) as (keyof TPoint)[]
-  const tick = stepMs >= 60 * 60_000 ? "MMM d HH:mm" : "HH:mm"
+  const rows = React.useMemo(
+    () =>
+      toRows(
+        data,
+        series.map((s) => s.key)
+      ),
+    [data, series]
+  )
   return (
-    <Card size="sm">
-      <CardHeader>
-        <CardTitle className="text-sm">{title}</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <ChartContainer config={config} className="aspect-auto h-48 w-full">
-          <LineChart
-            data={data.map((p) => ({ ...p, t: new Date(p.at).getTime() }))}
-            margin={{ left: 0, right: 8 }}
-          >
-            <CartesianGrid vertical={false} />
-            <XAxis
-              dataKey="t"
-              type="number"
-              scale="time"
-              domain={["dataMin", "dataMax"]}
-              tickFormatter={(v: number) => format(v, tick)}
-              tickLine={false}
-              axisLine={false}
-              minTickGap={40}
-            />
-            <YAxis
-              tickLine={false}
-              axisLine={false}
-              width={44}
-              tickFormatter={(v: number) => num(v)}
-            />
-            <ChartTooltip
-              content={
-                <ChartTooltipContent
-                  labelFormatter={(_, items) =>
-                    format(items?.[0]?.payload?.t ?? 0, "MMM d, HH:mm")
-                  }
-                  formatter={(value, name) => (
-                    <span className="flex w-full justify-between gap-3">
-                      <span className="text-muted-foreground">
-                        {config[name as string]?.label}
-                      </span>
-                      <span className="font-mono tabular-nums">
-                        {value == null ? "—" : `${num(Number(value))} ${unit}`}
-                      </span>
-                    </span>
-                  )}
-                />
-              }
-            />
-            {keys.length > 1 && (
-              <ChartLegend content={<ChartLegendContent />} />
-            )}
-            {keys.map((key) => (
-              <Line
-                key={key}
-                dataKey={key}
-                type="monotone"
-                stroke={`var(--color-${key})`}
-                strokeWidth={2}
-                dot={false}
-                connectNulls
-                isAnimationActive={false}
-              />
-            ))}
-          </LineChart>
-        </ChartContainer>
-      </CardContent>
-    </Card>
+    <Panel title={title}>
+      {rows.length < 2 ? (
+        <Skeleton className="aspect-5/2 w-full rounded-lg" />
+      ) : (
+        <TimeSeries
+          data={rows}
+          series={series}
+          format={(v) => `${num(v)} ${unit}`}
+          aspectRatio="5 / 2"
+        />
+      )}
+    </Panel>
   )
 }
 
@@ -162,233 +134,228 @@ export default function ControlPlane() {
   const list = o ? findings(o, t) : []
 
   return (
-    <Page className="flex flex-col gap-6 py-4">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="text-xl font-semibold">{t("Control plane")}</h1>
-          <p className="text-sm text-muted-foreground">
-            {t(
-              "Each instance reports once a minute: CPU and memory, the requests and agent polls it serves, and the database."
-            )}
-          </p>
-        </div>
-        <ToggleGroup
-          value={range}
-          onValueChange={(v) => v && setRange(v as TRange)}
-        >
-          {(["1h", "24h", "7d"] as const).map((r) => (
-            <ToggleGroupItem key={r} value={r} aria-label={r}>
-              {r}
-            </ToggleGroupItem>
-          ))}
-        </ToggleGroup>
-      </div>
+    <Page className="flex flex-col gap-4 py-5">
+      <PageHeader
+        title={t("Control plane")}
+        status={o && <HealthBadge findings={list} />}
+        description={t(
+          "Each instance reports once a minute: CPU and memory, the requests and agent polls it serves, and the database."
+        )}
+        actions={
+          <ToggleGroup
+            value={range}
+            onValueChange={(v) => v && setRange(v as TRange)}
+          >
+            {(["1h", "24h", "7d"] as const).map((r) => (
+              <ToggleGroupItem
+                key={r}
+                value={r}
+                aria-label={r}
+                className="h-7 px-2.5 text-xs"
+              >
+                {r}
+              </ToggleGroupItem>
+            ))}
+          </ToggleGroup>
+        }
+      />
 
       {isLoading && !o ? (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {Array.from({ length: 8 }, (_, i) => (
-            <Skeleton key={i} className="h-24 rounded-3xl" />
+            <Skeleton key={i} className="h-24 rounded-[10px]" />
           ))}
         </div>
       ) : !o ? null : (
         <>
           <HealthHero findings={list} />
-          <section className="flex flex-col gap-3">
-            <h2 className="text-base font-semibold">
+          <section className="flex flex-col gap-2">
+            <h2 className="text-sm font-semibold">
               {t("The control plane's machine")}
             </h2>
             <InstanceMeters o={o} />
           </section>
-          <section className="flex flex-col gap-3">
-            <h2 className="text-base font-semibold">
+          <section className="flex flex-col gap-2">
+            <h2 className="text-sm font-semibold">
               {t("Agents, traffic and database")}
             </h2>
             <ClusterMeters o={o} />
           </section>
 
-          <div className="grid gap-4 lg:grid-cols-2">
+          <div className="grid gap-3 lg:grid-cols-2">
             <SeriesChart
               title={t("Requests per minute")}
               data={o.series}
-              stepMs={o.stepMs}
               unit="/min"
-              config={{
-                requestsPerMin: {
-                  label: t("All requests"),
-                  color: "var(--chart-1)",
-                },
-                pollsPerMin: {
-                  label: t("Agent polls"),
-                  color: "var(--chart-2)",
-                },
-              }}
+              series={[
+                { key: "requestsPerMin", label: t("All requests") },
+                { key: "pollsPerMin", label: t("Agent polls") },
+              ]}
             />
             <SeriesChart
               title={t("Response time, p95")}
               data={o.series}
-              stepMs={o.stepMs}
               unit="ms"
-              config={{
-                p95Ms: { label: t("All requests"), color: "var(--chart-1)" },
-                pollP95Ms: { label: t("Agent polls"), color: "var(--chart-2)" },
-              }}
+              series={[
+                { key: "p95Ms", label: t("All requests") },
+                { key: "pollP95Ms", label: t("Agent polls") },
+              ]}
             />
             <SeriesChart
               title={t("CPU, busiest instance (% of a core)")}
               data={o.series}
-              stepMs={o.stepMs}
               unit="%"
-              config={{ cpuPct: { label: t("CPU"), color: "var(--chart-1)" } }}
+              series={[{ key: "cpuPct", label: t("CPU") }]}
             />
             <SeriesChart
               title={t("Memory, largest instance (MB)")}
               data={o.series}
-              stepMs={o.stepMs}
               unit="MB"
-              config={{
-                rssMb: { label: t("Memory"), color: "var(--chart-1)" },
-              }}
+              series={[{ key: "rssMb", label: t("Memory") }]}
             />
             <SeriesChart
               title={t("Database operations per minute")}
               data={o.series}
-              stepMs={o.stepMs}
               unit="/min"
-              config={{
-                dbOpsPerMin: {
-                  label: t("Operations"),
-                  color: "var(--chart-1)",
-                },
-              }}
+              series={[{ key: "dbOpsPerMin", label: t("Operations") }]}
             />
             <SeriesChart
               title={t("Database time, p95")}
               data={o.series}
-              stepMs={o.stepMs}
               unit="ms"
-              config={{ dbP95Ms: { label: t("p95"), color: "var(--chart-1)" } }}
+              series={[{ key: "dbP95Ms", label: t("p95") }]}
             />
           </div>
 
-          <div className="grid gap-4 lg:grid-cols-2">
-            <Card size="sm">
-              <CardHeader>
-                <CardTitle className="text-sm">{t("Busiest routes")}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>{t("Route")}</TableHead>
-                      <TableHead className="text-right">
-                        {t("Requests")}
-                      </TableHead>
-                      <TableHead className="text-right">
-                        {t("Errors")}
-                      </TableHead>
-                      <TableHead className="text-right">{t("Avg")}</TableHead>
-                      <TableHead className="text-right">{t("Max")}</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {o.routes.map((r) => (
-                      <TableRow key={r.route}>
-                        <TableCell className="font-mono text-xs">
+          <div className="grid gap-3 lg:grid-cols-2">
+            <section className="flex min-w-0 flex-col gap-2">
+              <h2 className="text-sm font-semibold">{t("Busiest routes")}</h2>
+              <div className="overflow-x-auto">
+                <DataTable
+                  label={t("Busiest routes")}
+                  rows={o.routes}
+                  rowId={(r) => r.route}
+                  columns={[
+                    {
+                      id: "route",
+                      header: t("Route"),
+                      sortValue: (r) => r.route,
+                      cell: (r) => (
+                        <span dir="ltr" className="font-mono text-xs">
                           {r.route}
-                        </TableCell>
-                        <TableCell className="text-right tabular-nums">
-                          {num(r.count)}
-                        </TableCell>
-                        <TableCell className="text-right tabular-nums">
-                          {num(r.errors)}
-                        </TableCell>
-                        <TableCell className="text-right tabular-nums">
-                          {num(r.avgMs)} ms
-                        </TableCell>
-                        <TableCell className="text-right tabular-nums">
-                          {num(r.maxMs)} ms
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
-            <Card size="sm">
-              <CardHeader>
-                <CardTitle className="text-sm">
-                  {t("Slowest database operations")}
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {o.slowQueries.length ? (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>{t("Operation")}</TableHead>
-                        <TableHead>{t("When · instance")}</TableHead>
-                        <TableHead className="text-right">
-                          {t("Time")}
-                        </TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {o.slowQueries.map((q, i) => (
-                        <TableRow key={i}>
-                          <TableCell className="text-xs whitespace-normal">
-                            <span className="font-mono">
-                              {q.command}
-                              {q.collection && (
-                                <span className="text-muted-foreground">
-                                  {" "}
-                                  on {q.collection}
-                                </span>
-                              )}
-                            </span>
-                            <span className="block text-muted-foreground">
-                              {describeCommand(q.command, t)}
-                            </span>
-                          </TableCell>
-                          <TableCell className="text-xs text-muted-foreground">
-                            <span className="block whitespace-nowrap">
-                              {format(new Date(q.at), "MMM d, HH:mm")}
-                            </span>
-                            <span className="block font-mono">{q.host}</span>
-                          </TableCell>
-                          <TableCell className="text-right tabular-nums">
-                            {num(q.ms)} ms
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                ) : (
-                  <p className="text-sm text-muted-foreground">
-                    {t("No database operation took 100 ms or more.")}
-                  </p>
-                )}
-                {o.slowQueries.length > 0 && (
-                  <p className="mt-3 text-xs text-muted-foreground">
-                    {t(
-                      "Operations of 100 ms or more in the selected period. Change streams' idle waits aren't counted."
-                    )}
-                  </p>
-                )}
-              </CardContent>
-            </Card>
+                        </span>
+                      ),
+                    },
+                    {
+                      id: "count",
+                      header: t("Requests"),
+                      align: "end",
+                      sortValue: (r) => r.count,
+                      cell: (r) => num(r.count),
+                    },
+                    {
+                      id: "errors",
+                      header: t("Errors"),
+                      align: "end",
+                      sortValue: (r) => r.errors,
+                      cell: (r) => num(r.errors),
+                    },
+                    {
+                      id: "avg",
+                      header: t("Avg"),
+                      align: "end",
+                      sortValue: (r) => r.avgMs,
+                      cell: (r) => `${num(r.avgMs)} ms`,
+                    },
+                    {
+                      id: "max",
+                      header: t("Max"),
+                      align: "end",
+                      sortValue: (r) => r.maxMs,
+                      cell: (r) => `${num(r.maxMs)} ms`,
+                    },
+                  ]}
+                />
+              </div>
+            </section>
+            <section className="flex min-w-0 flex-col gap-2">
+              <h2 className="text-sm font-semibold">
+                {t("Slowest database operations")}
+              </h2>
+              <div className="overflow-x-auto">
+                <DataTable
+                  label={t("Slowest database operations")}
+                  rows={o.slowQueries}
+                  rowId={(q) => `${q.at}-${q.host}-${q.command}-${q.ms}`}
+                  empty={t("No database operation took 100 ms or more.")}
+                  columns={[
+                    {
+                      id: "op",
+                      header: t("Operation"),
+                      className: "whitespace-normal",
+                      cell: (q) => (
+                        <div className="min-w-0 text-xs">
+                          <span dir="ltr" className="font-mono">
+                            {q.command}
+                            {q.collection && (
+                              <span className="text-muted-foreground">
+                                {" "}
+                                on {q.collection}
+                              </span>
+                            )}
+                          </span>
+                          <span className="block text-muted-foreground">
+                            {describeCommand(q.command, t)}
+                          </span>
+                        </div>
+                      ),
+                    },
+                    {
+                      id: "when",
+                      header: t("When · instance"),
+                      sortValue: (q) => new Date(q.at).getTime(),
+                      cell: (q) => (
+                        <div className="text-xs text-muted-foreground">
+                          <span className="block whitespace-nowrap tabular-nums">
+                            {format(new Date(q.at), "MMM d, HH:mm")}
+                          </span>
+                          <span dir="ltr" className="block font-mono">
+                            {q.host}
+                          </span>
+                        </div>
+                      ),
+                    },
+                    {
+                      id: "ms",
+                      header: t("Time"),
+                      align: "end",
+                      sortValue: (q) => q.ms,
+                      cell: (q) => `${num(q.ms)} ms`,
+                    },
+                  ]}
+                />
+              </div>
+              {o.slowQueries.length > 0 && (
+                <p className="text-xs text-muted-foreground">
+                  {t(
+                    "Operations of 100 ms or more in the selected period. Change streams' idle waits aren't counted."
+                  )}
+                </p>
+              )}
+            </section>
           </div>
 
           {ThunderSDK.isPermitted("controlPlane", "rules") && (
             <ControlPlaneRules />
           )}
 
-          <p className="flex gap-2 text-sm text-muted-foreground">
+          <p className="flex gap-2 text-[13px] text-muted-foreground">
             <IconHeartbeat className="mt-0.5 size-4 shrink-0" aria-hidden />
             <span>
               {t(
                 "A control plane that is down can't report it. Point an uptime monitor at"
               )}{" "}
-              <code className="font-mono text-foreground">
+              <code dir="ltr" className="font-mono text-xs text-foreground">
                 /home/api/health
               </code>{" "}
               {t(

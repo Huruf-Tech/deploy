@@ -1,4 +1,5 @@
 import { useReducedMotion } from "motion/react"
+import { curveMonotoneX } from "@visx/curve"
 
 import { LineChart, Line } from "./line-chart"
 import { Grid } from "./grid"
@@ -25,6 +26,21 @@ export const SERIES = [
 
 export type TSeries = { key: string; label: string; color?: string }
 
+const DAY = 24 * 60 * 60 * 1000
+
+/** Times for ranges up to two days, dates beyond, in the viewer's locale. */
+function timeLabels(data: Record<string, unknown>[]) {
+  const dates = data.map((d) => d.date as Date)
+  const span = (dates.at(-1)?.getTime() ?? 0) - (dates[0]?.getTime() ?? 0)
+  const format = new Intl.DateTimeFormat(
+    undefined,
+    span <= 2 * DAY
+      ? { hour: "2-digit", minute: "2-digit" }
+      : { month: "short", day: "numeric" }
+  )
+  return dates.map((d) => format.format(d))
+}
+
 export function TimeSeries({
   data,
   series,
@@ -46,7 +62,7 @@ export function TimeSeries({
       data={data}
       aspectRatio={aspectRatio}
       className={className}
-      margin={{ top: 8, right: 8, bottom: 24, left: 40 }}
+      margin={{ top: 8, right: 8, bottom: 24, left: 64 }}
       animationDuration={still ? 0 : 300}
     >
       <Grid horizontal numTicksRows={4} />
@@ -56,11 +72,13 @@ export function TimeSeries({
           dataKey={s.key}
           stroke={color(s, i)}
           strokeWidth={1.75}
+          // Monotone: never overshoots the samples, unlike the default natural curve.
+          curve={curveMonotoneX}
           animate={!still}
         />
       ))}
       <YAxis numTicks={4} formatValue={format} />
-      <XAxis numTicks={5} />
+      <XAxis numTicks={5} labels={timeLabels(data)} />
       <ChartTooltip
         rows={(point) =>
           series.map((s, i) => ({

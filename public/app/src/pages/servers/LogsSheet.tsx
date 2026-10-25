@@ -25,9 +25,9 @@ const MAX_LINES = 10_000
 const ANSI = /\u001b\[[0-9;?]*[ -/]*[@-~]/g
 
 const LEVEL_STYLE: Record<TLogLevel, string> = {
-  error: "bg-red-500/15 text-red-600 dark:text-red-400",
-  warn: "bg-amber-500/15 text-amber-700 dark:text-amber-400",
-  info: "bg-sky-500/15 text-sky-700 dark:text-sky-400",
+  error: "bg-destructive-soft text-destructive-foreground",
+  warn: "bg-warning-soft text-warning-foreground",
+  info: "bg-info-soft text-info-foreground",
   debug: "bg-muted text-muted-foreground",
 }
 
@@ -43,9 +43,9 @@ const LogLine = React.memo(function LogLine({ raw }: { raw: string }) {
   return (
     <div
       className={cn(
-        "flex gap-3 border-l-2 border-transparent px-3 py-1 hover:bg-muted",
-        line.level === "error" && "border-red-500 bg-red-500/5",
-        line.level === "warn" && "border-amber-500"
+        "flex gap-3 border-s-2 border-transparent px-3 py-0.5 hover:bg-muted",
+        line.level === "error" && "border-destructive bg-destructive-soft/50",
+        line.level === "warn" && "border-warning"
       )}
     >
       {line.time && (
@@ -69,7 +69,7 @@ const LogLine = React.memo(function LogLine({ raw }: { raw: string }) {
         <span className="text-foreground">{line.message}</span>
         {line.fields.map(([key, value]) => (
           <span key={key} className="ms-3 inline-block break-all">
-            <span className="text-violet-600 dark:text-violet-400">{key}</span>
+            <span className="font-medium text-foreground/80">{key}</span>
             <span className="text-muted-foreground">=</span>
             <span className="text-muted-foreground">{value}</span>
           </span>
@@ -113,11 +113,14 @@ function LogLines({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-2">
-      <div className="relative min-h-0 flex-1 rounded-2xl bg-muted/50 font-mono text-xs">
+      <div
+        dir="ltr"
+        className="relative min-h-0 flex-1 rounded-lg border bg-muted/50 font-mono text-xs"
+      >
         {lines.length === 0 ? (
           <div className="flex h-full items-center justify-center gap-2 text-muted-foreground">
             {status === "error" ? (
-              <span className="text-destructive">{error}</span>
+              <span className="text-destructive-foreground">{error}</span>
             ) : (
               <>
                 <Spinner /> {t("Waiting for output…")}

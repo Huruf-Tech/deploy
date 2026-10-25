@@ -85,19 +85,20 @@ export function SelectionBar({
 
   return (
     <ActionBar
-      containerClassName="fixed inset-x-3 bottom-4 z-20 mx-auto max-w-md shadow-sm sm:bottom-12"
+      containerClassName="fixed inset-x-3 bottom-4 z-20 mx-auto max-w-sm sm:bottom-8"
       data-open={ids.length > 0}
     >
-      <div className="flex w-full items-center justify-between gap-2 rounded-full border bg-background p-3 dark:bg-black">
-        <p className="text-sm md:ltr:ml-3 md:rtl:mr-3">
-          {ids.length} <span className="font-medium">{t("selected")}</span>
+      <div className="flex w-full items-center justify-between gap-2 rounded-[10px] border bg-popover py-2 ps-3 pe-2 shadow-md">
+        <p className="text-[13px]" aria-live="polite">
+          <span className="font-medium tabular-nums">{ids.length}</span>{" "}
+          {t("selected")}
         </p>
         <div className="flex items-center gap-2">
           {canDelete && (
             <ConfirmationDialog
               trigger={
                 <Button
-                  size="sm"
+                  size="icon-sm"
                   variant="destructive"
                   aria-label={t("Delete selected")}
                 >

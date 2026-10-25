@@ -2,7 +2,7 @@
 
 The dashboard (`public/app`, thunder-ui) is a DevOps console: people scan it to see what's running, what's wrong and what changed, then act. This document is the plan for the redesign **and** the reference for every UI change after it. Read it before touching UI; update it when a rule changes.
 
-Status: **D1 (foundations) built; D2 next, after the owner's review.** Phases are in §9.
+Status: **built (D1–D6 done).** This is now the reference for every UI change; phases are kept in §9 as history.
 
 ---
 
@@ -40,7 +40,7 @@ The dashboard wears Huruf's own theme, taken from the site's stylesheet. These v
 | Card / popover | `oklch(100% 0 0)` | `oklch(13% 0 0)` |
 | Secondary | `oklch(96.7% .001 286.375)` | `oklch(17% 0 0)` |
 | Muted / accent surface | `oklch(97% 0 0)` | `oklch(15% 0 0)` / `oklch(20% 0 0)` |
-| Muted foreground | `oklch(55.6% 0 0)` | `oklch(70.8% 0 0)` |
+| Muted foreground | `oklch(52% 0 0)` (the site's 55.6% fails AA on muted surfaces: 4.2:1) | `oklch(70.8% 0 0)` |
 | Border / input | `oklch(92.2% 0 0)` | `oklch(100% 0 0 / .1)` / `/ .15` |
 | Sidebar | `oklch(98.5% 0 0)` | `oklch(10% 0 0)` |
 | **Primary (Huruf orange)** | `oklch(70.5% .213 47.604)` (≈ #FF6900) | same |
@@ -134,6 +134,8 @@ Flat by default: canvas → card (hairline border) → popover (border + soft sh
 | `CodeBlock` | Mono, copy button, wraps or scrolls. For DNS records, commands and logs. |
 | `Timeline` | Deployment and event history: dot, label, time, details on expand. |
 
+Kit props worth knowing: `DataTable` takes `isSelected` (selected-row highlight) and `onRowClick`; `CodeBlock` takes `maxHeight` (the code scrolls, the copy button stays); `PageHeader` wraps a string title in the page's `h1`, while a custom title (an inline rename) renders its own.
+
 Files: `page-header`, `status` (`StatusDot`, `StatusBadge`, `toneOf`), `stat` (`Stat`, `StatStrip`), `meter`, `panel`, `data-table` (`DataTable`, `TColumn`), `key-value`, `toolbar`, `empty-state`, `code-block`, `timeline`, `kbd`. Status tokens come as a fill (`bg-success`), text (`text-success-foreground`) and soft background (`bg-success-soft`), likewise `warning`, `info` and `destructive`.
 
 Rules: pages compose these; new patterns get added here first, then used. The kit lives in our own folder, so core syncs never touch it. `DataTable` selection and row menus are columns for now; they become built-in when a second page needs them.
@@ -153,6 +155,8 @@ Rules: pages compose these; new patterns get added here first, then used. The ki
 | Comparisons (busiest routes, per-server load) | `bar-chart` |
 
 - Installed through the CLI into `src/components/charts/` (registry `@bklit`: `https://bklit.com/r/{name}.json`; the old `ui.bklit.com` redirects). The CLI overwrites `src/lib/utils.ts`: restore ours after any `shadcn add @bklit/...`. It also appends `--chart-*` / `--legend*` variables to `src/index.css`; ours map them onto Huruf's neutrals. Its dependencies (`@visx/*`, `d3-*`, `@number-flow/react`; `motion` we have) are justified: they replace `recharts` once every chart is migrated, and `recharts` is then removed.
+- `recharts` and `ui/chart.tsx` are gone; bklit's d3 types come from `@types/d3-shape` and `@types/d3-array`. bklit's vendored files are excluded from eslint (presets are linted).
+- `TimeSeries` draws monotone curves (no overshoot), labels the time axis with times up to two days and dates beyond, and expects rows with `date: Date`; thin long series to about 240 points first. A null bucket is carried forward by the caller (the control plane does this).
 - Presets live in `src/components/charts/presets.tsx` (`TimeSeries`, `Spark`, `SERIES` colors); gauge, ring, bar and live-line presets are added there when a page first needs them. Defaults: compact margins, no entry animation on refresh (only on first draw, and none under reduced motion), tooltips with units, `--chart-*` colors, and time axes in the viewer's locale.
 
 ---
@@ -190,10 +194,22 @@ Each phase ends with screenshots (light, dark, phone, Arabic), the app's checks 
 
 ---
 
+## 9a. Known gaps (core screens)
+
+axe (WCAG 2 A/AA + best practices) is clean on our pages in both themes. What remains comes from `src/core/`, which we don't edit:
+
+- Core's generated list pages (servers, plans, roles, policies, users, envs) have no `h1` and an unlabelled select-all checkbox, and their card/table toggle switches to core's generic table (our card override is the designed view).
+- Core's breadcrumb renders the home crumb as a bare icon link; the shell labels it ("Home") after each navigation (`src/layouts/console/index.tsx`).
+- Base UI tooltips and popovers portal outside the landmarks (axe "region", best practice only).
+
+Raise these upstream with thunder-ui rather than patching core.
+
 ## 10. Rules for future changes
 
 - Start every page with `PageHeader`; build with the kit; add new patterns to the kit (and to §5) first.
 - No hard-coded colors (`text-sky-600`, `bg-[#…]`) outside `lib/hues.ts` and the tokens; status always through `StatusBadge` or `StatusDot`.
 - Lists are `DataTable` unless a card grid is clearly better; dense rows, 13 px.
 - Charts only through `src/components/charts/` presets.
-- Check light, dark, phone and Arabic before calling a UI change done.
+- Check light, dark, phone and Arabic before calling a UI change done; run axe on the page (both themes).
+- No palette colors (`text-amber-700`, `bg-sky-500/10`) on content: status tokens (`bg-warning-soft text-warning-foreground` …) and `text-brand-text` for orange text.
+- Panels `rounded-[10px]`, inner boxes `rounded-lg`; no gradients, glass or large icon tiles on content.

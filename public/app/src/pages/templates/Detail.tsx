@@ -7,11 +7,15 @@ import { toast } from "sonner"
 import { IconCopy, IconPlayerPlay, IconTrash } from "@tabler/icons-react"
 
 import { Page } from "@/components/page"
+import { PageHeader } from "@/components/console/page-header"
+import { Panel } from "@/components/console/panel"
+import { KeyValue } from "@/components/console/key-value"
+import { CodeBlock } from "@/components/console/code-block"
+import { DataTable } from "@/components/console/data-table"
 import { use } from "@/core/hooks/use"
 import { useBreadcrumbTitle } from "@/core/layouts/shared/breadcrumb"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { CopyButton } from "@/components/ui/copy-button"
 import {
   Dialog,
   DialogContent,
@@ -36,14 +40,6 @@ import {
 } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Switch } from "@/components/ui/switch"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
 import { errorMessage } from "@/lib/utils"
@@ -53,15 +49,6 @@ import { useFresh } from "@/hooks/use-fresh"
 type TDetail = Awaited<ReturnType<typeof ThunderSDK.templates.get>>
 type TContent = TDetail["content"]
 export type TInput = TContent["inputs"][number]
-
-const Code = ({ children }: { children: string }) => (
-  <div className="relative rounded-2xl bg-muted/50">
-    <pre className="max-h-[32rem] overflow-auto p-4 pe-12 font-mono text-xs leading-relaxed">
-      {children}
-    </pre>
-    <CopyButton value={children} className="absolute end-2 top-2" />
-  </div>
-)
 
 /** Tenant templates are edited here; saving creates the next version. */
 function SourceEditor({
@@ -303,24 +290,23 @@ function Preview({ id, content }: { id: string; content: TContent }) {
         {result ? (
           <>
             {result.generated.length > 0 && (
-              <p className="text-sm text-muted-foreground">
+              <p className="text-[13px] text-muted-foreground">
                 {t("Generated: {{keys}}. A deploy stores them as secrets.", {
                   keys: result.generated.join(", "),
                 })}
               </p>
             )}
             {Object.entries(result.files).map(([name, text]) => (
-              <div key={name} className="flex flex-col gap-2">
-                <span className="font-mono text-xs text-muted-foreground">
-                  {name}
-                </span>
-                <Code>{text}</Code>
-              </div>
+              <CodeBlock
+                key={name}
+                label={<span className="font-mono">{name}</span>}
+                code={text}
+              />
             ))}
           </>
         ) : (
           !error && (
-            <p className="rounded-3xl border border-dashed p-6 text-center text-sm text-muted-foreground">
+            <p className="rounded-[10px] border border-dashed p-6 text-center text-[13px] text-muted-foreground">
               {t("Fill in the inputs and render to see the final file.")}
             </p>
           )
@@ -332,43 +318,47 @@ function Preview({ id, content }: { id: string; content: TContent }) {
 
 function InputsTable({ inputs }: { inputs: TInput[] }) {
   const { t } = useTranslation()
-  if (!inputs.length) {
-    return (
-      <p className="text-sm text-muted-foreground">
-        {t("This template has no inputs.")}
-      </p>
-    )
-  }
   return (
-    <div className="overflow-hidden rounded-2xl border">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>{t("Key")}</TableHead>
-            <TableHead>{t("Label")}</TableHead>
-            <TableHead>{t("Type")}</TableHead>
-            <TableHead>{t("Default")}</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {inputs.map((input) => (
-            <TableRow key={input.key}>
-              <TableCell className="font-mono text-xs">
-                {input.key}
-                {input.required && <span className="text-destructive">*</span>}
-              </TableCell>
-              <TableCell>{input.label}</TableCell>
-              <TableCell>
-                <Badge variant="outline">{input.type}</Badge>
-              </TableCell>
-              <TableCell className="font-mono text-xs">
-                {input.generate ? t("generated") : String(input.default ?? "—")}
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </div>
+    <DataTable
+      label={t("Inputs")}
+      rows={inputs}
+      rowId={(input) => input.key}
+      empty={t("This template has no inputs.")}
+      columns={[
+        {
+          id: "key",
+          header: t("Key"),
+          sortValue: (input) => input.key,
+          cell: (input) => (
+            <span dir="ltr" className="font-mono text-xs">
+              {input.key}
+              {input.required && <span className="text-destructive">*</span>}
+            </span>
+          ),
+        },
+        {
+          id: "label",
+          header: t("Label"),
+          sortValue: (input) => input.label,
+          cell: (input) => input.label,
+        },
+        {
+          id: "type",
+          header: t("Type"),
+          sortValue: (input) => input.type,
+          cell: (input) => <Badge variant="outline">{input.type}</Badge>,
+        },
+        {
+          id: "default",
+          header: t("Default"),
+          cell: (input) => (
+            <span dir="ltr" className="font-mono text-xs">
+              {input.generate ? t("generated") : String(input.default ?? "—")}
+            </span>
+          ),
+        },
+      ]}
+    />
   )
 }
 
@@ -402,9 +392,9 @@ export default function TemplateDetail() {
 
   if (!data) {
     return (
-      <Page className="flex flex-col gap-4 py-4">
-        <Skeleton className="h-16 rounded-3xl" />
-        <Skeleton className="h-96 rounded-3xl" />
+      <Page className="flex flex-col gap-4 py-5">
+        <Skeleton className="h-12 rounded-[10px]" />
+        <Skeleton className="h-96 rounded-[10px]" />
       </Page>
     )
   }
@@ -426,143 +416,193 @@ export default function TemplateDetail() {
   }
 
   return (
-    <Page className="flex flex-col gap-6 py-4">
-      <div className="flex flex-wrap items-start gap-4">
-        <span className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-muted">
-          <TemplateIcon icon={template.icon} className="size-6" />
-        </span>
-        <div className="min-w-0 flex-1">
-          <h1 className="text-xl font-semibold">{template.name}</h1>
-          <div className="mt-1 flex flex-wrap items-center gap-1">
-            <Badge variant="secondary">
-              {template.scope === "system" ? t("Built-in") : t("Tenant")}
-            </Badge>
-            <Badge variant="outline">
-              {template.kind === "app" ? t("App") : t("Service")}
-            </Badge>
-            <span className="font-mono text-xs text-muted-foreground">
-              {template.slug}
+    <Page className="flex flex-col gap-4 py-5">
+      <PageHeader
+        title={
+          <div className="flex min-w-0 items-center gap-2">
+            <span className="flex size-7 shrink-0 items-center justify-center rounded-lg border bg-muted">
+              <TemplateIcon icon={template.icon} className="size-4" />
             </span>
+            <h1 className="truncate font-heading text-xl font-semibold tracking-tight">
+              {template.name}
+            </h1>
           </div>
-          {template.description && (
-            <p className="mt-2 text-sm text-muted-foreground">
-              {template.description}
-            </p>
-          )}
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Select
-            items={(history ?? []).map((v) => ({
-              value: String(v.version),
-              label: `v${v.version}`,
-            }))}
-            value={String(content.version)}
-            onValueChange={(v) =>
-              setVersion(
-                Number(v) === template.latestVersion ? undefined : Number(v)
-              )
-            }
-          >
-            <SelectTrigger className="w-28" aria-label={t("Version")}>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {(history ?? []).map((v) => (
-                <SelectItem key={v.version} value={String(v.version)}>
-                  v{v.version}
-                  {v.version === template.latestVersion && ` (${t("latest")})`}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Button variant="outline" onClick={() => setCloning(true)}>
-            <IconCopy aria-hidden /> {t("Clone")}
-          </Button>
-          {template.scope === "tenant" && (
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setDeleting(true)}
-              aria-label={t("Delete template")}
+        }
+        status={
+          <Badge variant="secondary">
+            {template.kind === "app" ? t("App") : t("Service")}
+          </Badge>
+        }
+        description={template.description}
+        actions={
+          <>
+            <Select
+              items={(history ?? []).map((v) => ({
+                value: String(v.version),
+                label: `v${v.version}`,
+              }))}
+              value={String(content.version)}
+              onValueChange={(v) =>
+                setVersion(
+                  Number(v) === template.latestVersion ? undefined : Number(v)
+                )
+              }
             >
-              <IconTrash />
-            </Button>
-          )}
-        </div>
-      </div>
-
-      <Tabs value={tab} onValueChange={setTab}>
-        <TabsList>
-          <TabsTrigger value="source">
-            {template.kind === "app" ? "Dockerfile" : "Compose"}
-          </TabsTrigger>
-          <TabsTrigger value="inputs">{t("Inputs")}</TabsTrigger>
-          <TabsTrigger value="preview">{t("Preview")}</TabsTrigger>
-          <TabsTrigger value="versions">{t("Versions")}</TabsTrigger>
-        </TabsList>
-        <TabsContent value="source" className="pt-4">
-          {editable ? (
-            <SourceEditor
-              key={content.version}
-              id={id}
-              kind={template.kind}
-              content={content}
-              onSaved={() => {
-                setVersion(undefined)
-                request.invalidate()
-                versions.invalidate()
-              }}
-            />
-          ) : (
-            <div className="flex flex-col gap-3">
-              {template.scope === "system" && (
-                <p className="text-sm text-muted-foreground">
-                  {t("Built-in templates are read-only. Clone it to edit.")}
-                </p>
-              )}
-              <Code>{source}</Code>
-            </div>
-          )}
-        </TabsContent>
-        <TabsContent value="inputs" className="pt-4">
-          <InputsTable inputs={content.inputs} />
-        </TabsContent>
-        <TabsContent value="preview" className="pt-4">
-          <Preview key={content.version} id={id} content={content} />
-        </TabsContent>
-        <TabsContent value="versions" className="pt-4">
-          <ol className="flex flex-col gap-2">
-            {(history ?? []).map((v) => (
-              <li
-                key={v.version}
-                className="flex flex-wrap items-center gap-3 rounded-2xl border p-3"
+              <SelectTrigger
+                size="sm"
+                className="w-28"
+                aria-label={t("Version")}
               >
-                <Badge variant="outline">v{v.version}</Badge>
-                <span className="min-w-0 flex-1 truncate text-sm">
-                  {v.changelog ?? t("No description")}
-                </span>
-                <span className="text-xs text-muted-foreground">
-                  {format(new Date(v.createdAt), "PPp")}
-                </span>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => {
-                    setVersion(
-                      v.version === template.latestVersion
-                        ? undefined
-                        : v.version
-                    )
-                    setTab("source")
-                  }}
-                >
-                  {t("View")}
-                </Button>
-              </li>
-            ))}
-          </ol>
-        </TabsContent>
-      </Tabs>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {(history ?? []).map((v) => (
+                  <SelectItem key={v.version} value={String(v.version)}>
+                    v{v.version}
+                    {v.version === template.latestVersion &&
+                      ` (${t("latest")})`}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setCloning(true)}
+            >
+              <IconCopy aria-hidden /> {t("Clone")}
+            </Button>
+            {template.scope === "tenant" && (
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={() => setDeleting(true)}
+                aria-label={t("Delete template")}
+              >
+                <IconTrash />
+              </Button>
+            )}
+          </>
+        }
+      />
+
+      <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_18rem]">
+        <Tabs value={tab} onValueChange={setTab} className="min-w-0">
+          <TabsList>
+            <TabsTrigger value="source">
+              {template.kind === "app" ? "Dockerfile" : "Compose"}
+            </TabsTrigger>
+            <TabsTrigger value="inputs">{t("Inputs")}</TabsTrigger>
+            <TabsTrigger value="preview">{t("Preview")}</TabsTrigger>
+            <TabsTrigger value="versions">{t("Versions")}</TabsTrigger>
+          </TabsList>
+          <TabsContent value="source" className="pt-3">
+            {editable ? (
+              <SourceEditor
+                key={content.version}
+                id={id}
+                kind={template.kind}
+                content={content}
+                onSaved={() => {
+                  setVersion(undefined)
+                  request.invalidate()
+                  versions.invalidate()
+                }}
+              />
+            ) : (
+              <div className="flex flex-col gap-3">
+                {template.scope === "system" && (
+                  <p className="text-[13px] text-muted-foreground">
+                    {t("Built-in templates are read-only. Clone it to edit.")}
+                  </p>
+                )}
+                <CodeBlock code={source} />
+              </div>
+            )}
+          </TabsContent>
+          <TabsContent value="inputs" className="pt-3">
+            <InputsTable inputs={content.inputs} />
+          </TabsContent>
+          <TabsContent value="preview" className="pt-3">
+            <Preview key={content.version} id={id} content={content} />
+          </TabsContent>
+          <TabsContent value="versions" className="pt-3">
+            <DataTable
+              label={t("Versions")}
+              rows={history}
+              loading={!history}
+              rowId={(v) => String(v.version)}
+              onRowClick={(v) => {
+                setVersion(
+                  v.version === template.latestVersion ? undefined : v.version
+                )
+                setTab("source")
+              }}
+              columns={[
+                {
+                  id: "version",
+                  header: t("Version"),
+                  sortValue: (v) => v.version,
+                  className: "w-20",
+                  cell: (v) => (
+                    <span className="font-mono text-xs tabular-nums">
+                      v{v.version}
+                    </span>
+                  ),
+                },
+                {
+                  id: "changelog",
+                  header: t("What changed"),
+                  cell: (v) => (
+                    <span className="line-clamp-1">
+                      {v.changelog ?? t("No description")}
+                    </span>
+                  ),
+                },
+                {
+                  id: "created",
+                  header: t("Created"),
+                  align: "end",
+                  sortValue: (v) => new Date(v.createdAt).getTime(),
+                  cell: (v) => (
+                    <span className="text-xs whitespace-nowrap text-muted-foreground">
+                      {format(new Date(v.createdAt), "PPp")}
+                    </span>
+                  ),
+                },
+              ]}
+            />
+          </TabsContent>
+        </Tabs>
+
+        <Panel title={t("Details")} bodyClassName="px-4 py-1">
+          <KeyValue
+            items={[
+              {
+                label: t("Scope"),
+                value:
+                  template.scope === "system" ? t("Built-in") : t("Tenant"),
+              },
+              {
+                label: t("Kind"),
+                value: template.kind === "app" ? t("App") : t("Service"),
+              },
+              { label: t("Slug"), value: template.slug, copy: template.slug },
+              {
+                label: t("Version"),
+                value: (
+                  <span className="font-mono text-xs tabular-nums">
+                    v{content.version}
+                    {content.version === template.latestVersion &&
+                      ` (${t("latest")})`}
+                  </span>
+                ),
+              },
+              { label: t("Inputs"), value: content.inputs.length },
+            ]}
+          />
+        </Panel>
+      </div>
 
       <CloneDialog
         template={cloning ? template : null}

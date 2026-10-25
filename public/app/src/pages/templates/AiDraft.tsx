@@ -18,6 +18,7 @@ import { Field, FieldDescription, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
+import { CodeBlock } from "@/components/console/code-block"
 import { useAiStatus } from "@/hooks/use-ai"
 import { errorMessage } from "@/lib/utils"
 import { GitHubPicker } from "@/pages/projects/NewProject"
@@ -138,7 +139,7 @@ export function AiDraftDialog({
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <IconSparkles className="size-5 text-primary" aria-hidden />
+            <IconSparkles className="size-4 text-brand-text" aria-hidden />
             {t("Create a template with AI")}
           </DialogTitle>
           <DialogDescription>
@@ -164,7 +165,7 @@ export function AiDraftDialog({
                 )}
               />
             </Field>
-            <label className="flex items-center gap-3 text-sm">
+            <label className="flex items-center gap-3 text-[13px]">
               <Switch checked={fromRepo} onCheckedChange={setFromRepo} />
               {t("Build from a GitHub repository")}
             </label>
@@ -178,11 +179,11 @@ export function AiDraftDialog({
           </div>
         ) : (
           <div className="flex min-w-0 flex-col gap-4">
-            <p className="rounded-2xl bg-muted/50 p-3 text-sm">
+            <p className="rounded-lg border bg-muted/50 p-3 text-[13px]">
               {draft.explanation}
             </p>
             {draft.existing ? (
-              <p className="text-sm">
+              <p className="text-[13px]">
                 {t(
                   "No new template needed: {{name}} already does this. Open it to deploy with it.",
                   { name: draft.existing.name }
@@ -198,7 +199,7 @@ export function AiDraftDialog({
                     onChange={(e) => setName(e.target.value)}
                   />
                 </Field>
-                <div className="flex flex-wrap items-center gap-2 text-sm">
+                <div className="flex flex-wrap items-center gap-1">
                   <Badge variant="secondary">
                     {draft.kind === "app" ? t("App") : t("Service")}
                   </Badge>
@@ -208,12 +209,7 @@ export function AiDraftDialog({
                     </Badge>
                   ))}
                 </div>
-                <pre
-                  dir="ltr"
-                  className="max-h-80 overflow-auto rounded-2xl bg-muted/50 p-3 font-mono text-xs leading-relaxed"
-                >
-                  {source}
-                </pre>
+                <CodeBlock code={source} className="max-h-80 overflow-y-auto" />
                 <FieldDescription>
                   {t(
                     "Saving creates a template you can still edit and preview before deploying."

@@ -6,16 +6,8 @@ import { useTranslation } from "react-i18next"
 import type { TCardProps } from "@/core/types"
 import { Container } from "@/core/custom/Container"
 import { zodToMongoProjection } from "@/core/lib/zodToMongoProjection"
-import {
-  Card,
-  CardAction,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Empty, EmptyHeader, EmptyTitle } from "@/components/ui/empty"
+import { EmptyState } from "@/components/console/empty-state"
 import { Skeleton } from "@/components/ui/skeleton"
 import { cn } from "@/lib/utils"
 
@@ -90,19 +82,15 @@ export function RecordCards<T extends { _id: string }>({
   return (
     <Container className="py-4">
       {isLoading ? (
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {[0, 1, 2].map((i) => (
-            <Skeleton key={i} className="h-40 rounded-4xl" />
+            <Skeleton key={i} className="h-28 rounded-[10px]" />
           ))}
         </div>
       ) : !records.length ? (
-        <Empty className="min-h-[40vh]">
-          <EmptyHeader>
-            <EmptyTitle>{emptyTitle}</EmptyTitle>
-          </EmptyHeader>
-        </Empty>
+        <EmptyState title={emptyTitle} />
       ) : (
-        <ul className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {records.map((record) => {
             const card = render(record)
             // Straight to the form, as core's list rows do: core's `<id>`
@@ -114,39 +102,44 @@ export function RecordCards<T extends { _id: string }>({
               )
             return (
               <li key={record._id}>
-                <Card
-                  role="link"
-                  tabIndex={0}
-                  aria-label={t("Open {{name}}", { name: card.name })}
-                  onClick={open}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") open()
-                  }}
+                {/* The title's button stretches over the card, so the
+                    checkbox stays a sibling, not nested in a control. */}
+                <div
                   className={cn(
-                    "h-full cursor-pointer transition-colors hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
-                    selectedIds.includes(record._id) && "ring-2 ring-primary"
+                    "relative flex h-full flex-col gap-3 rounded-[10px] border bg-card p-4 transition-colors hover:bg-accent/50 has-[[data-open]:focus-visible]:ring-2 has-[[data-open]:focus-visible]:ring-ring",
+                    selectedIds.includes(record._id) &&
+                      "border-primary ring-1 ring-primary"
                   )}
                 >
-                  <CardHeader>
-                    <CardTitle className="flex min-w-0 flex-wrap items-center gap-2">
-                      {card.title}
-                      {card.badges}
-                    </CardTitle>
-                    {card.description && (
-                      <CardDescription>{card.description}</CardDescription>
-                    )}
-                    <CardAction>
-                      <Checkbox
-                        aria-label={t("Select {{name}}", { name: card.name })}
-                        checked={selectedIds.includes(record._id)}
-                        onCheckedChange={() => toggleSelect(record._id)}
-                        onClick={(e) => e.stopPropagation()}
-                        onKeyDown={(e) => e.stopPropagation()}
-                      />
-                    </CardAction>
-                  </CardHeader>
-                  {card.body && <CardContent>{card.body}</CardContent>}
-                </Card>
+                  <div className="flex items-start gap-3">
+                    <div className="min-w-0 flex-1">
+                      <h3 className="flex min-w-0 flex-wrap items-center gap-2 text-sm font-semibold">
+                        <button
+                          type="button"
+                          data-open
+                          onClick={open}
+                          aria-label={t("Open {{name}}", { name: card.name })}
+                          className="min-w-0 text-start after:absolute after:inset-0 after:rounded-[10px] focus-visible:outline-none"
+                        >
+                          {card.title}
+                        </button>
+                        {card.badges}
+                      </h3>
+                      {card.description && (
+                        <p className="mt-0.5 text-xs text-muted-foreground">
+                          {card.description}
+                        </p>
+                      )}
+                    </div>
+                    <Checkbox
+                      aria-label={t("Select {{name}}", { name: card.name })}
+                      checked={selectedIds.includes(record._id)}
+                      onCheckedChange={() => toggleSelect(record._id)}
+                      className="relative z-10"
+                    />
+                  </div>
+                  {card.body && <div className="text-[13px]">{card.body}</div>}
+                </div>
               </li>
             )
           })}

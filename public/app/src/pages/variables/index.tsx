@@ -16,17 +16,16 @@ import {
 } from "@tabler/icons-react"
 
 import { Page } from "@/components/page"
+import { PageHeader } from "@/components/console/page-header"
+import { Panel } from "@/components/console/panel"
+import { Toolbar } from "@/components/console/toolbar"
+import { DataTable, type TColumn } from "@/components/console/data-table"
+import { EmptyState } from "@/components/console/empty-state"
+import { CodeBlock } from "@/components/console/code-block"
 import { use } from "@/core/hooks/use"
 import { getAuthUrl } from "@/core/lib/utils"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
 import { CopyButton } from "@/components/ui/copy-button"
 import {
   Dialog,
@@ -36,24 +35,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import {
-  Empty,
-  EmptyContent,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyMedia,
-  EmptyTitle,
-} from "@/components/ui/empty"
-import { Skeleton } from "@/components/ui/skeleton"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import {
   SelectAllCheckbox,
   SelectCheckbox,
@@ -64,6 +46,7 @@ import { errorMessage } from "@/lib/utils"
 import { VariableDialog, type TScope, type TVariable } from "./VariableDialog"
 import { ImportEnvDialog } from "./ImportEnvDialog"
 import { useFresh } from "@/hooks/use-fresh"
+import { ago } from "@/pages/projects/shared"
 
 function SecretValue({
   variable,
@@ -166,11 +149,19 @@ function DeleteDialog({
   )
 }
 
-export function VariableTable({ scope }: { scope: TScope }) {
+export function VariableTable({
+  scope,
+  switcher,
+}: {
+  scope: TScope
+  /** A scope switch, shown at the start of the toolbar. */
+  switcher?: React.ReactNode
+}) {
   const { t } = useTranslation()
   const [editing, setEditing] = React.useState<TVariable | "new" | null>(null)
   const [deleting, setDeleting] = React.useState<TVariable>()
   const [importing, setImporting] = React.useState(false)
+  const [filter, setFilter] = React.useState("")
 
   const request = ThunderSDK.useCaching(
     ["variables", scope.scope, scope.project ?? ""],
@@ -189,154 +180,185 @@ export function VariableTable({ scope }: { scope: TScope }) {
   }
 
   const add = (
-    <div className="flex flex-wrap gap-2">
-      <Button variant="outline" onClick={() => setImporting(true)}>
+    <>
+      <Button size="sm" variant="outline" onClick={() => setImporting(true)}>
         <IconFileImport aria-hidden /> {t("Import .env")}
       </Button>
-      <Button onClick={() => setEditing("new")}>
+      <Button size="sm" onClick={() => setEditing("new")}>
         <IconPlus aria-hidden /> {t("Add variable")}
       </Button>
-    </div>
+    </>
   )
 
-  return (
-    <div className="flex flex-col gap-4">
-      {isLoading && !data ? (
-        <Skeleton className="h-48 rounded-4xl" />
-      ) : !data?.length ? (
-        <Empty className="border">
-          <EmptyHeader>
-            <EmptyMedia variant="icon">
-              <IconBraces />
-            </EmptyMedia>
-            <EmptyTitle>{t("No variables yet")}</EmptyTitle>
-            <EmptyDescription>
-              {scope.scope === "project"
-                ? t(
-                    "Only this project gets them; they override tenant variables."
-                  )
-                : scope.scope === "tenant"
-                  ? t("Shared by everyone in this tenant and its apps.")
-                  : t("Yours alone. Every tenant you own uses them.")}
-            </EmptyDescription>
-          </EmptyHeader>
-          <EmptyContent>{add}</EmptyContent>
-        </Empty>
-      ) : (
+  const needle = filter.trim().toLowerCase()
+  const rows = needle
+    ? data?.filter(
+        (v) =>
+          v.key.toLowerCase().includes(needle) ||
+          v.description?.toLowerCase().includes(needle)
+      )
+    : data
+
+  const columns: TColumn<TVariable>[] = [
+    {
+      id: "select",
+      header: (
+        <SelectAllCheckbox
+          selection={selection}
+          ids={(rows ?? []).map((v) => v._id)}
+        />
+      ),
+      className: "w-10",
+      cell: (variable) => (
+        <SelectCheckbox
+          selection={selection}
+          id={variable._id}
+          label={variable.key}
+        />
+      ),
+    },
+    {
+      id: "key",
+      header: t("Key"),
+      sortValue: (v) => v.key,
+      className: "max-w-56",
+      cell: (variable) => (
         <>
-          <div className="flex justify-end">{add}</div>
-          <div className="overflow-hidden rounded-2xl border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-10">
-                    <SelectAllCheckbox
-                      selection={selection}
-                      ids={data.map((v) => v._id)}
-                    />
-                  </TableHead>
-                  <TableHead>{t("Key")}</TableHead>
-                  <TableHead>{t("Value")}</TableHead>
-                  <TableHead className="hidden md:table-cell">
-                    {t("Available at")}
-                  </TableHead>
-                  <TableHead className="w-24">
-                    <span className="sr-only">{t("Actions")}</span>
-                  </TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {data.map((variable) => (
-                  <TableRow
-                    key={variable._id}
-                    data-state={
-                      selection.has(variable._id) ? "selected" : undefined
-                    }
-                  >
-                    <TableCell>
-                      <SelectCheckbox
-                        selection={selection}
-                        id={variable._id}
-                        label={variable.key}
-                      />
-                    </TableCell>
-                    <TableCell className="max-w-56">
-                      <div className="flex items-center gap-2">
-                        <span className="truncate font-mono text-xs font-medium">
-                          {variable.key}
-                        </span>
-                        {variable.isSecret && (
-                          <IconLock
-                            className="size-3.5 shrink-0 text-muted-foreground"
-                            aria-label={t("Secret")}
-                          />
-                        )}
-                        {variable.kind === "file" && (
-                          <Badge variant="secondary" className="gap-1">
-                            <IconFile aria-hidden /> {t("File")}
-                          </Badge>
-                        )}
-                      </div>
-                      {variable.description && (
-                        <p className="truncate text-xs text-muted-foreground">
-                          {variable.description}
-                        </p>
-                      )}
-                    </TableCell>
-                    <TableCell className="max-w-40 md:max-w-72">
-                      {variable.isSecret ? (
-                        <SecretValue variable={variable} scope={scope} />
-                      ) : (
-                        <div className="flex items-center gap-1">
-                          <span
-                            className="truncate font-mono text-xs"
-                            title={variable.value}
-                          >
-                            {variable.value || (
-                              <span className="text-muted-foreground italic">
-                                {t("empty")}
-                              </span>
-                            )}
-                          </span>
-                          {variable.value && (
-                            <CopyButton value={variable.value} />
-                          )}
-                        </div>
-                      )}
-                    </TableCell>
-                    <TableCell className="hidden md:table-cell">
-                      <Badge variant="outline">
-                        {stageLabel[variable.stage]}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex justify-end gap-1">
-                        <Button
-                          variant="ghost"
-                          size="icon-sm"
-                          onClick={() => setEditing(variable)}
-                          aria-label={t("Edit {{key}}", { key: variable.key })}
-                        >
-                          <IconPencil />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon-sm"
-                          onClick={() => setDeleting(variable)}
-                          aria-label={t("Delete {{key}}?", {
-                            key: variable.key,
-                          })}
-                        >
-                          <IconTrash />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+          <div className="flex items-center gap-2">
+            <span dir="ltr" className="truncate font-mono text-xs font-medium">
+              {variable.key}
+            </span>
+            {variable.isSecret && (
+              <IconLock
+                className="size-3.5 shrink-0 text-muted-foreground"
+                aria-label={t("Secret")}
+              />
+            )}
+            {variable.kind === "file" && (
+              <Badge variant="secondary" className="gap-1">
+                <IconFile aria-hidden /> {t("File")}
+              </Badge>
+            )}
           </div>
+          {variable.description && (
+            <p className="truncate text-xs text-muted-foreground">
+              {variable.description}
+            </p>
+          )}
         </>
+      ),
+    },
+    {
+      id: "value",
+      header: t("Value"),
+      className: "max-w-40 md:max-w-72",
+      cell: (variable) =>
+        variable.isSecret ? (
+          <SecretValue variable={variable} scope={scope} />
+        ) : (
+          <div className="flex items-center gap-1">
+            <span
+              dir="ltr"
+              className="truncate font-mono text-xs"
+              title={variable.value}
+            >
+              {variable.value || (
+                <span className="text-muted-foreground italic">
+                  {t("empty")}
+                </span>
+              )}
+            </span>
+            {variable.value && <CopyButton value={variable.value} />}
+          </div>
+        ),
+    },
+    {
+      id: "stage",
+      header: t("Available at"),
+      sortValue: (v) => v.stage,
+      className: "hidden md:table-cell",
+      cell: (variable) => (
+        <Badge variant="outline">{stageLabel[variable.stage]}</Badge>
+      ),
+    },
+    {
+      id: "updated",
+      header: t("Updated"),
+      sortValue: (v) => v.updatedAt,
+      className: "hidden lg:table-cell",
+      cell: (variable) => (
+        <span className="text-xs whitespace-nowrap text-muted-foreground">
+          {ago(variable.updatedAt)}
+        </span>
+      ),
+    },
+    {
+      id: "actions",
+      header: <span className="sr-only">{t("Actions")}</span>,
+      className: "w-20",
+      cell: (variable) => (
+        <div className="flex justify-end gap-0.5">
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={() => setEditing(variable)}
+            aria-label={t("Edit {{key}}", { key: variable.key })}
+          >
+            <IconPencil />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={() => setDeleting(variable)}
+            aria-label={t("Delete {{key}}?", {
+              key: variable.key,
+            })}
+          >
+            <IconTrash />
+          </Button>
+        </div>
+      ),
+    },
+  ]
+
+  const empty = !isLoading && !data?.length
+
+  return (
+    <div className="flex flex-col gap-3">
+      {(switcher || !empty) && (
+        <Toolbar
+          search={filter}
+          onSearch={empty ? undefined : setFilter}
+          placeholder={t("Filter variables")}
+          actions={!empty && add}
+        >
+          {switcher}
+        </Toolbar>
+      )}
+      {empty ? (
+        <EmptyState
+          icon={IconBraces}
+          title={t("No variables yet")}
+          description={
+            scope.scope === "project"
+              ? t(
+                  "Only this project gets them; they override tenant variables."
+                )
+              : scope.scope === "tenant"
+                ? t("Shared by everyone in this tenant and its apps.")
+                : t("Yours alone. Every tenant you own uses them.")
+          }
+          action={<div className="flex flex-wrap gap-2">{add}</div>}
+        />
+      ) : (
+        <DataTable
+          label={t("Variables")}
+          columns={columns}
+          rows={rows}
+          loading={isLoading}
+          rowId={(v) => v._id}
+          isSelected={(v) => selection.has(v._id)}
+        />
       )}
 
       <SelectionBar
@@ -382,69 +404,73 @@ function ScriptAccess() {
   ].join("\n")
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-base">
-          <IconKey className="size-4" aria-hidden />{" "}
+    <Panel
+      title={
+        <span className="flex items-center gap-2">
+          <IconKey className="size-4" aria-hidden />
           {t("Use from scripts and CI")}
-        </CardTitle>
-        <CardDescription>
-          {t(
-            "Returns this tenant's resolved variables (references expanded) as env and files. Create an API key with the variableApi scope so it can read nothing else."
-          )}
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-3">
-        <div className="relative rounded-2xl bg-muted/50 p-3 pe-10">
-          <pre className="overflow-x-auto font-mono text-xs">{command}</pre>
-          <CopyButton value={command} className="absolute end-2 top-2" />
-        </div>
-        <div>
-          <Button
-            variant="outline"
-            onClick={() => {
-              // Opens the account page on its API keys view.
-              const url = getAuthUrl()
-              url.searchParams.set("tab", "developers")
-              url.searchParams.set("view", "api-keys")
-              window.location.href = url.toString()
-            }}
-          >
-            {t("Manage API keys")}
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
+        </span>
+      }
+      actions={
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => {
+            // Opens the account page on its API keys view.
+            const url = getAuthUrl()
+            url.searchParams.set("tab", "developers")
+            url.searchParams.set("view", "api-keys")
+            window.location.href = url.toString()
+          }}
+        >
+          {t("Manage API keys")}
+        </Button>
+      }
+      bodyClassName="flex flex-col gap-3"
+    >
+      <p className="text-[13px] text-muted-foreground">
+        {t(
+          "Returns this tenant's resolved variables (references expanded) as env and files. Create an API key with the variableApi scope so it can read nothing else."
+        )}
+      </p>
+      <CodeBlock code={command} />
+    </Panel>
   )
 }
 
 /** Variables (PLAN §12, §15.6): tenant and global scopes, plus script access. */
 export default function VariablesPage() {
   const { t } = useTranslation()
+  const [scope, setScope] = React.useState<"tenant" | "global">("tenant")
 
   return (
-    <Page className="flex flex-col gap-6 py-4">
-      <div>
-        <h1 className="text-xl font-semibold">{t("Variables")}</h1>
-        <p className="text-sm text-muted-foreground">
-          {t(
-            "Encrypted settings for your apps. When a key exists in both scopes, the tenant value wins."
-          )}
-        </p>
-      </div>
+    <Page className="flex flex-col gap-4 py-5">
+      <PageHeader
+        title={t("Variables")}
+        description={t(
+          "Encrypted settings for your apps. When a key exists in both scopes, the tenant value wins."
+        )}
+      />
 
-      <Tabs defaultValue="tenant">
-        <TabsList>
-          <TabsTrigger value="tenant">{t("Tenant")}</TabsTrigger>
-          <TabsTrigger value="global">{t("Global")}</TabsTrigger>
-        </TabsList>
-        <TabsContent value="tenant" className="pt-2">
-          <VariableTable scope={{ scope: "tenant" }} />
-        </TabsContent>
-        <TabsContent value="global" className="pt-2">
-          <VariableTable scope={{ scope: "global" }} />
-        </TabsContent>
-      </Tabs>
+      {/* Keyed so filter and selection don't carry over between scopes. */}
+      <VariableTable
+        key={scope}
+        scope={{ scope }}
+        switcher={
+          <ToggleGroup
+            aria-label={t("Scope")}
+            value={scope}
+            onValueChange={(v) => setScope(v as "tenant" | "global")}
+          >
+            <ToggleGroupItem value="tenant" className="h-7 py-0 text-[13px]">
+              {t("Tenant")}
+            </ToggleGroupItem>
+            <ToggleGroupItem value="global" className="h-7 py-0 text-[13px]">
+              {t("Global")}
+            </ToggleGroupItem>
+          </ToggleGroup>
+        }
+      />
 
       <ScriptAccess />
     </Page>

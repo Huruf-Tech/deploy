@@ -134,13 +134,17 @@ export function RepositoriesSheet({
               aria-label={t("Filter repositories")}
             />
           </InputGroup>
-          {error && <p className="text-sm text-destructive">{error}</p>}
-          <ul className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto">
+          {error && (
+            <p role="alert" className="text-[13px] text-destructive-foreground">
+              {error}
+            </p>
+          )}
+          <ul className="flex min-h-0 flex-1 flex-col divide-y overflow-y-auto rounded-lg border">
             {shown.map((repo) => (
-              <li key={repo.id} className="rounded-2xl border">
+              <li key={repo.id}>
                 <button
                   type="button"
-                  className="flex w-full items-center gap-2 px-3 py-2 text-start hover:bg-muted"
+                  className="flex w-full items-center gap-2 px-3 py-1.5 text-start outline-none hover:bg-muted focus-visible:bg-muted"
                   aria-expanded={expanded === repo.fullName}
                   onClick={() =>
                     setExpanded((e) =>
@@ -149,7 +153,10 @@ export function RepositoriesSheet({
                   }
                 >
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-medium">
+                    <span
+                      dir="ltr"
+                      className="block truncate text-[13px] font-medium"
+                    >
                       {repo.fullName}
                     </span>
                     {repo.description && (
@@ -165,7 +172,7 @@ export function RepositoriesSheet({
                   )}
                 </button>
                 {expanded === repo.fullName && target && (
-                  <div className="border-t px-3 py-2">
+                  <div className="border-t bg-muted/30 px-3 py-2">
                     <Branches target={target} repo={repo.fullName} />
                   </div>
                 )}
@@ -173,16 +180,20 @@ export function RepositoriesSheet({
             ))}
             {loading &&
               Array.from({ length: 4 }, (_, i) => (
-                <Skeleton key={i} className="h-12 rounded-2xl" />
+                <Skeleton key={i} className="m-2 h-8 rounded-md" />
               ))}
             {!loading && !error && repos.length === 0 && (
-              <p className="py-8 text-center text-sm text-muted-foreground">
+              <p className="py-8 text-center text-[13px] text-muted-foreground">
                 {t("This installation can't read any repositories yet.")}
               </p>
             )}
           </ul>
           {hasMore && !loading && (
-            <Button variant="outline" onClick={() => setPage((p) => p + 1)}>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setPage((p) => p + 1)}
+            >
               {t("Load more")}
             </Button>
           )}

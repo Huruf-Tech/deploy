@@ -4,22 +4,16 @@ import {
   IconAlertOctagon,
   IconAlertTriangle,
   IconArrowsExchange,
-  IconCircleCheck,
   IconCpu,
   IconDatabase,
   IconServer2,
   IconStack2,
 } from "@tabler/icons-react"
 
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
-import { Bar, IconChip } from "@/components/meter"
-import { levelFill, type THue, type TLevel } from "@/lib/hues"
+import { Meter } from "@/components/console/meter"
+import { Panel } from "@/components/console/panel"
+import { StatusBadge, type TTone } from "@/components/console/status"
+import type { TLevel } from "@/lib/hues"
 import { cn } from "@/lib/utils"
 import {
   num,
@@ -42,15 +36,14 @@ const gb = (mb: number) =>
 const level = (value: number, warn: number, crit: number): TLevel =>
   value >= crit ? "critical" : value >= warn ? "warning" : "ok"
 
-function Meter({
-  hue,
-  icon,
+/** A metric panel: label, headline value, then its meters. */
+function MeterPanel({
+  icon: Icon,
   label,
   title,
   detail,
   children,
 }: {
-  hue: THue
   icon: React.ComponentType<{ className?: string }>
   label: string
   title: string
@@ -58,103 +51,93 @@ function Meter({
   children: React.ReactNode
 }) {
   return (
-    <Card size="sm">
-      <CardHeader className="flex flex-row items-center gap-3">
-        <IconChip hue={hue} icon={icon} />
-        <div className="min-w-0">
-          <CardDescription>{label}</CardDescription>
-          <CardTitle className="text-2xl tabular-nums">{title}</CardTitle>
-        </div>
-        {detail && (
-          <span className="ms-auto self-start text-xs text-muted-foreground">
+    <Panel
+      title={
+        <span className="flex items-center gap-1.5">
+          <Icon className="size-4 text-muted-foreground" aria-hidden />
+          {label}
+        </span>
+      }
+      actions={
+        detail && (
+          <span className="text-xs text-muted-foreground tabular-nums">
             {detail}
           </span>
-        )}
-      </CardHeader>
-      <CardContent className="flex flex-col gap-3">{children}</CardContent>
-    </Card>
+        )
+      }
+      bodyClassName="flex flex-col gap-3"
+    >
+      <div className="font-mono text-xl font-semibold tabular-nums">
+        {title}
+      </div>
+      {children}
+    </Panel>
   )
 }
 
-/** The verdict: healthy, needs attention or under pressure, and why. */
-export function HealthHero({ findings }: { findings: TFinding[] }) {
+/** The overall verdict from the findings, for the page header. */
+export function HealthBadge({ findings }: { findings: TFinding[] }) {
   const { t } = useTranslation()
   const worst: TLevel = findings.some((f) => f.level === "critical")
     ? "critical"
     : findings.length
       ? "warning"
       : "ok"
-  const look = {
-    ok: {
-      icon: IconCircleCheck,
-      chip: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300",
-      bg: "from-emerald-500/15 via-emerald-500/5 to-transparent",
-      title: t("Healthy"),
-      text: t(
-        "Every instance has headroom, and agents' polls are within budget."
-      ),
-    },
-    warning: {
-      icon: IconAlertTriangle,
-      chip: "bg-amber-500/15 text-amber-700 dark:text-amber-300",
-      bg: "from-amber-500/15 via-amber-500/5 to-transparent",
-      title: t("Needs attention"),
-      text: t("Something is close to its limit; see below."),
-    },
-    critical: {
-      icon: IconAlertOctagon,
-      chip: "bg-rose-500/15 text-rose-700 dark:text-rose-300",
-      bg: "from-rose-500/15 via-rose-500/5 to-transparent",
-      title: t("Under pressure"),
-      text: t("Something is at its limit: act on the items below."),
-    },
-  }[worst]
+  const [tone, label]: [TTone, string] =
+    worst === "critical"
+      ? ["danger", t("Under pressure")]
+      : worst === "warning"
+        ? ["warning", t("Needs attention")]
+        : ["success", t("Healthy")]
+  return <StatusBadge tone={tone} label={label} />
+}
 
+/** Why the verdict is what it is: one line per finding, or the all-clear. */
+export function HealthHero({ findings }: { findings: TFinding[] }) {
+  const { t } = useTranslation()
+  const critical = findings.some((f) => f.level === "critical")
   return (
-    <section
-      aria-label={t("Health")}
-      className={cn(
-        "flex flex-col gap-4 rounded-3xl border bg-linear-to-br p-5 sm:p-6",
-        look.bg
-      )}
-    >
-      <div className="flex items-center gap-4">
-        <span
-          aria-hidden
-          className={cn(
-            "flex size-12 shrink-0 items-center justify-center rounded-2xl",
-            look.chip
+    <section aria-label={t("Health")} aria-live="polite">
+      {!findings.length ? (
+        <p className="text-[13px] text-muted-foreground">
+          {t(
+            "Every instance has headroom, and agents' polls are within budget."
           )}
-        >
-          <look.icon className="size-7" />
-        </span>
-        <div>
-          <h2 className="text-2xl font-semibold">{look.title}</h2>
-          <p className="text-sm text-muted-foreground">{look.text}</p>
+        </p>
+      ) : (
+        <div className="flex flex-col gap-2">
+          <p className="text-[13px] text-muted-foreground">
+            {critical
+              ? t("Something is at its limit: act on the items below.")
+              : t("Something is close to its limit; see below.")}
+          </p>
+          <ul className="flex flex-col gap-1.5">
+            {findings.map((f) => (
+              <li
+                key={f.text}
+                className={cn(
+                  "flex items-start gap-2 rounded-lg px-3 py-2 text-[13px]",
+                  f.level === "critical"
+                    ? "bg-destructive-soft text-destructive-foreground"
+                    : "bg-warning-soft text-warning-foreground"
+                )}
+              >
+                {f.level === "critical" ? (
+                  <IconAlertOctagon
+                    className="mt-0.5 size-4 shrink-0"
+                    aria-hidden
+                  />
+                ) : (
+                  <IconAlertTriangle
+                    className="mt-0.5 size-4 shrink-0"
+                    aria-hidden
+                  />
+                )}
+                {f.text}
+              </li>
+            ))}
+          </ul>
         </div>
-      </div>
-      {findings.length > 0 && (
-        <ul className="flex flex-col gap-2">
-          {findings.map((f) => (
-            <li
-              key={f.text}
-              className="flex gap-2 rounded-2xl bg-background/70 p-3 text-sm"
-            >
-              {f.level === "critical" ? (
-                <IconAlertOctagon
-                  className="mt-0.5 size-4 shrink-0 text-destructive"
-                  aria-hidden
-                />
-              ) : (
-                <IconAlertTriangle
-                  className="mt-0.5 size-4 shrink-0 text-warning"
-                  aria-hidden
-                />
-              )}
-              {f.text}
-            </li>
-          ))}
-        </ul>
       )}
     </section>
   )
@@ -170,14 +153,13 @@ export function ClusterMeters({ o }: { o: TOverview }) {
   const ping = cluster.db.pingMs
 
   return (
-    <div className="grid gap-4 md:grid-cols-3">
-      <Meter
-        hue="orange"
+    <div className="grid gap-3 md:grid-cols-3">
+      <MeterPanel
         icon={IconServer2}
         label={t("Agents online")}
         title={`${num(cluster.onlineAgents)} / ${num(cluster.activeServers)}`}
       >
-        <Bar
+        <Meter
           label={t("Online")}
           value={cluster.onlineAgents}
           total={Math.max(1, cluster.activeServers)}
@@ -185,21 +167,21 @@ export function ClusterMeters({ o }: { o: TOverview }) {
             n: num(cluster.onlineAgents),
             total: num(cluster.activeServers),
           })}
-          fill={levelFill(
-            "orange",
+          hue="orange"
+          level={
             cluster.activeServers &&
-              cluster.onlineAgents < cluster.activeServers
+            cluster.onlineAgents < cluster.activeServers
               ? "warning"
               : "ok"
-          )}
+          }
         />
-        <Bar
+        <Meter
           label={t("Poll time, p95 (budget {{n}} ms)", { n: POLL_BUDGET_MS })}
           value={pollP95 ?? 0}
           total={POLL_BUDGET_MS * 2}
           text={pollP95 == null ? "—" : `${num(pollP95)} ms`}
-          fill={levelFill(
-            "orange",
+          hue="orange"
+          level={
             pollP95 == null
               ? "ok"
               : pollP95 > 100
@@ -207,34 +189,34 @@ export function ClusterMeters({ o }: { o: TOverview }) {
                 : pollP95 > POLL_BUDGET_MS
                   ? "warning"
                   : "ok"
-          )}
+          }
         />
-      </Meter>
+      </MeterPanel>
 
-      <Meter
-        hue="sky"
+      <MeterPanel
         icon={IconArrowsExchange}
         label={t("Requests per minute")}
         title={last ? num(last.requestsPerMin) : "—"}
       >
-        <Bar
+        <Meter
           label={t("Agent polls per minute")}
           value={last?.pollsPerMin ?? 0}
           total={Math.max(1, last?.requestsPerMin ?? 0)}
           text={last ? num(last.pollsPerMin) : "—"}
-          fill={levelFill("sky")}
+          hue="sky"
+          level="ok"
         />
-        <Bar
+        <Meter
           label={t("Server errors")}
           value={errorPct}
           total={5}
           text={`${num(errorPct)}%`}
-          fill={levelFill("sky", level(errorPct, 0.5, 1))}
+          hue="sky"
+          level={level(errorPct, 0.5, 1)}
         />
-      </Meter>
+      </MeterPanel>
 
-      <Meter
-        hue="emerald"
+      <MeterPanel
         icon={IconDatabase}
         label={t("Database")}
         title={cluster.db.storageMb == null ? "—" : gb(cluster.db.storageMb)}
@@ -244,21 +226,23 @@ export function ClusterMeters({ o }: { o: TOverview }) {
             : t("{{n}} documents", { n: num(cluster.db.objects) })
         }
       >
-        <Bar
+        <Meter
           label={t("Ping from this instance")}
           value={ping ?? 0}
           total={100}
           text={ping == null ? "—" : `${num(ping)} ms`}
-          fill={levelFill("emerald", level(ping ?? 0, 30, 80))}
+          hue="emerald"
+          level={level(ping ?? 0, 30, 80)}
         />
-        <Bar
+        <Meter
           label={t("Commands waiting for agents")}
           value={cluster.pendingCommands}
           total={1000}
           text={num(cluster.pendingCommands)}
-          fill={levelFill("emerald", level(cluster.pendingCommands, 500, 1000))}
+          hue="emerald"
+          level={level(cluster.pendingCommands, 500, 1000)}
         />
-      </Meter>
+      </MeterPanel>
     </div>
   )
 }
@@ -268,7 +252,7 @@ export function InstanceMeters({ o }: { o: TOverview }) {
   const { t } = useTranslation()
   if (!o.instances.length)
     return (
-      <p className="rounded-2xl border border-dashed p-4 text-sm text-muted-foreground">
+      <p className="rounded-[10px] border border-dashed px-4 py-3 text-[13px] text-muted-foreground">
         {t(
           "No instance has reported in the last 3 minutes. Instances report once a minute while they serve requests."
         )}
@@ -286,8 +270,10 @@ export function InstanceMeters({ o }: { o: TOverview }) {
             aria-label={i.host}
             className="flex flex-col gap-2"
           >
-            <h3 className="flex flex-wrap items-baseline gap-x-2 text-sm">
-              <span className="font-medium">{i.host}</span>
+            <h3 className="flex flex-wrap items-baseline gap-x-2 text-[13px]">
+              <span dir="ltr" className="font-mono text-xs font-medium">
+                {i.host}
+              </span>
               <span className="text-xs text-muted-foreground">
                 {t("up {{time}} · {{n}} database connections", {
                   time: uptime(i.process.uptimeS),
@@ -297,9 +283,8 @@ export function InstanceMeters({ o }: { o: TOverview }) {
                   ` · ${t("waited {{ms}} ms", { ms: Math.round(i.dbPoolWaitMaxMs) })}`}
               </span>
             </h3>
-            <div className="grid gap-4 md:grid-cols-2">
-              <Meter
-                hue="sky"
+            <div className="grid gap-3 md:grid-cols-2">
+              <MeterPanel
                 icon={IconCpu}
                 label={t("CPU")}
                 title={
@@ -309,23 +294,25 @@ export function InstanceMeters({ o }: { o: TOverview }) {
                 }
               >
                 {s && (
-                  <Bar
+                  <Meter
                     label={t("Host CPU used")}
                     value={s.cpuPct}
                     total={100}
                     text={`${num(s.cpuPct)}%`}
-                    fill={levelFill("sky", level(s.cpuPct, 80, 95))}
+                    hue="sky"
+                    level={level(s.cpuPct, 80, 95)}
                   />
                 )}
-                <Bar
+                <Meter
                   label={t("Control plane (runs on one core)")}
                   value={i.process.cpuPct}
                   total={100}
                   text={`${num(i.process.cpuPct)}%`}
-                  fill={levelFill("sky", level(i.process.cpuPct, 80, 95))}
+                  hue="sky"
+                  level={level(i.process.cpuPct, 80, 95)}
                 />
                 {s && (
-                  <Bar
+                  <Meter
                     label={t("Load, 5 min")}
                     value={s.load5}
                     total={s.cpus}
@@ -333,33 +320,35 @@ export function InstanceMeters({ o }: { o: TOverview }) {
                       load: num(s.load5),
                       cpus: s.cpus,
                     })}
-                    fill={levelFill("sky", s.load5 > s.cpus ? "warning" : "ok")}
+                    hue="sky"
+                    level={s.load5 > s.cpus ? "warning" : "ok"}
                   />
                 )}
-              </Meter>
-              <Meter
-                hue="violet"
+              </MeterPanel>
+              <MeterPanel
                 icon={IconStack2}
                 label={t("Memory")}
                 title={s ? gb(s.memTotalMb) : gb(i.process.rssMb)}
               >
                 {s && (
-                  <Bar
+                  <Meter
                     label={t("Host memory used")}
                     value={memUsed}
                     total={s.memTotalMb}
                     text={`${gb(memUsed)} · ${num(memPct)}%`}
-                    fill={levelFill("violet", level(memPct, 85, 95))}
+                    hue="violet"
+                    level={level(memPct, 85, 95)}
                   />
                 )}
-                <Bar
+                <Meter
                   label={t("Control plane process")}
                   value={i.process.rssMb}
                   total={s?.memTotalMb ?? i.process.rssMb}
                   text={gb(i.process.rssMb)}
-                  fill={levelFill("violet")}
+                  hue="violet"
+                  level="ok"
                 />
-              </Meter>
+              </MeterPanel>
             </div>
           </section>
         )

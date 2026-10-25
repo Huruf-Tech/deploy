@@ -3,25 +3,10 @@ import { ThunderSDK } from "thunder-sdk"
 import { useTranslation } from "react-i18next"
 import { formatDistanceToNow } from "date-fns"
 import { toast } from "sonner"
-import {
-  IconBell,
-  IconPencil,
-  IconPlus,
-  IconTrash,
-  IconX,
-} from "@tabler/icons-react"
+import { IconPencil, IconPlus, IconTrash, IconX } from "@tabler/icons-react"
 
 import { use } from "@/core/hooks/use"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import {
-  Card,
-  CardAction,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
 import {
   Dialog,
   DialogContent,
@@ -39,6 +24,10 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
+import { DataTable, type TColumn } from "@/components/console/data-table"
+import { Panel } from "@/components/console/panel"
+import { StatusBadge } from "@/components/console/status"
+import { Timeline } from "@/components/console/timeline"
 import { errorMessage } from "@/lib/utils"
 import { useFresh } from "@/hooks/use-fresh"
 
@@ -392,113 +381,156 @@ export function ControlPlaneRules() {
     }
   }
 
-  return (
-    <Card size="sm">
-      <CardHeader>
-        <CardTitle className="text-sm">{t("Alert rules")}</CardTitle>
-        <CardDescription>
-          {t(
-            "Checked by each instance once a minute; a rule fires when every minute of its window breaches."
+  const columns: TColumn<TRule>[] = [
+    {
+      id: "name",
+      header: t("Rule"),
+      sortValue: (rule) => rule.name,
+      cell: (rule) => <span className="font-medium">{rule.name}</span>,
+    },
+    {
+      id: "condition",
+      header: t("Condition"),
+      cell: (rule) => {
+        const meta = METRICS[rule.metric]
+        return (
+          <span className="tabular-nums">
+            {t(meta.label)} {meta.below ? "<" : ">"} {rule.threshold}{" "}
+            {t(meta.unit)} · {t("for {{n}} min", { n: rule.forSec / 60 })}
+          </span>
+        )
+      },
+    },
+    {
+      id: "channels",
+      header: t("Channels"),
+      className: "max-w-64",
+      cell: (rule) => (
+        <span
+          dir="ltr"
+          className="block truncate font-mono text-xs"
+          title={rule.channels.map((c) => c.target).join(", ")}
+        >
+          {rule.channels.map((c) => c.target).join(", ")}
+        </span>
+      ),
+    },
+    {
+      id: "status",
+      header: t("Status"),
+      sortValue: (rule) => (rule.enabled ? 0 : 1),
+      cell: (rule) => (
+        <span className="flex items-center gap-2">
+          {can("updateRuleHandler") && (
+            <Switch
+              aria-label={t("Enabled")}
+              checked={rule.enabled}
+              onCheckedChange={() => toggle(rule)}
+            />
           )}
-        </CardDescription>
-        {can("createRuleHandler") && (
-          <CardAction>
-            <Button size="sm" onClick={() => setEditing(null)}>
-              <IconPlus data-icon="inline-start" /> {t("Add rule")}
+          {rule.enabled ? (
+            <StatusBadge tone="success" label={t("Enabled")} />
+          ) : (
+            <StatusBadge tone="neutral" label={t("Disabled")} />
+          )}
+        </span>
+      ),
+    },
+    {
+      id: "actions",
+      header: <span className="sr-only">{t("Actions")}</span>,
+      align: "end",
+      className: "whitespace-nowrap",
+      cell: (rule) => (
+        <>
+          {can("updateRuleHandler") && (
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label={t("Edit {{name}}", { name: rule.name })}
+              onClick={() => setEditing(rule)}
+            >
+              <IconPencil />
             </Button>
-          </CardAction>
-        )}
-      </CardHeader>
-      <CardContent className="flex flex-col gap-4">
-        {!list?.length ? (
-          <p className="text-sm text-muted-foreground">
+          )}
+          {can("deleteRuleHandler") && (
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label={t("Delete {{name}}", { name: rule.name })}
+              onClick={() => remove(rule)}
+            >
+              <IconTrash />
+            </Button>
+          )}
+        </>
+      ),
+    },
+  ]
+
+  return (
+    <section className="flex flex-col gap-2">
+      <div className="flex flex-wrap items-start gap-3">
+        <div className="min-w-0 flex-1">
+          <h2 className="text-sm font-semibold">{t("Alert rules")}</h2>
+          <p className="text-xs text-muted-foreground">
             {t(
-              "No rules yet. Start with CPU of an instance above 80% and agent polls arriving below 50%."
+              "Checked by each instance once a minute; a rule fires when every minute of its window breaches."
             )}
           </p>
-        ) : (
-          <ul className="flex flex-col divide-y">
-            {list.map((rule) => {
-              const meta = METRICS[rule.metric]
-              return (
-                <li key={rule._id} className="flex items-center gap-3 py-2">
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium">{rule.name}</p>
-                    <p className="truncate text-xs text-muted-foreground">
-                      {t(meta.label)} {meta.below ? "<" : ">"} {rule.threshold}{" "}
-                      {t(meta.unit)} ·{" "}
-                      {t("for {{n}} min", { n: rule.forSec / 60 })} ·{" "}
-                      {rule.channels.map((c) => c.target).join(", ")}
-                    </p>
-                  </div>
-                  {can("updateRuleHandler") && (
-                    <>
-                      <Switch
-                        aria-label={t("Enabled")}
-                        checked={rule.enabled}
-                        onCheckedChange={() => toggle(rule)}
-                      />
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        aria-label={t("Edit {{name}}", { name: rule.name })}
-                        onClick={() => setEditing(rule)}
-                      >
-                        <IconPencil />
-                      </Button>
-                    </>
-                  )}
-                  {can("deleteRuleHandler") && (
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      aria-label={t("Delete {{name}}", { name: rule.name })}
-                      onClick={() => remove(rule)}
-                    >
-                      <IconTrash />
-                    </Button>
-                  )}
-                </li>
-              )
-            })}
-          </ul>
+        </div>
+        {can("createRuleHandler") && (
+          <Button size="sm" onClick={() => setEditing(null)}>
+            <IconPlus data-icon="inline-start" /> {t("Add rule")}
+          </Button>
         )}
+      </div>
+      <div className="overflow-x-auto">
+        <DataTable
+          label={t("Alert rules")}
+          columns={columns}
+          rows={list}
+          rowId={(rule) => rule._id}
+          loading={!list}
+          empty={t(
+            "No rules yet. Start with CPU of an instance above 80% and agent polls arriving below 50%."
+          )}
+        />
+      </div>
 
-        {can("alerts") && !!recent?.length && (
-          <section aria-label={t("Recent alerts")}>
-            <h3 className="mb-1.5 text-sm font-medium">{t("Recent alerts")}</h3>
-            <ul className="flex flex-col gap-1.5">
-              {recent.map((e) => (
-                <li key={e._id} className="flex items-start gap-2 text-sm">
-                  <IconBell
-                    className={
-                      e.open
-                        ? "mt-0.5 size-4 shrink-0 text-destructive"
-                        : "mt-0.5 size-4 shrink-0 text-muted-foreground"
-                    }
-                    aria-hidden
-                  />
-                  <span className="min-w-0 flex-1">
+      {can("alerts") && !!recent?.length && (
+        <Panel title={t("Recent alerts")} className="mt-2">
+          <Timeline
+            items={recent.map((e) => ({
+              id: e._id,
+              tone: e.open ? "danger" : "success",
+              label: (
+                <span className="flex min-w-0 items-center gap-2">
+                  <span className="truncate">
                     {e.ruleName}
                     {e.value !== undefined && ` · ${e.value}`}
-                    <span className="block text-xs text-muted-foreground">
-                      {e.instance === "all" ? t("All instances") : e.instance} ·{" "}
-                      {formatDistanceToNow(new Date(e.firedAt), {
-                        addSuffix: true,
-                      })}
-                      {e.delivery.status === "failed" &&
-                        ` · ${t("not delivered")}: ${e.delivery.error ?? ""}`}
-                    </span>
                   </span>
-                  <Badge variant={e.open ? "destructive" : "outline"}>
-                    {e.open ? t("Open") : t("Resolved")}
-                  </Badge>
-                </li>
-              ))}
-            </ul>
-          </section>
-        )}
-      </CardContent>
+                  {e.open ? (
+                    <StatusBadge tone="danger" label={t("Open")} />
+                  ) : (
+                    <StatusBadge state="resolved" label={t("Resolved")} />
+                  )}
+                </span>
+              ),
+              time: formatDistanceToNow(new Date(e.firedAt), {
+                addSuffix: true,
+              }),
+              details: (
+                <>
+                  {e.instance === "all" ? t("All instances") : e.instance}
+                  {e.delivery.status === "failed" &&
+                    ` · ${t("not delivered")}: ${e.delivery.error ?? ""}`}
+                </>
+              ),
+            }))}
+          />
+        </Panel>
+      )}
       {editing !== undefined && (
         <RuleDialog
           rule={editing ?? undefined}
@@ -507,6 +539,6 @@ export function ControlPlaneRules() {
           onSaved={reload}
         />
       )}
-    </Card>
+    </section>
   )
 }

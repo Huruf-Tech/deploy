@@ -2,13 +2,6 @@ import * as React from "react"
 import { ThunderSDK } from "thunder-sdk"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
-import {
-  IconCheck,
-  IconCircleDashed,
-  IconLoader2,
-  IconX,
-} from "@tabler/icons-react"
-
 import { Button } from "@/components/ui/button"
 import {
   Sheet,
@@ -20,6 +13,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton"
 import { Spinner } from "@/components/ui/spinner"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Timeline, type TTimelineItem } from "@/components/console/timeline"
 import { usePolling } from "@/hooks/use-polling"
 import { useStream, type TStreamChunk } from "@/hooks/use-stream"
 import { errorMessage } from "@/lib/utils"
@@ -29,21 +23,14 @@ import { AiFixButton } from "./AiFix"
 type TDeployment = Awaited<ReturnType<typeof ThunderSDK.projects.deployment>>
 type TStep = "pending" | "applying" | "healthy" | "failed" | "running" | "done"
 
-function StepIcon({ state }: { state?: TStep }) {
-  if (state === "healthy" || state === "done")
-    return <IconCheck className="size-4 text-success" aria-hidden />
-  if (state === "failed")
-    return <IconX className="size-4 text-destructive" aria-hidden />
-  if (state === "applying" || state === "running")
-    return (
-      <IconLoader2
-        className="size-4 text-sky-600 motion-safe:animate-spin"
-        aria-hidden
-      />
-    )
-  return (
-    <IconCircleDashed className="size-4 text-muted-foreground" aria-hidden />
-  )
+/** A step's state as a Timeline status (dot + pulse while it runs). */
+const STEP_STATE: Record<TStep, string> = {
+  pending: "new",
+  applying: "deploying",
+  running: "building",
+  healthy: "healthy",
+  done: "healthy",
+  failed: "failed",
 }
 
 /** The build log stays on the server that built it; this streams it while open. */
@@ -89,7 +76,10 @@ function BuildLog({
           const el = e.currentTarget
           follow.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40
         }}
-        className="min-h-0 flex-1 overflow-auto rounded-2xl bg-muted/50 p-3 font-mono text-xs leading-relaxed break-all whitespace-pre-wrap"
+        dir="ltr"
+        tabIndex={0}
+        aria-label={t("Build log")}
+        className="min-h-48 flex-1 overflow-auto rounded-lg border bg-muted/50 p-3 font-mono text-xs leading-relaxed break-all whitespace-pre-wrap focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
       >
         {text || (status === "error" ? "" : t("Waiting for the build log…"))}
       </pre>
@@ -170,6 +160,46 @@ export function DeploymentSheet({
   }
 
   const builders = data?.servers.filter((s) => s.build) ?? []
+  const rolloutLabel = (step?: TStep) =>
+    step === "healthy"
+      ? t("Serving")
+      : step === "applying"
+        ? data?.phase === "prepare"
+          ? t("Starting unrouted")
+          : t("Rolling out")
+        : step === "failed"
+          ? t("Failed")
+          : t("Waiting")
+  // Build (where it ran) then rollout, per server.
+  const steps: TTimelineItem[] = (data?.servers ?? []).flatMap((s) => [
+    ...(s.build
+      ? [
+          {
+            id: `${s._id}:build`,
+            state: STEP_STATE[s.build],
+            label: (
+              <>
+                <span className="font-medium">{s.name}</span>{" "}
+                <span className="text-muted-foreground">{t("Build")}</span>
+              </>
+            ),
+            time: s.buildMs !== undefined ? duration(s.buildMs) : undefined,
+          },
+        ]
+      : []),
+    {
+      id: `${s._id}:rollout`,
+      state: STEP_STATE[s.rollout ?? "pending"],
+      label: (
+        <>
+          <span className="font-medium">{s.name}</span>{" "}
+          <span className="text-muted-foreground">
+            {rolloutLabel(s.rollout)}
+          </span>
+        </>
+      ),
+    },
+  ])
 
   return (
     <Sheet open={!!deployment} onOpenChange={onOpenChange}>
@@ -203,11 +233,14 @@ export function DeploymentSheet({
 
         <div className="flex min-h-0 flex-1 flex-col gap-4 px-4 pb-4">
           {!data ? (
-            <Skeleton className="h-32 rounded-2xl" />
+            <Skeleton className="h-32 rounded-lg" />
           ) : (
             <>
               {data.errorSummary && data.status !== "cancelled" && (
-                <p className="rounded-2xl bg-destructive/10 p-3 font-mono text-xs whitespace-pre-wrap text-destructive">
+                <p
+                  dir="ltr"
+                  className="rounded-lg bg-destructive-soft p-3 font-mono text-xs whitespace-pre-wrap text-destructive-foreground"
+                >
                   {data.errorSummary}
                 </p>
               )}
@@ -224,36 +257,9 @@ export function DeploymentSheet({
                 </div>
               )}
 
-              <ol className="flex flex-col gap-1 rounded-2xl border p-2">
-                {data.servers.map((s) => (
-                  <li
-                    key={s._id}
-                    className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-xl px-2 py-1.5 text-sm"
-                  >
-                    <span className="min-w-28 flex-1 font-medium">
-                      {s.name}
-                    </span>
-                    {s.build && (
-                      <span className="inline-flex items-center gap-1.5 text-muted-foreground">
-                        <StepIcon state={s.build} /> {t("Build")}{" "}
-                        {s.buildMs !== undefined && duration(s.buildMs)}
-                      </span>
-                    )}
-                    <span className="inline-flex items-center gap-1.5 text-muted-foreground">
-                      <StepIcon state={s.rollout} />
-                      {s.rollout === "healthy"
-                        ? t("Serving")
-                        : s.rollout === "applying"
-                          ? data.phase === "prepare"
-                            ? t("Starting unrouted")
-                            : t("Rolling out")
-                          : s.rollout === "failed"
-                            ? t("Failed")
-                            : t("Waiting")}
-                    </span>
-                  </li>
-                ))}
-              </ol>
+              <div className="rounded-lg border p-3">
+                <Timeline items={steps} />
+              </div>
 
               {builders.length > 0 && logServer && deployment && (
                 <div className="flex min-h-0 flex-1 flex-col gap-2">
@@ -285,7 +291,7 @@ export function DeploymentSheet({
 
               {(isLive(data.status) || data.status === "queued") && (
                 <div className="flex justify-end">
-                  <Button variant="outline" onClick={cancel}>
+                  <Button size="sm" variant="outline" onClick={cancel}>
                     {t("Cancel deployment")}
                   </Button>
                 </div>

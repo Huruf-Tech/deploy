@@ -73,7 +73,7 @@ export function Onboarding() {
     <Dialog open={open}>
       <DialogContent
         showCloseButton={false}
-        className="h-full max-w-full rounded-none border-none bg-linear-0 from-primary to-white to-20% sm:h-auto sm:max-w-md sm:rounded-3xl dark:to-black"
+        className="h-full max-w-full rounded-none border-none bg-background sm:h-auto sm:max-w-md sm:rounded-xl sm:border"
       >
         <div className="flex flex-col justify-between gap-5">
           <div className="flex flex-col gap-3">
@@ -102,7 +102,7 @@ export function Onboarding() {
                 onClick={dismiss}
                 className={!isLastScreen ? "visible" : "invisible"}
               >
-                {t("Skip")} <IconChevronsRight />
+                {t("Skip")} <IconChevronsRight className="icon-flip-rtl" />
               </Button>
             </div>
           </div>
@@ -114,10 +114,8 @@ export function Onboarding() {
                 src={resolveUrl(screen.image).toString()}
                 alt={screen.title}
                 className={cn(
-                  "absolute inset-0 h-full w-full object-contain transition-all duration-700 ease-[cubic-bezier(0.22,1,0.36,1)]",
-                  current === idx
-                    ? "blur-0 z-10 translate-y-0 scale-100 opacity-100"
-                    : "z-0 translate-y-8 scale-110 opacity-0 blur-xl"
+                  "absolute inset-0 h-full w-full object-contain transition-opacity duration-200 ease-[cubic-bezier(0.23,1,0.32,1)]",
+                  current === idx ? "z-10 opacity-100" : "z-0 opacity-0"
                 )}
               />
             ))}
@@ -138,7 +136,7 @@ export function Onboarding() {
                 <div
                   key={idx}
                   className={cn(
-                    "flex flex-col items-center gap-4 rounded-3xl border-2 border-background/30 bg-background/60 p-6 text-center text-foreground backdrop-blur-md transition-all duration-300 ease-out",
+                    "flex flex-col items-center gap-3 rounded-[10px] border bg-card p-5 text-center text-foreground transition-all duration-200 ease-out",
                     isActive
                       ? "relative"
                       : "pointer-events-none absolute bottom-0"
@@ -148,9 +146,13 @@ export function Onboarding() {
                     zIndex,
                   }}
                 >
-                  <h2 className="text-2xl font-medium">{t(screen.title)}</h2>
+                  <h2 className="text-xl font-semibold tracking-tight">
+                    {t(screen.title)}
+                  </h2>
 
-                  <p className="text-sm opacity-90">{t(screen.description)}</p>
+                  <p className="text-[13px] text-muted-foreground">
+                    {t(screen.description)}
+                  </p>
 
                   {current + 1 === Screens.length ? (
                     <Button className="mt-2 w-full" onClick={dismiss}>
@@ -158,7 +160,8 @@ export function Onboarding() {
                     </Button>
                   ) : (
                     <Button className="mt-2 w-full" onClick={handleNext}>
-                      {t("Continue")} <IconArrowRight />
+                      {t("Continue")}{" "}
+                      <IconArrowRight className="icon-flip-rtl" />
                     </Button>
                   )}
                 </div>

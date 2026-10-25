@@ -8,7 +8,6 @@ import { IconLoader2 } from "@tabler/icons-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
-import { CopyButton } from "@/components/ui/copy-button"
 import {
   Dialog,
   DialogContent,
@@ -17,6 +16,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { CodeBlock } from "@/components/console/code-block"
 import { errorMessage } from "@/lib/utils"
 import type { TServer } from "./server"
 
@@ -145,7 +145,7 @@ export function RemoveServerDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex max-h-[55vh] flex-col gap-4 overflow-y-auto text-sm">
+        <div className="flex max-h-[55vh] flex-col gap-4 overflow-y-auto text-[13px]">
           {!online ? (
             <>
               <div className="flex flex-col gap-2">
@@ -154,10 +154,7 @@ export function RemoveServerDialog({
                     "The server is offline, so it can't clean up now. Over SSH, this shows the plan; add -yes to remove, and -keep / -remove with the ids it prints to change it:"
                   )}
                 </p>
-                <div className="flex items-center gap-2 rounded-xl bg-muted p-3 font-mono text-xs">
-                  <span className="min-w-0 flex-1 break-all">{command}</span>
-                  <CopyButton value={command} />
-                </div>
+                <CodeBlock code={command} wrap />
               </div>
               <label className="flex items-start gap-2">
                 <Checkbox
@@ -176,23 +173,29 @@ export function RemoveServerDialog({
               </label>
             </>
           ) : error ? (
-            <p className="rounded-xl bg-destructive/10 p-3 text-destructive">
+            <p
+              role="alert"
+              className="rounded-lg bg-destructive-soft p-3 text-destructive-foreground"
+            >
               {error}
             </p>
           ) : !steps ? (
-            <p className="flex items-center gap-2 text-muted-foreground">
+            <p
+              aria-live="polite"
+              className="flex items-center gap-2 text-muted-foreground"
+            >
               <IconLoader2 className="size-4 animate-spin" aria-hidden />
               {t("Asking the agent what it would remove…")}
             </p>
           ) : (
-            <ul className="flex flex-col gap-1" aria-label={t("Plan")}>
+            <ul className="flex flex-col" aria-label={t("Plan")}>
               {steps.map((s) => (
                 <li key={s.id}>
                   <label
                     className={
                       s.choice
-                        ? "flex cursor-pointer items-start gap-2 rounded-lg p-1.5 hover:bg-muted/60"
-                        : "flex items-start gap-2 rounded-lg p-1.5"
+                        ? "flex cursor-pointer items-start gap-2 rounded-md px-1.5 py-1 hover:bg-muted/60"
+                        : "flex items-start gap-2 rounded-md px-1.5 py-1"
                     }
                   >
                     <Checkbox

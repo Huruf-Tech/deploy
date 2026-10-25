@@ -1,30 +1,24 @@
+import React from "react"
 import { ThunderSDK } from "thunder-sdk"
-import { Link } from "react-router"
+import { Link, useNavigate } from "react-router"
 import { useTranslation } from "react-i18next"
-import { IconPlus, IconRocket, IconServer2 } from "@tabler/icons-react"
+import { IconPlus, IconRocket } from "@tabler/icons-react"
 
 import { Page } from "@/components/page"
 import { use } from "@/core/hooks/use"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import {
-  Empty,
-  EmptyContent,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyMedia,
-  EmptyTitle,
-} from "@/components/ui/empty"
-import { Skeleton } from "@/components/ui/skeleton"
 import { usePolling } from "@/hooks/use-polling"
 import { useFresh } from "@/hooks/use-fresh"
-import { cn } from "@/lib/utils"
+import { PageHeader } from "@/components/console/page-header"
+import { StatusBadge } from "@/components/console/status"
+import { Toolbar } from "@/components/console/toolbar"
+import { DataTable, type TColumn } from "@/components/console/data-table"
+import { EmptyState } from "@/components/console/empty-state"
 import {
   SelectAllCheckbox,
   SelectCheckbox,
   SelectionBar,
   useSelection,
-  type TSelection,
 } from "@/components/selection-bar"
 import {
   ago,
@@ -35,81 +29,10 @@ import {
   type TProjectSummary,
 } from "./shared"
 
-function ProjectCard({
-  project,
-  selection,
-}: {
-  project: TProjectSummary
-  selection: TSelection
-}) {
-  const { t } = useTranslation()
-  const last = project.lastDeployment
-
-  return (
-    <div
-      className={cn(
-        "relative flex flex-col gap-3 rounded-3xl border bg-card p-4 transition-colors hover:border-foreground/20",
-        selection.has(project._id) && "ring-2 ring-primary"
-      )}
-    >
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          {/* The whole card is the link. */}
-          <Link
-            to={`./${project._id}`}
-            className="font-medium after:absolute after:inset-0 after:rounded-3xl focus-visible:outline-none after:focus-visible:ring-2 after:focus-visible:ring-ring"
-          >
-            {project.name}
-          </Link>
-          <p className="mt-0.5 flex items-center gap-1.5 truncate text-xs text-muted-foreground">
-            <SourceIcon
-              source={project.sourceType}
-              className="size-3.5 shrink-0"
-            />
-            <span className="truncate">{project.source}</span>
-          </p>
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
-          {last ? (
-            <DeploymentStatus status={last.status} />
-          ) : (
-            <Badge variant="outline">{t("Not deployed")}</Badge>
-          )}
-          {/* Above the card-wide link. */}
-          <span className="relative z-10 flex">
-            <SelectCheckbox
-              selection={selection}
-              id={project._id}
-              label={project.name}
-            />
-          </span>
-        </div>
-      </div>
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-        {project.release !== undefined && (
-          <span className="font-medium text-foreground">
-            {t("Release {{n}}", { n: project.release })}
-          </span>
-        )}
-        <span className="inline-flex items-center gap-1">
-          <IconServer2 className="size-3.5" aria-hidden />
-          {t("{{count}} servers", { count: project.servers })}
-        </span>
-        {project.publicPort && <span>:{project.publicPort}</span>}
-        {last && (
-          <span className="min-w-0 truncate">
-            {last.commit?.message ?? shortSha(last.commit?.sha)} ·{" "}
-            {ago(last.createdAt)}
-          </span>
-        )}
-      </div>
-    </div>
-  )
-}
-
 /** Projects (PLAN §15.6): what runs, where, and how the last deploy went. */
 export default function ProjectsPage() {
   const { t } = useTranslation()
+  const navigate = useNavigate()
   const request = ThunderSDK.useCaching(
     ["projects"],
     async ({ signal }) => await ThunderSDK.projects.list({ signal })
@@ -117,6 +40,7 @@ export default function ProjectsPage() {
   useFresh(request)
   const { data, isLoading } = use(request)
   const selection = useSelection()
+  const [search, setSearch] = React.useState("")
 
   // Refresh while something is building or deploying.
   usePolling(() => {
@@ -124,66 +48,190 @@ export default function ProjectsPage() {
       request.invalidate()
   }, 4_000)
 
+  const q = search.trim().toLowerCase()
+  const rows = q
+    ? data?.filter((p) =>
+        [p.name, p.slug, p.source].some((s) => s.toLowerCase().includes(q))
+      )
+    : data
+  const live = data?.filter((p) => isLive(p.lastDeployment?.status)).length
+  const failed = data?.filter(
+    (p) => p.lastDeployment?.status === "failed"
+  ).length
+
   const create = (
-    <Button render={<Link to="./new" />} nativeButton={false}>
+    <Button size="sm" render={<Link to="./new" />} nativeButton={false}>
       <IconPlus aria-hidden /> {t("New project")}
     </Button>
   )
 
-  return (
-    <Page className="flex flex-col gap-6 py-4">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="text-xl font-semibold">{t("Projects")}</h1>
-          <p className="text-sm text-muted-foreground">
-            {t("Apps and services running on your servers.")}
-          </p>
-        </div>
-        {!!data?.length && (
-          <div className="flex items-center gap-3">
-            <label className="flex items-center gap-2 text-sm text-muted-foreground">
-              <SelectAllCheckbox
-                selection={selection}
-                ids={data.map((p) => p._id)}
-              />
-              {t("Select all")}
-            </label>
-            {create}
+  const columns: TColumn<TProjectSummary>[] = [
+    {
+      id: "select",
+      header: (
+        <SelectAllCheckbox
+          selection={selection}
+          ids={(rows ?? []).map((p) => p._id)}
+        />
+      ),
+      className: "w-8 pe-0",
+      cell: (p) => (
+        <SelectCheckbox selection={selection} id={p._id} label={p.name} />
+      ),
+    },
+    {
+      id: "name",
+      header: t("Project"),
+      sortValue: (p) => p.name,
+      cell: (p) => (
+        <div className="min-w-36">
+          <Link
+            to={`./${p._id}`}
+            onClick={(e) => e.stopPropagation()}
+            className="font-medium hover:underline focus-visible:underline focus-visible:outline-none"
+          >
+            {p.name}
+          </Link>
+          <div
+            dir="ltr"
+            className="truncate font-mono text-[11px] text-muted-foreground"
+          >
+            {p.slug}
           </div>
-        )}
-      </div>
+        </div>
+      ),
+    },
+    {
+      id: "kind",
+      header: t("Kind"),
+      className: "max-sm:hidden",
+      sortValue: (p) => p.kind,
+      cell: (p) => (
+        <span className="text-muted-foreground">
+          {p.kind === "app" ? t("App") : t("Service")}
+        </span>
+      ),
+    },
+    {
+      id: "source",
+      header: t("Source"),
+      className: "max-md:hidden",
+      sortValue: (p) => p.source,
+      cell: (p) => (
+        <span className="flex max-w-64 items-center gap-1.5 text-muted-foreground">
+          <SourceIcon source={p.sourceType} className="size-3.5 shrink-0" />
+          <span dir="ltr" className="truncate font-mono text-xs">
+            {p.source}
+          </span>
+        </span>
+      ),
+    },
+    {
+      id: "deployment",
+      header: t("Last deployment"),
+      sortValue: (p) => p.lastDeployment?.createdAt,
+      cell: (p) => {
+        const last = p.lastDeployment
+        if (!last) return <StatusBadge state="new" label={t("Not deployed")} />
+        return (
+          <div className="flex min-w-0 items-center gap-2">
+            <DeploymentStatus status={last.status} />
+            <span className="min-w-0 truncate text-xs text-muted-foreground max-lg:hidden">
+              {last.commit?.message ?? shortSha(last.commit?.sha)}
+            </span>
+            <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
+              {ago(last.createdAt)}
+            </span>
+          </div>
+        )
+      },
+    },
+    {
+      id: "release",
+      header: t("Release"),
+      className: "max-lg:hidden",
+      align: "end",
+      sortValue: (p) => p.release ?? -1,
+      cell: (p) => (p.release !== undefined ? `#${p.release}` : "—"),
+    },
+    {
+      id: "servers",
+      header: t("Servers"),
+      align: "end",
+      className: "max-sm:hidden",
+      sortValue: (p) => p.servers,
+      cell: (p) => (
+        <span>
+          {p.servers}
+          {p.publicPort && (
+            <span
+              dir="ltr"
+              className="ms-2 font-mono text-xs text-muted-foreground"
+            >
+              :{p.publicPort}
+            </span>
+          )}
+        </span>
+      ),
+    },
+  ]
 
-      {isLoading && !data ? (
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          {Array.from({ length: 3 }, (_, i) => (
-            <Skeleton key={i} className="h-28 rounded-3xl" />
-          ))}
-        </div>
-      ) : !data?.length ? (
-        <Empty className="border">
-          <EmptyHeader>
-            <EmptyMedia variant="icon">
-              <IconRocket />
-            </EmptyMedia>
-            <EmptyTitle>{t("Deploy your first project")}</EmptyTitle>
-            <EmptyDescription>
-              {t(
-                "From a GitHub repository, any Git repository, a Docker image, or a one-click database."
+  return (
+    <Page className="flex flex-col gap-4 py-5">
+      <PageHeader
+        title={t("Projects")}
+        status={
+          !!data?.length && (
+            <span className="flex items-center gap-2 text-xs text-muted-foreground tabular-nums">
+              {t("{{count}} projects", { count: data.length })}
+              {!!live && (
+                <StatusBadge
+                  state="building"
+                  label={t("{{n}} building", { n: live })}
+                />
               )}
-            </EmptyDescription>
-          </EmptyHeader>
-          <EmptyContent>{create}</EmptyContent>
-        </Empty>
+              {!!failed && (
+                <StatusBadge
+                  state="failed"
+                  label={t("{{n}} failed", { n: failed })}
+                />
+              )}
+            </span>
+          )
+        }
+        description={t("Apps and services running on your servers.")}
+        actions={create}
+      />
+
+      {!isLoading && !data?.length ? (
+        <EmptyState
+          icon={IconRocket}
+          title={t("Deploy your first project")}
+          description={t(
+            "From a GitHub repository, any Git repository, a Docker image, or a one-click database."
+          )}
+          action={create}
+        />
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          {data.map((project) => (
-            <ProjectCard
-              key={project._id}
-              project={project}
-              selection={selection}
+        <>
+          <Toolbar
+            search={search}
+            onSearch={setSearch}
+            placeholder={t("Filter projects…")}
+          />
+          <div aria-live="polite">
+            <DataTable
+              label={t("Projects")}
+              columns={columns}
+              rows={rows}
+              rowId={(p) => p._id}
+              isSelected={(p) => selection.has(p._id)}
+              loading={isLoading}
+              empty={t("No projects match the filter.")}
+              onRowClick={(p) => navigate(`./${p._id}`)}
             />
-          ))}
-        </div>
+          </div>
+        </>
       )}
 
       <SelectionBar

@@ -1,24 +1,21 @@
 import { ThunderSDK } from "thunder-sdk"
 import { Link, useParams } from "react-router"
 import { useTranslation } from "react-i18next"
-import { IconLock, IconPencil, IconShield } from "@tabler/icons-react"
+import { IconPencil } from "@tabler/icons-react"
 
 import { Page } from "@/components/page"
 import { use } from "@/core/hooks/use"
 import { getLocalPath } from "@/core/lib/utils"
 import { useBreadcrumbTitle } from "@/core/layouts/shared/breadcrumb"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
+import { PageHeader } from "@/components/console/page-header"
+import { Panel } from "@/components/console/panel"
+import { KeyValue } from "@/components/console/key-value"
+import { StatusBadge } from "@/components/console/status"
+import { EmptyState } from "@/components/console/empty-state"
+import { Chip } from "@/components/record-cards"
 import { useFresh } from "@/hooks/use-fresh"
-import { IconChip } from "@/components/meter"
 
 /**
  * A role and the policies attached to it (Admin > Roles > a role), each with
@@ -58,15 +55,15 @@ export default function RoleDetail() {
 
   if (isLoading && !role)
     return (
-      <Page className="flex flex-col gap-4 py-4">
-        <Skeleton className="h-24 rounded-3xl" />
-        <Skeleton className="h-48 rounded-3xl" />
+      <Page className="flex flex-col gap-4 py-5">
+        <Skeleton className="h-12 rounded-[10px]" />
+        <Skeleton className="h-40 rounded-[10px]" />
       </Page>
     )
   if (!role)
     return (
-      <Page className="py-4">
-        <p className="text-sm text-muted-foreground">{t("Role not found")}</p>
+      <Page className="py-5">
+        <EmptyState title={t("Role not found")} />
       </Page>
     )
 
@@ -75,67 +72,103 @@ export default function RoleDetail() {
   )
 
   return (
-    <Page className="flex flex-col gap-6 py-4">
-      <div className="flex flex-wrap items-start gap-4">
-        <IconChip hue="violet" icon={IconShield} className="size-12" />
-        <div className="min-w-0 flex-1">
-          <h1 className="flex flex-wrap items-center gap-2 font-mono text-xl font-semibold">
+    <Page className="flex flex-col gap-4 py-5">
+      <PageHeader
+        title={
+          <h1
+            dir="ltr"
+            className="truncate font-mono text-xl font-semibold tracking-tight"
+          >
             {role.role}
-            {role.skipIntersection && (
-              <Badge variant="outline" className="font-sans">
-                {t("Full grant to invitees")}
-              </Badge>
-            )}
           </h1>
-          <p className="text-sm text-muted-foreground">
-            {role.policies.length === 1
-              ? t("1 policy attached")
-              : t("{{count}} policies attached", {
-                  count: role.policies.length,
-                })}
-            {!!role.subRoles?.length &&
-              ` · ${t("Can invite as: {{roles}}", {
-                roles: role.subRoles.join(", "),
-              })}`}
-          </p>
-        </div>
-        <Button
-          variant="outline"
-          render={
-            <Link to={getLocalPath(`admin/accessControl/form/${role._id}`)} />
-          }
-        >
-          <IconPencil aria-hidden /> {t("Edit role")}
-        </Button>
-      </div>
+        }
+        status={
+          role.skipIntersection && (
+            <StatusBadge tone="warning" label={t("Full grant to invitees")} />
+          )
+        }
+        description={
+          role.policies.length === 1
+            ? t("1 policy attached")
+            : t("{{count}} policies attached", {
+                count: role.policies.length,
+              })
+        }
+        actions={
+          <Button
+            size="sm"
+            variant="outline"
+            nativeButton={false}
+            render={
+              <Link to={getLocalPath(`admin/accessControl/form/${role._id}`)} />
+            }
+          >
+            <IconPencil data-icon="inline-start" aria-hidden />
+            {t("Edit role")}
+          </Button>
+        }
+      />
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <Panel bodyClassName="px-4 py-1">
+        <KeyValue
+          items={[
+            { label: t("Role"), value: role.role, copy: role.role },
+            {
+              label: t("Policies"),
+              value: (
+                <span className="tabular-nums">{role.policies.length}</span>
+              ),
+            },
+            {
+              label: t("Full grant to invitees"),
+              value: role.skipIntersection ? t("Yes") : t("No"),
+            },
+            ...(role.subRoles?.length
+              ? [
+                  {
+                    label: t("Can invite as"),
+                    value: (
+                      <span className="flex flex-wrap gap-1.5">
+                        {role.subRoles.map((r) => (
+                          <Chip key={r}>{r}</Chip>
+                        ))}
+                      </span>
+                    ),
+                  },
+                ]
+              : []),
+          ]}
+        />
+      </Panel>
+
+      <div className="grid gap-3 lg:grid-cols-2">
         {attached.map((policy) => (
-          <Card key={policy._id} size="sm">
-            <CardHeader className="flex flex-row items-center gap-3">
-              <IconChip hue="sky" icon={IconLock} />
-              <div className="min-w-0 flex-1">
-                <CardTitle className="font-mono text-base">
-                  {"name" in policy ? policy.name : t("Unknown policy")}
-                </CardTitle>
-                <CardDescription>
-                  {"permissions" in policy
-                    ? policy.permissions.includes("*")
-                      ? t("Every permission")
-                      : policy.permissions.length === 1
-                        ? t("1 permission")
-                        : t("{{count}} permissions", {
-                            count: policy.permissions.length,
-                          })
-                    : t("It may have been deleted.")}
-                </CardDescription>
-              </div>
+          <Panel
+            key={policy._id}
+            title={
+              <span dir="ltr" className="font-mono text-[13px]">
+                {"name" in policy ? policy.name : t("Unknown policy")}
+              </span>
+            }
+            description={
+              "permissions" in policy
+                ? policy.permissions.includes("*")
+                  ? t("Every permission")
+                  : policy.permissions.length === 1
+                    ? t("1 permission")
+                    : t("{{count}} permissions", {
+                        count: policy.permissions.length,
+                      })
+                : t("It may have been deleted.")
+            }
+            actions={
               <Button
                 size="sm"
                 variant="ghost"
                 aria-label={t("Edit {{name}}", {
                   name: "name" in policy ? policy.name : policy._id,
                 })}
+                nativeButton={false}
                 render={
                   <Link
                     to={getLocalPath(
@@ -144,26 +177,30 @@ export default function RoleDetail() {
                   />
                 }
               >
-                <IconPencil aria-hidden /> {t("Edit")}
+                <IconPencil data-icon="inline-start" aria-hidden />
+                {t("Edit")}
               </Button>
-            </CardHeader>
+            }
+            bodyClassName={
+              "permissions" in policy && policy.permissions.length > 0
+                ? "p-4"
+                : "hidden"
+            }
+          >
             {"permissions" in policy && policy.permissions.length > 0 && (
-              <CardContent>
-                <ul className="flex flex-wrap gap-1.5">
-                  {[...policy.permissions].sort().map((p) => (
-                    <li key={p}>
-                      <Badge
-                        variant={p === "*" ? "destructive" : "secondary"}
-                        className="font-mono"
-                      >
-                        {p === "*" ? t("everything (*)") : p}
-                      </Badge>
-                    </li>
-                  ))}
-                </ul>
-              </CardContent>
+              <ul className="flex flex-wrap gap-1.5">
+                {[...policy.permissions].sort().map((p) => (
+                  <li key={p}>
+                    {p === "*" ? (
+                      <StatusBadge tone="danger" label={t("everything (*)")} />
+                    ) : (
+                      <Chip>{p}</Chip>
+                    )}
+                  </li>
+                ))}
+              </ul>
             )}
-          </Card>
+          </Panel>
         ))}
       </div>
     </Page>

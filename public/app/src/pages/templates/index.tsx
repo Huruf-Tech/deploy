@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next"
 import { IconCopy, IconSparkles } from "@tabler/icons-react"
 
 import { Page } from "@/components/page"
+import { PageHeader } from "@/components/console/page-header"
 import { use } from "@/core/hooks/use"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -36,27 +37,29 @@ function TemplateCard({
   return (
     <div
       className={cn(
-        "group relative flex flex-col gap-3 rounded-3xl border bg-card p-4 transition-colors hover:border-foreground/20",
+        "group relative flex flex-col gap-2 rounded-[10px] border bg-card p-3 transition-colors hover:bg-accent/50",
         selection?.has(template._id) && "ring-2 ring-primary"
       )}
     >
       <div className="flex items-start gap-3">
-        <span className="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-muted">
-          <TemplateIcon icon={template.icon} className="size-5" />
+        <span className="flex size-8 shrink-0 items-center justify-center rounded-lg border bg-muted">
+          <TemplateIcon icon={template.icon} className="size-4" />
         </span>
         <div className="min-w-0 flex-1">
           {/* The whole card is the link; the clone button sits above it. */}
           <Link
             to={`./${template._id}`}
-            className="font-medium after:absolute after:inset-0 after:rounded-3xl focus-visible:outline-none after:focus-visible:ring-2 after:focus-visible:ring-ring"
+            className="block truncate text-[13px] font-medium after:absolute after:inset-0 after:rounded-[10px] focus-visible:outline-none after:focus-visible:ring-2 after:focus-visible:ring-ring"
           >
             {template.name}
           </Link>
-          <div className="mt-1 flex flex-wrap gap-1">
+          <div className="mt-0.5 flex flex-wrap items-center gap-1">
             <Badge variant="secondary">
               {template.kind === "app" ? t("App") : t("Service")}
             </Badge>
-            <Badge variant="outline">v{template.latestVersion}</Badge>
+            <Badge variant="outline" className="font-mono tabular-nums">
+              v{template.latestVersion}
+            </Badge>
             {template.clonedFrom && (
               <Badge variant="outline">{t("Cloned")}</Badge>
             )}
@@ -82,7 +85,7 @@ function TemplateCard({
         </Button>
       </div>
       {template.description && (
-        <p className="line-clamp-2 text-sm text-muted-foreground">
+        <p className="line-clamp-1 text-xs text-muted-foreground">
           {template.description}
         </p>
       )}
@@ -108,14 +111,14 @@ function Section({
 }) {
   const { t } = useTranslation()
   return (
-    <section className="flex flex-col gap-3">
+    <section className="flex flex-col gap-2">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h2 className="font-medium">{title}</h2>
-          <p className="text-sm text-muted-foreground">{description}</p>
+          <h2 className="text-sm font-semibold">{title}</h2>
+          <p className="text-xs text-muted-foreground">{description}</p>
         </div>
         {selection && templates.length > 1 && (
-          <label className="flex items-center gap-2 text-sm text-muted-foreground">
+          <label className="flex items-center gap-2 text-xs text-muted-foreground">
             <SelectAllCheckbox
               selection={selection}
               ids={templates.map((x) => x._id)}
@@ -125,7 +128,7 @@ function Section({
         )}
       </div>
       {templates.length ? (
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
           {templates.map((template) => (
             <TemplateCard
               key={template._id}
@@ -136,7 +139,7 @@ function Section({
           ))}
         </div>
       ) : (
-        <p className="rounded-3xl border border-dashed p-6 text-center text-sm text-muted-foreground">
+        <p className="rounded-[10px] border border-dashed p-6 text-center text-[13px] text-muted-foreground">
           {empty}
         </p>
       )}
@@ -164,27 +167,25 @@ export default function TemplatesPage() {
   const system = (data ?? []).filter((x) => x.scope === "system")
 
   return (
-    <Page className="flex flex-col gap-8 py-4">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="text-xl font-semibold">{t("Templates")}</h1>
-          <p className="text-sm text-muted-foreground">
-            {t(
-              "Recipes that turn a repository into an image, or set up a ready-made service."
-            )}
-          </p>
-        </div>
-        {ai?.enabled && (
-          <Button onClick={() => setDrafting(true)}>
-            <IconSparkles aria-hidden /> {t("Create with AI")}
-          </Button>
+    <Page className="flex flex-col gap-6 py-5">
+      <PageHeader
+        title={t("Templates")}
+        description={t(
+          "Recipes that turn a repository into an image, or set up a ready-made service."
         )}
-      </div>
+        actions={
+          ai?.enabled && (
+            <Button size="sm" onClick={() => setDrafting(true)}>
+              <IconSparkles aria-hidden /> {t("Create with AI")}
+            </Button>
+          )
+        }
+      />
 
       {isLoading && !data ? (
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
           {Array.from({ length: 6 }, (_, i) => (
-            <Skeleton key={i} className="h-32 rounded-3xl" />
+            <Skeleton key={i} className="h-20 rounded-[10px]" />
           ))}
         </div>
       ) : (

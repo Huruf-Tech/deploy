@@ -15,13 +15,6 @@ import { use } from "@/core/hooks/use"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
-import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -32,16 +25,13 @@ import {
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Page } from "@/components/page"
+import { PageHeader } from "@/components/console/page-header"
+import { Panel } from "@/components/console/panel"
+import { DataTable, type TColumn } from "@/components/console/data-table"
+import { EmptyState } from "@/components/console/empty-state"
+import { StatusBadge, StatusDot } from "@/components/console/status"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Switch } from "@/components/ui/switch"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
 import { usePolling } from "@/hooks/use-polling"
 import { errorMessage } from "@/lib/utils"
 
@@ -122,18 +112,18 @@ function Matrix({ network }: { network: TNetwork }) {
     network.reachability.find((r) => r.from === from && r.to === to)?.reachable
 
   return (
-    <div className="overflow-x-auto rounded-2xl border">
-      <table className="w-full text-sm">
+    <div className="overflow-x-auto rounded-lg border">
+      <table className="w-full text-[13px]" aria-label={t("Who reaches whom")}>
         <thead>
           <tr>
-            <th className="p-3 text-start text-xs font-medium text-muted-foreground">
+            <th className="h-9 px-3 text-start text-xs font-medium text-muted-foreground">
               {t("From ↓ to →")}
             </th>
             {servers.map((s) => (
               <th
                 key={s._id}
                 scope="col"
-                className="p-3 text-center text-xs font-medium"
+                className="h-9 px-3 text-center text-xs font-medium"
               >
                 {s.name}
               </th>
@@ -143,24 +133,27 @@ function Matrix({ network }: { network: TNetwork }) {
         <tbody>
           {servers.map((from) => (
             <tr key={from._id} className="border-t">
-              <th scope="row" className="p-3 text-start text-xs font-medium">
+              <th
+                scope="row"
+                className="h-9 px-3 text-start text-xs font-medium"
+              >
                 {from.name}
               </th>
               {servers.map((to) => {
                 const state =
                   from._id === to._id ? undefined : cell(from._id, to._id)
                 return (
-                  <td key={to._id} className="p-3 text-center">
+                  <td key={to._id} className="h-9 px-3 text-center">
                     {from._id === to._id ? (
                       <span className="text-muted-foreground">·</span>
                     ) : state === true ? (
                       <IconCheck
-                        className="mx-auto size-4 text-success"
+                        className="mx-auto size-4 text-success-foreground"
                         aria-label={t("Reachable")}
                       />
                     ) : state === false ? (
                       <IconX
-                        className="mx-auto size-4 text-destructive"
+                        className="mx-auto size-4 text-destructive-foreground"
                         aria-label={t("Not reachable")}
                       />
                     ) : (
@@ -200,161 +193,207 @@ export default function NetworkPage() {
     }
   }
 
+  // One line of state: errors or broken links degrade it, joins pending wait.
+  const state = !data?.servers.length
+    ? undefined
+    : data.servers.some((s) => s.error) ||
+        data.reachability.some((r) => r.reachable === false)
+      ? "degraded"
+      : data.servers.some((s) => s.enabled && !s.joined)
+        ? "pending"
+        : "healthy"
+
+  const columns: TColumn<TMember>[] = [
+    {
+      id: "server",
+      header: t("Server"),
+      sortValue: (s) => s.name,
+      cell: (s) => (
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 font-medium">
+            <StatusDot
+              tone={
+                s.error
+                  ? "danger"
+                  : !s.enabled
+                    ? "neutral"
+                    : s.joined
+                      ? "success"
+                      : "warning"
+              }
+            />
+            <span className="truncate">{s.name}</span>
+          </div>
+          {s.error ? (
+            <div
+              className="max-w-64 truncate text-xs text-destructive-foreground"
+              title={s.error}
+            >
+              {s.error}
+            </div>
+          ) : !s.joined ? (
+            <div className="text-xs text-muted-foreground">
+              {t("Waiting for its key")}
+            </div>
+          ) : null}
+        </div>
+      ),
+    },
+    {
+      id: "mesh",
+      header: t("Mesh address"),
+      sortValue: (s) => s.meshIp,
+      cell: (s) => (
+        <span dir="ltr" className="font-mono text-xs">
+          {s.meshIp}
+        </span>
+      ),
+    },
+    {
+      id: "subnet",
+      header: t("Containers"),
+      className: "hidden md:table-cell",
+      cell: (s) => (
+        <span dir="ltr" className="font-mono text-xs">
+          {s.subnet}
+        </span>
+      ),
+    },
+    {
+      id: "endpoint",
+      header: t("Endpoint"),
+      cell: (s) => (
+        <div className="flex items-center gap-1">
+          <span dir="ltr" className="font-mono text-xs">
+            {s.endpoint ?? t("unknown")}
+          </span>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label={t("Change the endpoint of {{name}}", {
+              name: s.name,
+            })}
+            onClick={() => setEditing(s)}
+          >
+            <IconPencil />
+          </Button>
+        </div>
+      ),
+    },
+    {
+      id: "enabled",
+      header: t("In the network"),
+      cell: (s) => (
+        <Switch
+          checked={s.enabled}
+          aria-label={t("{{name}} is in the private network", {
+            name: s.name,
+          })}
+          onCheckedChange={(enabled) =>
+            act(
+              () =>
+                ThunderSDK.networks.updateMember({
+                  params: { id: s._id },
+                  body: { enabled },
+                }),
+              t("Could not change it")
+            )
+          }
+        />
+      ),
+    },
+    {
+      id: "registry",
+      header: <span className="sr-only">{t("Registry")}</span>,
+      align: "end",
+      cell: (s) =>
+        data?.primaryServer === s._id ? (
+          <Badge variant="secondary" className="gap-1">
+            <IconStar aria-hidden /> {t("Registry")}
+          </Badge>
+        ) : (
+          s.enabled &&
+          s.joined && (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() =>
+                act(
+                  () =>
+                    ThunderSDK.networks.setPrimary({
+                      body: { server: s._id },
+                    }),
+                  t("Could not change the primary server")
+                )
+              }
+            >
+              {t("Host the registry")}
+            </Button>
+          )
+        ),
+    },
+  ]
+
   return (
-    <Page className="flex flex-col gap-6 py-4">
-      <div>
-        <h1 className="text-xl font-semibold">{t("Private network")}</h1>
-        <p className="max-w-3xl text-sm text-muted-foreground">
-          {t(
-            "Your servers connect over WireGuard, so apps reach each other across servers as <project>.internal. Servers need UDP 51820 open to each other (or to share a network); a server behind NAT still reaches servers it can dial."
-          )}
-        </p>
-      </div>
+    <Page className="flex flex-col gap-4 py-5">
+      <PageHeader
+        title={t("Private network")}
+        status={state && <StatusBadge state={state} />}
+        description={t(
+          "Your servers connect over WireGuard, so apps reach each other across servers as <project>.internal. Servers need UDP 51820 open to each other (or to share a network); a server behind NAT still reaches servers it can dial."
+        )}
+      />
 
       {!data ? (
-        <Skeleton className="h-48 rounded-3xl" />
+        <Skeleton className="h-48 rounded-[10px]" />
       ) : !data.servers.length ? (
-        <p className="rounded-3xl border border-dashed p-6 text-center text-sm text-muted-foreground">
-          {t("Servers join the private network once they're set up.")}
-        </p>
+        <EmptyState
+          icon={IconNetwork}
+          title={t("Servers join the private network once they're set up.")}
+        />
       ) : (
         <>
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">{t("Servers")}</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="overflow-x-auto rounded-2xl border">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>{t("Server")}</TableHead>
-                      <TableHead>{t("Mesh address")}</TableHead>
-                      <TableHead>{t("Containers")}</TableHead>
-                      <TableHead>{t("Endpoint")}</TableHead>
-                      <TableHead>{t("In the network")}</TableHead>
-                      <TableHead>
-                        <span className="sr-only">{t("Registry")}</span>
-                      </TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {data.servers.map((s) => (
-                      <TableRow key={s._id}>
-                        <TableCell>
-                          <div className="font-medium">{s.name}</div>
-                          {s.error ? (
-                            <div
-                              className="max-w-64 truncate text-xs text-destructive"
-                              title={s.error}
-                            >
-                              {s.error}
-                            </div>
-                          ) : !s.joined ? (
-                            <div className="text-xs text-muted-foreground">
-                              {t("Waiting for its key")}
-                            </div>
-                          ) : null}
-                        </TableCell>
-                        <TableCell className="font-mono text-xs">
-                          {s.meshIp}
-                        </TableCell>
-                        <TableCell className="font-mono text-xs">
-                          {s.subnet}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-1">
-                            <span className="font-mono text-xs">
-                              {s.endpoint ?? t("unknown")}
-                            </span>
-                            <Button
-                              variant="ghost"
-                              size="icon-sm"
-                              aria-label={t("Change the endpoint of {{name}}", {
-                                name: s.name,
-                              })}
-                              onClick={() => setEditing(s)}
-                            >
-                              <IconPencil />
-                            </Button>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <Switch
-                            checked={s.enabled}
-                            aria-label={t(
-                              "{{name}} is in the private network",
-                              { name: s.name }
-                            )}
-                            onCheckedChange={(enabled) =>
-                              act(
-                                () =>
-                                  ThunderSDK.networks.updateMember({
-                                    params: { id: s._id },
-                                    body: { enabled },
-                                  }),
-                                t("Could not change it")
-                              )
-                            }
-                          />
-                        </TableCell>
-                        <TableCell className="text-end">
-                          {data.primaryServer === s._id ? (
-                            <Badge variant="secondary" className="gap-1">
-                              <IconStar aria-hidden /> {t("Registry")}
-                            </Badge>
-                          ) : (
-                            s.enabled &&
-                            s.joined && (
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() =>
-                                  act(
-                                    () =>
-                                      ThunderSDK.networks.setPrimary({
-                                        body: { server: s._id },
-                                      }),
-                                    t("Could not change the primary server")
-                                  )
-                                }
-                              >
-                                {t("Host the registry")}
-                              </Button>
-                            )
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            </CardContent>
-          </Card>
+          <section
+            aria-labelledby="network-servers"
+            className="flex flex-col gap-2"
+          >
+            <h2 id="network-servers" className="text-sm font-semibold">
+              {t("Servers")}
+            </h2>
+            <DataTable
+              label={t("Servers")}
+              columns={columns}
+              rows={data.servers}
+              rowId={(s) => s._id}
+            />
+          </section>
 
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-base">
-                <IconNetwork className="size-4" aria-hidden />{" "}
-                {t("Who reaches whom")}
-              </CardTitle>
-              <CardDescription>
+          <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_22rem]">
+            <Panel
+              title={
+                <span className="flex items-center gap-2">
+                  <IconNetwork className="size-4" aria-hidden />
+                  {t("Who reaches whom")}
+                </span>
+              }
+              bodyClassName="flex flex-col gap-3"
+            >
+              <p className="text-xs text-muted-foreground">
                 {t(
                   "From recent WireGuard handshakes, updated every 30 seconds or so. Two servers that can't reach each other keep running their apps; only cross-server traffic between them fails."
                 )}
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
+              </p>
               <Matrix network={data} />
-            </CardContent>
-          </Card>
+            </Panel>
 
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">
-                {t("Built-in registry")}
-              </CardTitle>
-              <CardDescription>
+            <Panel
+              title={t("Built-in registry")}
+              actions={
+                data.primaryServer ? <StatusBadge state="active" /> : undefined
+              }
+              bodyClassName="flex flex-col gap-3"
+            >
+              <p className="text-[13px] text-muted-foreground">
                 {data.primaryServer
                   ? t(
                       "Projects on several servers build once and push here; the other servers pull over the private network. Without a connected registry, this is used whenever every target server reaches it."
@@ -362,27 +401,28 @@ export default function NetworkPage() {
                   : t(
                       "Pick a server to host it, and projects on several servers build once instead of on every server."
                     )}
-              </CardDescription>
-            </CardHeader>
-            {data.primaryServer && (
-              <CardContent>
-                <Button
-                  variant="outline"
-                  onClick={() =>
-                    act(
-                      () =>
-                        ThunderSDK.networks.setPrimary({
-                          body: { server: null },
-                        }),
-                      t("Could not remove it")
-                    )
-                  }
-                >
-                  {t("Stop the built-in registry")}
-                </Button>
-              </CardContent>
-            )}
-          </Card>
+              </p>
+              {data.primaryServer && (
+                <div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() =>
+                      act(
+                        () =>
+                          ThunderSDK.networks.setPrimary({
+                            body: { server: null },
+                          }),
+                        t("Could not remove it")
+                      )
+                    }
+                  >
+                    {t("Stop the built-in registry")}
+                  </Button>
+                </div>
+              )}
+            </Panel>
+          </div>
         </>
       )}
 

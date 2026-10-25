@@ -4,7 +4,7 @@ import { useTranslation } from "react-i18next"
 import { IconEye, IconEyeOff } from "@tabler/icons-react"
 
 import type { TCardProps } from "@/core/types"
-import { Badge } from "@/components/ui/badge"
+import { StatusBadge } from "@/components/console/status"
 import { Button } from "@/components/ui/button"
 import { Chip, RecordCards } from "@/components/record-cards"
 
@@ -48,28 +48,29 @@ export function PlanCards(props: TCardProps) {
         title: plan.name,
         badges: (
           <>
-            {plan.isFree && <Badge variant="secondary">{t("Default")}</Badge>}
+            {plan.isFree && <StatusBadge tone="info" label={t("Default")} />}
             {plan.visibility === "private" && (
-              <Badge variant="outline">
-                {t("Private · {{count}} tenants", {
+              <StatusBadge
+                tone="neutral"
+                label={t("Private · {{count}} tenants", {
                   count: plan.allowedTenants?.length ?? 0,
                 })}
-              </Badge>
+              />
             )}
             {!plan.active && (
-              <Badge variant="destructive">{t("Inactive")}</Badge>
+              <StatusBadge tone="neutral" label={t("Inactive")} />
             )}
           </>
         ),
         description: plan.description,
         body: (
-          <div className="flex flex-col gap-3">
-            <p className="text-2xl font-semibold tabular-nums">
+          <div className="flex flex-col gap-2">
+            <p className="text-xl font-semibold tabular-nums">
               {plan.price.amount
                 ? money(plan.price.amount, plan.price.currency)
                 : t("Free")}
               {!!plan.price.amount && (
-                <span className="text-sm font-normal text-muted-foreground">
+                <span className="text-xs font-normal text-muted-foreground">
                   {" "}
                   / {t(plan.price.interval)}
                 </span>
@@ -122,9 +123,13 @@ export function RoleCards(props: TCardProps) {
       opens="detail"
       render={(role) => ({
         name: role.role,
-        title: <span className="font-mono">{role.role}</span>,
+        title: (
+          <span dir="ltr" className="font-mono text-[13px]">
+            {role.role}
+          </span>
+        ),
         badges: role.skipIntersection && (
-          <Badge variant="outline">{t("Full grant to invitees")}</Badge>
+          <StatusBadge tone="warning" label={t("Full grant to invitees")} />
         ),
         description:
           role.policies.length === 1
@@ -159,9 +164,13 @@ export function PolicyCards(props: TCardProps) {
       emptyTitle={t("No policies yet")}
       render={(policy) => ({
         name: policy.name,
-        title: <span className="font-mono">{policy.name}</span>,
+        title: (
+          <span dir="ltr" className="font-mono text-[13px]">
+            {policy.name}
+          </span>
+        ),
         badges: policy.permissions.includes("*") && (
-          <Badge variant="destructive">{t("Full access")}</Badge>
+          <StatusBadge tone="danger" label={t("Full access")} />
         ),
         description:
           policy.permissions.length === 1
@@ -185,7 +194,10 @@ function EnvValue({ value }: { value: string }) {
   const [shown, setShown] = React.useState(false)
   return (
     <div className="flex items-center gap-2">
-      <code className="min-w-0 flex-1 truncate rounded-md bg-muted px-2 py-1 text-xs">
+      <code
+        dir="ltr"
+        className="min-w-0 flex-1 truncate rounded-md bg-muted px-2 py-1 font-mono text-xs"
+      >
         {shown ? value || t("(empty)") : "••••••••"}
       </code>
       <Button
@@ -214,7 +226,11 @@ export function EnvCards(props: TCardProps) {
       emptyTitle={t("No settings stored")}
       render={(env) => ({
         name: env.key,
-        title: <span className="font-mono text-sm break-all">{env.key}</span>,
+        title: (
+          <span dir="ltr" className="font-mono text-xs break-all">
+            {env.key}
+          </span>
+        ),
         body: <EnvValue value={env.value} />,
       })}
     />

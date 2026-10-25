@@ -2,15 +2,9 @@ import * as React from "react"
 import { ThunderSDK } from "thunder-sdk"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
-import {
-  IconAlertTriangle,
-  IconCircleCheck,
-  IconLoader2,
-  IconLock,
-} from "@tabler/icons-react"
+import { IconLoader2, IconLock } from "@tabler/icons-react"
 
 import { Button } from "@/components/ui/button"
-import { CopyButton } from "@/components/ui/copy-button"
 import {
   Dialog,
   DialogContent,
@@ -24,7 +18,9 @@ import { Input } from "@/components/ui/input"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
 import { usePolling } from "@/hooks/use-polling"
-import { cn, errorMessage } from "@/lib/utils"
+import { CodeBlock } from "@/components/console/code-block"
+import { Timeline } from "@/components/console/timeline"
+import { errorMessage } from "@/lib/utils"
 
 type TProgress = Awaited<
   ReturnType<typeof ThunderSDK.servers.bootstrapProgress>
@@ -145,7 +141,7 @@ function SshForm({ onStarted }: { onStarted: (session: string) => void }) {
         </TabsContent>
       </Tabs>
 
-      <p className="flex gap-2 rounded-2xl bg-muted/60 p-3 text-xs text-muted-foreground">
+      <p className="flex gap-2 rounded-lg border bg-muted/50 p-3 text-xs text-muted-foreground">
         <IconLock className="size-4 shrink-0 text-foreground" aria-hidden />
         {t(
           "Credentials are used once to start the installer and are never stored. Non-root users need sudo rights."
@@ -214,42 +210,39 @@ function InstallProgress({
 
   return (
     <div className="flex flex-col gap-4" aria-live="polite">
-      <ol className="flex flex-col gap-3">
-        {stages.map((stage, index) => {
+      <Timeline
+        items={stages.map((stage, index) => {
           const failed = progress?.status === "failed" && index === current
-          return (
-            <li key={stage.key} className="flex items-center gap-3 text-sm">
-              {stage.done ? (
-                <IconCircleCheck className="size-5 text-success" aria-hidden />
-              ) : failed ? (
-                <IconAlertTriangle
-                  className="size-5 text-destructive"
-                  aria-hidden
-                />
-              ) : index === current ? (
-                <IconLoader2
-                  className="size-5 text-primary motion-safe:animate-spin"
-                  aria-hidden
-                />
-              ) : (
-                <span
-                  className="size-5 rounded-full border-2 border-muted"
-                  aria-hidden
-                />
-              )}
-              <span
-                className={cn(
-                  !stage.done && index !== current && "text-muted-foreground"
-                )}
-              >
-                {stage.label}
-              </span>
-            </li>
-          )
+          // The state is text too, not only the dot's color.
+          return stage.done
+            ? { id: stage.key, label: stage.label, state: "succeeded" }
+            : failed
+              ? {
+                  id: stage.key,
+                  label: stage.label,
+                  state: "failed",
+                  time: t("Failed"),
+                }
+              : index === current
+                ? {
+                    id: stage.key,
+                    label: stage.label,
+                    state: "building",
+                    time: t("Running"),
+                  }
+                : {
+                    id: stage.key,
+                    label: (
+                      <span className="text-muted-foreground">
+                        {stage.label}
+                      </span>
+                    ),
+                    time: t("Waiting"),
+                  }
         })}
-      </ol>
+      />
       {progress?.error && (
-        <p className="rounded-2xl bg-destructive/10 p-3 text-sm text-destructive">
+        <p className="rounded-lg bg-destructive-soft p-3 text-[13px] text-destructive-foreground">
           {progress.error}
         </p>
       )}
@@ -269,16 +262,17 @@ function ManualInstall() {
   }, [])
 
   return (
-    <div className="flex flex-col gap-3 text-sm">
+    <div className="flex flex-col gap-3 text-[13px]">
       <p className="text-muted-foreground">
         {t(
           "Run this on the server (Ubuntu 22.04 or 24.04). It prints a pairing code; accept the server here with that code."
         )}
       </p>
-      <div className="flex items-start gap-2 rounded-2xl bg-muted p-3 font-mono text-xs">
-        <code className="min-w-0 flex-1 break-all">{command ?? "…"}</code>
-        {command && <CopyButton value={command} />}
-      </div>
+      {command ? (
+        <CodeBlock code={command} wrap />
+      ) : (
+        <div className="h-11 rounded-lg border bg-muted/50" aria-hidden />
+      )}
     </div>
   )
 }

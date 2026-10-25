@@ -138,10 +138,16 @@ function TerminalView({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
-      <div className="relative min-h-0 flex-1 overflow-hidden rounded-2xl bg-[#0b0b0c] p-2">
+      <div
+        dir="ltr"
+        className="relative min-h-0 flex-1 overflow-hidden rounded-lg border bg-[#0b0b0c] p-2"
+      >
         <div ref={host} className="h-full w-full" />
         {(status === "done" || status === "error") && (
-          <div className="absolute inset-x-0 bottom-0 bg-black/70 px-3 py-2 text-xs text-white">
+          <div
+            role="status"
+            className="absolute inset-x-0 bottom-0 bg-black/70 px-3 py-2 text-xs text-white"
+          >
             {status === "error" ? error : t("Session ended.")}
           </div>
         )}

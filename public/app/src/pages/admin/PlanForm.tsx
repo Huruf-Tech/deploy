@@ -6,13 +6,8 @@ import { toast } from "sonner"
 
 import { Page } from "@/components/page"
 import { Button } from "@/components/ui/button"
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
+import { PageHeader } from "@/components/console/page-header"
+import { Panel } from "@/components/console/panel"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import {
@@ -153,8 +148,8 @@ export default function PlanForm() {
 
   if (!plan)
     return (
-      <Page className="py-4">
-        <Skeleton className="h-96 max-w-3xl rounded-4xl" />
+      <Page className="py-5">
+        <Skeleton className="h-96 max-w-[720px] rounded-[10px]" />
       </Page>
     )
 
@@ -182,271 +177,260 @@ export default function PlanForm() {
   }
 
   return (
-    <Page className="py-4">
-      <form onSubmit={save} className="flex max-w-3xl flex-col gap-4">
-        <Card>
-          <CardHeader>
-            <CardTitle>{id ? t("Edit plan") : t("New plan")}</CardTitle>
-            <CardDescription>
-              {plan.isFree
-                ? t(
-                    "The default plan every tenant starts on. It can't be made paid or deleted."
-                  )
-                : t(
-                    "Edits apply to subscribed tenants from their next period."
-                  )}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-4 sm:grid-cols-2">
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="plan-name">{t("Name")}</Label>
-              <Input
-                id="plan-name"
-                required
-                maxLength={50}
-                value={plan.name}
-                onChange={(e) =>
-                  set({
-                    name: e.target.value,
-                    ...(slugTouched ? {} : { slug: slugify(e.target.value) }),
-                  })
-                }
-              />
-            </div>
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="plan-slug">{t("Slug")}</Label>
-              <Input
-                id="plan-slug"
-                required
-                maxLength={50}
-                pattern="[a-z0-9\-]+"
-                title={t("Lowercase letters, digits and '-'")}
-                className="font-mono"
-                value={plan.slug}
-                onChange={(e) => {
-                  setSlugTouched(true)
-                  set({ slug: e.target.value })
-                }}
-              />
-            </div>
-            <div className="flex flex-col gap-2 sm:col-span-2">
-              <Label htmlFor="plan-description">{t("Description")}</Label>
-              <Textarea
-                id="plan-description"
-                maxLength={500}
-                rows={2}
-                value={plan.description}
-                onChange={(e) => set({ description: e.target.value })}
-              />
-            </div>
-          </CardContent>
-        </Card>
+    <Page className="flex flex-col gap-4 py-5">
+      <PageHeader
+        className="w-full max-w-[720px]"
+        title={id ? t("Edit plan") : t("New plan")}
+        description={
+          plan.isFree
+            ? t(
+                "The default plan every tenant starts on. It can't be made paid or deleted."
+              )
+            : t("Edits apply to subscribed tenants from their next period.")
+        }
+      />
+      <form
+        onSubmit={save}
+        className="flex w-full max-w-[720px] flex-col gap-3"
+      >
+        <Panel bodyClassName="grid gap-4 sm:grid-cols-2">
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="plan-name">{t("Name")}</Label>
+            <Input
+              id="plan-name"
+              required
+              maxLength={50}
+              value={plan.name}
+              onChange={(e) =>
+                set({
+                  name: e.target.value,
+                  ...(slugTouched ? {} : { slug: slugify(e.target.value) }),
+                })
+              }
+            />
+          </div>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="plan-slug">{t("Slug")}</Label>
+            <Input
+              id="plan-slug"
+              required
+              maxLength={50}
+              pattern="[a-z0-9\-]+"
+              title={t("Lowercase letters, digits and '-'")}
+              className="font-mono"
+              value={plan.slug}
+              onChange={(e) => {
+                setSlugTouched(true)
+                set({ slug: e.target.value })
+              }}
+            />
+          </div>
+          <div className="flex flex-col gap-2 sm:col-span-2">
+            <Label htmlFor="plan-description">{t("Description")}</Label>
+            <Textarea
+              id="plan-description"
+              maxLength={500}
+              rows={2}
+              value={plan.description}
+              onChange={(e) => set({ description: e.target.value })}
+            />
+          </div>
+        </Panel>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">{t("Price")}</CardTitle>
-          </CardHeader>
-          <CardContent className="grid gap-4 sm:grid-cols-3">
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="plan-amount">{t("Amount")}</Label>
+        <Panel title={t("Price")} bodyClassName="grid gap-4 sm:grid-cols-3">
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="plan-amount">{t("Amount")}</Label>
+            <Input
+              id="plan-amount"
+              type="number"
+              min={0}
+              step="0.01"
+              required
+              disabled={plan.isFree}
+              value={plan.price.amount / 100}
+              onChange={(e) =>
+                set({
+                  price: {
+                    ...plan.price,
+                    amount: Math.round(Number(e.target.value) * 100),
+                  },
+                })
+              }
+            />
+          </div>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="plan-currency">{t("Currency")}</Label>
+            <Input
+              id="plan-currency"
+              required
+              minLength={3}
+              maxLength={3}
+              className="font-mono uppercase"
+              value={plan.price.currency}
+              onChange={(e) =>
+                set({
+                  price: {
+                    ...plan.price,
+                    currency: e.target.value.toLowerCase(),
+                  },
+                })
+              }
+            />
+          </div>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="plan-interval">{t("Billed every")}</Label>
+            <Select
+              items={[
+                { value: "month", label: t("Month") },
+                { value: "year", label: t("Year") },
+              ]}
+              value={plan.price.interval}
+              onValueChange={(v) =>
+                set({
+                  price: { ...plan.price, interval: v as "month" | "year" },
+                })
+              }
+            >
+              <SelectTrigger id="plan-interval" className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="month">{t("Month")}</SelectItem>
+                <SelectItem value="year">{t("Year")}</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </Panel>
+
+        <Panel
+          title={t("Limits")}
+          bodyClassName="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"
+        >
+          {LIMITS.map(([key, label]) => (
+            <div key={key} className="flex flex-col gap-2">
+              <Label htmlFor={`limit-${key}`}>{t(label)}</Label>
               <Input
-                id="plan-amount"
+                id={`limit-${key}`}
                 type="number"
-                min={0}
-                step="0.01"
-                required
-                disabled={plan.isFree}
-                value={plan.price.amount / 100}
-                onChange={(e) =>
-                  set({
-                    price: {
-                      ...plan.price,
-                      amount: Math.round(Number(e.target.value) * 100),
-                    },
-                  })
-                }
-              />
-            </div>
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="plan-currency">{t("Currency")}</Label>
-              <Input
-                id="plan-currency"
-                required
-                minLength={3}
-                maxLength={3}
-                className="font-mono uppercase"
-                value={plan.price.currency}
-                onChange={(e) =>
-                  set({
-                    price: {
-                      ...plan.price,
-                      currency: e.target.value.toLowerCase(),
-                    },
-                  })
-                }
-              />
-            </div>
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="plan-interval">{t("Billed every")}</Label>
-              <Select
-                items={[
-                  { value: "month", label: t("Month") },
-                  { value: "year", label: t("Year") },
-                ]}
-                value={plan.price.interval}
-                onValueChange={(v) =>
-                  set({
-                    price: { ...plan.price, interval: v as "month" | "year" },
-                  })
-                }
-              >
-                <SelectTrigger id="plan-interval" className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="month">{t("Month")}</SelectItem>
-                  <SelectItem value="year">{t("Year")}</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">{t("Limits")}</CardTitle>
-          </CardHeader>
-          <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {LIMITS.map(([key, label]) => (
-              <div key={key} className="flex flex-col gap-2">
-                <Label htmlFor={`limit-${key}`}>{t(label)}</Label>
-                <Input
-                  id={`limit-${key}`}
-                  type="number"
-                  min={key === "releasesKept" ? 1 : 0}
-                  step={1}
-                  required
-                  value={plan.limits[key]}
-                  onChange={(e) =>
-                    set({
-                      limits: {
-                        ...plan.limits,
-                        [key]: Math.trunc(Number(e.target.value)),
-                      },
-                    })
-                  }
-                />
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">{t("Features")}</CardTitle>
-          </CardHeader>
-          <CardContent className="grid gap-3 sm:grid-cols-2">
-            {FEATURES.map(([key, label]) => (
-              <label
-                key={key}
-                className="flex items-center justify-between gap-3 rounded-xl border p-3 text-sm"
-              >
-                {t(label)}
-                <Switch
-                  checked={plan.features[key]}
-                  onCheckedChange={(on) =>
-                    set({ features: { ...plan.features, [key]: on } })
-                  }
-                />
-              </label>
-            ))}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">{t("Availability")}</CardTitle>
-          </CardHeader>
-          <CardContent className="grid gap-4 sm:grid-cols-2">
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="plan-visibility">{t("Visibility")}</Label>
-              <Select
-                items={[
-                  { value: "public", label: t("Public: every tenant") },
-                  { value: "private", label: t("Private: chosen tenants") },
-                ]}
-                value={plan.visibility}
-                disabled={plan.isFree}
-                onValueChange={(v) =>
-                  set({ visibility: v as "public" | "private" })
-                }
-              >
-                <SelectTrigger id="plan-visibility" className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="public">
-                    {t("Public: every tenant")}
-                  </SelectItem>
-                  <SelectItem value="private">
-                    {t("Private: chosen tenants")}
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="plan-order">{t("Sort order")}</Label>
-              <Input
-                id="plan-order"
-                type="number"
+                min={key === "releasesKept" ? 1 : 0}
                 step={1}
-                value={plan.sortOrder}
+                required
+                value={plan.limits[key]}
                 onChange={(e) =>
-                  set({ sortOrder: Math.trunc(Number(e.target.value)) })
+                  set({
+                    limits: {
+                      ...plan.limits,
+                      [key]: Math.trunc(Number(e.target.value)),
+                    },
+                  })
                 }
               />
             </div>
-            {plan.visibility === "private" && (
-              <div className="flex flex-col gap-2 sm:col-span-2">
-                <Label htmlFor="plan-tenants">{t("Tenants")}</Label>
-                <RefSelect
-                  id="plan-tenants"
-                  field={tenantsField}
-                  multiple
-                  value={plan.allowedTenants}
-                  onValueChange={(v) =>
-                    set({
-                      allowedTenants: ((v as unknown[] | null) ?? []).map(
-                        String
-                      ),
-                    })
-                  }
-                />
-              </div>
-            )}
-            <label className="flex items-center justify-between gap-3 rounded-xl border p-3 text-sm sm:col-span-2">
-              <span>
-                {t("Active")}
-                <span className="block text-xs text-muted-foreground">
-                  {t(
-                    "Inactive plans can't be picked; subscribed tenants keep them."
-                  )}
-                </span>
-              </span>
+          ))}
+        </Panel>
+
+        <Panel title={t("Features")} bodyClassName="grid gap-3 sm:grid-cols-2">
+          {FEATURES.map(([key, label]) => (
+            <label
+              key={key}
+              className="flex items-center justify-between gap-3 rounded-lg border px-3 py-2 text-[13px]"
+            >
+              {t(label)}
               <Switch
-                checked={plan.active}
-                disabled={plan.isFree}
-                onCheckedChange={(active) => set({ active })}
+                checked={plan.features[key]}
+                onCheckedChange={(on) =>
+                  set({ features: { ...plan.features, [key]: on } })
+                }
               />
             </label>
-          </CardContent>
-        </Card>
+          ))}
+        </Panel>
 
-        <div className="flex justify-end gap-2">
-          <Button type="button" variant="ghost" onClick={() => toList()}>
+        <Panel
+          title={t("Availability")}
+          bodyClassName="grid gap-4 sm:grid-cols-2"
+        >
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="plan-visibility">{t("Visibility")}</Label>
+            <Select
+              items={[
+                { value: "public", label: t("Public: every tenant") },
+                { value: "private", label: t("Private: chosen tenants") },
+              ]}
+              value={plan.visibility}
+              disabled={plan.isFree}
+              onValueChange={(v) =>
+                set({ visibility: v as "public" | "private" })
+              }
+            >
+              <SelectTrigger id="plan-visibility" className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="public">
+                  {t("Public: every tenant")}
+                </SelectItem>
+                <SelectItem value="private">
+                  {t("Private: chosen tenants")}
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="plan-order">{t("Sort order")}</Label>
+            <Input
+              id="plan-order"
+              type="number"
+              step={1}
+              value={plan.sortOrder}
+              onChange={(e) =>
+                set({ sortOrder: Math.trunc(Number(e.target.value)) })
+              }
+            />
+          </div>
+          {plan.visibility === "private" && (
+            <div className="flex flex-col gap-2 sm:col-span-2">
+              <Label htmlFor="plan-tenants">{t("Tenants")}</Label>
+              <RefSelect
+                id="plan-tenants"
+                field={tenantsField}
+                multiple
+                value={plan.allowedTenants}
+                onValueChange={(v) =>
+                  set({
+                    allowedTenants: ((v as unknown[] | null) ?? []).map(String),
+                  })
+                }
+              />
+            </div>
+          )}
+          <label className="flex items-center justify-between gap-3 rounded-lg border px-3 py-2 text-[13px] sm:col-span-2">
+            <span>
+              {t("Active")}
+              <span className="block text-xs text-muted-foreground">
+                {t(
+                  "Inactive plans can't be picked; subscribed tenants keep them."
+                )}
+              </span>
+            </span>
+            <Switch
+              checked={plan.active}
+              disabled={plan.isFree}
+              onCheckedChange={(active) => set({ active })}
+            />
+          </label>
+        </Panel>
+
+        <div className="flex justify-end gap-2 pt-1">
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            onClick={() => toList()}
+          >
             {t("Cancel")}
           </Button>
-          <Button type="submit" disabled={busy}>
+          <Button type="submit" size="sm" disabled={busy}>
             {id ? t("Save") : t("Create plan")}
           </Button>
         </div>

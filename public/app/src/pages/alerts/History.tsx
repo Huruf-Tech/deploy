@@ -1,23 +1,20 @@
 import { ThunderSDK } from "thunder-sdk"
 import { useTranslation } from "react-i18next"
-import { IconAlertCircle, IconCircleCheck } from "@tabler/icons-react"
+import { IconBellCheck } from "@tabler/icons-react"
 
 import { use } from "@/core/hooks/use"
 import { Page } from "@/components/page"
-import { Badge } from "@/components/ui/badge"
-import { Skeleton } from "@/components/ui/skeleton"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
+import { PageHeader } from "@/components/console/page-header"
+import { DataTable, type TColumn } from "@/components/console/data-table"
+import { EmptyState } from "@/components/console/empty-state"
+import { StatusBadge } from "@/components/console/status"
 import { usePolling } from "@/hooks/use-polling"
 import { METRICS } from "./metrics"
 
+type TEvent = Awaited<ReturnType<typeof ThunderSDK.alertEvents.list>>[number]
+
 const when = (at: string | Date) => new Date(at).toLocaleString()
+const time = (at?: string | Date) => (at ? new Date(at).getTime() : undefined)
 
 /** Monitoring → Alert history (PLAN §13): episodes and their delivery. */
 export default function AlertHistory() {
@@ -30,103 +27,114 @@ export default function AlertHistory() {
   const { data } = use(request)
   usePolling(() => request.invalidate(), 30_000)
 
+  const columns: TColumn<TEvent>[] = [
+    {
+      id: "state",
+      header: t("Status"),
+      sortValue: (e) => (e.open ? 0 : 1),
+      cell: (e) =>
+        e.open ? (
+          <StatusBadge tone="danger" label={t("Open")} />
+        ) : (
+          <StatusBadge state="resolved" label={t("Resolved")} />
+        ),
+    },
+    {
+      id: "alert",
+      header: t("Alert"),
+      sortValue: (e) => e.ruleName,
+      cell: (e) => (
+        <div className="min-w-0">
+          <div className="font-medium">{e.ruleName}</div>
+          <div className="text-xs text-muted-foreground tabular-nums">
+            {t(METRICS[e.metric].label)}
+            {e.value !== undefined &&
+              ` · ${e.value}${METRICS[e.metric].unit === "%" ? "%" : " MiB"}`}
+          </div>
+          {e.detail && (
+            <div
+              className="max-w-80 truncate text-xs text-muted-foreground"
+              title={e.detail}
+            >
+              {e.detail}
+            </div>
+          )}
+        </div>
+      ),
+    },
+    {
+      id: "where",
+      header: t("Where"),
+      cell: (e) =>
+        [e.projectName, e.serverName].filter(Boolean).join(" · ") || "—",
+    },
+    {
+      id: "fired",
+      header: t("Fired"),
+      sortValue: (e) => time(e.firedAt),
+      className: "whitespace-nowrap tabular-nums",
+      cell: (e) => when(e.firedAt),
+    },
+    {
+      id: "resolved",
+      header: t("Resolved"),
+      sortValue: (e) => time(e.resolvedAt),
+      className: "whitespace-nowrap tabular-nums",
+      cell: (e) => (e.resolvedAt ? when(e.resolvedAt) : "—"),
+    },
+    {
+      id: "notice",
+      header: t("Notice"),
+      cell: (e) => (
+        <span title={e.delivery.error}>
+          <StatusBadge
+            tone={
+              e.delivery.status === "failed"
+                ? "danger"
+                : e.delivery.status === "pending"
+                  ? "warning"
+                  : "neutral"
+            }
+            label={
+              <>
+                {e.delivery.notice === "resolved"
+                  ? t("Resolve notice")
+                  : t("Alert notice")}
+                :{" "}
+                {e.delivery.status === "sent"
+                  ? t("sent")
+                  : e.delivery.status === "failed"
+                    ? t("failed")
+                    : e.delivery.attempts
+                      ? t("retrying")
+                      : t("sending")}
+              </>
+            }
+          />
+        </span>
+      ),
+    },
+  ]
+
   return (
-    <Page className="flex flex-col gap-6 py-4">
-      <div>
-        <h1 className="text-xl font-semibold">{t("Alert history")}</h1>
-        <p className="max-w-3xl text-sm text-muted-foreground">
-          {t("The latest 100 alerts. Failed notices are retried with backoff.")}
-        </p>
-      </div>
-      {!data ? (
-        <Skeleton className="h-40 rounded-3xl" />
-      ) : !data.length ? (
-        <p className="rounded-3xl border border-dashed p-6 text-center text-sm text-muted-foreground">
-          {t("No alerts yet.")}
-        </p>
+    <Page className="flex flex-col gap-4 py-5">
+      <PageHeader
+        title={t("Alert history")}
+        description={t(
+          "The latest 100 alerts. Failed notices are retried with backoff."
+        )}
+      />
+      {data && !data.length ? (
+        <EmptyState icon={IconBellCheck} title={t("No alerts yet.")} />
       ) : (
-        <div className="overflow-x-auto rounded-2xl border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>{t("Alert")}</TableHead>
-                <TableHead>{t("Where")}</TableHead>
-                <TableHead>{t("Fired")}</TableHead>
-                <TableHead>{t("Resolved")}</TableHead>
-                <TableHead>{t("Notice")}</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {data.map((e) => (
-                <TableRow key={e._id}>
-                  <TableCell>
-                    <div className="flex items-center gap-2 font-medium">
-                      {e.open ? (
-                        <IconAlertCircle
-                          className="size-4 text-destructive"
-                          aria-label={t("Open")}
-                        />
-                      ) : (
-                        <IconCircleCheck
-                          className="size-4 text-success"
-                          aria-label={t("Resolved")}
-                        />
-                      )}
-                      {e.ruleName}
-                    </div>
-                    <div className="text-xs text-muted-foreground">
-                      {t(METRICS[e.metric].label)}
-                      {e.value !== undefined &&
-                        ` · ${e.value}${METRICS[e.metric].unit === "%" ? "%" : " MiB"}`}
-                    </div>
-                    {e.detail && (
-                      <div
-                        className="max-w-80 truncate text-xs text-muted-foreground"
-                        title={e.detail}
-                      >
-                        {e.detail}
-                      </div>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-sm">
-                    {[e.projectName, e.serverName]
-                      .filter(Boolean)
-                      .join(" · ") || "—"}
-                  </TableCell>
-                  <TableCell className="text-sm whitespace-nowrap">
-                    {when(e.firedAt)}
-                  </TableCell>
-                  <TableCell className="text-sm whitespace-nowrap">
-                    {e.resolvedAt ? when(e.resolvedAt) : "—"}
-                  </TableCell>
-                  <TableCell>
-                    <Badge
-                      variant={
-                        e.delivery.status === "failed"
-                          ? "destructive"
-                          : e.delivery.status === "pending"
-                            ? "outline"
-                            : "secondary"
-                      }
-                      title={e.delivery.error}
-                    >
-                      {e.delivery.notice === "resolved"
-                        ? t("Resolve notice")
-                        : t("Alert notice")}
-                      :{" "}
-                      {e.delivery.status === "sent"
-                        ? t("sent")
-                        : e.delivery.status === "failed"
-                          ? t("failed")
-                          : e.delivery.attempts
-                            ? t("retrying")
-                            : t("sending")}
-                    </Badge>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+        <div className="overflow-x-auto">
+          <DataTable
+            label={t("Alert history")}
+            columns={columns}
+            rows={data}
+            rowId={(e) => e._id}
+            loading={!data}
+          />
         </div>
       )}
     </Page>

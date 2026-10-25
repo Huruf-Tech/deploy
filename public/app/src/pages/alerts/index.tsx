@@ -13,7 +13,6 @@ import {
 import { use } from "@/core/hooks/use"
 import { useFresh } from "@/hooks/use-fresh"
 import { Page } from "@/components/page"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -23,14 +22,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import {
-  Empty,
-  EmptyContent,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyMedia,
-  EmptyTitle,
-} from "@/components/ui/empty"
 import {
   Field,
   FieldDescription,
@@ -47,22 +38,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Skeleton } from "@/components/ui/skeleton"
 import { Switch } from "@/components/ui/switch"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
 import {
   SelectAllCheckbox,
   SelectCheckbox,
   SelectionBar,
   useSelection,
 } from "@/components/selection-bar"
+import { PageHeader } from "@/components/console/page-header"
+import { DataTable, type TColumn } from "@/components/console/data-table"
+import { EmptyState } from "@/components/console/empty-state"
+import { StatusBadge } from "@/components/console/status"
+import { Toolbar } from "@/components/console/toolbar"
 import { errorMessage } from "@/lib/utils"
 import { METRICS } from "./metrics"
 
@@ -458,132 +445,154 @@ export default function AlertRules() {
     }
   }
 
-  return (
-    <Page className="flex flex-col gap-6 py-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-semibold">{t("Alert rules")}</h1>
-          <p className="max-w-3xl text-sm text-muted-foreground">
-            {t(
-              "Get told by email, Slack or a webhook when a server or project needs attention."
-            )}
-          </p>
-        </div>
-        <Button onClick={() => edit(null)}>
-          <IconPlus data-icon="inline-start" />
-          {t("New rule")}
-        </Button>
-      </div>
+  const [search, setSearch] = React.useState("")
+  const rows = React.useMemo(() => {
+    const q = search.trim().toLowerCase()
+    return q ? data?.filter((r) => r.name.toLowerCase().includes(q)) : data
+  }, [data, search])
 
-      {!data ? (
-        <Skeleton className="h-40 rounded-3xl" />
-      ) : !data.length ? (
-        <Empty>
-          <EmptyHeader>
-            <EmptyMedia variant="icon">
-              <IconBell />
-            </EmptyMedia>
-            <EmptyTitle>{t("No alert rules yet")}</EmptyTitle>
-            <EmptyDescription>
-              {t("Start with a server offline rule and a failed deploy rule.")}
-            </EmptyDescription>
-          </EmptyHeader>
-          <EmptyContent>
-            <Button onClick={() => edit(null)}>{t("New rule")}</Button>
-          </EmptyContent>
-        </Empty>
+  const columns: TColumn<TRule>[] = [
+    {
+      id: "select",
+      header: (
+        <SelectAllCheckbox
+          selection={selection}
+          ids={(rows ?? []).map((r) => r._id)}
+        />
+      ),
+      cell: (rule) => (
+        <SelectCheckbox selection={selection} id={rule._id} label={rule.name} />
+      ),
+      className: "w-10",
+    },
+    {
+      id: "name",
+      header: t("Rule"),
+      sortValue: (rule) => rule.name,
+      cell: (rule) => <span className="font-medium">{rule.name}</span>,
+    },
+    {
+      id: "condition",
+      header: t("Condition"),
+      sortValue: (rule) => t(METRICS[rule.metric].label),
+      cell: (rule) => {
+        const meta = METRICS[rule.metric]
+        return (
+          <div className="min-w-0">
+            <div className="tabular-nums">
+              {t(meta.label)}
+              {meta.unit &&
+                ` ${rule.metric === "room" ? "<" : ">"} ${rule.threshold}${meta.unit === "%" ? "%" : " MiB"}`}
+              {rule.forSec > 0 && ` · ${t("{{n}} s", { n: rule.forSec })}`}
+            </div>
+            <div className="text-xs text-muted-foreground">
+              {rule.target.ref
+                ? rule.target.kind === "server"
+                  ? t("One server")
+                  : t("One project")
+                : rule.target.kind === "server"
+                  ? t("Every server")
+                  : t("Every project")}
+            </div>
+          </div>
+        )
+      },
+    },
+    {
+      id: "channels",
+      header: t("Channels"),
+      className: "max-w-72",
+      cell: (rule) =>
+        rule.channels.map((c, i) => (
+          <div key={i} className="truncate text-xs" title={c.target}>
+            <span className="text-muted-foreground">{c.type}:</span>{" "}
+            <span dir="ltr" className="font-mono">
+              {c.target}
+            </span>
+          </div>
+        )),
+    },
+    {
+      id: "status",
+      header: t("Status"),
+      sortValue: (rule) => (rule.enabled ? 0 : 1),
+      cell: (rule) =>
+        rule.enabled ? (
+          <StatusBadge tone="success" label={t("Enabled")} />
+        ) : (
+          <StatusBadge tone="neutral" label={t("Disabled")} />
+        ),
+    },
+    {
+      id: "actions",
+      header: <span className="sr-only">{t("Actions")}</span>,
+      align: "end",
+      className: "whitespace-nowrap",
+      cell: (rule) => (
+        <>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label={t("Edit {{name}}", { name: rule.name })}
+            onClick={() => edit(rule)}
+          >
+            <IconPencil />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label={t("Delete {{name}}", { name: rule.name })}
+            onClick={() => remove(rule)}
+          >
+            <IconTrash />
+          </Button>
+        </>
+      ),
+    },
+  ]
+
+  return (
+    <Page className="flex flex-col gap-4 py-5">
+      <PageHeader
+        title={t("Alert rules")}
+        description={t(
+          "Get told by email, Slack or a webhook when a server or project needs attention."
+        )}
+        actions={
+          <Button size="sm" onClick={() => edit(null)}>
+            <IconPlus data-icon="inline-start" />
+            {t("New rule")}
+          </Button>
+        }
+      />
+
+      {data && !data.length ? (
+        <EmptyState
+          icon={IconBell}
+          title={t("No alert rules yet")}
+          description={t(
+            "Start with a server offline rule and a failed deploy rule."
+          )}
+          action={
+            <Button size="sm" onClick={() => edit(null)}>
+              {t("New rule")}
+            </Button>
+          }
+        />
       ) : (
-        <div className="overflow-x-auto rounded-2xl border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-10">
-                  <SelectAllCheckbox
-                    selection={selection}
-                    ids={data.map((r) => r._id)}
-                  />
-                </TableHead>
-                <TableHead>{t("Rule")}</TableHead>
-                <TableHead>{t("Condition")}</TableHead>
-                <TableHead>{t("Channels")}</TableHead>
-                <TableHead>
-                  <span className="sr-only">{t("Actions")}</span>
-                </TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {data.map((rule) => {
-                const meta = METRICS[rule.metric]
-                return (
-                  <TableRow
-                    key={rule._id}
-                    data-state={
-                      selection.has(rule._id) ? "selected" : undefined
-                    }
-                  >
-                    <TableCell>
-                      <SelectCheckbox
-                        selection={selection}
-                        id={rule._id}
-                        label={rule.name}
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <div className="font-medium">{rule.name}</div>
-                      {!rule.enabled && (
-                        <Badge variant="outline">{t("Disabled")}</Badge>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-sm">
-                      {t(meta.label)}
-                      {meta.unit &&
-                        ` ${rule.metric === "room" ? "<" : ">"} ${rule.threshold}${meta.unit === "%" ? "%" : " MiB"}`}
-                      {rule.forSec > 0 &&
-                        ` · ${t("{{n}} s", { n: rule.forSec })}`}
-                      <div className="text-xs text-muted-foreground">
-                        {rule.target.ref
-                          ? rule.target.kind === "server"
-                            ? t("One server")
-                            : t("One project")
-                          : rule.target.kind === "server"
-                            ? t("Every server")
-                            : t("Every project")}
-                      </div>
-                    </TableCell>
-                    <TableCell className="max-w-72 text-xs">
-                      {rule.channels.map((c, i) => (
-                        <div key={i} className="truncate" title={c.target}>
-                          <span className="text-muted-foreground">
-                            {c.type}:
-                          </span>{" "}
-                          {c.target}
-                        </div>
-                      ))}
-                    </TableCell>
-                    <TableCell className="text-end whitespace-nowrap">
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        aria-label={t("Edit {{name}}", { name: rule.name })}
-                        onClick={() => edit(rule)}
-                      >
-                        <IconPencil />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        aria-label={t("Delete {{name}}", { name: rule.name })}
-                        onClick={() => remove(rule)}
-                      >
-                        <IconTrash />
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                )
-              })}
-            </TableBody>
-          </Table>
-        </div>
+        <>
+          <Toolbar search={search} onSearch={setSearch} />
+          <div className="overflow-x-auto">
+            <DataTable
+              label={t("Alert rules")}
+              columns={columns}
+              rows={rows}
+              rowId={(rule) => rule._id}
+              isSelected={(rule) => selection.has(rule._id)}
+              loading={!data}
+            />
+          </div>
+        </>
       )}
 
       <SelectionBar

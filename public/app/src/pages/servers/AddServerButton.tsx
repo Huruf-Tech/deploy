@@ -20,7 +20,7 @@ export function AddServerButton() {
 
   return (
     <>
-      <Button onClick={() => setOpen(true)}>
+      <Button size="sm" onClick={() => setOpen(true)}>
         <IconPlus aria-hidden /> {t("Add server")}
       </Button>
       <AddServerDialog

@@ -14,25 +14,29 @@ import {
 
 import { use } from "@/core/hooks/use"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { CopyButton } from "@/components/ui/copy-button"
-import {
-  Empty,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyMedia,
-  EmptyTitle,
-} from "@/components/ui/empty"
 import { Input } from "@/components/ui/input"
-import { Skeleton } from "@/components/ui/skeleton"
+import { CodeBlock } from "@/components/console/code-block"
+import { DataTable, type TColumn } from "@/components/console/data-table"
+import { EmptyState } from "@/components/console/empty-state"
+import { Panel } from "@/components/console/panel"
+import { StatusBadge } from "@/components/console/status"
 import { usePolling } from "@/hooks/use-polling"
 import { useFresh } from "@/hooks/use-fresh"
-import { errorMessage } from "@/lib/utils"
+import { cn, errorMessage } from "@/lib/utils"
 
 type TDomain = Awaited<ReturnType<typeof ThunderSDK.domains.list>>[number]
 
-function StatusBadge({ status }: { status: TDomain["status"] }) {
+/** Domain states on the shared status tokens (checks and issuing pulse). */
+const STATE: Record<TDomain["status"], string> = {
+  pending: "pending",
+  checking: "deploying",
+  issuing: "deploying",
+  active: "healthy",
+  failed: "failed",
+}
+
+function DomainStatus({ status }: { status: TDomain["status"] }) {
   const { t } = useTranslation()
   const label = {
     pending: t("Waiting for DNS records"),
@@ -41,52 +45,11 @@ function StatusBadge({ status }: { status: TDomain["status"] }) {
     active: t("Live"),
     failed: t("Needs attention"),
   }[status]
-  const busy = status === "checking" || status === "issuing"
-  return (
-    <Badge
-      variant={
-        status === "active"
-          ? "default"
-          : status === "failed"
-            ? "destructive"
-            : "secondary"
-      }
-    >
-      {busy && <IconLoader2 className="animate-spin" aria-hidden />}
-      {label}
-    </Badge>
-  )
+  return <StatusBadge state={STATE[status]} label={label} />
 }
 
-function Record({
-  type,
-  name,
-  value,
-}: {
-  type: string
-  name: string
-  value: string
-}) {
-  return (
-    <tr className="border-t align-top">
-      <td className="py-2 pe-3 font-mono text-xs">{type}</td>
-      <td className="py-2 pe-3">
-        <span className="flex items-center gap-1 font-mono text-xs break-all">
-          {name}
-          <CopyButton value={name} />
-        </span>
-      </td>
-      <td className="py-2">
-        <span className="flex items-center gap-1 font-mono text-xs break-all">
-          {value}
-          <CopyButton value={value} />
-        </span>
-      </td>
-    </tr>
-  )
-}
-
-function DomainCard({
+/** Check now and remove, with their own busy state. */
+function DomainActions({
   domain,
   onChanged,
 }: {
@@ -97,7 +60,6 @@ function DomainCard({
   const [busy, setBusy] = React.useState<"check" | "remove" | null>(null)
   const { records } = domain
   const configured = !!records.cname || !!records.ipv4?.length
-  const apex = domain.hostname.split(".").length === 2
   const canCheck = ["pending", "failed", "checking"].includes(domain.status)
 
   const run = async (
@@ -117,151 +79,152 @@ function DomainCard({
   }
 
   return (
-    <li className="flex flex-col gap-3 rounded-2xl border p-4">
-      <div className="flex flex-wrap items-center gap-3">
-        <IconWorld className="size-5 text-muted-foreground" aria-hidden />
-        <span className="min-w-48 flex-1 font-medium break-all">
-          {domain.status === "active" ? (
-            <a
-              href={`https://${domain.hostname}`}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center gap-1 hover:underline"
-            >
-              {domain.hostname}
-              <IconExternalLink className="size-4" aria-hidden />
-            </a>
-          ) : (
-            domain.hostname
-          )}
-        </span>
-        <StatusBadge status={domain.status} />
-        {canCheck && (
-          <Button
-            size="sm"
-            variant={domain.status === "checking" ? "ghost" : "default"}
-            disabled={!!busy || !configured}
-            onClick={() =>
-              run(
-                "check",
-                () => ThunderSDK.domains.check({ params: { id: domain._id } }),
-                t("Could not start the check")
-              )
-            }
-          >
-            {busy === "check" ? (
-              <IconLoader2 className="animate-spin" aria-hidden />
-            ) : (
-              <IconRefresh aria-hidden />
-            )}
-            {t("Check now")}
-          </Button>
-        )}
+    <span className="inline-flex items-center gap-1">
+      {canCheck && (
         <Button
-          size="icon-sm"
-          variant="ghost"
-          disabled={!!busy}
-          aria-label={t("Remove {{name}}", { name: domain.hostname })}
+          size="xs"
+          variant={domain.status === "checking" ? "ghost" : "outline"}
+          disabled={!!busy || !configured}
           onClick={() =>
             run(
-              "remove",
-              () => ThunderSDK.domains.del({ params: { id: domain._id } }),
-              t("Could not remove it")
+              "check",
+              () => ThunderSDK.domains.check({ params: { id: domain._id } }),
+              t("Could not start the check")
             )
           }
         >
-          <IconTrash />
-        </Button>
-      </div>
-
-      {domain.status === "active" && domain.certificate && (
-        <p className="text-sm text-muted-foreground">
-          {t("Certificate valid until {{date}}; it renews automatically.", {
-            date: new Date(domain.certificate.notAfter).toLocaleDateString(),
-          })}
-        </p>
-      )}
-
-      {domain.status !== "active" && (
-        <>
-          {!configured ? (
-            <Alert variant="destructive">
-              <IconAlertTriangle />
-              <AlertTitle>{t("Custom domains aren't set up yet")}</AlertTitle>
-              <AlertDescription>
-                {t(
-                  "The platform admin needs to set INGRESS_HOSTNAME or INGRESS_IPV4 first."
-                )}
-              </AlertDescription>
-            </Alert>
+          {busy === "check" ? (
+            <IconLoader2 className="animate-spin" aria-hidden />
           ) : (
-            <div className="flex flex-col gap-2">
-              <p className="text-sm text-muted-foreground">
-                {t(
-                  "Create these records at your DNS provider, then click Check now. Checking continues for 30 minutes while they propagate."
-                )}
-              </p>
-              <div className="overflow-x-auto">
-                <table className="w-full text-start text-sm">
-                  <thead className="text-xs text-muted-foreground">
-                    <tr>
-                      <th className="pe-3 pb-1 text-start font-normal">
-                        {t("Type")}
-                      </th>
-                      <th className="pe-3 pb-1 text-start font-normal">
-                        {t("Name")}
-                      </th>
-                      <th className="pb-1 text-start font-normal">
-                        {t("Value")}
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <Record
-                      type={records.ownership.type}
-                      name={records.ownership.name}
-                      value={records.ownership.value}
-                    />
-                    {records.cname && !(apex && records.ipv4?.length) ? (
-                      <Record
-                        type="CNAME"
-                        name={domain.hostname}
-                        value={records.cname}
-                      />
-                    ) : (
-                      records.ipv4?.map((ip) => (
-                        <Record
-                          key={ip}
-                          type="A"
-                          name={domain.hostname}
-                          value={ip}
-                        />
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                {t(
-                  "If your DNS is on Cloudflare, set the record to DNS only (grey cloud)."
-                )}
-              </p>
-            </div>
+            <IconRefresh aria-hidden />
           )}
-          {(domain.error || domain.checks?.detail) && (
-            <p
-              className={
-                domain.status === "failed"
-                  ? "text-sm text-destructive"
-                  : "text-sm text-muted-foreground"
-              }
+          {t("Check now")}
+        </Button>
+      )}
+      <Button
+        size="icon-xs"
+        variant="ghost"
+        disabled={!!busy}
+        aria-label={t("Remove {{name}}", { name: domain.hostname })}
+        onClick={() =>
+          run(
+            "remove",
+            () => ThunderSDK.domains.del({ params: { id: domain._id } }),
+            t("Could not remove it")
+          )
+        }
+      >
+        {busy === "remove" ? (
+          <IconLoader2 className="animate-spin" aria-hidden />
+        ) : (
+          <IconTrash />
+        )}
+      </Button>
+    </span>
+  )
+}
+
+/** The DNS records a domain that isn't live yet still needs. */
+function DomainSetup({ domain }: { domain: TDomain }) {
+  const { t } = useTranslation()
+  const { records } = domain
+  const configured = !!records.cname || !!records.ipv4?.length
+  const apex = domain.hostname.split(".").length === 2
+  const rows = [
+    records.ownership,
+    ...(records.cname && !(apex && records.ipv4?.length)
+      ? [{ type: "CNAME", name: domain.hostname, value: records.cname }]
+      : (records.ipv4 ?? []).map((ip) => ({
+          type: "A",
+          name: domain.hostname,
+          value: ip,
+        }))),
+  ]
+
+  return (
+    <Panel
+      title={
+        <span dir="ltr" className="font-mono text-[13px]">
+          {domain.hostname}
+        </span>
+      }
+      actions={<DomainStatus status={domain.status} />}
+      bodyClassName="flex flex-col gap-3"
+    >
+      {!configured ? (
+        <Alert variant="destructive">
+          <IconAlertTriangle />
+          <AlertTitle>{t("Custom domains aren't set up yet")}</AlertTitle>
+          <AlertDescription>
+            {t(
+              "The platform admin needs to set INGRESS_HOSTNAME or INGRESS_IPV4 first."
+            )}
+          </AlertDescription>
+        </Alert>
+      ) : (
+        <>
+          <p className="text-[13px] text-muted-foreground">
+            {t(
+              "Create these records at your DNS provider, then click Check now. Checking continues for 30 minutes while they propagate."
+            )}
+          </p>
+          <div
+            role="table"
+            aria-label={t("DNS records for {{name}}", {
+              name: domain.hostname,
+            })}
+            className="flex flex-col gap-2"
+          >
+            <div
+              role="row"
+              className="grid grid-cols-[3.5rem_1fr_1fr] gap-2 text-xs text-muted-foreground max-sm:hidden"
             >
-              {domain.error ?? domain.checks?.detail}
-            </p>
-          )}
+              <span role="columnheader">{t("Type")}</span>
+              <span role="columnheader">{t("Name")}</span>
+              <span role="columnheader">{t("Value")}</span>
+            </div>
+            {rows.map((r) => (
+              <div
+                key={`${r.type}:${r.value}`}
+                role="row"
+                className="grid items-start gap-2 sm:grid-cols-[3.5rem_1fr_1fr]"
+              >
+                <span
+                  role="cell"
+                  className="pt-2 font-mono text-xs font-medium"
+                >
+                  {r.type}
+                </span>
+                <div role="cell" className="min-w-0">
+                  <CodeBlock code={r.name} wrap className="[&_pre]:py-2" />
+                </div>
+                <div role="cell" className="min-w-0">
+                  <CodeBlock code={r.value} wrap className="[&_pre]:py-2" />
+                </div>
+              </div>
+            ))}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            {t(
+              "If your DNS is on Cloudflare, set the record to DNS only (grey cloud)."
+            )}
+          </p>
         </>
       )}
-    </li>
+      {(domain.error || domain.checks?.detail) && (
+        <p
+          aria-live="polite"
+          className={cn(
+            "text-[13px]",
+            domain.status === "failed"
+              ? "text-destructive-foreground"
+              : "text-muted-foreground"
+          )}
+        >
+          {domain.error ?? domain.checks?.detail}
+        </p>
+      )}
+    </Panel>
   )
 }
 
@@ -296,6 +259,60 @@ export function DomainsTab({ project }: { project: string }) {
     }
   }
 
+  const onChanged = () => request.invalidate()
+  const columns: TColumn<TDomain>[] = [
+    {
+      id: "hostname",
+      header: t("Domain"),
+      sortValue: (d) => d.hostname,
+      cell: (d) =>
+        d.status === "active" ? (
+          <a
+            href={`https://${d.hostname}`}
+            target="_blank"
+            rel="noreferrer"
+            dir="ltr"
+            className="inline-flex items-center gap-1 font-mono text-xs break-all text-brand-text hover:underline"
+          >
+            {d.hostname}
+            <IconExternalLink className="size-3" aria-hidden />
+          </a>
+        ) : (
+          <span dir="ltr" className="font-mono text-xs break-all">
+            {d.hostname}
+          </span>
+        ),
+    },
+    {
+      id: "status",
+      header: t("Status"),
+      sortValue: (d) => d.status,
+      cell: (d) => <DomainStatus status={d.status} />,
+    },
+    {
+      id: "certificate",
+      header: t("Certificate"),
+      className: "max-md:hidden",
+      cell: (d) =>
+        d.status === "active" && d.certificate ? (
+          <span className="text-xs text-muted-foreground">
+            {t("Certificate valid until {{date}}; it renews automatically.", {
+              date: new Date(d.certificate.notAfter).toLocaleDateString(),
+            })}
+          </span>
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        ),
+    },
+    {
+      id: "actions",
+      header: <span className="sr-only">{t("Actions")}</span>,
+      align: "end",
+      cell: (d) => <DomainActions domain={d} onChanged={onChanged} />,
+    },
+  ]
+  const pending = (data ?? []).filter((d) => d.status !== "active")
+
   return (
     <div className="flex flex-col gap-4">
       <form onSubmit={add} className="flex flex-wrap gap-2">
@@ -304,10 +321,10 @@ export function DomainsTab({ project }: { project: string }) {
           onChange={(e) => setHostname(e.target.value)}
           placeholder="app.example.com"
           aria-label={t("Domain")}
-          className="max-w-sm min-w-0 flex-1"
+          className="h-8 max-w-sm min-w-0 flex-1 font-mono text-[13px]"
           dir="ltr"
         />
-        <Button type="submit" disabled={adding || !hostname.trim()}>
+        <Button size="sm" type="submit" disabled={adding || !hostname.trim()}>
           {adding ? (
             <IconLoader2 className="animate-spin" aria-hidden />
           ) : (
@@ -317,32 +334,27 @@ export function DomainsTab({ project }: { project: string }) {
         </Button>
       </form>
 
-      {isLoading && !data ? (
-        <Skeleton className="h-32 rounded-2xl" />
-      ) : !data?.length ? (
-        <Empty className="border">
-          <EmptyHeader>
-            <EmptyMedia variant="icon">
-              <IconWorld />
-            </EmptyMedia>
-            <EmptyTitle>{t("No custom domains")}</EmptyTitle>
-            <EmptyDescription>
-              {t(
-                "Add a domain you own: traffic is spread evenly across this project's servers, with HTTPS from Let's Encrypt. No redeploy needed."
-              )}
-            </EmptyDescription>
-          </EmptyHeader>
-        </Empty>
+      {!isLoading && !data?.length ? (
+        <EmptyState
+          icon={IconWorld}
+          title={t("No custom domains")}
+          description={t(
+            "Add a domain you own: traffic is spread evenly across this project's servers, with HTTPS from Let's Encrypt. No redeploy needed."
+          )}
+        />
       ) : (
-        <ul className="flex flex-col gap-3">
-          {data.map((d) => (
-            <DomainCard
-              key={d._id}
-              domain={d}
-              onChanged={() => request.invalidate()}
-            />
+        <div aria-live="polite" className="flex flex-col gap-4">
+          <DataTable
+            label={t("Domains")}
+            columns={columns}
+            rows={data}
+            rowId={(d) => d._id}
+            loading={isLoading}
+          />
+          {pending.map((d) => (
+            <DomainSetup key={d._id} domain={d} />
           ))}
-        </ul>
+        </div>
       )}
     </div>
   )

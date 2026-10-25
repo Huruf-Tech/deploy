@@ -2,11 +2,10 @@ import * as React from "react"
 import { ThunderSDK } from "thunder-sdk"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
-import { IconGift } from "@tabler/icons-react"
+import { IconGift, IconReceipt } from "@tabler/icons-react"
 
 import { use } from "@/core/hooks/use"
 import { Page } from "@/components/page"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -25,15 +24,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Skeleton } from "@/components/ui/skeleton"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
+import { PageHeader } from "@/components/console/page-header"
+import { DataTable } from "@/components/console/data-table"
+import { EmptyState } from "@/components/console/empty-state"
+import { StatusBadge } from "@/components/console/status"
 import { useFresh } from "@/hooks/use-fresh"
 import { errorMessage } from "@/lib/utils"
 
@@ -172,79 +166,100 @@ export default function BillingAdmin() {
   const [granting, setGranting] = React.useState(false)
 
   return (
-    <Page className="flex flex-col gap-6 py-4">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-semibold">{t("Billing")}</h1>
-          <p className="text-sm text-muted-foreground">
-            {t(
-              "Subscriptions across tenants. Plans are edited under Admin → Plans."
-            )}
-          </p>
-        </div>
-        {ThunderSDK.isPermitted("billingAdmin", "grant") && (
-          <Button onClick={() => setGranting(true)}>
-            <IconGift data-icon="inline-start" />
-            {t("Grant a plan")}
-          </Button>
+    <Page className="flex flex-col gap-4 py-5">
+      <PageHeader
+        title={t("Billing")}
+        description={t(
+          "Subscriptions across tenants. Plans are edited under Admin → Plans."
         )}
-      </div>
-      {!data ? (
-        <Skeleton className="h-40 rounded-3xl" />
-      ) : !data.length ? (
-        <p className="rounded-3xl border border-dashed p-6 text-center text-sm text-muted-foreground">
-          {t("No subscriptions yet: every tenant is on Free.")}
-        </p>
+        actions={
+          ThunderSDK.isPermitted("billingAdmin", "grant") && (
+            <Button size="sm" onClick={() => setGranting(true)}>
+              <IconGift data-icon="inline-start" />
+              {t("Grant a plan")}
+            </Button>
+          )
+        }
+      />
+      {data && !data.length ? (
+        <EmptyState
+          icon={IconReceipt}
+          title={t("No subscriptions yet: every tenant is on Free.")}
+        />
       ) : (
-        <div className="overflow-x-auto rounded-2xl border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>{t("Tenant")}</TableHead>
-                <TableHead>{t("Plan")}</TableHead>
-                <TableHead>{t("Status")}</TableHead>
-                <TableHead>{t("Period ends")}</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {data.map((s) => (
-                <TableRow key={s._id}>
-                  <TableCell>
+        <div className="overflow-x-auto">
+          <DataTable
+            label={t("Billing")}
+            rows={data}
+            rowId={(s) => s._id}
+            loading={!data}
+            columns={[
+              {
+                id: "tenant",
+                header: t("Tenant"),
+                sortValue: (s) => s.tenantName ?? "",
+                cell: (s) => (
+                  <div className="min-w-0">
                     <div className="font-medium">{s.tenantName ?? "—"}</div>
-                    <div className="font-mono text-xs text-muted-foreground">
+                    <div
+                      dir="ltr"
+                      className="font-mono text-xs text-muted-foreground"
+                    >
                       {s.tenant}
                     </div>
-                  </TableCell>
-                  <TableCell>{s.planName ?? "—"}</TableCell>
-                  <TableCell>
-                    <Badge
-                      variant={
+                  </div>
+                ),
+              },
+              {
+                id: "plan",
+                header: t("Plan"),
+                sortValue: (s) => s.planName ?? "",
+                cell: (s) => s.planName ?? "—",
+              },
+              {
+                id: "status",
+                header: t("Status"),
+                sortValue: (s) => s.status,
+                cell: (s) => (
+                  <span title={s.lastError}>
+                    <StatusBadge
+                      tone={
                         s.status === "pastDue"
-                          ? "destructive"
+                          ? "danger"
                           : s.status === "active"
-                            ? "secondary"
-                            : "outline"
+                            ? s.cancelAtPeriodEnd
+                              ? "warning"
+                              : "success"
+                            : "neutral"
                       }
-                      title={s.lastError}
-                    >
-                      {s.status === "pastDue"
-                        ? t("Past due")
-                        : s.status === "active"
-                          ? s.cancelAtPeriodEnd
-                            ? t("Ends at period end")
-                            : t("Active")
-                          : t("Canceled")}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="whitespace-nowrap">
-                    {s.currentPeriodEnd
-                      ? new Date(s.currentPeriodEnd).toLocaleDateString()
-                      : "—"}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+                      label={
+                        s.status === "pastDue"
+                          ? t("Past due")
+                          : s.status === "active"
+                            ? s.cancelAtPeriodEnd
+                              ? t("Ends at period end")
+                              : t("Active")
+                            : t("Canceled")
+                      }
+                    />
+                  </span>
+                ),
+              },
+              {
+                id: "ends",
+                header: t("Period ends"),
+                sortValue: (s) =>
+                  s.currentPeriodEnd
+                    ? new Date(s.currentPeriodEnd).getTime()
+                    : undefined,
+                className: "whitespace-nowrap tabular-nums",
+                cell: (s) =>
+                  s.currentPeriodEnd
+                    ? new Date(s.currentPeriodEnd).toLocaleDateString()
+                    : "—",
+              },
+            ]}
+          />
         </div>
       )}
       <GrantDialog

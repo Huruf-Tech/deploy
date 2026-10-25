@@ -65,7 +65,7 @@ export function VolumesEditor({
         {!storages?.length && (
           <Link
             to={getLocalPath("infrastructure/storage")}
-            className="font-medium underline"
+            className="font-medium text-brand-text underline"
           >
             {t("Connect S3 storage")}
           </Link>
@@ -74,7 +74,7 @@ export function VolumesEditor({
       {value.map((v, i) => (
         <div
           key={i}
-          className="grid gap-2 rounded-2xl border p-3 sm:grid-cols-[1fr_1.4fr_1.4fr_auto]"
+          className="grid gap-2 rounded-lg border p-2.5 sm:grid-cols-[1fr_1.4fr_1.4fr_auto]"
         >
           <Input
             aria-label={t("Volume {{n}} name", { n: i + 1 })}
@@ -83,7 +83,8 @@ export function VolumesEditor({
             required
             pattern="[a-z0-9][a-z0-9\-]{0,40}"
             onChange={(e) => set(i, { name: e.target.value.toLowerCase() })}
-            className="font-mono"
+            dir="ltr"
+            className="h-8 font-mono text-[13px]"
           />
           <Input
             aria-label={t("Volume {{n}} mount path", { n: i + 1 })}
@@ -92,7 +93,8 @@ export function VolumesEditor({
             required
             pattern="/[^:]*"
             onChange={(e) => set(i, { mountPath: e.target.value })}
-            className="font-mono"
+            dir="ltr"
+            className="h-8 font-mono text-[13px]"
           />
           <Select
             items={locations}
@@ -105,7 +107,8 @@ export function VolumesEditor({
             }
           >
             <SelectTrigger
-              className="w-full"
+              size="sm"
+              className="w-full text-[13px]"
               aria-label={t("Volume {{n}} location", { n: i + 1 })}
             >
               <SelectValue />
@@ -121,7 +124,7 @@ export function VolumesEditor({
           <Button
             type="button"
             variant="ghost"
-            size="icon"
+            size="icon-sm"
             aria-label={t("Remove volume {{n}}", { n: i + 1 })}
             onClick={() => onChange(value.filter((_, j) => j !== i))}
           >
@@ -134,7 +137,8 @@ export function VolumesEditor({
               value={v.path ?? ""}
               pattern="[\w.\/\-]*"
               onChange={(e) => set(i, { path: e.target.value || undefined })}
-              className="font-mono sm:col-span-3"
+              dir="ltr"
+              className="h-8 font-mono text-[13px] sm:col-span-3"
             />
           )}
         </div>

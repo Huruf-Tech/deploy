@@ -13,17 +13,13 @@ import {
 } from "@tabler/icons-react"
 
 import { Page } from "@/components/page"
+import { PageHeader } from "@/components/console/page-header"
+import { Panel } from "@/components/console/panel"
+import { EmptyState } from "@/components/console/empty-state"
+import { StatusBadge } from "@/components/console/status"
 import { use } from "@/core/hooks/use"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import {
-  Card,
-  CardAction,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
 import {
   Dialog,
   DialogContent,
@@ -32,14 +28,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import {
-  Empty,
-  EmptyContent,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyMedia,
-  EmptyTitle,
-} from "@/components/ui/empty"
 import {
   Field,
   FieldContent,
@@ -194,11 +182,10 @@ function IntegrationCard({
   const installUrl = `https://github.com/apps/${integration.appSlug}/installations/new`
 
   return (
-    <Card
+    <Panel
       className={cn(selection.has(integration._id) && "ring-2 ring-primary")}
-    >
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
+      title={
+        <span className="flex items-center gap-2">
           {/* Only the owner can remove it, so only theirs are selectable. */}
           {integration.isOwner && (
             <SelectCheckbox
@@ -207,14 +194,18 @@ function IntegrationCard({
               label={integration.appName}
             />
           )}
-          <IconBrandGithub className="size-5" aria-hidden />
-          {integration.appName}
-        </CardTitle>
-        <CardDescription>
+          <IconBrandGithub className="size-4 shrink-0" aria-hidden />
+          <span className="truncate">{integration.appName}</span>
+        </span>
+      }
+      description={
+        <>
           {t("Owned by {{login}}", { login: integration.account.login })}
           {!integration.isOwner && ` · ${t("shared with this tenant")}`}
-        </CardDescription>
-        <CardAction className="flex gap-1">
+        </>
+      }
+      actions={
+        <>
           <Button
             variant="ghost"
             size="icon-sm"
@@ -242,104 +233,104 @@ function IntegrationCard({
               <IconTrash />
             </Button>
           )}
-        </CardAction>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-4">
-        {integration.installations.length === 0 ? (
-          <div className="flex flex-wrap items-center gap-3 rounded-2xl bg-muted/50 p-3 text-sm">
-            <span className="flex-1">
-              {t("Not installed yet: choose which repositories it may read.")}
-            </span>
+        </>
+      }
+      bodyClassName="flex flex-col gap-3 p-3"
+    >
+      {integration.installations.length === 0 ? (
+        <div className="flex flex-wrap items-center gap-3 rounded-lg bg-warning-soft p-3 text-[13px] text-warning-foreground">
+          <span className="flex-1">
+            {t("Not installed yet: choose which repositories it may read.")}
+          </span>
+          <Button
+            size="sm"
+            render={<a href={installUrl} />}
+            nativeButton={false}
+          >
+            {t("Install on GitHub")}
+          </Button>
+        </div>
+      ) : (
+        <ul className="flex flex-col divide-y rounded-lg border text-[13px]">
+          {integration.installations.map((installation) => (
+            <li
+              key={installation.id}
+              className="flex flex-wrap items-center gap-2 px-3 py-1.5"
+            >
+              <span className="flex min-w-0 flex-1 items-center gap-2">
+                {installation.account.type === "Organization" ? (
+                  <IconBuilding className="size-4 shrink-0" aria-hidden />
+                ) : (
+                  <IconUser className="size-4 shrink-0" aria-hidden />
+                )}
+                <span className="truncate font-medium">
+                  {installation.account.login}
+                </span>
+                <Badge variant="outline">
+                  {installation.repositorySelection === "all"
+                    ? t("All repositories")
+                    : t("Selected repositories")}
+                </Badge>
+                {installation.suspended && (
+                  <StatusBadge tone="danger" label={t("Suspended")} />
+                )}
+              </span>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() =>
+                  onBrowse({
+                    integration: integration._id,
+                    installation: installation.id,
+                    account: installation.account.login,
+                  })
+                }
+              >
+                {t("Browse repositories")}
+              </Button>
+            </li>
+          ))}
+          <li className="px-3 py-1">
             <Button
               size="sm"
+              variant="link"
+              className="h-7 px-0 text-brand-text"
               render={<a href={installUrl} />}
               nativeButton={false}
             >
-              {t("Install on GitHub")}
+              {t("Install on another account or change repositories")}
             </Button>
-          </div>
-        ) : (
-          <ul className="flex flex-col gap-2">
-            {integration.installations.map((installation) => (
-              <li
-                key={installation.id}
-                className="flex flex-wrap items-center gap-3 rounded-2xl border p-3"
-              >
-                <span className="flex min-w-0 flex-1 items-center gap-2">
-                  {installation.account.type === "Organization" ? (
-                    <IconBuilding className="size-4 shrink-0" aria-hidden />
-                  ) : (
-                    <IconUser className="size-4 shrink-0" aria-hidden />
-                  )}
-                  <span className="truncate font-medium">
-                    {installation.account.login}
-                  </span>
-                  <Badge variant="outline">
-                    {installation.repositorySelection === "all"
-                      ? t("All repositories")
-                      : t("Selected repositories")}
-                  </Badge>
-                  {installation.suspended && (
-                    <Badge variant="destructive">{t("Suspended")}</Badge>
-                  )}
-                </span>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() =>
-                    onBrowse({
-                      integration: integration._id,
-                      installation: installation.id,
-                      account: installation.account.login,
-                    })
-                  }
-                >
-                  {t("Browse repositories")}
-                </Button>
-              </li>
-            ))}
-            <li>
-              <Button
-                size="sm"
-                variant="link"
-                className="px-0"
-                render={<a href={installUrl} />}
-                nativeButton={false}
-              >
-                {t("Install on another account or change repositories")}
-              </Button>
-            </li>
-          </ul>
-        )}
+          </li>
+        </ul>
+      )}
 
-        {integration.isOwner && (
-          <Field orientation="horizontal">
-            <FieldContent>
-              <FieldLabel htmlFor={`share-${integration._id}`}>
-                {t("Share with this tenant")}
-              </FieldLabel>
-              <FieldDescription>
-                {t("Other members can deploy from these repositories.")}
-              </FieldDescription>
-            </FieldContent>
-            <Switch
-              id={`share-${integration._id}`}
-              checked={integration.sharedWithTenant}
-              disabled={busy}
-              onCheckedChange={(sharedWithTenant) =>
-                run(
-                  () =>
-                    ThunderSDK.gitIntegrations.update({
-                      params: { id: integration._id },
-                      body: { sharedWithTenant },
-                    }),
-                  t("Could not change sharing")
-                )
-              }
-            />
-          </Field>
-        )}
-      </CardContent>
+      {integration.isOwner && (
+        <Field orientation="horizontal">
+          <FieldContent>
+            <FieldLabel htmlFor={`share-${integration._id}`}>
+              {t("Share with this tenant")}
+            </FieldLabel>
+            <FieldDescription>
+              {t("Other members can deploy from these repositories.")}
+            </FieldDescription>
+          </FieldContent>
+          <Switch
+            id={`share-${integration._id}`}
+            checked={integration.sharedWithTenant}
+            disabled={busy}
+            onCheckedChange={(sharedWithTenant) =>
+              run(
+                () =>
+                  ThunderSDK.gitIntegrations.update({
+                    params: { id: integration._id },
+                    body: { sharedWithTenant },
+                  }),
+                t("Could not change sharing")
+              )
+            }
+          />
+        </Field>
+      )}
 
       <Dialog open={removing} onOpenChange={setRemoving}>
         <DialogContent>
@@ -385,7 +376,7 @@ function IntegrationCard({
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </Card>
+    </Panel>
   )
 }
 
@@ -424,49 +415,49 @@ export default function GitHubPage() {
   }, [params, setParams, request, t])
 
   const connect = (
-    <Button onClick={() => setConnecting(true)}>
+    <Button size="sm" onClick={() => setConnecting(true)}>
       <IconBrandGithub aria-hidden /> {t("Connect GitHub")}
     </Button>
   )
 
   return (
-    <Page className="flex flex-col gap-6 py-4">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="text-xl font-semibold">{t("GitHub")}</h1>
-          <p className="text-sm text-muted-foreground">
-            {t("Deploy from your repositories, including private ones.")}
-          </p>
-        </div>
-        {!!data?.length && connect}
-      </div>
+    <Page className="flex flex-col gap-4 py-5">
+      <PageHeader
+        title={t("GitHub")}
+        status={
+          !!data?.length &&
+          (data.some((i) => i.installations.some((x) => !x.suspended)) ? (
+            <StatusBadge tone="success" label={t("Connected")} />
+          ) : (
+            <StatusBadge tone="warning" label={t("Not installed")} />
+          ))
+        }
+        description={t(
+          "Deploy from your repositories, including private ones."
+        )}
+        actions={!!data?.length && connect}
+      />
 
       {isLoading && !data ? (
-        <Skeleton className="h-48 rounded-4xl" />
+        <Skeleton className="h-48 rounded-[10px]" />
       ) : !data?.length ? (
-        <Empty className="border">
-          <EmptyHeader>
-            <EmptyMedia variant="icon">
-              <IconBrandGithub />
-            </EmptyMedia>
-            <EmptyTitle>{t("Connect GitHub")}</EmptyTitle>
-            <EmptyDescription>
-              {t(
-                "Three clicks: connect here, create the App on GitHub, then install it on your repositories."
-              )}
-            </EmptyDescription>
-          </EmptyHeader>
-          <EmptyContent>{connect}</EmptyContent>
-        </Empty>
+        <EmptyState
+          icon={IconBrandGithub}
+          title={t("Connect GitHub")}
+          description={t(
+            "Three clicks: connect here, create the App on GitHub, then install it on your repositories."
+          )}
+          action={connect}
+        />
       ) : (
         <div className="flex flex-col gap-3">
           {owned.length > 1 && (
-            <label className="flex w-fit items-center gap-3 px-1 text-sm text-muted-foreground">
+            <label className="flex w-fit items-center gap-2 px-1 text-xs text-muted-foreground">
               <SelectAllCheckbox selection={selection} ids={owned} />
               {t("Select all")}
             </label>
           )}
-          <div className="grid gap-4 lg:grid-cols-2">
+          <div className="grid items-start gap-3 lg:grid-cols-2">
             {data.map((integration) => (
               <IntegrationCard
                 key={integration._id}

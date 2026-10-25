@@ -16,6 +16,7 @@ import {
 import React, { useMemo } from "react"
 import { useTranslation } from "react-i18next"
 import { IconChevronLeft, IconChevronRight } from "@tabler/icons-react"
+import { cn } from "@/lib/utils"
 
 function calculatePaginationRange(
   active: number,
@@ -102,7 +103,12 @@ export function Pagination({
         {range.map((page) => (
           <PaginationItem key={page.value} value={page.value}>
             <PaginationLink
-              className={page.value === active ? "bg-primary text-white" : ""}
+              aria-current={page.value === active ? "page" : undefined}
+              className={cn(
+                "tabular-nums",
+                page.value === active &&
+                  "bg-primary text-primary-foreground hover:bg-primary/90"
+              )}
               onClick={() => handleChange(page.value)}
             >
               {page.label}
@@ -114,7 +120,10 @@ export function Pagination({
             items={totalPages}
             onValueChange={(value) => handleChange(Number(value))}
           >
-            <SelectTrigger className="w-full max-w-48">
+            <SelectTrigger
+              className="h-8 w-full max-w-48"
+              aria-label={t("Pages")}
+            >
               <PaginationEllipsis />
             </SelectTrigger>
             <SelectContent className="max-h-50">

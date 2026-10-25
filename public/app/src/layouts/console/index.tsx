@@ -78,8 +78,17 @@ const sidebarOpen = () => !document.cookie.includes("sidebar_state=false")
  */
 export function Layout({ children }: { children: React.ReactNode }) {
   const { router } = useLayout()
-  const { i18n } = useTranslation()
   const [paletteOpen, setPaletteOpen] = React.useState(false)
+  const { pathname } = useLocation()
+  const { t, i18n } = useTranslation()
+
+  // ponytail: core's breadcrumb renders its home crumb as a bare icon link;
+  // label it here until core does (src/core is not ours to edit).
+  React.useEffect(() => {
+    document
+      .querySelector('#console-bar a[data-slot="breadcrumb-link"]')
+      ?.setAttribute("aria-label", t("Home"))
+  }, [pathname, t])
 
   const groups = React.useMemo<TNavGroup[]>(() => {
     const { routes, subRoutes } = getNavRoutes(router.routes)
@@ -123,7 +132,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
       <SidebarInset className="h-svh min-w-0 overflow-hidden bg-background">
         <HeaderActionsProvider>
           {(actionsElement) => (
-            <header className="relative flex h-12 shrink-0 items-center gap-2 border-b px-3 md:px-4">
+            <header
+              id="console-bar"
+              className="relative flex h-12 shrink-0 items-center gap-2 border-b px-3 md:px-4"
+            >
               {actionsElement}
               <SidebarToggle />
               <Breadcrumb className="no-scrollbar min-w-0 flex-1 overflow-x-auto text-[13px] scroll-mask-x-from-90%" />
@@ -135,12 +147,13 @@ export function Layout({ children }: { children: React.ReactNode }) {
             </header>
           )}
         </HeaderActionsProvider>
-        <main
+        {/* SidebarInset is the page's <main>. */}
+        <div
           id="main"
           className="page-transition relative flex min-h-0 w-full flex-1 flex-col"
         >
           {children}
-        </main>
+        </div>
       </SidebarInset>
       <CommandMenu
         open={paletteOpen}

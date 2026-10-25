@@ -11,17 +11,7 @@ import {
 
 import { use } from "@/core/hooks/use"
 import { Page } from "@/components/page"
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
 import {
   Dialog,
   DialogContent,
@@ -31,14 +21,11 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Skeleton } from "@/components/ui/skeleton"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
+import { PageHeader } from "@/components/console/page-header"
+import { Panel } from "@/components/console/panel"
+import { Meter } from "@/components/console/meter"
+import { StatusBadge } from "@/components/console/status"
+import { DataTable } from "@/components/console/data-table"
 import { useFresh } from "@/hooks/use-fresh"
 import { cn, errorMessage } from "@/lib/utils"
 
@@ -67,48 +54,21 @@ const day = (d?: string | Date) => (d ? new Date(d).toLocaleDateString() : "—"
 function Usage({ overview }: { overview: TOverview }) {
   const { t } = useTranslation()
   return (
-    <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+    <ul className="grid gap-x-6 gap-y-3 sm:grid-cols-2 lg:grid-cols-4">
       {QUOTAS.map(({ key, label }) => {
         const used = overview.usage[key] ?? 0
         const limit = overview.limits[key]
-        const over = used > limit
-        const pct = limit ? Math.min(100, (used / limit) * 100) : 100
+        const pct = limit ? (used / limit) * 100 : 100
         return (
-          <li key={key} className="flex flex-col gap-1">
-            <div className="flex justify-between text-sm">
-              <span>{t(label)}</span>
-              <span
-                className={cn(
-                  "tabular-nums",
-                  over
-                    ? "font-medium text-destructive"
-                    : "text-muted-foreground"
-                )}
-              >
-                {used} / {limit}
-              </span>
-            </div>
-            <div
-              role="meter"
-              aria-label={t(label)}
-              aria-valuemin={0}
-              aria-valuemax={limit}
-              aria-valuenow={used}
-              aria-valuetext={t("{{used}} of {{limit}}", { used, limit })}
-              className="h-2 overflow-hidden rounded-full bg-muted"
-            >
-              <div
-                className={cn(
-                  "h-full rounded-full",
-                  over
-                    ? "bg-destructive"
-                    : pct >= 80
-                      ? "bg-amber-500"
-                      : "bg-primary"
-                )}
-                style={{ width: `${pct}%` }}
-              />
-            </div>
+          <li key={key}>
+            <Meter
+              label={t(label)}
+              value={used}
+              total={limit}
+              text={`${used} / ${limit}`}
+              hue="orange"
+              level={used > limit ? "critical" : pct >= 80 ? "warning" : "ok"}
+            />
           </li>
         )
       })}
@@ -116,6 +76,34 @@ function Usage({ overview }: { overview: TOverview }) {
   )
 }
 
+/** A one-line status notice in the status tokens (not color alone: icon + text). */
+function Notice({
+  tone,
+  title,
+  children,
+}: {
+  tone: "danger" | "warning"
+  title: string
+  children: React.ReactNode
+}) {
+  return (
+    <div
+      role="status"
+      className={cn(
+        "flex items-start gap-2 rounded-[10px] border px-3 py-2 text-[13px]",
+        tone === "danger"
+          ? "border-destructive/40 bg-destructive-soft text-destructive-foreground"
+          : "border-warning/40 bg-warning-soft text-warning-foreground"
+      )}
+    >
+      <IconAlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden />
+      <div className="min-w-0">
+        <p className="font-medium">{title}</p>
+        <div className="opacity-90">{children}</div>
+      </div>
+    </div>
+  )
+}
 function ConfirmDialog({
   plan,
   current,
@@ -238,177 +226,175 @@ export default function BillingPage() {
     new Date(new Date(overLimit).getTime() + overview.graceDays * 86_400_000)
 
   return (
-    <Page className="flex flex-col gap-6 py-4">
-      <div>
-        <h1 className="text-xl font-semibold">{t("Plan & usage")}</h1>
-        <p className="text-sm text-muted-foreground">
-          {t("What this tenant can use, and what it uses now.")}
-        </p>
-      </div>
+    <Page className="flex flex-col gap-4 py-5">
+      <PageHeader
+        title={t("Plan & usage")}
+        status={
+          sub?.status === "pastDue" ? (
+            <StatusBadge tone="danger" label={t("Past due")} />
+          ) : undefined
+        }
+        description={t("What this tenant can use, and what it uses now.")}
+      />
 
       {sub?.status === "pastDue" && (
-        <Alert variant="destructive">
-          <IconAlertTriangle />
-          <AlertTitle>{t("Your plan couldn't be renewed")}</AlertTitle>
-          <AlertDescription>
-            {t(
-              "The tenant is on Free until the renewal goes through. We try again every hour; add funds to the wallet or pick a plan below."
-            )}
-            {sub.lastError && (
-              <span className="block text-xs">{sub.lastError}</span>
-            )}
-          </AlertDescription>
-        </Alert>
+        <Notice tone="danger" title={t("Your plan couldn't be renewed")}>
+          {t(
+            "The tenant is on Free until the renewal goes through. We try again every hour; add funds to the wallet or pick a plan below."
+          )}
+          {sub.lastError && (
+            <span className="block text-xs">{sub.lastError}</span>
+          )}
+        </Notice>
       )}
       {overLimit && (
-        <Alert className="border-amber-500/40 bg-amber-500/10">
-          <IconAlertTriangle className="text-amber-600" />
-          <AlertTitle>{t("More servers than your plan allows")}</AlertTitle>
-          <AlertDescription>
-            {throttleAt && throttleAt > new Date()
-              ? t(
-                  "Everything keeps running. From {{date}}, the newest servers beyond the limit poll slowly and get no deploys until you upgrade or remove servers.",
-                  { date: day(throttleAt) }
-                )
-              : t(
-                  "The newest servers beyond the limit poll slowly and get no deploys. Upgrade, or remove servers, to restore them."
-                )}
-          </AlertDescription>
-        </Alert>
+        <Notice tone="warning" title={t("More servers than your plan allows")}>
+          {throttleAt && throttleAt > new Date()
+            ? t(
+                "Everything keeps running. From {{date}}, the newest servers beyond the limit poll slowly and get no deploys until you upgrade or remove servers.",
+                { date: day(throttleAt) }
+              )
+            : t(
+                "The newest servers beyond the limit poll slowly and get no deploys. Upgrade, or remove servers, to restore them."
+              )}
+        </Notice>
       )}
 
       {!overview ? (
-        <Skeleton className="h-48 rounded-3xl" />
+        <Skeleton className="h-40 rounded-[10px]" />
       ) : (
-        <Card>
-          <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-3">
-            <div>
-              <CardDescription>{t("Current plan")}</CardDescription>
-              <CardTitle className="flex items-center gap-2 text-2xl">
-                {overview.plan.name}
-                {overview.period?.kind === "complimentary" && (
-                  <Badge variant="secondary">{t("Complimentary")}</Badge>
-                )}
-              </CardTitle>
-              <p className="text-sm text-muted-foreground">
-                {overview.period
-                  ? sub?.cancelAtPeriodEnd
-                    ? t("Ends on {{date}}, then Free", {
+        <Panel
+          title={
+            <span className="flex items-center gap-2">
+              <span className="text-xs font-normal text-muted-foreground">
+                {t("Current plan")}
+              </span>
+              {overview.plan.name}
+              {overview.period?.kind === "complimentary" && (
+                <StatusBadge tone="info" label={t("Complimentary")} />
+              )}
+            </span>
+          }
+          description={
+            overview.period
+              ? sub?.cancelAtPeriodEnd
+                ? t("Ends on {{date}}, then Free", {
+                    date: day(overview.period.periodEnd),
+                  })
+                : sub?.nextPlan
+                  ? t("Changes on {{date}}", {
+                      date: day(overview.period.periodEnd),
+                    })
+                  : overview.period.kind === "paid"
+                    ? t("Renews on {{date}}", {
                         date: day(overview.period.periodEnd),
                       })
-                    : sub?.nextPlan
-                      ? t("Changes on {{date}}", {
-                          date: day(overview.period.periodEnd),
-                        })
-                      : overview.period.kind === "paid"
-                        ? t("Renews on {{date}}", {
-                            date: day(overview.period.periodEnd),
-                          })
-                        : t("Until {{date}}", {
-                            date: day(overview.period.periodEnd),
-                          })
-                  : t("Every tenant starts here.")}
-              </p>
-            </div>
-            {overview.isOwner &&
-              sub?.status === "active" &&
-              !sub.cancelAtPeriodEnd &&
-              overview.period?.kind === "paid" && (
-                <Button variant="outline" onClick={cancel}>
-                  {t("Cancel plan")}
-                </Button>
-              )}
-          </CardHeader>
-          <CardContent>
-            <Usage overview={overview} />
-          </CardContent>
-        </Card>
+                    : t("Until {{date}}", {
+                        date: day(overview.period.periodEnd),
+                      })
+              : t("Every tenant starts here.")
+          }
+          actions={
+            overview.isOwner &&
+            sub?.status === "active" &&
+            !sub.cancelAtPeriodEnd &&
+            overview.period?.kind === "paid" && (
+              <Button size="sm" variant="outline" onClick={cancel}>
+                {t("Cancel plan")}
+              </Button>
+            )
+          }
+        >
+          <Usage overview={overview} />
+        </Panel>
       )}
 
-      <section aria-labelledby="plans-title" className="flex flex-col gap-3">
-        <h2 id="plans-title" className="text-base font-semibold">
+      <section aria-labelledby="plans-title" className="flex flex-col gap-2">
+        <h2 id="plans-title" className="text-sm font-semibold">
           {t("Plans")}
         </h2>
         {overview && !overview.isOwner && (
-          <p className="text-sm text-muted-foreground">
+          <p className="text-[13px] text-muted-foreground">
             {t("Only the tenant owner can change the plan.")}
           </p>
         )}
         {overview?.isOwner && !overview.paymentsReady && (
-          <p className="text-sm text-muted-foreground">
+          <p className="text-[13px] text-muted-foreground">
             {t("Paid plans aren't available yet.")}
           </p>
         )}
         {!plans ? (
-          <Skeleton className="h-40 rounded-3xl" />
+          <Skeleton className="h-36 rounded-[10px]" />
         ) : (
-          <ul className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          <ul className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
             {plans.map((plan) => {
               const isCurrent =
                 plan._id === overview?.plan._id ||
                 (plan.isFree && overview?.source === "free")
               return (
-                <li key={plan._id}>
-                  <Card
-                    className={cn(
-                      "h-full",
-                      isCurrent && "border-primary ring-1 ring-primary"
-                    )}
-                  >
-                    <CardHeader>
-                      <CardTitle className="flex items-center gap-2">
-                        {plan.name}
-                        {plan.visibility === "private" && (
-                          <Badge variant="outline">{t("For you")}</Badge>
-                        )}
-                      </CardTitle>
-                      <p className="text-2xl font-semibold tabular-nums">
-                        {plan.price.amount
-                          ? money(plan.price.amount, plan.price.currency)
-                          : t("Free")}
-                        {!!plan.price.amount && (
-                          <span className="text-sm font-normal text-muted-foreground">
-                            {" "}
-                            / {t(plan.price.interval)}
-                          </span>
-                        )}
+                <li
+                  key={plan._id}
+                  className={cn(
+                    "flex h-full flex-col gap-3 rounded-[10px] border bg-card p-4",
+                    isCurrent && "border-primary ring-1 ring-primary"
+                  )}
+                >
+                  <div className="flex flex-col gap-0.5">
+                    <h3 className="flex items-center gap-2 text-sm font-semibold">
+                      {plan.name}
+                      {plan.visibility === "private" && (
+                        <StatusBadge tone="neutral" label={t("For you")} />
+                      )}
+                    </h3>
+                    <p className="text-xl font-semibold tabular-nums">
+                      {plan.price.amount
+                        ? money(plan.price.amount, plan.price.currency)
+                        : t("Free")}
+                      {!!plan.price.amount && (
+                        <span className="text-xs font-normal text-muted-foreground">
+                          {" "}
+                          / {t(plan.price.interval)}
+                        </span>
+                      )}
+                    </p>
+                    {plan.description && (
+                      <p className="text-xs text-muted-foreground">
+                        {plan.description}
                       </p>
-                      {plan.description && (
-                        <CardDescription>{plan.description}</CardDescription>
-                      )}
-                    </CardHeader>
-                    <CardContent>
-                      <ul className="flex flex-col gap-1 text-sm">
-                        {QUOTAS.slice(0, 4).map(({ key, label }) => (
-                          <li key={key} className="flex items-center gap-2">
-                            <IconCheck
-                              className="size-4 text-success"
-                              aria-hidden
-                            />
-                            {plan.limits[key]} {t(label).toLowerCase()}
-                          </li>
-                        ))}
-                      </ul>
-                    </CardContent>
-                    <CardFooter>
-                      {isCurrent ? (
-                        <Badge variant="secondary">{t("Current plan")}</Badge>
-                      ) : (
-                        overview?.isOwner &&
-                        (plan.isFree || overview.paymentsReady) && (
-                          <Button
-                            variant={plan.isFree ? "outline" : "default"}
-                            onClick={() => setChoosing(plan)}
-                          >
-                            <IconCreditCard data-icon="inline-start" />
-                            {plan.isFree
-                              ? t("Move to Free")
-                              : t("Choose {{name}}", { name: plan.name })}
-                          </Button>
-                        )
-                      )}
-                    </CardFooter>
-                  </Card>
+                    )}
+                  </div>
+                  <ul className="flex flex-col gap-1 text-[13px]">
+                    {QUOTAS.slice(0, 4).map(({ key, label }) => (
+                      <li key={key} className="flex items-center gap-2">
+                        <IconCheck
+                          className="size-3.5 text-success-foreground"
+                          aria-hidden
+                        />
+                        <span className="tabular-nums">
+                          {plan.limits[key]} {t(label).toLowerCase()}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                  <div className="mt-auto">
+                    {isCurrent ? (
+                      <StatusBadge tone="success" label={t("Current plan")} />
+                    ) : (
+                      overview?.isOwner &&
+                      (plan.isFree || overview.paymentsReady) && (
+                        <Button
+                          size="sm"
+                          variant={plan.isFree ? "outline" : "default"}
+                          onClick={() => setChoosing(plan)}
+                        >
+                          <IconCreditCard data-icon="inline-start" />
+                          {plan.isFree
+                            ? t("Move to Free")
+                            : t("Choose {{name}}", { name: plan.name })}
+                        </Button>
+                      )
+                    )}
+                  </div>
                 </li>
               )
             })}
@@ -416,51 +402,58 @@ export default function BillingPage() {
         )}
       </section>
 
-      <section aria-labelledby="history-title" className="flex flex-col gap-3">
+      <section aria-labelledby="history-title" className="flex flex-col gap-2">
         <h2
           id="history-title"
-          className="flex items-center gap-2 text-base font-semibold"
+          className="flex items-center gap-2 text-sm font-semibold"
         >
           <IconReceipt className="size-4" aria-hidden /> {t("Billing history")}
         </h2>
-        {!periods?.length ? (
-          <p className="text-sm text-muted-foreground">
-            {t("No payments yet.")}
-          </p>
-        ) : (
-          <div className="overflow-x-auto rounded-2xl border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>{t("Plan")}</TableHead>
-                  <TableHead>{t("Period")}</TableHead>
-                  <TableHead>{t("Amount")}</TableHead>
-                  <TableHead>{t("Reference")}</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {periods.map((p) => (
-                  <TableRow key={p._id}>
-                    <TableCell className="font-medium">
-                      {p.planName ?? "—"}
-                    </TableCell>
-                    <TableCell className="whitespace-nowrap">
-                      {day(p.periodStart)} – {day(p.periodEnd)}
-                    </TableCell>
-                    <TableCell className="tabular-nums">
-                      {p.kind === "complimentary"
-                        ? t("Complimentary")
-                        : money(p.amount, p.currency)}
-                    </TableCell>
-                    <TableCell className="font-mono text-xs">
-                      {p.ledgerReference ?? p.note ?? "—"}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        )}
+        <div className="overflow-x-auto">
+          <DataTable
+            label={t("Billing history")}
+            rows={periods}
+            rowId={(p) => p._id}
+            loading={!periods}
+            empty={t("No payments yet.")}
+            columns={[
+              {
+                id: "plan",
+                header: t("Plan"),
+                sortValue: (p) => p.planName,
+                cell: (p) => (
+                  <span className="font-medium">{p.planName ?? "—"}</span>
+                ),
+              },
+              {
+                id: "period",
+                header: t("Period"),
+                sortValue: (p) => new Date(p.periodStart).getTime(),
+                className: "whitespace-nowrap tabular-nums",
+                cell: (p) => `${day(p.periodStart)} – ${day(p.periodEnd)}`,
+              },
+              {
+                id: "amount",
+                header: t("Amount"),
+                align: "end",
+                sortValue: (p) => p.amount,
+                cell: (p) =>
+                  p.kind === "complimentary"
+                    ? t("Complimentary")
+                    : money(p.amount, p.currency),
+              },
+              {
+                id: "ref",
+                header: t("Reference"),
+                cell: (p) => (
+                  <span dir="ltr" className="font-mono text-xs">
+                    {p.ledgerReference ?? p.note ?? "—"}
+                  </span>
+                ),
+              },
+            ]}
+          />
+        </div>
       </section>
 
       <ConfirmDialog

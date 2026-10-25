@@ -536,6 +536,7 @@ function ServerTable({
         columns={columns}
         rows={servers}
         rowId={(s) => s._id}
+        isSelected={(s) => selectedIds.includes(s._id)}
       />
     </div>
   )

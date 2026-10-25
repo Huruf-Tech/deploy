@@ -36,6 +36,7 @@ export function DataTable<T>({
   loading,
   empty,
   onRowClick,
+  isSelected,
   className,
 }: {
   /** Accessible name of the table. */
@@ -46,6 +47,8 @@ export function DataTable<T>({
   loading?: boolean
   empty?: React.ReactNode
   onRowClick?: (row: T) => void
+  /** Highlights selected rows (selection itself is a column). */
+  isSelected?: (row: T) => boolean
   className?: string
 }) {
   const { t } = useTranslation()
@@ -151,6 +154,7 @@ export function DataTable<T>({
               <TableRow
                 key={rowId(row)}
                 tabIndex={onRowClick ? 0 : undefined}
+                data-state={isSelected?.(row) ? "selected" : undefined}
                 onClick={onRowClick && (() => onRowClick(row))}
                 onKeyDown={
                   onRowClick &&

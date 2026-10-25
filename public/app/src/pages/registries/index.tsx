@@ -5,6 +5,10 @@ import { toast } from "sonner"
 import { IconBox, IconPlus, IconStar, IconTrash } from "@tabler/icons-react"
 
 import { Page } from "@/components/page"
+import { PageHeader } from "@/components/console/page-header"
+import { DataTable, type TColumn } from "@/components/console/data-table"
+import { EmptyState } from "@/components/console/empty-state"
+import { StatusBadge } from "@/components/console/status"
 import { use } from "@/core/hooks/use"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -17,21 +21,12 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import {
-  Empty,
-  EmptyContent,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyMedia,
-  EmptyTitle,
-} from "@/components/ui/empty"
-import {
   Field,
   FieldDescription,
   FieldError,
   FieldLabel,
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
-import { Skeleton } from "@/components/ui/skeleton"
 import { Switch } from "@/components/ui/switch"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
@@ -40,8 +35,10 @@ import {
   SelectionBar,
   useSelection,
 } from "@/components/selection-bar"
-import { cn, errorMessage } from "@/lib/utils"
+import { errorMessage } from "@/lib/utils"
 import { useFresh } from "@/hooks/use-fresh"
+
+type TRegistry = Awaited<ReturnType<typeof ThunderSDK.registries.list>>[number]
 
 function AddRegistryDialog({
   open,
@@ -212,105 +209,134 @@ export default function RegistriesPage() {
   }
 
   const add = (
-    <Button onClick={() => setAdding(true)}>
+    <Button size="sm" onClick={() => setAdding(true)}>
       <IconPlus aria-hidden /> {t("Connect a registry")}
     </Button>
   )
 
-  return (
-    <Page className="flex flex-col gap-6 py-4">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="text-xl font-semibold">{t("Registries")}</h1>
-          <p className="text-sm text-muted-foreground">
-            {t("Without one, each server builds the same commit itself.")}
-          </p>
-        </div>
-        {!!data?.length && add}
-      </div>
-
-      {isLoading && !data ? (
-        <Skeleton className="h-32 rounded-3xl" />
-      ) : !data?.length ? (
-        <Empty className="border">
-          <EmptyHeader>
-            <EmptyMedia variant="icon">
-              <IconBox />
-            </EmptyMedia>
-            <EmptyTitle>{t("No registry connected")}</EmptyTitle>
-            <EmptyDescription>
-              {t(
-                "Optional: with a registry, multi-server projects build once and the other servers pull the image."
-              )}
-            </EmptyDescription>
-          </EmptyHeader>
-          <EmptyContent>{add}</EmptyContent>
-        </Empty>
-      ) : (
-        <ul className="flex flex-col gap-2">
-          <li>
-            <label className="flex w-fit items-center gap-3 px-3 text-sm text-muted-foreground">
-              <SelectAllCheckbox
-                selection={selection}
-                ids={data.map((r) => r._id)}
-              />
-              {t("Select all")}
-            </label>
-          </li>
-          {data.map((r) => (
-            <li
-              key={r._id}
-              className={cn(
-                "flex flex-wrap items-center gap-3 rounded-2xl border p-3",
-                selection.has(r._id) && "ring-2 ring-primary"
-              )}
+  const columns: TColumn<TRegistry>[] = [
+    {
+      id: "select",
+      header: (
+        <SelectAllCheckbox
+          selection={selection}
+          ids={(data ?? []).map((r) => r._id)}
+        />
+      ),
+      className: "w-10",
+      cell: (r) => (
+        <SelectCheckbox selection={selection} id={r._id} label={r.name} />
+      ),
+    },
+    {
+      id: "name",
+      header: t("Name"),
+      sortValue: (r) => r.name,
+      cell: (r) => (
+        <span className="flex items-center gap-2">
+          <IconBox
+            className="size-4 shrink-0 text-muted-foreground"
+            aria-hidden
+          />
+          <span className="truncate font-medium">{r.name}</span>
+          {r.isDefault && <Badge variant="secondary">{t("Default")}</Badge>}
+        </span>
+      ),
+    },
+    {
+      id: "namespace",
+      header: t("Namespace"),
+      sortValue: (r) => r.namespace,
+      cell: (r) => (
+        <span dir="ltr" className="truncate font-mono text-xs">
+          {r.kind === "dockerhub" ? `docker.io/${r.namespace}` : r.namespace}
+        </span>
+      ),
+    },
+    {
+      id: "username",
+      header: t("Username"),
+      className: "hidden md:table-cell",
+      cell: (r) => (
+        <span dir="ltr" className="font-mono text-xs text-muted-foreground">
+          {r.username}
+        </span>
+      ),
+    },
+    {
+      id: "actions",
+      header: <span className="sr-only">{t("Actions")}</span>,
+      align: "end",
+      cell: (r) => (
+        <div className="flex justify-end gap-0.5">
+          {!r.isDefault && (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() =>
+                act(
+                  () =>
+                    ThunderSDK.registries.makeDefault({
+                      params: { id: r._id },
+                    }),
+                  t("Could not change the default")
+                )
+              }
             >
-              <SelectCheckbox selection={selection} id={r._id} label={r.name} />
-              <IconBox className="size-5 text-muted-foreground" aria-hidden />
-              <span className="min-w-0 flex-1">
-                <span className="block font-medium">{r.name}</span>
-                <span className="block truncate font-mono text-xs text-muted-foreground">
-                  {r.kind === "dockerhub"
-                    ? `docker.io/${r.namespace}`
-                    : r.namespace}{" "}
-                  · {r.username}
-                </span>
-              </span>
-              {r.isDefault ? (
-                <Badge variant="secondary">{t("Default")}</Badge>
-              ) : (
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() =>
-                    act(
-                      () =>
-                        ThunderSDK.registries.makeDefault({
-                          params: { id: r._id },
-                        }),
-                      t("Could not change the default")
-                    )
-                  }
-                >
-                  <IconStar aria-hidden /> {t("Make default")}
-                </Button>
-              )}
-              <Button
-                size="icon-sm"
-                variant="ghost"
-                aria-label={t("Remove {{name}}", { name: r.name })}
-                onClick={() =>
-                  act(
-                    () => ThunderSDK.registries.del({ params: { id: r._id } }),
-                    t("Could not remove it")
-                  )
-                }
-              >
-                <IconTrash />
-              </Button>
-            </li>
-          ))}
-        </ul>
+              <IconStar aria-hidden /> {t("Make default")}
+            </Button>
+          )}
+          <Button
+            size="icon-sm"
+            variant="ghost"
+            aria-label={t("Remove {{name}}", { name: r.name })}
+            onClick={() =>
+              act(
+                () => ThunderSDK.registries.del({ params: { id: r._id } }),
+                t("Could not remove it")
+              )
+            }
+          >
+            <IconTrash />
+          </Button>
+        </div>
+      ),
+    },
+  ]
+
+  return (
+    <Page className="flex flex-col gap-4 py-5">
+      <PageHeader
+        title={t("Registries")}
+        status={
+          !!data?.length && (
+            <StatusBadge tone="success" label={t("Connected")} />
+          )
+        }
+        description={t(
+          "Without one, each server builds the same commit itself."
+        )}
+        actions={!!data?.length && add}
+      />
+
+      {!isLoading && !data?.length ? (
+        <EmptyState
+          icon={IconBox}
+          title={t("No registry connected")}
+          description={t(
+            "Optional: with a registry, multi-server projects build once and the other servers pull the image."
+          )}
+          action={add}
+        />
+      ) : (
+        <DataTable
+          label={t("Registries")}
+          columns={columns}
+          rows={data}
+          loading={isLoading}
+          rowId={(r) => r._id}
+          isSelected={(r) => selection.has(r._id)}
+        />
       )}
 
       <SelectionBar

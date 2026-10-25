@@ -11,6 +11,7 @@ import {
   IconFileText,
   IconHistory,
   IconRocket,
+  IconServer2,
   IconTerminal2,
 } from "@tabler/icons-react"
 
@@ -18,12 +19,9 @@ import { Page } from "@/components/page"
 import { use } from "@/core/hooks/use"
 import { useBreadcrumbTitle } from "@/core/layouts/shared/breadcrumb"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { ButtonGroup } from "@/components/ui/button-group"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
-import { CopyButton } from "@/components/ui/copy-button"
 import {
   Dialog,
   DialogContent,
@@ -57,6 +55,14 @@ import {
 import { Skeleton } from "@/components/ui/skeleton"
 import { Switch } from "@/components/ui/switch"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { PageHeader } from "@/components/console/page-header"
+import { Panel } from "@/components/console/panel"
+import { Stat, StatStrip } from "@/components/console/stat"
+import { KeyValue } from "@/components/console/key-value"
+import { DataTable, type TColumn } from "@/components/console/data-table"
+import { EmptyState } from "@/components/console/empty-state"
+import { CodeBlock } from "@/components/console/code-block"
+import { StatusBadge } from "@/components/console/status"
 import { usePolling } from "@/hooks/use-polling"
 import { errorMessage } from "@/lib/utils"
 import { LogsSheet } from "@/pages/servers/LogsSheet"
@@ -109,14 +115,19 @@ function DeployButton({
 
   return (
     <ButtonGroup>
-      <Button onClick={() => deploy(false)} disabled={busy}>
-        <IconRocket aria-hidden /> {t("Deploy")}
+      <Button size="sm" onClick={() => deploy(false)} disabled={busy}>
+        {busy ? (
+          <IconLoader2 className="animate-spin" aria-hidden />
+        ) : (
+          <IconRocket aria-hidden />
+        )}{" "}
+        {t("Deploy")}
       </Button>
       <DropdownMenu>
         <DropdownMenuTrigger
           render={
             <Button
-              size="icon"
+              size="icon-sm"
               aria-label={t("More deploy options")}
               disabled={busy}
             />
@@ -134,31 +145,34 @@ function DeployButton({
   )
 }
 
-function DeploymentRow({
-  d,
+/** Deployment history as a table; a row opens its sheet. */
+function DeploymentsTable({
+  deployments,
   onOpen,
 }: {
-  d: TDeploymentSummary
-  onOpen: () => void
+  deployments?: TDeploymentSummary[] | null
+  onOpen: (id: string) => void
 }) {
   const { t } = useTranslation()
-  return (
-    <li>
-      <button
-        type="button"
-        onClick={onOpen}
-        className="flex w-full flex-wrap items-center gap-x-4 gap-y-1 rounded-2xl px-3 py-2.5 text-start hover:bg-muted"
-      >
-        <DeploymentStatus status={d.status} className="w-28 justify-center" />
-        <span className="min-w-0 flex-1">
-          <span className="block truncate text-sm">
+  const columns: TColumn<TDeploymentSummary>[] = [
+    {
+      id: "status",
+      header: t("Status"),
+      className: "w-28",
+      sortValue: (d) => d.status,
+      cell: (d) => <DeploymentStatus status={d.status} />,
+    },
+    {
+      id: "what",
+      header: t("Deployment"),
+      cell: (d) => (
+        <div className="min-w-40">
+          <div className="truncate">
             {d.commit?.message ??
               (d.trigger === "rollback" ? t("Rollback") : t("Deployment"))}
-          </span>
-          <span className="block text-xs text-muted-foreground">
+          </div>
+          <div className="truncate text-xs text-muted-foreground">
             {[
-              d.releaseNumber !== undefined &&
-                t("Release {{n}}", { n: d.releaseNumber }),
               d.commit && shortSha(d.commit.sha),
               d.trigger === "push"
                 ? t("push")
@@ -169,14 +183,50 @@ function DeploymentRow({
             ]
               .filter(Boolean)
               .join(" · ")}
-          </span>
-        </span>
-        <span className="text-xs text-muted-foreground tabular-nums">
+          </div>
+        </div>
+      ),
+    },
+    {
+      id: "release",
+      header: t("Release"),
+      className: "max-sm:hidden",
+      align: "end",
+      sortValue: (d) => d.releaseNumber ?? -1,
+      cell: (d) =>
+        d.releaseNumber !== undefined ? `#${d.releaseNumber}` : "—",
+    },
+    {
+      id: "duration",
+      header: t("Duration"),
+      className: "max-md:hidden",
+      align: "end",
+      sortValue: (d) => d.durationMs ?? -1,
+      cell: (d) => duration(d.durationMs) || "—",
+    },
+    {
+      id: "created",
+      header: t("Created"),
+      align: "end",
+      sortValue: (d) => d.createdAt,
+      cell: (d) => (
+        <span className="text-xs whitespace-nowrap text-muted-foreground">
           {ago(d.createdAt)}
-          {d.durationMs !== undefined && ` · ${duration(d.durationMs)}`}
         </span>
-      </button>
-    </li>
+      ),
+    },
+  ]
+  return (
+    <DataTable
+      label={t("Deployments")}
+      columns={columns}
+      rows={deployments}
+      rowId={(d) => d._id}
+      loading={!deployments}
+      empty={t("No deployments yet.")}
+      onRowClick={(d) => onOpen(d._id)}
+      className="rounded-none border-0"
+    />
   )
 }
 
@@ -196,7 +246,7 @@ function Releases({
         params: { id: project._id },
       })
   )
-  const { data } = use(request)
+  const { data, isLoading } = use(request)
 
   const rollback = async (release: string, number: number) => {
     try {
@@ -211,44 +261,76 @@ function Releases({
     }
   }
 
+  type TRelease = NonNullable<typeof data>[number]
+  const columns: TColumn<TRelease>[] = [
+    {
+      id: "number",
+      header: t("Release"),
+      className: "w-20",
+      sortValue: (r) => r.number,
+      cell: (r) => (
+        <span className="font-medium tabular-nums">#{r.number}</span>
+      ),
+    },
+    {
+      id: "what",
+      header: t("Build"),
+      cell: (r) => (
+        <span
+          dir="ltr"
+          className="block max-w-80 truncate font-mono text-xs text-muted-foreground"
+        >
+          {r.commit
+            ? `${shortSha(r.commit.sha)} ${r.commit.message ?? ""}`
+            : (r.image ?? "")}
+        </span>
+      ),
+    },
+    {
+      id: "created",
+      header: t("Created"),
+      className: "max-sm:hidden",
+      sortValue: (r) => r.createdAt,
+      cell: (r) => (
+        <span className="text-xs whitespace-nowrap text-muted-foreground">
+          {ago(r.createdAt)}
+        </span>
+      ),
+    },
+    {
+      id: "action",
+      header: <span className="sr-only">{t("Actions")}</span>,
+      align: "end",
+      cell: (r) =>
+        r.active ? (
+          <StatusBadge state="healthy" label={t("Live")} />
+        ) : (
+          <Button
+            size="xs"
+            variant="outline"
+            onClick={() => rollback(r._id, r.number)}
+          >
+            <IconHistory aria-hidden /> {t("Roll back")}
+          </Button>
+        ),
+    },
+  ]
+
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-base">{t("Releases")}</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <ul className="flex flex-col gap-1">
-          {(data ?? []).map((r) => (
-            <li
-              key={r._id}
-              className="flex flex-wrap items-center gap-3 rounded-xl px-2 py-1.5"
-            >
-              <span className="w-16 font-medium">#{r.number}</span>
-              <span className="min-w-0 flex-1 truncate text-sm text-muted-foreground">
-                {r.commit
-                  ? `${shortSha(r.commit.sha)} ${r.commit.message ?? ""}`
-                  : (r.image ?? "")}{" "}
-                · {ago(r.createdAt)}
-              </span>
-              {r.active ? (
-                <Badge variant="secondary">{t("Live")}</Badge>
-              ) : (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => rollback(r._id, r.number)}
-                >
-                  <IconHistory aria-hidden /> {t("Roll back")}
-                </Button>
-              )}
-            </li>
-          ))}
-        </ul>
-        <p className="mt-3 text-xs text-muted-foreground">
-          {t("Rollbacks reuse the kept image: nothing is rebuilt.")}
-        </p>
-      </CardContent>
-    </Card>
+    <Panel
+      title={t("Releases")}
+      description={t("Rollbacks reuse the kept image: nothing is rebuilt.")}
+      bodyClassName="p-0"
+    >
+      <DataTable
+        label={t("Releases")}
+        columns={columns}
+        rows={data}
+        rowId={(r) => r._id}
+        loading={isLoading}
+        className="rounded-none border-0"
+      />
+    </Panel>
   )
 }
 
@@ -409,64 +491,116 @@ function Settings({
   }
 
   return (
-    <div className="flex flex-col gap-6">
-      <form
-        onSubmit={save}
-        className="flex flex-col gap-6 rounded-3xl border p-4 sm:p-6"
-      >
-        <FieldSet>
-          <FieldLegend variant="label">{t("Servers")}</FieldLegend>
-          <div className="flex flex-col gap-2">
-            {(placement.data ?? []).map((s) => (
-              <label
-                key={s.server}
-                className="flex cursor-pointer items-center gap-3 rounded-2xl border p-3"
+    <div className="flex flex-col gap-4">
+      <form onSubmit={save} className="flex flex-col gap-4">
+        <Panel title={t("Placement")} bodyClassName="flex flex-col gap-4">
+          <FieldSet>
+            <FieldLegend variant="label">{t("Servers")}</FieldLegend>
+            <div className="flex flex-col divide-y rounded-lg border">
+              {(placement.data ?? []).map((s) => (
+                <label
+                  key={s.server}
+                  className="flex cursor-pointer items-center gap-3 px-3 py-2 first:rounded-t-lg last:rounded-b-lg hover:bg-muted/50"
+                >
+                  <Checkbox
+                    checked={servers.includes(s.server)}
+                    onCheckedChange={(on) =>
+                      setServers((c) =>
+                        on ? [...c, s.server] : c.filter((x) => x !== s.server)
+                      )
+                    }
+                  />
+                  <span className="flex min-w-0 flex-1 flex-col gap-1 text-[13px]">
+                    {s.name}
+                    <LabelChips labels={s.labels} />
+                  </span>
+                  <span className="text-xs text-muted-foreground tabular-nums">
+                    {t("{{cpu}} CPU · {{mem}} MiB free", {
+                      cpu: s.cpuFree.toFixed(1),
+                      mem: s.memFreeMb,
+                    })}
+                  </span>
+                </label>
+              ))}
+            </div>
+            <FieldDescription>
+              {t(
+                "Changing servers takes effect on the next deploy: the new ones start, then the old ones drain."
+              )}
+            </FieldDescription>
+          </FieldSet>
+
+          <div className="grid gap-4 sm:grid-cols-3">
+            <Field>
+              <FieldLabel htmlFor="s-replicas">
+                {t("Replicas per server")}
+              </FieldLabel>
+              <Input
+                id="s-replicas"
+                type="number"
+                min={0}
+                max={20}
+                value={replicas}
+                onChange={(e) => setReplicas(Number(e.target.value))}
+              />
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="s-port">{t("Public port")}</FieldLabel>
+              <Input
+                id="s-port"
+                type="number"
+                value={publicPort}
+                onChange={(e) => setPublicPort(e.target.value)}
+                placeholder={t("Private")}
+              />
+            </Field>
+            <Field>
+              <FieldLabel>{t("Deploy strategy")}</FieldLabel>
+              <Select
+                items={[
+                  { value: "rolling", label: t("Rolling") },
+                  { value: "allAtOnce", label: t("All at once") },
+                  { value: "stopFirst", label: t("Stop first") },
+                ]}
+                value={strategy}
+                onValueChange={(v) => setStrategy(v as TStrategy)}
               >
-                <Checkbox
-                  checked={servers.includes(s.server)}
-                  onCheckedChange={(on) =>
-                    setServers((c) =>
-                      on ? [...c, s.server] : c.filter((x) => x !== s.server)
-                    )
-                  }
-                />
-                <span className="flex min-w-0 flex-1 flex-col gap-1 text-sm">
-                  {s.name}
-                  <LabelChips labels={s.labels} />
-                </span>
-                <span className="text-xs text-muted-foreground">
-                  {t("{{cpu}} CPU · {{mem}} MiB free", {
-                    cpu: s.cpuFree.toFixed(1),
-                    mem: s.memFreeMb,
-                  })}
-                </span>
-              </label>
-            ))}
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="rolling">{t("Rolling")}</SelectItem>
+                  <SelectItem value="allAtOnce">{t("All at once")}</SelectItem>
+                  <SelectItem value="stopFirst">{t("Stop first")}</SelectItem>
+                </SelectContent>
+              </Select>
+              <FieldDescription>
+                {strategy === "rolling"
+                  ? t("One server and one replica at a time; no downtime.")
+                  : strategy === "allAtOnce"
+                    ? t(
+                        "Starts the new release everywhere, then switches all at once."
+                      )
+                    : t(
+                        "Stops each old replica first: brief downtime. Safe for local volumes."
+                      )}
+              </FieldDescription>
+            </Field>
           </div>
-          <FieldDescription>
-            {t(
-              "Changing servers takes effect on the next deploy: the new ones start, then the old ones drain."
-            )}
-          </FieldDescription>
-        </FieldSet>
+        </Panel>
 
-        {project.build.mode !== "compose" && (
-          <VolumesEditor
-            slug={project.slug}
-            value={volumes}
-            onChange={setVolumes}
-          />
-        )}
-
-        <FieldSet>
-          <Field orientation="horizontal">
+        <Panel
+          title={t("Autoscale")}
+          actions={
             <Switch
               id="s-autoscale"
+              aria-label={t("Autoscale")}
               checked={autoscale}
               onCheckedChange={setAutoscale}
             />
-            <FieldLabel htmlFor="s-autoscale">{t("Autoscale")}</FieldLabel>
-          </Field>
+          }
+          bodyClassName="flex flex-col gap-4"
+        >
           <FieldDescription>
             {t(
               "Each server adds or removes replicas of this project to stay near the targets, within the bounds and at most once per cooldown. Placement reserves room for the maximum."
@@ -550,205 +684,163 @@ function Settings({
               )}
             </FieldDescription>
           )}
-        </FieldSet>
+        </Panel>
 
-        <div className="grid gap-4 sm:grid-cols-3">
-          <Field>
-            <FieldLabel htmlFor="s-replicas">
-              {t("Replicas per server")}
-            </FieldLabel>
-            <Input
-              id="s-replicas"
-              type="number"
-              min={0}
-              max={20}
-              value={replicas}
-              onChange={(e) => setReplicas(Number(e.target.value))}
-            />
-          </Field>
-          <Field>
-            <FieldLabel htmlFor="s-port">{t("Public port")}</FieldLabel>
-            <Input
-              id="s-port"
-              type="number"
-              value={publicPort}
-              onChange={(e) => setPublicPort(e.target.value)}
-              placeholder={t("Private")}
-            />
-          </Field>
-          <Field>
-            <FieldLabel>{t("Deploy strategy")}</FieldLabel>
-            <Select
-              items={[
-                { value: "rolling", label: t("Rolling") },
-                { value: "allAtOnce", label: t("All at once") },
-                { value: "stopFirst", label: t("Stop first") },
-              ]}
-              value={strategy}
-              onValueChange={(v) => setStrategy(v as TStrategy)}
-            >
-              <SelectTrigger className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="rolling">{t("Rolling")}</SelectItem>
-                <SelectItem value="allAtOnce">{t("All at once")}</SelectItem>
-                <SelectItem value="stopFirst">{t("Stop first")}</SelectItem>
-              </SelectContent>
-            </Select>
-            <FieldDescription>
-              {strategy === "rolling"
-                ? t("One server and one replica at a time; no downtime.")
-                : strategy === "allAtOnce"
-                  ? t(
-                      "Starts the new release everywhere, then switches all at once."
-                    )
-                  : t(
-                      "Stops each old replica first: brief downtime. Safe for local volumes."
-                    )}
-            </FieldDescription>
-          </Field>
-        </div>
-
-        <div className="grid gap-4 sm:grid-cols-4">
-          <Field>
-            <FieldLabel htmlFor="s-cpu-r">{t("CPU reserved")}</FieldLabel>
-            <Input
-              id="s-cpu-r"
-              type="number"
-              step="0.05"
-              min={0}
-              value={cpuReserve}
-              onChange={(e) => setCpuReserve(e.target.value)}
-            />
-          </Field>
-          <Field>
-            <FieldLabel htmlFor="s-mem-r">
-              {t("Memory reserved (MiB)")}
-            </FieldLabel>
-            <Input
-              id="s-mem-r"
-              type="number"
-              min={0}
-              value={memReserve}
-              onChange={(e) => setMemReserve(e.target.value)}
-            />
-          </Field>
-          <Field>
-            <FieldLabel htmlFor="s-cpu-l">{t("CPU limit")}</FieldLabel>
-            <Input
-              id="s-cpu-l"
-              type="number"
-              step="0.25"
-              value={cpuLimit}
-              onChange={(e) => setCpuLimit(e.target.value)}
-              placeholder={t("None")}
-            />
-          </Field>
-          <Field>
-            <FieldLabel htmlFor="s-mem-l">{t("Memory limit (MiB)")}</FieldLabel>
-            <Input
-              id="s-mem-l"
-              type="number"
-              value={memLimit}
-              onChange={(e) => setMemLimit(e.target.value)}
-              placeholder={t("None")}
-            />
-          </Field>
-        </div>
-
-        <Field orientation="horizontal">
-          <FieldLabel htmlFor="s-network">
-            {t("Talks to projects on other servers")}
-          </FieldLabel>
-          <Switch
-            id="s-network"
-            checked={needsNetwork}
-            onCheckedChange={setNeedsNetwork}
-          />
-        </Field>
-
-        {project.source.type === "compose" && (
-          <Field>
-            <FieldLabel htmlFor="s-compose">{t("Compose file")}</FieldLabel>
-            <Textarea
-              id="s-compose"
-              value={compose}
-              onChange={(e) => setCompose(e.target.value)}
-              rows={16}
-              spellCheck={false}
-              className="font-mono text-xs"
-            />
-            <FieldDescription>
-              {t(
-                "Changes apply on the next deploy. ${VAR} comes from the project's variables."
-              )}
-            </FieldDescription>
-          </Field>
-        )}
-
-        {"branch" in project.source && (
-          <div className="grid gap-4 sm:grid-cols-2">
+        <Panel title={t("Resources")} bodyClassName="flex flex-col gap-4">
+          <div className="grid gap-4 sm:grid-cols-4">
             <Field>
-              <FieldLabel htmlFor="s-branch">{t("Branch")}</FieldLabel>
+              <FieldLabel htmlFor="s-cpu-r">{t("CPU reserved")}</FieldLabel>
               <Input
-                id="s-branch"
-                value={branch}
-                onChange={(e) => setBranch(e.target.value)}
+                id="s-cpu-r"
+                type="number"
+                step="0.05"
+                min={0}
+                value={cpuReserve}
+                onChange={(e) => setCpuReserve(e.target.value)}
               />
             </Field>
-            {project.source.type === "github" && (
-              <Field orientation="horizontal" className="self-end">
-                <FieldLabel htmlFor="s-auto">{t("Deploy on push")}</FieldLabel>
-                <Switch
-                  id="s-auto"
-                  checked={autoDeploy}
-                  onCheckedChange={setAutoDeploy}
+            <Field>
+              <FieldLabel htmlFor="s-mem-r">
+                {t("Memory reserved (MiB)")}
+              </FieldLabel>
+              <Input
+                id="s-mem-r"
+                type="number"
+                min={0}
+                value={memReserve}
+                onChange={(e) => setMemReserve(e.target.value)}
+              />
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="s-cpu-l">{t("CPU limit")}</FieldLabel>
+              <Input
+                id="s-cpu-l"
+                type="number"
+                step="0.25"
+                value={cpuLimit}
+                onChange={(e) => setCpuLimit(e.target.value)}
+                placeholder={t("None")}
+              />
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="s-mem-l">
+                {t("Memory limit (MiB)")}
+              </FieldLabel>
+              <Input
+                id="s-mem-l"
+                type="number"
+                value={memLimit}
+                onChange={(e) => setMemLimit(e.target.value)}
+                placeholder={t("None")}
+              />
+            </Field>
+          </div>
+
+          {project.build.mode !== "compose" && (
+            <VolumesEditor
+              slug={project.slug}
+              value={volumes}
+              onChange={setVolumes}
+            />
+          )}
+        </Panel>
+
+        <Panel
+          title={t("Source and network")}
+          bodyClassName="flex flex-col gap-4"
+        >
+          <Field orientation="horizontal">
+            <FieldLabel htmlFor="s-network">
+              {t("Talks to projects on other servers")}
+            </FieldLabel>
+            <Switch
+              id="s-network"
+              checked={needsNetwork}
+              onCheckedChange={setNeedsNetwork}
+            />
+          </Field>
+
+          {project.source.type === "compose" && (
+            <Field>
+              <FieldLabel htmlFor="s-compose">{t("Compose file")}</FieldLabel>
+              <Textarea
+                id="s-compose"
+                value={compose}
+                onChange={(e) => setCompose(e.target.value)}
+                rows={16}
+                spellCheck={false}
+                dir="ltr"
+                className="font-mono text-xs"
+              />
+              <FieldDescription>
+                {t(
+                  "Changes apply on the next deploy. ${VAR} comes from the project's variables."
+                )}
+              </FieldDescription>
+            </Field>
+          )}
+
+          {"branch" in project.source && (
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field>
+                <FieldLabel htmlFor="s-branch">{t("Branch")}</FieldLabel>
+                <Input
+                  id="s-branch"
+                  value={branch}
+                  onChange={(e) => setBranch(e.target.value)}
+                  dir="ltr"
+                  className="font-mono"
                 />
               </Field>
-            )}
-          </div>
-        )}
+              {project.source.type === "github" && (
+                <Field orientation="horizontal" className="self-end">
+                  <FieldLabel htmlFor="s-auto">
+                    {t("Deploy on push")}
+                  </FieldLabel>
+                  <Switch
+                    id="s-auto"
+                    checked={autoDeploy}
+                    onCheckedChange={setAutoDeploy}
+                  />
+                </Field>
+              )}
+            </div>
+          )}
+        </Panel>
 
         <div className="flex justify-end">
-          <Button type="submit" disabled={busy}>
+          <Button type="submit" size="sm" disabled={busy}>
+            {busy && <IconLoader2 className="animate-spin" aria-hidden />}
             {t("Save")}
           </Button>
         </div>
       </form>
 
       {project.deployKeyPublic && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">{t("Deploy key")}</CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-2">
-            <p className="text-sm text-muted-foreground">
-              {t("Add it to the repository as a read-only deploy key.")}
-            </p>
-            <div className="flex items-center gap-2 rounded-2xl bg-muted/50 p-3">
-              <code className="min-w-0 flex-1 truncate text-xs">
-                {project.deployKeyPublic}
-              </code>
-              <CopyButton value={project.deployKeyPublic} />
-            </div>
-          </CardContent>
-        </Card>
+        <Panel
+          title={t("Deploy key")}
+          description={t("Add it to the repository as a read-only deploy key.")}
+        >
+          <CodeBlock code={project.deployKeyPublic} wrap />
+        </Panel>
       )}
 
-      <Card className="border-destructive/30">
-        <CardHeader>
-          <CardTitle className="text-base">{t("Danger zone")}</CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-wrap gap-3">
-          <Button variant="outline" onClick={clearCache}>
-            {t("Clear build cache")}
-          </Button>
-          <Button variant="destructive" onClick={() => setDeleting(true)}>
-            {t("Delete project")}
-          </Button>
-        </CardContent>
-      </Card>
+      <Panel
+        title={t("Danger zone")}
+        className="border-destructive/40"
+        bodyClassName="flex flex-wrap gap-2"
+      >
+        <Button size="sm" variant="outline" onClick={clearCache}>
+          {t("Clear build cache")}
+        </Button>
+        <Button
+          size="sm"
+          variant="destructive"
+          onClick={() => setDeleting(true)}
+        >
+          {t("Delete project")}
+        </Button>
+      </Panel>
 
       <Dialog open={deleting} onOpenChange={setDeleting}>
         <DialogContent>
@@ -771,6 +863,7 @@ function Settings({
               value={confirm}
               onChange={(e) => setConfirm(e.target.value)}
               autoComplete="off"
+              dir="ltr"
               className="font-mono"
             />
           </Field>
@@ -789,6 +882,8 @@ function Settings({
     </div>
   )
 }
+
+type TContainer = TProject["containers"][number]
 
 /** A project (PLAN §15.6 item 4): deploys, releases, logs, shells, variables, settings. */
 export default function ProjectDetail() {
@@ -851,9 +946,10 @@ export default function ProjectDetail() {
 
   if (!project) {
     return (
-      <Page className="flex flex-col gap-4 py-4">
-        <Skeleton className="h-20 rounded-3xl" />
-        <Skeleton className="h-64 rounded-3xl" />
+      <Page className="flex flex-col gap-4 py-5">
+        <Skeleton className="h-14 rounded-[10px]" />
+        <Skeleton className="h-20 rounded-[10px]" />
+        <Skeleton className="h-64 rounded-[10px]" />
       </Page>
     )
   }
@@ -869,43 +965,123 @@ export default function ProjectDetail() {
     : []
   const canShell = ThunderSDK.isPermitted("streams", "openTerminal")
   const latest = deployments?.[0]
+  const source =
+    project.source.type === "github"
+      ? `${project.source.repo} · ${project.source.branch}`
+      : project.source.type === "git"
+        ? `${project.source.url} · ${project.source.branch}`
+        : project.source.type === "image"
+          ? project.source.image
+          : project.source.type === "compose"
+            ? t("Compose file")
+            : t("One-click service")
+  const internal = `${project.slug}.internal${project.runtime.port ? `:${project.runtime.port}` : ""}`
+  const activeDomains = (domains ?? []).filter((d) => d.status === "active")
+  const strategyLabel = {
+    rolling: t("rolling"),
+    allAtOnce: t("all at once"),
+    stopFirst: t("stop first"),
+  }[project.deployStrategy]
+
+  const containerColumns: TColumn<TContainer>[] = [
+    {
+      id: "name",
+      header: t("Container"),
+      sortValue: (c) => c.name,
+      cell: (c) => (
+        <span dir="ltr" className="block truncate font-mono text-xs">
+          {c.name}
+        </span>
+      ),
+    },
+    {
+      id: "server",
+      header: t("Server"),
+      sortValue: (c) => c.serverName,
+      cell: (c) => c.serverName,
+    },
+    {
+      id: "service",
+      header: t("Service"),
+      className: "max-sm:hidden",
+      sortValue: (c) => c.service,
+      cell: (c) => (
+        <span dir="ltr" className="font-mono text-xs text-muted-foreground">
+          {c.service}
+        </span>
+      ),
+    },
+    {
+      id: "actions",
+      header: <span className="sr-only">{t("Actions")}</span>,
+      align: "end",
+      cell: (c) => (
+        <span className="inline-flex gap-1">
+          <Button
+            size="xs"
+            variant="outline"
+            onClick={() => setLogs({ server: c.server, container: c.name })}
+          >
+            <IconFileText aria-hidden /> {t("Logs")}
+          </Button>
+          {canShell && (
+            <Button
+              size="xs"
+              variant="outline"
+              onClick={() =>
+                setTerminal({ server: c.server, container: c.name })
+              }
+            >
+              <IconTerminal2 aria-hidden /> {t("Shell")}
+            </Button>
+          )}
+        </span>
+      ),
+    },
+  ]
+
+  const link =
+    "inline-flex items-center gap-1 font-mono text-xs text-brand-text underline-offset-4 hover:underline"
 
   return (
-    <Page className="flex flex-col gap-6 py-4">
-      <div className="flex flex-wrap items-start gap-4">
-        <div className="min-w-0 flex-1">
-          <h1 className="flex flex-wrap items-center gap-3 text-xl font-semibold">
-            {project.name}
-            {latest && <DeploymentStatus status={latest.status} />}
-          </h1>
-          <p className="mt-1 flex items-center gap-1.5 text-sm text-muted-foreground">
-            <SourceIcon source={project.source.type} />
-            {project.source.type === "github"
-              ? `${project.source.repo} · ${project.source.branch}`
-              : project.source.type === "git"
-                ? `${project.source.url} · ${project.source.branch}`
-                : project.source.type === "image"
-                  ? project.source.image
-                  : project.source.type === "compose"
-                    ? t("Compose file")
-                    : t("One-click service")}
-          </p>
-        </div>
-        <DeployButton project={project} onDeployed={deployed} />
-      </div>
+    <Page className="flex flex-col gap-4 py-5">
+      <Tabs value={tab} onValueChange={setTab} className="gap-4">
+        <PageHeader
+          title={project.name}
+          status={
+            latest ? (
+              <DeploymentStatus status={latest.status} />
+            ) : (
+              <StatusBadge state="new" label={t("Not deployed")} />
+            )
+          }
+          description={
+            <span className="flex min-w-0 items-center gap-1.5">
+              <SourceIcon source={project.source.type} className="size-3.5" />
+              <span dir="ltr" className="truncate">
+                {source}
+              </span>
+            </span>
+          }
+          actions={<DeployButton project={project} onDeployed={deployed} />}
+          tabs={
+            <TabsList
+              variant="line"
+              className="w-full max-w-full justify-start overflow-x-auto border-b"
+            >
+              <TabsTrigger value="overview">{t("Overview")}</TabsTrigger>
+              <TabsTrigger value="deployments">{t("Deployments")}</TabsTrigger>
+              <TabsTrigger value="logs">{t("Logs")}</TabsTrigger>
+              <TabsTrigger value="variables">{t("Variables")}</TabsTrigger>
+              {canDomains && (
+                <TabsTrigger value="domains">{t("Domains")}</TabsTrigger>
+              )}
+              <TabsTrigger value="settings">{t("Settings")}</TabsTrigger>
+            </TabsList>
+          }
+        />
 
-      <Tabs value={tab} onValueChange={setTab}>
-        <TabsList className="max-w-full justify-start overflow-x-auto">
-          <TabsTrigger value="overview">{t("Overview")}</TabsTrigger>
-          <TabsTrigger value="logs">{t("Logs")}</TabsTrigger>
-          <TabsTrigger value="variables">{t("Variables")}</TabsTrigger>
-          {canDomains && (
-            <TabsTrigger value="domains">{t("Domains")}</TabsTrigger>
-          )}
-          <TabsTrigger value="settings">{t("Settings")}</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="overview" className="flex flex-col gap-6 pt-4">
+        <TabsContent value="overview" className="flex flex-col gap-4">
           {project.networkWarnings.length > 0 && (
             <Alert variant="destructive">
               <IconAlertTriangle />
@@ -919,211 +1095,181 @@ export default function ProjectDetail() {
               </AlertDescription>
             </Alert>
           )}
-          <div className="grid gap-4 md:grid-cols-3">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-sm text-muted-foreground">
-                  {t("Live release")}
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {project.release ? (
-                  <>
-                    <p className="text-2xl font-semibold">
-                      #{project.release.number}
-                    </p>
-                    <p className="truncate text-sm text-muted-foreground">
-                      {project.release.commit
-                        ? `${shortSha(project.release.commit.sha)} ${project.release.commit.message ?? ""}`
-                        : "—"}
-                    </p>
-                  </>
-                ) : (
-                  <p className="text-sm text-muted-foreground">
-                    {t("Not deployed yet")}
-                  </p>
-                )}
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-sm text-muted-foreground">
-                  {t("Running on")}
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-2xl font-semibold">
-                  {t("{{count}} servers", { count: project.placedOn.length })}
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  {t("{{n}} replicas each · {{strategy}}", {
-                    n: project.autoscale
-                      ? `${project.autoscale.min}–${project.autoscale.max}`
-                      : project.replicasPerServer,
-                    strategy: {
-                      rolling: t("rolling"),
-                      allAtOnce: t("all at once"),
-                      stopFirst: t("stop first"),
-                    }[project.deployStrategy],
-                  })}
-                </p>
-                {project.autoscale &&
-                  project.autoscaled?.map((a) => (
-                    <p
-                      key={a.server}
-                      className="text-xs text-muted-foreground"
-                      title={a.reason}
-                    >
-                      {t("{{server}}: {{n}} replicas now ({{reason}})", {
-                        server:
-                          project.servers.find((s) => s._id === a.server)
-                            ?.name ?? a.server,
-                        n: a.replicas,
-                        reason: a.reason,
-                      })}
-                    </p>
-                  ))}
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-sm text-muted-foreground">
-                  {t("Reach it")}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="flex flex-col gap-1 text-sm">
-                <code className="text-xs">
-                  {project.slug}.internal
-                  {project.runtime.port ? `:${project.runtime.port}` : ""}
-                </code>
-                {(domains ?? []).map((d) =>
-                  d.status === "active" ? (
-                    <a
-                      key={d._id}
-                      href={`https://${d.hostname}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-flex items-center gap-1 font-mono text-xs text-primary underline-offset-4 hover:underline"
-                    >
-                      https://{d.hostname}{" "}
-                      <IconExternalLink className="size-3" aria-hidden />
-                    </a>
-                  ) : (
-                    <span
-                      key={d._id}
-                      className="font-mono text-xs text-muted-foreground"
-                    >
-                      {d.hostname} ·{" "}
-                      {d.status === "failed"
-                        ? t("Needs attention")
-                        : t("Not live yet")}
-                    </span>
-                  )
-                )}
-                {urls.map((url) => (
-                  <a
-                    key={url}
-                    href={url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center gap-1 font-mono text-xs text-primary underline-offset-4 hover:underline"
-                  >
-                    {url} <IconExternalLink className="size-3" aria-hidden />
-                  </a>
-                ))}
-                {project.publicPort && !urls.length && (
-                  <span className="text-xs text-muted-foreground">
-                    {t("Port {{port}} on every server", {
-                      port: project.publicPort,
-                    })}
-                  </span>
-                )}
-                {!project.publicPort &&
-                  !domains?.some((d) => d.status === "active") && (
-                    <span className="text-xs text-muted-foreground">
-                      {t("Not public")}
-                    </span>
-                  )}
-              </CardContent>
-            </Card>
-          </div>
 
-          <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,24rem)]">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">{t("Deployments")}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {!deployments?.length ? (
-                  <p className="text-sm text-muted-foreground">
-                    {t("No deployments yet.")}
-                  </p>
-                ) : (
-                  <ul className="-mx-3 flex flex-col">
-                    {deployments.map((d) => (
-                      <DeploymentRow
-                        key={d._id}
-                        d={d}
-                        onOpen={() => setOpen(d._id)}
-                      />
-                    ))}
-                  </ul>
-                )}
-              </CardContent>
-            </Card>
-            <Releases project={project} onDeployed={deployed} />
+          <StatStrip>
+            <Stat
+              label={t("Live release")}
+              value={project.release ? `#${project.release.number}` : "—"}
+              hint={
+                project.release
+                  ? project.release.commit
+                    ? `${shortSha(project.release.commit.sha)} ${project.release.commit.message ?? ""}`
+                    : undefined
+                  : t("Not deployed yet")
+              }
+            />
+            <Stat
+              label={t("Running on")}
+              value={t("{{count}} servers", {
+                count: project.placedOn.length,
+              })}
+              hint={t("{{n}} replicas each · {{strategy}}", {
+                n: project.autoscale
+                  ? `${project.autoscale.min}–${project.autoscale.max}`
+                  : project.replicasPerServer,
+                strategy: strategyLabel,
+              })}
+            />
+            <Stat
+              label={t("Last deployment")}
+              value={latest ? ago(latest.createdAt) : "—"}
+              hint={latest && <DeploymentStatus status={latest.status} />}
+            />
+            {canDomains && (
+              <Stat
+                label={t("Domains")}
+                value={`${activeDomains.length} / ${domains?.length ?? 0}`}
+                hint={t("Live")}
+              />
+            )}
+          </StatStrip>
+
+          <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,26rem)]">
+            <Panel
+              title={t("Recent deployments")}
+              actions={
+                <Button
+                  size="xs"
+                  variant="ghost"
+                  onClick={() => setTab("deployments")}
+                >
+                  {t("View all")}
+                </Button>
+              }
+              bodyClassName="p-0"
+            >
+              <DeploymentsTable
+                deployments={deployments?.slice(0, 6)}
+                onOpen={setOpen}
+              />
+            </Panel>
+
+            <Panel title={t("Reach it")} bodyClassName="px-4 py-1">
+              <KeyValue
+                items={[
+                  {
+                    label: t("Internal"),
+                    value: internal,
+                    copy: internal,
+                  },
+                  ...(domains ?? []).map((d) => ({
+                    label: t("Domain"),
+                    value:
+                      d.status === "active" ? (
+                        <a
+                          href={`https://${d.hostname}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          dir="ltr"
+                          className={link}
+                        >
+                          https://{d.hostname}
+                          <IconExternalLink className="size-3" aria-hidden />
+                        </a>
+                      ) : (
+                        <span className="flex min-w-0 flex-wrap items-center gap-2">
+                          <span
+                            dir="ltr"
+                            className="truncate font-mono text-xs text-muted-foreground"
+                          >
+                            {d.hostname}
+                          </span>
+                          <StatusBadge
+                            state={d.status === "failed" ? "failed" : "pending"}
+                            label={
+                              d.status === "failed"
+                                ? t("Needs attention")
+                                : t("Not live yet")
+                            }
+                          />
+                        </span>
+                      ),
+                  })),
+                  ...urls.map((url) => ({
+                    label: t("Public port"),
+                    value: (
+                      <a
+                        href={url}
+                        target="_blank"
+                        rel="noreferrer"
+                        dir="ltr"
+                        className={link}
+                      >
+                        {url}
+                        <IconExternalLink className="size-3" aria-hidden />
+                      </a>
+                    ),
+                  })),
+                  ...(project.publicPort && !urls.length
+                    ? [
+                        {
+                          label: t("Public port"),
+                          value: t("Port {{port}} on every server", {
+                            port: project.publicPort,
+                          }),
+                        },
+                      ]
+                    : []),
+                  ...(!project.publicPort && !activeDomains.length
+                    ? [{ label: t("Public"), value: t("Not public") }]
+                    : []),
+                  ...(project.autoscale
+                    ? (project.autoscaled ?? []).map((a) => ({
+                        label: t("Autoscale"),
+                        value: (
+                          <span title={a.reason}>
+                            {t("{{server}}: {{n}} replicas now ({{reason}})", {
+                              server:
+                                project.servers.find((s) => s._id === a.server)
+                                  ?.name ?? a.server,
+                              n: a.replicas,
+                              reason: a.reason,
+                            })}
+                          </span>
+                        ),
+                      }))
+                    : []),
+                ]}
+              />
+            </Panel>
           </div>
         </TabsContent>
 
-        <TabsContent value="logs" className="pt-4">
+        <TabsContent value="deployments" className="flex flex-col gap-4">
+          <Panel title={t("Deployments")} bodyClassName="p-0">
+            <DeploymentsTable deployments={deployments} onOpen={setOpen} />
+          </Panel>
+          <Releases project={project} onDeployed={deployed} />
+        </TabsContent>
+
+        <TabsContent value="logs">
           {!project.containers.length ? (
-            <p className="rounded-3xl border border-dashed p-6 text-center text-sm text-muted-foreground">
-              {t("Nothing is running yet.")}
-            </p>
+            <EmptyState
+              icon={IconServer2}
+              title={t("Nothing is running yet.")}
+            />
           ) : (
-            <ul className="flex flex-col gap-2">
-              {project.containers.map((c) => (
-                <li
-                  key={`${c.server}/${c.name}`}
-                  className="flex flex-wrap items-center gap-3 rounded-2xl border p-3"
-                >
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate font-mono text-sm">
-                      {c.name}
-                    </span>
-                    <span className="block text-xs text-muted-foreground">
-                      {c.serverName}
-                      {c.service !== "app" ? ` · ${c.service}` : ""}
-                    </span>
-                  </span>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() =>
-                      setLogs({ server: c.server, container: c.name })
-                    }
-                  >
-                    <IconFileText aria-hidden /> {t("Logs")}
-                  </Button>
-                  {canShell && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() =>
-                        setTerminal({ server: c.server, container: c.name })
-                      }
-                    >
-                      <IconTerminal2 aria-hidden /> {t("Shell")}
-                    </Button>
-                  )}
-                </li>
-              ))}
-            </ul>
+            <DataTable
+              label={t("Containers")}
+              columns={containerColumns}
+              rows={project.containers}
+              rowId={(c) => `${c.server}/${c.name}`}
+            />
           )}
         </TabsContent>
 
-        <TabsContent value="variables" className="flex flex-col gap-3 pt-4">
-          <p className="text-sm text-muted-foreground">
+        <TabsContent value="variables" className="flex flex-col gap-3">
+          <p className="text-[13px] text-muted-foreground">
             {t(
               "Variables apply on the next deploy; they override tenant and global variables."
             )}
@@ -1132,12 +1278,12 @@ export default function ProjectDetail() {
         </TabsContent>
 
         {canDomains && (
-          <TabsContent value="domains" className="pt-4">
+          <TabsContent value="domains">
             <DomainsTab project={project._id} />
           </TabsContent>
         )}
 
-        <TabsContent value="settings" className="pt-4">
+        <TabsContent value="settings">
           <Settings
             key={project.updatedAt}
             project={project}
@@ -1181,10 +1327,7 @@ export default function ProjectDetail() {
               )}
             </DialogDescription>
           </DialogHeader>
-          <div className="flex items-center gap-2 rounded-2xl bg-muted/50 p-3">
-            <code className="min-w-0 flex-1 truncate text-xs">{deployKey}</code>
-            {deployKey && <CopyButton value={deployKey} />}
-          </div>
+          {deployKey && <CodeBlock code={deployKey} wrap />}
           <DialogFooter>
             <Button
               onClick={async () => {
