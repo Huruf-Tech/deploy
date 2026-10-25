@@ -44,6 +44,7 @@ const LIMITS = [
   ["alertRules", "Alert rules", 10],
   ["gitIntegrations", "GitHub connections", 10],
   ["registries", "Registries", 10],
+  ["domains", "Custom domains", 3],
   ["managedServers", "Managed servers", 0],
 ] as const
 

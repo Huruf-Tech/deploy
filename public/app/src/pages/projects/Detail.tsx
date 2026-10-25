@@ -62,6 +62,7 @@ import { errorMessage } from "@/lib/utils"
 import { LogsSheet } from "@/pages/servers/LogsSheet"
 import { VariableTable } from "@/pages/variables"
 import { DeploymentSheet } from "./DeploymentSheet"
+import { DomainsTab } from "./DomainsTab"
 import { type TVolume, VolumesEditor } from "./VolumesEditor"
 import { LabelChips } from "@/pages/servers/ServerLabels"
 import {
@@ -795,6 +796,7 @@ export default function ProjectDetail() {
   const { id = "" } = useParams()
   const location = useLocation()
   const [tab, setTab] = React.useState("overview")
+  const canDomains = ThunderSDK.isPermitted("domains", "list")
   const [open, setOpen] = React.useState<string | null>(null)
   const [logs, setLogs] = React.useState<{
     server: string
@@ -882,10 +884,13 @@ export default function ProjectDetail() {
       </div>
 
       <Tabs value={tab} onValueChange={setTab}>
-        <TabsList>
+        <TabsList className="max-w-full justify-start overflow-x-auto">
           <TabsTrigger value="overview">{t("Overview")}</TabsTrigger>
           <TabsTrigger value="logs">{t("Logs")}</TabsTrigger>
           <TabsTrigger value="variables">{t("Variables")}</TabsTrigger>
+          {canDomains && (
+            <TabsTrigger value="domains">{t("Domains")}</TabsTrigger>
+          )}
           <TabsTrigger value="settings">{t("Settings")}</TabsTrigger>
         </TabsList>
 
@@ -1089,6 +1094,12 @@ export default function ProjectDetail() {
           </p>
           <VariableTable scope={{ scope: "project", project: project._id }} />
         </TabsContent>
+
+        {canDomains && (
+          <TabsContent value="domains" className="pt-4">
+            <DomainsTab project={project._id} />
+          </TabsContent>
+        )}
 
         <TabsContent value="settings" className="pt-4">
           <Settings

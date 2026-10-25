@@ -30,6 +30,7 @@ import { templateModel } from "@/schemas/build/template.ts";
 import { alertRuleModel } from "@/schemas/monitoring/alert.ts";
 import { gitIntegrationModel } from "@/schemas/build/gitIntegration.ts";
 import { registryModel } from "@/schemas/infrastructure/serverSpec.ts";
+import { domainModel } from "@/schemas/applications/domain.ts";
 
 /** What counts against the plan's quotas, for the usage bars (PLAN §20.3). */
 async function usageOf(tenant: ObjectId) {
@@ -45,6 +46,7 @@ async function usageOf(tenant: ObjectId) {
     alertRules,
     gitIntegrations,
     registries,
+    domains,
   ] = await Promise.all([
     count(serverModel, { status: "active" }),
     count(projectModel),
@@ -53,6 +55,7 @@ async function usageOf(tenant: ObjectId) {
     count(alertRuleModel),
     count(gitIntegrationModel),
     count(registryModel),
+    count(domainModel),
   ]);
   return {
     servers,
@@ -62,6 +65,7 @@ async function usageOf(tenant: ObjectId) {
     alertRules,
     gitIntegrations,
     registries,
+    domains,
   };
 }
 
@@ -138,7 +142,8 @@ export default new Router("/api", function billing(router) {
             ? { _id: plan._id, name: plan.name }
             : { name: free?.name ?? "Free" },
           source: resolved.source,
-          limits: resolved.limits,
+          // Periods paid before a limit existed: show its default.
+          limits: { ...$planLimits.parse({}), ...resolved.limits },
           features: resolved.features,
           ...(period
             ? {

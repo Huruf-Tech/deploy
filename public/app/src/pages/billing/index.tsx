@@ -53,6 +53,7 @@ const QUOTAS: { key: keyof TOverview["limits"]; label: string }[] = [
   { key: "alertRules", label: "Alert rules" },
   { key: "gitIntegrations", label: "GitHub connections" },
   { key: "registries", label: "Registries" },
+  { key: "domains", label: "Custom domains" },
 ]
 
 const money = (cents: number, currency: string) =>
