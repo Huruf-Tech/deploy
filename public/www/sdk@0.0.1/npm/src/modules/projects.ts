@@ -10,6 +10,8 @@ export type list$return = {
     name: string;
     slug: string;
     kind: "app" | "service";
+    /** Its folder (project group) */
+    group?: string | undefined;
     status: "new" | "deploying" | "running" | "failed";
     /** Short description, e.g. acme/shop@main */
     source: string;
