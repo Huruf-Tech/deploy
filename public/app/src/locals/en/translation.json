@@ -906,5 +906,6 @@
   "{{n}} of {{total}}": "{{n}} of {{total}}",
   "{{n}}% of a core": "{{n}}% of a core",
   "The control plane's machine": "The control plane's machine",
-  "Agents, traffic and database": "Agents, traffic and database"
+  "Agents, traffic and database": "Agents, traffic and database",
+  "No instance has reported in the last 3 minutes. Instances report once a minute while they serve requests.": "No instance has reported in the last 3 minutes. Instances report once a minute while they serve requests."
 }

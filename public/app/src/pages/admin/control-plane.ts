@@ -101,6 +101,24 @@ export const uptime = (s: number) =>
 
 export type TFinding = { level: "warning" | "critical"; text: string }
 
+/**
+ * The last few complete buckets: what the verdict and its bars judge, so an
+ * hour-old spike (or a fix just deployed) shows in the charts, not as "now".
+ */
+export function recent(o: TOverview) {
+  const points = o.series.slice(-4, -1) // the newest bucket is still filling
+  const polls = points.flatMap((p) =>
+    p.pollP95Ms == null ? [] : [p.pollP95Ms]
+  )
+  const requests = points.reduce((n, p) => n + p.requestsPerMin, 0)
+  const errors = points.reduce((n, p) => n + p.errorsPerMin, 0)
+  return {
+    pollP95Ms: polls.length ? Math.max(...polls) : null,
+    requests,
+    errorPct: requests ? (100 * errors) / requests : 0,
+  }
+}
+
 /** What to act on, from the latest numbers (thresholds for one Deno process). */
 export function findings(o: TOverview, t: TFunction) {
   const list: TFinding[] = []
@@ -147,7 +165,8 @@ export function findings(o: TOverview, t: TFunction) {
         ),
       })
   }
-  const pollP95 = o.summary.pollP95Ms
+  const now = recent(o)
+  const pollP95 = now.pollP95Ms
   if (pollP95 != null && pollP95 > POLL_BUDGET_MS)
     list.push({
       level: pollP95 > 100 ? "critical" : "warning",
@@ -156,11 +175,11 @@ export function findings(o: TOverview, t: TFunction) {
         { ms: ms(pollP95), budget: POLL_BUDGET_MS }
       ),
     })
-  if (o.summary.requests > 100 && o.summary.errors / o.summary.requests > 0.01)
+  if (now.requests > 100 && now.errorPct > 1)
     list.push({
       level: "critical",
       text: t("{{pct}}% of requests failed with a server error.", {
-        pct: num((100 * o.summary.errors) / o.summary.requests),
+        pct: num(now.errorPct),
       }),
     })
   const last = o.series.at(-2) // the newest bucket is still filling

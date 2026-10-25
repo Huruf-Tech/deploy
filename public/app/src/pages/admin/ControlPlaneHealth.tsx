@@ -24,6 +24,7 @@ import { cn } from "@/lib/utils"
 import {
   num,
   POLL_BUDGET_MS,
+  recent,
   uptime,
   type TFinding,
   type TOverview,
@@ -163,11 +164,9 @@ export function HealthHero({ findings }: { findings: TFinding[] }) {
 export function ClusterMeters({ o }: { o: TOverview }) {
   const { t } = useTranslation()
   const last = o.series.at(-2) ?? o.series.at(-1)
-  const { cluster, summary } = o
-  const errorPct = summary.requests
-    ? (100 * summary.errors) / summary.requests
-    : 0
-  const pollP95 = summary.pollP95Ms
+  const { cluster } = o
+  // The same recent minutes the verdict judges.
+  const { errorPct, pollP95Ms: pollP95 } = recent(o)
   const ping = cluster.db.pingMs
 
   return (
@@ -267,6 +266,14 @@ export function ClusterMeters({ o }: { o: TOverview }) {
 /** Each instance's CPU and memory, with its host's when it has one. */
 export function InstanceMeters({ o }: { o: TOverview }) {
   const { t } = useTranslation()
+  if (!o.instances.length)
+    return (
+      <p className="rounded-2xl border border-dashed p-4 text-sm text-muted-foreground">
+        {t(
+          "No instance has reported in the last 3 minutes. Instances report once a minute while they serve requests."
+        )}
+      </p>
+    )
   return (
     <div className="flex flex-col gap-4">
       {o.instances.map((i) => {

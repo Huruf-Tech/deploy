@@ -906,5 +906,6 @@
   "{{n}} of {{total}}": "{{n}} من {{total}}",
   "{{n}}% of a core": "{{n}}% من نواة",
   "The control plane's machine": "جهاز لوحة التحكم",
-  "Agents, traffic and database": "الوكلاء والحركة وقاعدة البيانات"
+  "Agents, traffic and database": "الوكلاء والحركة وقاعدة البيانات",
+  "No instance has reported in the last 3 minutes. Instances report once a minute while they serve requests.": "لم تُرسل أي نسخة تقريرًا في آخر 3 دقائق. ترسل النسخ تقريرًا كل دقيقة أثناء خدمة الطلبات."
 }
