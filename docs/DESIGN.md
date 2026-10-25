@@ -239,6 +239,7 @@ Each of these shipped, was caught after the redesign, and was fixed. Check new U
 - **Size overrides must match the primitive's selector.** `SelectTrigger` sets its height with `data-[size=sm]:h-8`, which beats a plain `h-7`; override with `data-[size=sm]:h-7` (same for radius and padding). In a 32–36 px bar, controls are 28 px (`h-7`) with `rounded-md`, never the default pill.
 - **Rounded containers clip their children** (`overflow-hidden`), or a sticky/colored header paints square corners over the border (it happened on every `DataTable`).
 - **Don't duplicate a control core already renders.** Core's list toolbar has its own cards/table toggle; a second toggle in our card override confused the page. Check what the core screen already shows before adding to it.
+- **Never format vendored code.** Running prettier on `src/components` reformatted all of bklit's files; format only the files you changed, and keep vendored edits small and marked.
 - **`shadcn add` from another registry may overwrite our files** (`@bklit` replaced `src/lib/utils.ts`): dry-run first, then restore anything it overwrote.
 
 ### Layout and navigation
