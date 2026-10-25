@@ -325,13 +325,19 @@ function BulkAgentUpdate({
   const [busy, setBusy] = React.useState(false)
 
   const selected = servers.filter((s) => selectedIds.includes(s._id))
-  const outdated = selected.filter((s) => {
+  // Why a selected server is left out, so a changing count explains itself.
+  const skipReason = (s: TServer) => {
     const latest = data?.sums[s.inventory.arch]
-    return (
-      stateOf(s, liveness.get(s._id)) === "online" &&
-      !!latest &&
-      latest !== s.inventory.agentSha256
-    )
+    if (stateOf(s, liveness.get(s._id)) !== "online") return t("offline")
+    if (!latest)
+      return t("no published agent for {{arch}}", { arch: s.inventory.arch })
+    if (latest === s.inventory.agentSha256) return t("already up to date")
+    return null
+  }
+  const outdated = selected.filter((s) => !skipReason(s))
+  const skipped = selected.flatMap((s) => {
+    const reason = skipReason(s)
+    return reason ? [`${s.name} (${reason})`] : []
   })
   if (!selected.length || !ThunderSDK.isPermitted("servers", "updateAgent"))
     return null
@@ -364,6 +370,10 @@ function BulkAgentUpdate({
               total: selected.length,
             })
           : t("The selected servers run the latest agent (or are offline).")}
+        {outdated.length > 0 && skipped.length > 0 && (
+          <> {t("Skipped: {{list}}.", { list: skipped.join(", ") })}</>
+        )}
+        {!outdated.length && skipped.length > 0 && <> ({skipped.join(", ")})</>}
       </span>
       <Button
         size="sm"
