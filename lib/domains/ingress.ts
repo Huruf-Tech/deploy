@@ -5,7 +5,7 @@ import { cache } from "@/core/utils/cache.ts";
 import { Env } from "@/core/utils/env.ts";
 import { Logger } from "@/core/utils/logger.ts";
 import { keyring } from "@/lib/services.ts";
-import { readTextSetting } from "@/lib/core/settings.ts";
+import { readFlagSetting, readTextSetting } from "@/lib/core/settings.ts";
 import { domainModel } from "@/schemas/applications/domain.ts";
 import { projectModel } from "@/schemas/applications/project.ts";
 import { serverModel } from "@/schemas/infrastructure/server.ts";
@@ -24,14 +24,17 @@ import { serverLeaseModel } from "@/schemas/infrastructure/serverLease.ts";
 export const PROJECT_HEADER = "X-Huruf-Project";
 
 /**
- * Always served: the platform's own hostname (its certificate from Traefik's
- * `platform` resolver), Let's Encrypt's challenges for custom domains, and
- * HTTP to HTTPS for everything else.
+ * Always served: Let's Encrypt's challenges for custom domains, and HTTP to
+ * HTTPS for everything else. The platform's own hostname (its certificate
+ * from Traefik's `platform` resolver) only with `INGRESS_SERVE_PLATFORM`:
+ * behind another proxy (e.g. nginx keeping the dashboard), Traefik must not
+ * try to get a certificate for it.
  */
 async function platformConfig() {
   const url = await readTextSetting("INGRESS_PLATFORM_URL", "http://web:8000");
-  const host = new URL(Env.getSync("BASE_URL", true) || "http://localhost")
-    .hostname;
+  const host = await readFlagSetting("INGRESS_SERVE_PLATFORM")
+    ? new URL(Env.getSync("BASE_URL", true) || "http://localhost").hostname
+    : "localhost";
   return {
     routers: {
       ...(host !== "localhost"

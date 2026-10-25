@@ -1108,6 +1108,7 @@ Each phase ends with a **review checkpoint** (demo + code review + approval). Ph
   - `ACME_EMAIL`, and `ACME_DIRECTORY` (Let's Encrypt production by default; staging or Pebble for tests).
   - `INGRESS_CONFIG_TOKEN`: authorizes Traefik's polls and keys the tunnel logins.
   - `INGRESS_TUNNEL_ADDRS`: each instance's frps address for agents, e.g. `3.74.42.148:7000,…`. Agents get no tunnels until it's set.
+  - `INGRESS_SERVE_PLATFORM`: Traefik also serves the dashboard's own hostname (off by default, so a proxy already in front, like nginx, keeps it). `INGRESS_HTTP_PORT` / `INGRESS_HTTPS_PORT` (Compose) move Traefik behind such a proxy; setup steps in [INGRESS.md](INGRESS.md).
   - Set by the Compose file: `TRAEFIK_CERTS_DIR`, `FRPS_DIR`. Defaults that fit it: `INGRESS_PLATFORM_URL` (`http://web:8000`), `INGRESS_TUNNEL_HOST` (`frps`).
 - **Acceptance:**
   1. A domain added to a running project serves traffic without a redeploy, within 10 s of its certificate being issued.

@@ -24,18 +24,23 @@ services:
         max-size: "10m"
         max-file: "5"
 
-  # Custom domains (PLAN §14): enable with COMPOSE_PROFILES=ingress once ports
-  # 80, 443 and 7000 are free on this host, and INGRESS_CONFIG_TOKEN is set.
+  # Custom domains (PLAN §14): enable with COMPOSE_PROFILES=ingress, with
+  # INGRESS_CONFIG_TOKEN set. Traefik takes ports 80 and 443 unless
+  # INGRESS_HTTP_PORT / INGRESS_HTTPS_PORT move it behind another proxy
+  # (docs/INGRESS.md), which may pass visitors' IPs with the PROXY protocol.
   traefik:
     image: traefik:v3.5.3
     profiles: ["ingress"]
     restart: unless-stopped
     ports:
-      - "80:80"
-      - "443:443"
+      - "${INGRESS_HTTP_PORT:-80}:80"
+      - "${INGRESS_HTTPS_PORT:-443}:443"
     command:
       - --entrypoints.web.address=:80
       - --entrypoints.websecure.address=:443
+      # Only local proxies may say who the visitor is; others are ignored.
+      - --entrypoints.web.proxyProtocol.trustedIPs=127.0.0.1/32,172.16.0.0/12
+      - --entrypoints.websecure.proxyProtocol.trustedIPs=127.0.0.1/32,172.16.0.0/12
       - --providers.http.endpoint=http://web:8000/ingress/api/traefik
       - --providers.http.pollInterval=5s
       - --providers.http.headers.X-Ingress-Token=${INGRESS_CONFIG_TOKEN}
