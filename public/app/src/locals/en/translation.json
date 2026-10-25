@@ -831,8 +831,5 @@
   "Create these records at your DNS provider, then click Check now. Checking continues for 30 minutes while they propagate.": "Create these records at your DNS provider, then click Check now. Checking continues for 30 minutes while they propagate.",
   "Type": "Type",
   "If your DNS is on Cloudflare, set the record to DNS only (grey cloud).": "If your DNS is on Cloudflare, set the record to DNS only (grey cloud).",
-  "Custom domains": "Custom domains",
-  "no published agent for {{arch}}": "no published agent for {{arch}}",
-  "already up to date": "already up to date",
-  "Skipped: {{list}}.": "Skipped: {{list}}."
+  "Custom domains": "Custom domains"
 }

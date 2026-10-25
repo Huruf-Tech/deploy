@@ -831,8 +831,5 @@
   "Create these records at your DNS provider, then click Check now. Checking continues for 30 minutes while they propagate.": "أنشئ هذه السجلات لدى مزوّد DNS، ثم انقر «تحقق الآن». يستمر التحقق 30 دقيقة ريثما تنتشر السجلات.",
   "Type": "النوع",
   "If your DNS is on Cloudflare, set the record to DNS only (grey cloud).": "إذا كان DNS لديك على Cloudflare، فاجعل السجل «DNS only» (السحابة الرمادية).",
-  "Custom domains": "النطاقات المخصصة",
-  "no published agent for {{arch}}": "لا يوجد وكيل منشور لـ {{arch}}",
-  "already up to date": "محدَّث بالفعل",
-  "Skipped: {{list}}.": "تم التخطي: {{list}}."
+  "Custom domains": "النطاقات المخصصة"
 }
