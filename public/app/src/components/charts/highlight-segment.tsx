@@ -1,7 +1,7 @@
-"use client"
+"use client";
 
-import { type MotionValue, motion } from "motion/react"
-import { type RefObject, useId, useLayoutEffect, useRef } from "react"
+import { type MotionValue, motion } from "motion/react";
+import { type RefObject, useId, useLayoutEffect, useRef } from "react";
 
 // Hover-highlight overlay: re-strokes the base path `d`, clipped to a vertical
 // band whose x/width spring to track the hovered point, so only the segment
@@ -11,17 +11,17 @@ import { type RefObject, useId, useLayoutEffect, useRef } from "react"
 
 export interface HighlightSegmentProps {
   /** Ref to the rendered base stroke `<path>` — its `d` is re-used verbatim. */
-  pathRef: RefObject<SVGPathElement | null>
+  pathRef: RefObject<SVGPathElement | null>;
   /** Whether to render (caller gates on showHighlight + active + loaded). */
-  visible: boolean
-  stroke: string
-  strokeWidth: number
+  visible: boolean;
+  stroke: string;
+  strokeWidth: number;
   /** Plot height — the clip band spans it fully. */
-  height: number
+  height: number;
   /** Spring-eased left edge of the clip band (px). */
-  x: MotionValue<number>
+  x: MotionValue<number>;
   /** Spring-eased width of the clip band (px). */
-  width: MotionValue<number>
+  width: MotionValue<number>;
 }
 
 export function HighlightSegment({
@@ -33,24 +33,24 @@ export function HighlightSegment({
   x,
   width,
 }: HighlightSegmentProps) {
-  const clipId = useId()
-  const highlightRef = useRef<SVGPathElement>(null)
+  const clipId = useId();
+  const highlightRef = useRef<SVGPathElement>(null);
 
   // Copy the base stroke's `d` after commit (before paint) instead of reading
   // `pathRef.current` during render — same frame, and it picks up the base
   // path's `d` from this commit rather than the previous one.
   useLayoutEffect(() => {
     if (!visible) {
-      return
+      return;
     }
     highlightRef.current?.setAttribute(
       "d",
       pathRef.current?.getAttribute("d") || ""
-    )
-  })
+    );
+  });
 
   if (!visible) {
-    return null
+    return null;
   }
   return (
     <>
@@ -78,9 +78,9 @@ export function HighlightSegment({
         transition={{ duration: 0.4, ease: "easeInOut" }}
       />
     </>
-  )
+  );
 }
 
-HighlightSegment.displayName = "HighlightSegment"
+HighlightSegment.displayName = "HighlightSegment";
 
-export default HighlightSegment
+export default HighlightSegment;

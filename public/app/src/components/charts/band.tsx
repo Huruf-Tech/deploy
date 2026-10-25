@@ -1,8 +1,8 @@
-"use client"
+"use client";
 
-import { curveLinear, curveNatural } from "@visx/curve"
-import type { CurveFactory } from "d3-shape"
-import { type ReactNode, useId, useMemo } from "react"
+import { curveLinear, curveNatural } from "@visx/curve";
+import type { CurveFactory } from "d3-shape";
+import { type ReactNode, useId, useMemo } from "react";
 import {
   type BandFadeEdges,
   type BandFadeStop,
@@ -11,89 +11,89 @@ import {
   bandFadeStops,
   bandPixelExtent,
   resolveBandFadeSides,
-} from "./band-geometry"
-import { chartCssVars, useChartStable, useYScale } from "./chart-context"
-import { type PatternPresetId, renderPatternPreset } from "./pattern-preset"
-import { useAnimatedBand } from "./use-animated-band"
+} from "./band-geometry";
+import { chartCssVars, useChartStable, useYScale } from "./chart-context";
+import { type PatternPresetId, renderPatternPreset } from "./pattern-preset";
+import { useAnimatedBand } from "./use-animated-band";
 
-export type { BandFadeEdges } from "./band-geometry"
+export type { BandFadeEdges } from "./band-geometry";
 
-export type BandFillType = "solid" | "gradient" | "pattern"
+export type BandFillType = "solid" | "gradient" | "pattern";
 
 export interface BandStrokeProps {
   /** Default: Band `stroke` ?? `fill`. */
-  stroke?: string
+  stroke?: string;
   /** Default: Band `strokeWidth`. */
-  strokeWidth?: number
+  strokeWidth?: number;
   /** Default: Band `strokeDasharray`. */
-  strokeDasharray?: string
+  strokeDasharray?: string;
   /** Default: Band `strokeOpacity`. */
-  strokeOpacity?: number
+  strokeOpacity?: number;
 }
 
 export interface BandProps {
   /** Data key for the band's upper edge. */
-  upperKey: string
+  upperKey: string;
   /** Data key for the band's lower edge. */
-  lowerKey: string
+  lowerKey: string;
   /** Y-scale group id. Default: `"left"`. */
-  yAxisId?: string
+  yAxisId?: string;
   /**
    * Tooltip row label. Default: `"lowerKey – upperKey"` (or the key when both
    * edges share one key).
    */
-  label?: string
+  label?: string;
   /**
    * Add a `low – high` row (and dots on both edges) to `ChartTooltip`.
    * Default: true
    */
-  showInTooltip?: boolean
+  showInTooltip?: boolean;
   /** Curve function. Default: curveNatural (same as Line). */
-  curve?: CurveFactory
+  curve?: CurveFactory;
   /** Band colour. Default: var(--chart-line-primary) */
-  fill?: string
+  fill?: string;
   /** Default: `"solid"`. */
-  fillType?: BandFillType
+  fillType?: BandFillType;
   /** Solid opacity, or gradient opacity at the upper edge. Default: 0.15 */
-  fillOpacity?: number
+  fillOpacity?: number;
   /** Gradient opacity at the lower edge. Default: 0 */
-  gradientToOpacity?: number
+  gradientToOpacity?: number;
   /** Pattern preset when `fillType` is `"pattern"`. Default: `"diagonal"`. */
-  pattern?: PatternPresetId
+  pattern?: PatternPresetId;
   /** Default: `fill`. */
-  patternColor?: string
-  patternScale?: number
-  patternStrokeWidth?: number
+  patternColor?: string;
+  patternScale?: number;
+  patternStrokeWidth?: number;
   /** Opacity applied to the pattern fill. Default: 1 */
-  patternOpacity?: number
+  patternOpacity?: number;
   /** Shared edge stroke colour. Default: `fill`. */
-  stroke?: string
+  stroke?: string;
   /** Default: 1 */
-  strokeWidth?: number
+  strokeWidth?: number;
   /** Default: undefined (solid). */
-  strokeDasharray?: string
+  strokeDasharray?: string;
   /** Default: 1 */
-  strokeOpacity?: number
+  strokeOpacity?: number;
   /** `false` hides the top edge; an object overrides the shared stroke. */
-  upperStroke?: BandStrokeProps | false
+  upperStroke?: BandStrokeProps | false;
   /** `false` hides the bottom edge; an object overrides the shared stroke. */
-  lowerStroke?: BandStrokeProps | false
+  lowerStroke?: BandStrokeProps | false;
   /**
    * Fade fill and strokes to transparent at the given sides. Horizontal fades
    * span the plot width; vertical fades span the band's own pixel extent.
    * Default: false
    */
-  fadeEdges?: BandFadeEdges
+  fadeEdges?: BandFadeEdges;
   /** Fraction (0–0.5) of the width / height each fade covers. Default: 0.15 */
-  fadeSize?: number
-  className?: string
+  fadeSize?: number;
+  className?: string;
 }
 
 interface ResolvedBandStroke {
-  stroke: string
-  strokeWidth: number
-  strokeDasharray?: string
-  strokeOpacity: number
+  stroke: string;
+  strokeWidth: number;
+  strokeDasharray?: string;
+  strokeOpacity: number;
 }
 
 function resolveEdgeStroke(
@@ -101,15 +101,15 @@ function resolveEdgeStroke(
   base: ResolvedBandStroke
 ): ResolvedBandStroke | null {
   if (override === false) {
-    return null
+    return null;
   }
   const resolved: ResolvedBandStroke = {
     stroke: override?.stroke ?? base.stroke,
     strokeWidth: override?.strokeWidth ?? base.strokeWidth,
     strokeDasharray: override?.strokeDasharray ?? base.strokeDasharray,
     strokeOpacity: override?.strokeOpacity ?? base.strokeOpacity,
-  }
-  return resolved.strokeWidth > 0 ? resolved : null
+  };
+  return resolved.strokeWidth > 0 ? resolved : null;
 }
 
 function FadeMaskStops({ stops }: { stops: BandFadeStop[] }) {
@@ -119,12 +119,12 @@ function FadeMaskStops({ stops }: { stops: BandFadeStop[] }) {
       offset={stop.offset}
       style={{ stopColor: "white", stopOpacity: stop.opacity }}
     />
-  ))
+  ));
 }
 
 /** Phases where series strokes are drawn (matches `<Line>`). */
 function isBandVisiblePhase(phase: string): boolean {
-  return phase === "revealing" || phase === "ready" || phase === "exitingReady"
+  return phase === "revealing" || phase === "ready" || phase === "exitingReady";
 }
 
 export function Band({
@@ -161,8 +161,8 @@ export function Band({
     xAccessor,
     chartPhase,
     yDomainTweenDuration,
-  } = useChartStable()
-  const yScale = useYScale(yAxisId)
+  } = useChartStable();
+  const yScale = useYScale(yAxisId);
 
   // Same tween inputs as `<Line>` (animate + ready phase, yDomainTweenDuration)
   // so band edges morph in lockstep with lines on data changes.
@@ -178,35 +178,35 @@ export function Band({
     xAccessor,
     xScale,
     yScale,
-  })
-  const { segments, polyline } = displayed
+  });
+  const { segments, polyline } = displayed;
 
   const paths = useMemo(() => {
-    const pathCurve = polyline ? curveLinear : curve
+    const pathCurve = polyline ? curveLinear : curve;
     return {
       area: bandAreaPath(segments, pathCurve),
       upper: bandEdgePath(segments, "upper", pathCurve),
       lower: bandEdgePath(segments, "lower", pathCurve),
       extent: bandPixelExtent(segments),
-    }
-  }, [segments, polyline, curve])
+    };
+  }, [segments, polyline, curve]);
 
-  const uniqueId = useId().replace(/:/g, "")
-  const gradientId = `chart-band-gradient-${uniqueId}`
-  const patternId = `chart-band-fill-${uniqueId}`
-  const hMaskId = `chart-band-fade-x-${uniqueId}`
-  const vMaskId = `chart-band-fade-y-${uniqueId}`
+  const uniqueId = useId().replace(/:/g, "");
+  const gradientId = `chart-band-gradient-${uniqueId}`;
+  const patternId = `chart-band-fill-${uniqueId}`;
+  const hMaskId = `chart-band-fade-x-${uniqueId}`;
+  const vMaskId = `chart-band-fade-y-${uniqueId}`;
 
-  const usesPattern = fillType === "pattern" && pattern !== "none"
+  const usesPattern = fillType === "pattern" && pattern !== "none";
   const patternNode = useMemo<ReactNode>(() => {
     if (!usesPattern) {
-      return null
+      return null;
     }
     return renderPatternPreset(pattern, patternId, {
       color: patternColor ?? fill,
       scale: patternScale,
       strokeWidth: patternStrokeWidth,
-    })
+    });
   }, [
     usesPattern,
     pattern,
@@ -215,27 +215,27 @@ export function Band({
     fill,
     patternScale,
     patternStrokeWidth,
-  ])
+  ]);
 
   if (!isBandVisiblePhase(chartPhase) || paths.area === "") {
-    return null
+    return null;
   }
 
-  const { extent } = paths
-  const hasExtent = extent != null && extent.bottom - extent.top > 0
-  const fadeSides = resolveBandFadeSides(fadeEdges)
-  const fadeX = fadeSides.horizontal && innerWidth > 0
-  const fadeY = fadeSides.vertical && hasExtent
-  const usesGradient = fillType === "gradient" && hasExtent
+  const { extent } = paths;
+  const hasExtent = extent != null && extent.bottom - extent.top > 0;
+  const fadeSides = resolveBandFadeSides(fadeEdges);
+  const fadeX = fadeSides.horizontal && innerWidth > 0;
+  const fadeY = fadeSides.vertical && hasExtent;
+  const usesGradient = fillType === "gradient" && hasExtent;
 
-  let areaFill = fill
-  let areaOpacity = fillOpacity
+  let areaFill = fill;
+  let areaOpacity = fillOpacity;
   if (patternNode) {
-    areaFill = `url(#${patternId})`
-    areaOpacity = patternOpacity
+    areaFill = `url(#${patternId})`;
+    areaOpacity = patternOpacity;
   } else if (usesGradient) {
-    areaFill = `url(#${gradientId})`
-    areaOpacity = 1
+    areaFill = `url(#${gradientId})`;
+    areaOpacity = 1;
   }
 
   const baseStroke: ResolvedBandStroke = {
@@ -243,9 +243,9 @@ export function Band({
     strokeWidth,
     strokeDasharray,
     strokeOpacity,
-  }
-  const upperEdge = resolveEdgeStroke(upperStroke, baseStroke)
-  const lowerEdge = resolveEdgeStroke(lowerStroke, baseStroke)
+  };
+  const upperEdge = resolveEdgeStroke(upperStroke, baseStroke);
+  const lowerEdge = resolveEdgeStroke(lowerStroke, baseStroke);
 
   // Generous user-space mask region: series extend past the plot while an
   // `xDomain` viewport pans; the gradients pad their end stops beyond it.
@@ -255,13 +255,13 @@ export function Band({
     width: innerWidth * 3,
     x: -innerWidth,
     y: -innerHeight,
-  }
+  };
   const maskRect = {
     height: maskRegion.height,
     width: maskRegion.width,
     x: maskRegion.x,
     y: maskRegion.y,
-  }
+  };
 
   const content = (
     <>
@@ -289,7 +289,7 @@ export function Band({
         />
       ) : null}
     </>
-  )
+  );
 
   return (
     // biome-ignore lint/a11y/noAriaHiddenOnFocusable: decorative band
@@ -362,9 +362,9 @@ export function Band({
         <g mask={fadeY ? `url(#${vMaskId})` : undefined}>{content}</g>
       </g>
     </g>
-  )
+  );
 }
 
-Band.displayName = "Band"
+Band.displayName = "Band";
 
-export default Band
+export default Band;

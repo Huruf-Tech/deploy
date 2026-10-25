@@ -1,8 +1,8 @@
-"use client"
+"use client";
 
-import { localPoint } from "@visx/event"
-import { scaleLinear, scaleTime } from "@visx/scale"
-import { bisector } from "d3-array"
+import { localPoint } from "@visx/event";
+import { scaleLinear, scaleTime } from "@visx/scale";
+import { bisector } from "d3-array";
 import {
   Children,
   isValidElement,
@@ -15,75 +15,75 @@ import {
   useMemo,
   useRef,
   useState,
-} from "react"
-import { cn } from "@/lib/utils"
+} from "react";
+import { cn } from "@/lib/utils";
 import {
   isClipExcludedComponent,
   isUnderlayComponent,
-} from "./chart-child-passthrough"
+} from "./chart-child-passthrough";
 import {
   ChartProvider,
   type LineConfig,
   type Margin,
   type TooltipData,
-} from "./chart-context"
-import { hmsTimeFmt } from "./chart-formatters"
-import { ParentSize } from "./chart-parent-size"
-import { DEFAULT_CHART_LIFECYCLE } from "./chart-phase"
-import type { LiveLineProps } from "./live-line"
-import { extractReferenceAreaConfigs } from "./reference-area-config"
-import { wrapSingleYScale } from "./y-axis-scales"
+} from "./chart-context";
+import { hmsTimeFmt } from "./chart-formatters";
+import { ParentSize } from "./chart-parent-size";
+import { DEFAULT_CHART_LIFECYCLE } from "./chart-phase";
+import type { LiveLineProps } from "./live-line";
+import { extractReferenceAreaConfigs } from "./reference-area-config";
+import { wrapSingleYScale } from "./y-axis-scales";
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
 export interface LiveLinePoint {
-  time: number
-  value: number
+  time: number;
+  value: number;
 }
 
 export interface LiveLineChartProps {
   /** Streaming data — array of { time: unixSeconds, value } */
-  data: LiveLinePoint[]
+  data: LiveLinePoint[];
   /** Latest value (smoothly interpolated to) */
-  value: number
+  value: number;
   /** Key used for the value field in context data. Default: "value" */
-  dataKey?: string
+  dataKey?: string;
   /** Visible time window in seconds. Default: 30 */
-  window?: number
+  window?: number;
   /** Number of X-axis ticks (used to compute leading offset). Default: 5 */
-  numXTicks?: number
+  numXTicks?: number;
   /** Leading offset in X-tick units (0 = now at right edge). Default: 0 */
-  nowOffsetUnits?: number
+  nowOffsetUnits?: number;
   /** Tight Y-axis. Default: false */
-  exaggerate?: boolean
+  exaggerate?: boolean;
   /** Interpolation speed (0–1). Default: 0.08 */
-  lerpSpeed?: number
+  lerpSpeed?: number;
   /** Chart margins */
-  margin?: Partial<Margin>
+  margin?: Partial<Margin>;
   /** Freeze chart scrolling. Default: false */
-  paused?: boolean
+  paused?: boolean;
   /** Child components (LiveLine, Grid, ChartTooltip, LiveXAxis, LiveYAxis, etc.) */
-  children: ReactNode
-  className?: string
-  style?: React.CSSProperties
+  children: ReactNode;
+  className?: string;
+  style?: React.CSSProperties;
 }
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-const LERP_SPEED = 0.08
-const DEFAULT_MARGIN: Margin = { top: 24, right: 16, bottom: 32, left: 16 }
+const LERP_SPEED = 0.08;
+const DEFAULT_MARGIN: Margin = { top: 24, right: 16, bottom: 32, left: 16 };
 /** React commit interval for the live animation loop (~30fps). */
-const LIVE_FRAME_COMMIT_MS = 32
+const LIVE_FRAME_COMMIT_MS = 32;
 
 interface AnimFrame {
-  now: number
-  yMin: number
-  yMax: number
-  displayValue: number
+  now: number;
+  yMin: number;
+  yMax: number;
+  displayValue: number;
 }
 
 function computeTargetRange(
@@ -92,28 +92,28 @@ function computeTargetRange(
   exaggerate: boolean
 ) {
   if (data.length === 0) {
-    return { yMin: 0, yMax: 100 }
+    return { yMin: 0, yMax: 100 };
   }
-  let min = Number.POSITIVE_INFINITY
-  let max = Number.NEGATIVE_INFINITY
+  let min = Number.POSITIVE_INFINITY;
+  let max = Number.NEGATIVE_INFINITY;
   for (const d of data) {
     if (d.value < min) {
-      min = d.value
+      min = d.value;
     }
     if (d.value > max) {
-      max = d.value
+      max = d.value;
     }
   }
   if (value < min) {
-    min = value
+    min = value;
   }
   if (value > max) {
-    max = value
+    max = value;
   }
-  const rawRange = max - min
-  const paddingFactor = exaggerate ? 0.03 : 0.15
-  const rangePad = rawRange * paddingFactor || (exaggerate ? 0.04 : 10)
-  return { yMin: min - rangePad, yMax: max + rangePad }
+  const rawRange = max - min;
+  const paddingFactor = exaggerate ? 0.03 : 0.15;
+  const rangePad = rawRange * paddingFactor || (exaggerate ? 0.04 : 10);
+  return { yMin: min - rangePad, yMax: max + rangePad };
 }
 
 function nextAnimFrame(
@@ -123,23 +123,23 @@ function nextAnimFrame(
   speed: number,
   isPaused: boolean
 ): AnimFrame {
-  const nextNow = isPaused ? prev.now : Date.now()
+  const nextNow = isPaused ? prev.now : Date.now();
   const nextYMin =
     targetRange.yMin < prev.yMin
       ? targetRange.yMin
-      : prev.yMin + (targetRange.yMin - prev.yMin) * speed
+      : prev.yMin + (targetRange.yMin - prev.yMin) * speed;
   const nextYMax =
     targetRange.yMax > prev.yMax
       ? targetRange.yMax
-      : prev.yMax + (targetRange.yMax - prev.yMax) * speed
+      : prev.yMax + (targetRange.yMax - prev.yMax) * speed;
   const nextValue =
-    prev.displayValue + (targetValue - prev.displayValue) * speed
+    prev.displayValue + (targetValue - prev.displayValue) * speed;
   return {
     now: nextNow,
     yMin: nextYMin,
     yMax: nextYMax,
     displayValue: nextValue,
-  }
+  };
 }
 
 function interpolateAtTime(
@@ -147,57 +147,57 @@ function interpolateAtTime(
   timeSec: number
 ): number | null {
   if (points.length === 0) {
-    return null
+    return null;
   }
-  const firstPt = points[0] as LiveLinePoint
-  const lastPt = points.at(-1) as LiveLinePoint
+  const firstPt = points[0] as LiveLinePoint;
+  const lastPt = points.at(-1) as LiveLinePoint;
   if (timeSec <= firstPt.time) {
-    return firstPt.value
+    return firstPt.value;
   }
   if (timeSec >= lastPt.time) {
-    return lastPt.value
+    return lastPt.value;
   }
-  let lo = 0
-  let hi = points.length - 1
+  let lo = 0;
+  let hi = points.length - 1;
   while (hi - lo > 1) {
-    const mid = Math.floor((lo + hi) / 2)
-    const midPt = points[mid]
+    const mid = Math.floor((lo + hi) / 2);
+    const midPt = points[mid];
     if (midPt && midPt.time <= timeSec) {
-      lo = mid
+      lo = mid;
     } else {
-      hi = mid
+      hi = mid;
     }
   }
-  const p1 = points[lo]
+  const p1 = points[lo];
   if (!p1) {
-    return null
+    return null;
   }
-  const p2 = points[hi]
+  const p2 = points[hi];
   if (!p2) {
-    return null
+    return null;
   }
-  const dt = p2.time - p1.time
+  const dt = p2.time - p1.time;
   if (dt === 0) {
-    return p1.value
+    return p1.value;
   }
-  const t = (timeSec - p1.time) / dt
-  return p1.value + (p2.value - p1.value) * t
+  const t = (timeSec - p1.time) / dt;
+  return p1.value + (p2.value - p1.value) * t;
 }
 
-const bisectTime = bisector<LiveLinePoint, number>((d) => d.time).left
+const bisectTime = bisector<LiveLinePoint, number>((d) => d.time).left;
 
 function extractLiveLineConfigs(children: ReactNode): LineConfig[] {
-  const configs: LineConfig[] = []
+  const configs: LineConfig[] = [];
   Children.forEach(children, (child) => {
     if (!isValidElement(child)) {
-      return
+      return;
     }
-    const childType = child.type as { displayName?: string; name?: string }
+    const childType = child.type as { displayName?: string; name?: string };
     const name =
       typeof child.type === "function"
         ? childType.displayName || childType.name || ""
-        : ""
-    const props = child.props as LiveLineProps | undefined
+        : "";
+    const props = child.props as LiveLineProps | undefined;
     if (
       (name === "LiveLine" || (props && "dataKey" in props)) &&
       props?.dataKey
@@ -206,10 +206,10 @@ function extractLiveLineConfigs(children: ReactNode): LineConfig[] {
         dataKey: props.dataKey,
         stroke: props.stroke || "var(--chart-line-primary)",
         strokeWidth: props.strokeWidth || 2,
-      })
+      });
     }
-  })
-  return configs
+  });
+  return configs;
 }
 
 // ---------------------------------------------------------------------------
@@ -221,9 +221,9 @@ function liveTooltipKey(
   dataKey: string
 ): string | null {
   if (!tooltip) {
-    return null
+    return null;
   }
-  return `${Math.round(tooltip.x)}:${Math.round(tooltip.yPositions[dataKey] ?? 0)}`
+  return `${Math.round(tooltip.x)}:${Math.round(tooltip.yPositions[dataKey] ?? 0)}`;
 }
 
 function resolveLiveTooltip(
@@ -238,30 +238,30 @@ function resolveLiveTooltip(
   dataKey: string
 ): TooltipData | null {
   if (cursorX === null || innerWidth <= 0 || innerHeight <= 0) {
-    return null
+    return null;
   }
 
-  const domainEndMs = frame.now + leadingMs
+  const domainEndMs = frame.now + leadingMs;
   const xScaleNext = scaleTime({
     domain: [new Date(domainEndMs - windowMs), new Date(domainEndMs)],
     range: [0, innerWidth],
-  })
+  });
   const yScaleNext = scaleLinear({
     domain: [frame.yMin, frame.yMax],
     range: [innerHeight, 0],
     nice: true,
-  })
-  const timeMs = xScaleNext.invert(cursorX).getTime()
-  const timeSec = timeMs / 1000
-  const visible = data.filter((p) => p.time >= (domainEndMs - windowMs) / 1000)
-  visible.push({ time: frame.now / 1000, value: frame.displayValue })
+  });
+  const timeMs = xScaleNext.invert(cursorX).getTime();
+  const timeSec = timeMs / 1000;
+  const visible = data.filter((p) => p.time >= (domainEndMs - windowMs) / 1000);
+  visible.push({ time: frame.now / 1000, value: frame.displayValue });
   visible.push({
     time: (frame.now + xTickUnitMs) / 1000,
     value: frame.displayValue,
-  })
-  const val = interpolateAtTime(visible, timeSec)
+  });
+  const val = interpolateAtTime(visible, timeSec);
   if (val === null) {
-    return null
+    return null;
   }
 
   return {
@@ -269,7 +269,7 @@ function resolveLiveTooltip(
     index: 0,
     x: cursorX,
     yPositions: { [dataKey]: yScaleNext(val) ?? 0 },
-  }
+  };
 }
 
 function shouldCommitLiveUpdates(
@@ -278,38 +278,38 @@ function shouldCommitLiveUpdates(
   tooltipKey: string | null,
   lastTooltipKey: string | null
 ): { commitFrame: boolean; commitTooltip: boolean } {
-  const commitFrame = now - lastFrameCommit >= LIVE_FRAME_COMMIT_MS
-  const commitTooltip = tooltipKey !== lastTooltipKey
-  return { commitFrame, commitTooltip }
+  const commitFrame = now - lastFrameCommit >= LIVE_FRAME_COMMIT_MS;
+  const commitTooltip = tooltipKey !== lastTooltipKey;
+  return { commitFrame, commitTooltip };
 }
 
 interface InnerProps {
-  data: LiveLinePoint[]
-  value: number
-  dataKey: string
-  windowSecs: number
-  numXTicks: number
-  nowOffsetUnits: number
-  exaggerate: boolean
-  lerpSpeed: number
-  margin: Margin
-  paused: boolean
-  width: number
-  height: number
-  containerRef: React.RefObject<HTMLDivElement | null>
-  children: ReactNode
+  data: LiveLinePoint[];
+  value: number;
+  dataKey: string;
+  windowSecs: number;
+  numXTicks: number;
+  nowOffsetUnits: number;
+  exaggerate: boolean;
+  lerpSpeed: number;
+  margin: Margin;
+  paused: boolean;
+  width: number;
+  height: number;
+  containerRef: React.RefObject<HTMLDivElement | null>;
+  children: ReactNode;
 }
 
 function LiveLineChartInner(props: InnerProps) {
-  const { width, height, margin } = props
-  const innerWidth = width - margin.left - margin.right
-  const innerHeight = height - margin.top - margin.bottom
+  const { width, height, margin } = props;
+  const innerWidth = width - margin.left - margin.right;
+  const innerHeight = height - margin.top - margin.bottom;
 
   if (innerWidth <= 0 || innerHeight <= 0) {
-    return null
+    return null;
   }
 
-  return <LiveLineChartCore {...props} />
+  return <LiveLineChartCore {...props} />;
 }
 
 const LiveLineChartCore = memo(function LiveLineChartCore({
@@ -328,9 +328,9 @@ const LiveLineChartCore = memo(function LiveLineChartCore({
   containerRef,
   children,
 }: InnerProps) {
-  const windowMs = windowSecs * 1000
-  const innerWidth = width - margin.left - margin.right
-  const innerHeight = height - margin.top - margin.bottom
+  const windowMs = windowSecs * 1000;
+  const innerWidth = width - margin.left - margin.right;
+  const innerHeight = height - margin.top - margin.bottom;
 
   // ---- Animation state ----
   // Lazy initializer: `Date.now()` runs once on mount, not on every render.
@@ -339,40 +339,40 @@ const LiveLineChartCore = memo(function LiveLineChartCore({
     yMin: 0,
     yMax: 100,
     displayValue: value,
-  }))
+  }));
   // rAF-owned copy of the latest frame (replaced, never mutated).
-  const animRef = useRef<AnimFrame>(frame)
+  const animRef = useRef<AnimFrame>(frame);
 
-  const pausedRef = useRef(paused)
-  const dataRef = useRef(data)
-  const dataKeyRef = useRef(dataKey)
+  const pausedRef = useRef(paused);
+  const dataRef = useRef(data);
+  const dataKeyRef = useRef(dataKey);
 
   // Latest values for the rAF loop — synced after commit, not during render.
   useEffect(() => {
-    pausedRef.current = paused
-    dataRef.current = data
-    dataKeyRef.current = dataKey
-  }, [paused, data, dataKey])
+    pausedRef.current = paused;
+    dataRef.current = data;
+    dataKeyRef.current = dataKey;
+  }, [paused, data, dataKey]);
 
   const targetRange = useMemo(
     () => computeTargetRange(data, value, exaggerate),
     [data, value, exaggerate]
-  )
+  );
 
-  const lines = useMemo(() => extractLiveLineConfigs(children), [children])
+  const lines = useMemo(() => extractLiveLineConfigs(children), [children]);
 
   // Leading offset (used in rAF for tooltip)
-  const xTickUnitMs = windowMs / (numXTicks - 1)
-  const leadingMs = nowOffsetUnits * xTickUnitMs
+  const xTickUnitMs = windowMs / (numXTicks - 1);
+  const leadingMs = nowOffsetUnits * xTickUnitMs;
 
   // ---- rAF loop: update frame and tooltip in one place to avoid effect→setState loops ----
-  const cursorXRef = useRef<number | null>(null)
-  const [tooltipData, setTooltipData] = useState<TooltipData | null>(null)
-  const lastFrameCommitRef = useRef(0)
-  const lastTooltipKeyRef = useRef<string | null>(null)
+  const cursorXRef = useRef<number | null>(null);
+  const [tooltipData, setTooltipData] = useState<TooltipData | null>(null);
+  const lastFrameCommitRef = useRef(0);
+  const lastTooltipKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
-    let raf: number
+    let raf: number;
     const tick = () => {
       const next = nextAnimFrame(
         animRef.current,
@@ -380,8 +380,8 @@ const LiveLineChartCore = memo(function LiveLineChartCore({
         value,
         lerpSpeed,
         pausedRef.current
-      )
-      animRef.current = next
+      );
+      animRef.current = next;
 
       const nextTooltip = resolveLiveTooltip(
         cursorXRef.current,
@@ -393,41 +393,41 @@ const LiveLineChartCore = memo(function LiveLineChartCore({
         xTickUnitMs,
         dataRef.current,
         dataKeyRef.current
-      )
-      const now = performance.now()
-      const tooltipKey = liveTooltipKey(nextTooltip, dataKeyRef.current)
+      );
+      const now = performance.now();
+      const tooltipKey = liveTooltipKey(nextTooltip, dataKeyRef.current);
       const { commitFrame, commitTooltip } = shouldCommitLiveUpdates(
         now,
         lastFrameCommitRef.current,
         tooltipKey,
         lastTooltipKeyRef.current
-      )
+      );
 
       if (!(commitFrame || commitTooltip)) {
-        raf = requestAnimationFrame(tick)
-        return
+        raf = requestAnimationFrame(tick);
+        return;
       }
 
       if (commitFrame) {
-        lastFrameCommitRef.current = now
+        lastFrameCommitRef.current = now;
       }
       if (commitTooltip) {
-        lastTooltipKeyRef.current = tooltipKey
+        lastTooltipKeyRef.current = tooltipKey;
       }
 
       startTransition(() => {
         if (commitFrame) {
-          setFrame(next)
+          setFrame(next);
         }
         if (commitTooltip) {
-          setTooltipData(nextTooltip)
+          setTooltipData(nextTooltip);
         }
-      })
+      });
 
-      raf = requestAnimationFrame(tick)
-    }
-    raf = requestAnimationFrame(tick)
-    return () => cancelAnimationFrame(raf)
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
   }, [
     targetRange,
     value,
@@ -437,9 +437,9 @@ const LiveLineChartCore = memo(function LiveLineChartCore({
     xTickUnitMs,
     innerWidth,
     innerHeight,
-  ])
+  ]);
 
-  const domainEndMs = frame.now + leadingMs
+  const domainEndMs = frame.now + leadingMs;
 
   // ---- Scales ----
   const xScale = useMemo(
@@ -449,7 +449,7 @@ const LiveLineChartCore = memo(function LiveLineChartCore({
         range: [0, innerWidth],
       }),
     [domainEndMs, windowMs, innerWidth]
-  )
+  );
 
   const yScale = useMemo(
     () =>
@@ -459,34 +459,34 @@ const LiveLineChartCore = memo(function LiveLineChartCore({
         nice: true,
       }),
     [frame.yMin, frame.yMax, innerHeight]
-  )
+  );
 
   // ---- Build context-compatible data ----
   // Convert LiveLinePoint[] to Record<string, unknown>[] with 2 virtual points:
   // 1. At "now" — the live tip where the dot sits
   // 2. At "now + 1 unit" — a queued point that the line fades into
   const contextData = useMemo(() => {
-    const windowStart = domainEndMs - windowMs
-    let startIdx = bisectTime(data, windowStart / 1000, 0)
+    const windowStart = domainEndMs - windowMs;
+    let startIdx = bisectTime(data, windowStart / 1000, 0);
     if (startIdx > 0) {
-      startIdx--
+      startIdx--;
     }
-    const sliced = data.slice(startIdx)
+    const sliced = data.slice(startIdx);
     const records: Record<string, unknown>[] = sliced.map((p) => ({
       date: new Date(p.time * 1000),
       [dataKey]: p.value,
-    }))
+    }));
     // Virtual point 1: the "now" position (where the live dot sits)
     records.push({
       date: new Date(frame.now),
       [dataKey]: frame.displayValue,
-    })
+    });
     // Virtual point 2: queued ahead (the line extends and fades into this)
     records.push({
       date: new Date(frame.now + xTickUnitMs),
       [dataKey]: frame.displayValue,
-    })
-    return records
+    });
+    return records;
   }, [
     data,
     frame.now,
@@ -495,66 +495,66 @@ const LiveLineChartCore = memo(function LiveLineChartCore({
     windowMs,
     dataKey,
     xTickUnitMs,
-  ])
+  ]);
 
   // ---- X accessor ----
   const xAccessor = useCallback(
     (d: Record<string, unknown>): Date =>
       d.date instanceof Date ? d.date : new Date(d.date as number),
     []
-  )
+  );
 
   const handleMouseMove = useCallback(
     (event: React.MouseEvent<SVGGElement>) => {
-      const coords = localPoint(event)
+      const coords = localPoint(event);
       if (!coords) {
-        return
+        return;
       }
-      const x = coords.x - margin.left
-      cursorXRef.current = x >= 0 && x <= innerWidth ? x : null
+      const x = coords.x - margin.left;
+      cursorXRef.current = x >= 0 && x <= innerWidth ? x : null;
     },
     [margin.left, innerWidth]
-  )
+  );
 
   const handleMouseLeave = useCallback(() => {
-    cursorXRef.current = null
-    lastTooltipKeyRef.current = null
-    setTooltipData(null)
-  }, [])
+    cursorXRef.current = null;
+    lastTooltipKeyRef.current = null;
+    setTooltipData(null);
+  }, []);
 
   // Date labels (for ChartTooltip's DateTicker — not used in live but needed for context)
   const dateLabels = useMemo(
     () => contextData.map((d) => hmsTimeFmt.format(xAccessor(d))),
     [contextData, xAccessor]
-  )
+  );
 
   const columnWidth = useMemo(() => {
     if (contextData.length < 2) {
-      return 0
+      return 0;
     }
-    return innerWidth / (contextData.length - 1)
-  }, [innerWidth, contextData.length])
+    return innerWidth / (contextData.length - 1);
+  }, [innerWidth, contextData.length]);
 
-  const clipExcludedChildren: ReactElement[] = []
-  const underlayChildren: ReactElement[] = []
-  const seriesChildren: ReactElement[] = []
+  const clipExcludedChildren: ReactElement[] = [];
+  const underlayChildren: ReactElement[] = [];
+  const seriesChildren: ReactElement[] = [];
   Children.forEach(children, (child) => {
     if (!isValidElement(child)) {
-      return
+      return;
     }
     if (isClipExcludedComponent(child)) {
-      clipExcludedChildren.push(child)
+      clipExcludedChildren.push(child);
     } else if (isUnderlayComponent(child)) {
-      underlayChildren.push(child)
+      underlayChildren.push(child);
     } else {
-      seriesChildren.push(child)
+      seriesChildren.push(child);
     }
-  })
+  });
 
   const referenceAreas = useMemo(
     () => extractReferenceAreaConfigs(children),
     [children]
-  )
+  );
 
   const contextValue = useMemo(
     () => ({
@@ -597,7 +597,7 @@ const LiveLineChartCore = memo(function LiveLineChartCore({
       xAccessor,
       dateLabels,
     ]
-  )
+  );
 
   return (
     <ChartProvider value={contextValue}>
@@ -627,8 +627,8 @@ const LiveLineChartCore = memo(function LiveLineChartCore({
         </g>
       </svg>
     </ChartProvider>
-  )
-})
+  );
+});
 
 // ---------------------------------------------------------------------------
 // Public component
@@ -649,8 +649,8 @@ export function LiveLineChart({
   className,
   style,
 }: LiveLineChartProps) {
-  const containerRef = useRef<HTMLDivElement>(null)
-  const margin = { ...DEFAULT_MARGIN, ...marginProp }
+  const containerRef = useRef<HTMLDivElement>(null);
+  const margin = { ...DEFAULT_MARGIN, ...marginProp };
 
   return (
     <div
@@ -680,7 +680,7 @@ export function LiveLineChart({
         )}
       </ParentSize>
     </div>
-  )
+  );
 }
 
-export default LiveLineChart
+export default LiveLineChart;

@@ -1,22 +1,22 @@
-"use client"
+"use client";
 
-import { curveMonotoneX } from "@visx/curve"
-import { AreaClosed, type AreaClosedProps, LinePath } from "@visx/shape"
+import { curveMonotoneX } from "@visx/curve";
+import { AreaClosed, type AreaClosedProps, LinePath } from "@visx/shape";
 
 // Curve factory type via @visx/shape (already a dependency) rather than
 // importing from d3-shape, which this registry item does not install.
-type CurveFactory = NonNullable<AreaClosedProps<unknown>["curve"]>
+type CurveFactory = NonNullable<AreaClosedProps<unknown>["curve"]>;
 
-import { motion } from "motion/react"
-import { useCallback, useId, useMemo } from "react"
-import { chartCssVars, useChart } from "./chart-context"
+import { motion } from "motion/react";
+import { useCallback, useId, useMemo } from "react";
+import { chartCssVars, useChart } from "./chart-context";
 
-export type Momentum = "up" | "down" | "flat"
+export type Momentum = "up" | "down" | "flat";
 
 export interface MomentumColors {
-  up: string
-  down: string
-  flat: string
+  up: string;
+  down: string;
+  flat: string;
 }
 
 export function detectMomentum(
@@ -25,67 +25,67 @@ export function detectMomentum(
   lookback = 20
 ): Momentum {
   if (data.length < 5) {
-    return "flat"
+    return "flat";
   }
-  const start = Math.max(0, data.length - lookback)
-  let min = Number.POSITIVE_INFINITY
-  let max = Number.NEGATIVE_INFINITY
+  const start = Math.max(0, data.length - lookback);
+  let min = Number.POSITIVE_INFINITY;
+  let max = Number.NEGATIVE_INFINITY;
   for (let i = start; i < data.length; i++) {
-    const v = data[i]?.[dataKey]
+    const v = data[i]?.[dataKey];
     if (typeof v === "number") {
       if (v < min) {
-        min = v
+        min = v;
       }
       if (v > max) {
-        max = v
+        max = v;
       }
     }
   }
-  const range = max - min
+  const range = max - min;
   if (range === 0) {
-    return "flat"
+    return "flat";
   }
-  const tailStart = Math.max(start, data.length - 5)
-  const first = (data[tailStart]?.[dataKey] as number) ?? 0
-  const last = (data.at(-1)?.[dataKey] as number) ?? 0
-  const delta = last - first
-  const threshold = range * 0.12
+  const tailStart = Math.max(start, data.length - 5);
+  const first = (data[tailStart]?.[dataKey] as number) ?? 0;
+  const last = (data.at(-1)?.[dataKey] as number) ?? 0;
+  const delta = last - first;
+  const threshold = range * 0.12;
   if (delta > threshold) {
-    return "up"
+    return "up";
   }
   if (delta < -threshold) {
-    return "down"
+    return "down";
   }
-  return "flat"
+  return "flat";
 }
 
 export interface LiveLineProps {
   /** Key in data to use for y values */
-  dataKey: string
+  dataKey: string;
   /** Stroke color. Default: var(--chart-line-primary) */
-  stroke?: string
+  stroke?: string;
   /** Stroke width. Default: 2 */
-  strokeWidth?: number
+  strokeWidth?: number;
   /** Curve function. Default: curveMonotoneX */
-  curve?: CurveFactory
+  curve?: CurveFactory;
   /** Show gradient fill under the curve. Default: true */
-  fill?: boolean
+  fill?: boolean;
   /** Show pulsing live dot at the right edge. Default: true */
-  pulse?: boolean
+  pulse?: boolean;
   /** Radius of the live dot. Default: 4 */
-  dotSize?: number
+  dotSize?: number;
   /** Show value badge pill at the live tip. Default: true */
-  badge?: boolean
+  badge?: boolean;
   /** Value label formatter for the badge */
-  formatValue?: (v: number) => string
+  formatValue?: (v: number) => string;
   /**
    * When set, the line/fill color changes based on momentum direction.
    * Overrides `stroke` for the line and fill (dot always uses momentum colors).
    */
-  momentumColors?: MomentumColors
+  momentumColors?: MomentumColors;
 }
 
-LiveLine.displayName = "LiveLine"
+LiveLine.displayName = "LiveLine";
 
 export function LiveLine({
   dataKey,
@@ -108,54 +108,57 @@ export function LiveLine({
     xAccessor,
     lines,
     tooltipData,
-  } = useChart()
+  } = useChart();
 
-  const isScrubbing = tooltipData !== null
+  const isScrubbing = tooltipData !== null;
 
-  const uid = useId()
-  const gradientId = `live-line-grad-${uid}`
-  const areaGradientId = `live-area-grad-${uid}`
-  const fadeId = `live-fade-${uid}`
-  const fadeMaskId = `live-fade-mask-${uid}`
+  const uid = useId();
+  const gradientId = `live-line-grad-${uid}`;
+  const areaGradientId = `live-area-grad-${uid}`;
+  const fadeId = `live-fade-${uid}`;
+  const fadeMaskId = `live-fade-mask-${uid}`;
 
   const getX = useCallback(
     (d: Record<string, unknown>) => xScale(xAccessor(d)) ?? 0,
     [xScale, xAccessor]
-  )
+  );
 
   const getY = useCallback(
     (d: Record<string, unknown>) => {
-      const v = d[dataKey]
-      return typeof v === "number" ? (yScale(v) ?? 0) : 0
+      const v = d[dataKey];
+      return typeof v === "number" ? (yScale(v) ?? 0) : 0;
     },
     [dataKey, yScale]
-  )
+  );
 
   // The second-to-last point is the "now" position (live tip).
   // The last point is the queued future point for the fade-out zone.
-  const nowPoint = data.length >= 2 ? data.at(-2) : data.at(-1)
+  const nowPoint = data.length >= 2 ? data.at(-2) : data.at(-1);
   const liveValue =
     nowPoint && typeof nowPoint[dataKey] === "number"
       ? (nowPoint[dataKey] as number)
-      : 0
+      : 0;
 
-  const liveDotX = nowPoint ? (xScale(xAccessor(nowPoint)) ?? 0) : innerWidth
-  const liveDotY = yScale(liveValue) ?? 0
+  const liveDotX = nowPoint ? (xScale(xAccessor(nowPoint)) ?? 0) : innerWidth;
+  const liveDotY = yScale(liveValue) ?? 0;
 
-  const momentum = useMemo(() => detectMomentum(data, dataKey), [data, dataKey])
+  const momentum = useMemo(
+    () => detectMomentum(data, dataKey),
+    [data, dataKey]
+  );
 
   const defaultMomentumColors: MomentumColors = {
     up: "var(--chart-1)",
     down: "var(--chart-5)",
     flat: stroke,
-  }
-  const dotMomentumColors = momentumColors ?? defaultMomentumColors
-  const dotColor = dotMomentumColors[momentum]
+  };
+  const dotMomentumColors = momentumColors ?? defaultMomentumColors;
+  const dotColor = dotMomentumColors[momentum];
 
   // Find the line config for this dataKey to get the resolved stroke
-  const lineConfig = lines.find((l) => l.dataKey === dataKey)
-  const baseStroke = lineConfig?.stroke ?? stroke
-  const resolvedStroke = momentumColors ? momentumColors[momentum] : baseStroke
+  const lineConfig = lines.find((l) => l.dataKey === dataKey);
+  const baseStroke = lineConfig?.stroke ?? stroke;
+  const resolvedStroke = momentumColors ? momentumColors[momentum] : baseStroke;
 
   return (
     <>
@@ -317,7 +320,7 @@ export function LiveLine({
         )}
       </motion.g>
     </>
-  )
+  );
 }
 
-export default LiveLine
+export default LiveLine;

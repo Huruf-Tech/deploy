@@ -1,34 +1,34 @@
-"use client"
+"use client";
 
-import { motion } from "motion/react"
-import { memo, useMemo } from "react"
-import { createPortal } from "react-dom"
-import { cn } from "@/lib/utils"
+import { motion } from "motion/react";
+import { memo, useMemo } from "react";
+import { createPortal } from "react-dom";
+import { cn } from "@/lib/utils";
 import {
   useChart,
   useChartPortalContainer,
   useChartStable,
-} from "./chart-context"
+} from "./chart-context";
 import {
   type ChartLabelCount,
   resolveResponsiveChartLabelCount,
-} from "./responsive-chart-label-count"
+} from "./responsive-chart-label-count";
 
 export interface BarXAxisProps {
   /** Width of the date ticker box for fade calculation. Default: 50 */
-  tickerHalfWidth?: number
+  tickerHalfWidth?: number;
   /** Whether to show all labels or skip some for dense data. Default: false */
-  showAllLabels?: boolean
+  showAllLabels?: boolean;
   /** Maximum number of labels to show. Supports responsive breakpoints. */
-  maxLabels?: ChartLabelCount
+  maxLabels?: ChartLabelCount;
 }
 
 interface BarXAxisLabelProps {
-  label: string
-  x: number
-  crosshairX: number | null
-  isHovering: boolean
-  tickerHalfWidth: number
+  label: string;
+  x: number;
+  crosshairX: number | null;
+  isHovering: boolean;
+  tickerHalfWidth: number;
 }
 
 function BarXAxisLabel({
@@ -38,16 +38,16 @@ function BarXAxisLabel({
   isHovering,
   tickerHalfWidth,
 }: BarXAxisLabelProps) {
-  const fadeBuffer = 20
-  const fadeRadius = tickerHalfWidth + fadeBuffer
+  const fadeBuffer = 20;
+  const fadeRadius = tickerHalfWidth + fadeBuffer;
 
-  let opacity = 1
+  let opacity = 1;
   if (isHovering && crosshairX !== null) {
-    const distance = Math.abs(x - crosshairX)
+    const distance = Math.abs(x - crosshairX);
     if (distance < tickerHalfWidth) {
-      opacity = 0
+      opacity = 0;
     } else if (distance < fadeRadius) {
-      opacity = (distance - tickerHalfWidth) / fadeBuffer
+      opacity = (distance - tickerHalfWidth) / fadeBuffer;
     }
   }
 
@@ -65,28 +65,28 @@ function BarXAxisLabel({
     >
       <motion.span
         animate={{ opacity }}
-        className={cn("text-xs whitespace-nowrap text-chart-label")}
+        className={cn("whitespace-nowrap text-chart-label text-xs")}
         initial={{ opacity: 1 }}
         transition={{ duration: 0.4, ease: "easeInOut" }}
       >
         {label}
       </motion.span>
     </div>
-  )
+  );
 }
 
 export function BarXAxis(props: BarXAxisProps) {
-  const { containerRef, barScale } = useChartStable()
-  const container = useChartPortalContainer(containerRef)
+  const { containerRef, barScale } = useChartStable();
+  const container = useChartPortalContainer(containerRef);
   if (!container) {
-    return null
+    return null;
   }
 
   if (!barScale) {
-    return null
+    return null;
   }
 
-  return <BarXAxisInner {...props} container={container} />
+  return <BarXAxisInner {...props} container={container} />;
 }
 
 const BarXAxisInner = memo(function BarXAxisInner({
@@ -103,35 +103,35 @@ const BarXAxisInner = memo(function BarXAxisInner({
     barXAccessor,
     data,
     width,
-  } = useChart()
+  } = useChart();
 
   const resolvedMaxLabels = useMemo(
     () => resolveResponsiveChartLabelCount(maxLabels, width, 12),
     [maxLabels, width]
-  )
+  );
 
   // Generate labels for each bar
   const labelsToShow = useMemo(() => {
     if (!(barScale && bandWidth && barXAccessor)) {
-      return []
+      return [];
     }
 
     const allLabels = data.map((d) => {
-      const label = barXAccessor(d)
-      const bandX = barScale(label) ?? 0
+      const label = barXAccessor(d);
+      const bandX = barScale(label) ?? 0;
       // Center the label under the bar group
-      const x = bandX + bandWidth / 2 + margin.left
-      return { label, x }
-    })
+      const x = bandX + bandWidth / 2 + margin.left;
+      return { label, x };
+    });
 
     // If showAllLabels is true or we have fewer than maxLabels, show all
     if (showAllLabels || allLabels.length <= resolvedMaxLabels) {
-      return allLabels
+      return allLabels;
     }
 
     // Otherwise, skip some labels to avoid crowding
-    const step = Math.ceil(allLabels.length / Math.max(1, resolvedMaxLabels))
-    return allLabels.filter((_, i) => i % step === 0)
+    const step = Math.ceil(allLabels.length / Math.max(1, resolvedMaxLabels));
+    return allLabels.filter((_, i) => i % step === 0);
   }, [
     barScale,
     bandWidth,
@@ -140,10 +140,10 @@ const BarXAxisInner = memo(function BarXAxisInner({
     margin.left,
     showAllLabels,
     resolvedMaxLabels,
-  ])
+  ]);
 
-  const isHovering = tooltipData !== null
-  const crosshairX = tooltipData ? tooltipData.x + margin.left : null
+  const isHovering = tooltipData !== null;
+  const crosshairX = tooltipData ? tooltipData.x + margin.left : null;
 
   return createPortal(
     <div className="pointer-events-none absolute inset-0">
@@ -159,9 +159,9 @@ const BarXAxisInner = memo(function BarXAxisInner({
       ))}
     </div>,
     container
-  )
-})
+  );
+});
 
-BarXAxis.displayName = "BarXAxis"
+BarXAxis.displayName = "BarXAxis";
 
-export default BarXAxis
+export default BarXAxis;

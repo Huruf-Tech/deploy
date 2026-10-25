@@ -1,25 +1,25 @@
-"use client"
+"use client";
 
-import type { ReactNode } from "react"
-import { cn } from "@/lib/utils"
-import { intFmt } from "../chart-formatters"
+import type { ReactNode } from "react";
+import { cn } from "@/lib/utils";
+import { intFmt } from "../chart-formatters";
 
 export interface TooltipRow {
-  color: string
-  label: string
-  value: string | number
+  color: string;
+  label: string;
+  value: string | number;
 }
 
 export interface TooltipContentProps {
-  title?: string
-  rows: TooltipRow[]
+  title?: string;
+  rows: TooltipRow[];
   /** Optional additional content (e.g., markers) */
-  children?: ReactNode
+  children?: ReactNode;
 }
 
 export interface TooltipHeaderProps {
-  children: ReactNode
-  className?: string
+  children: ReactNode;
+  className?: string;
 }
 
 /**
@@ -30,19 +30,19 @@ export function TooltipHeader({ children, className }: TooltipHeaderProps) {
   return (
     <div
       className={cn(
-        "border-b px-3.5 py-2.5 text-start text-sm font-medium text-chart-tooltip-foreground",
+        "border-b px-3.5 py-2.5 text-start font-medium text-chart-tooltip-foreground text-sm",
         className
       )}
     >
       {children}
     </div>
-  )
+  );
 }
 
-TooltipHeader.displayName = "TooltipHeader"
+TooltipHeader.displayName = "TooltipHeader";
 
 export function TooltipContent({ title, rows, children }: TooltipContentProps) {
-  const hasBody = rows.length > 0 || Boolean(children)
+  const hasBody = rows.length > 0 || Boolean(children);
   return (
     <div>
       {title && <TooltipHeader>{title}</TooltipHeader>}
@@ -60,11 +60,11 @@ export function TooltipContent({ title, rows, children }: TooltipContentProps) {
                       className="size-2 shrink-0 rounded-full"
                       style={{ backgroundColor: row.color }}
                     />
-                    <span className="truncate text-sm text-chart-tooltip-muted">
+                    <span className="truncate text-chart-tooltip-muted text-sm">
                       {row.label}
                     </span>
                   </div>
-                  <span className="text-end text-sm font-medium text-chart-tooltip-foreground tabular-nums">
+                  <span className="text-end font-medium text-chart-tooltip-foreground text-sm tabular-nums">
                     {typeof row.value === "number"
                       ? intFmt(row.value)
                       : row.value}
@@ -87,9 +87,9 @@ export function TooltipContent({ title, rows, children }: TooltipContentProps) {
         </div>
       )}
     </div>
-  )
+  );
 }
 
-TooltipContent.displayName = "TooltipContent"
+TooltipContent.displayName = "TooltipContent";
 
-export default TooltipContent
+export default TooltipContent;

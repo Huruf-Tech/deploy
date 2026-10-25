@@ -1,31 +1,31 @@
-import { cn } from "@/lib/utils"
-import { Pattern } from "./pattern"
+import { cn } from "@/lib/utils";
+import { Pattern } from "./pattern";
 
 export interface PatternPathProps {
   /** Unique id for the pattern. */
-  id: string
+  id: string;
   /** Width of the pattern element. */
-  width: number
+  width: number;
   /** Height of the pattern element. */
-  height: number
+  height: number;
   /** d attribute of the path element */
-  path?: string
+  path?: string;
   /** fill color applied to path. */
-  fill?: string
+  fill?: string;
   /** className applied to the path element. */
-  className?: string
+  className?: string;
   /** Background color applied behind path. */
-  background?: string
+  background?: string;
   /** Stroke color applied to path. */
-  stroke?: string
+  stroke?: string;
   /** strokeWidth applied to path. */
-  strokeWidth?: number | string
+  strokeWidth?: number | string;
   /** strokeDasharray applied to path. */
-  strokeDasharray?: string | number
+  strokeDasharray?: string | number;
   /** strokeLinecap applied to path. */
-  strokeLinecap?: "square" | "butt" | "round" | "inherit"
+  strokeLinecap?: "square" | "butt" | "round" | "inherit";
   /** shapeRendering applied to path. */
-  shapeRendering?: string | number
+  shapeRendering?: string | number;
 }
 
 export function Path({
@@ -56,5 +56,5 @@ export function Path({
         strokeWidth={strokeWidth}
       />
     </Pattern>
-  )
+  );
 }

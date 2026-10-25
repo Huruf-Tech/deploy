@@ -1,36 +1,36 @@
-"use client"
+"use client";
 
-import type { ReactNode } from "react"
-import { cn } from "@/lib/utils"
+import type { ReactNode } from "react";
+import { cn } from "@/lib/utils";
 import {
   chartCenterContainerClassName,
   chartCenterLabelClassName,
   chartCenterValueClassName,
-} from "./chart-center-typography"
+} from "./chart-center-typography";
 import {
   ChartStatFlow,
   type ChartStatFlowFormat,
   defaultChartStatFlowFormat,
-} from "./chart-stat-flow"
+} from "./chart-stat-flow";
 
-export type GaugeLabelPlacement = "top" | "bottom" | "left" | "right"
-export type GaugeLabelAlign = "start" | "center" | "end"
+export type GaugeLabelPlacement = "top" | "bottom" | "left" | "right";
+export type GaugeLabelAlign = "start" | "center" | "end";
 
 export interface GaugeLabelShellProps {
-  centerValue: number
-  defaultLabel?: string
-  prefix?: string
-  suffix?: string
-  formatOptions?: ChartStatFlowFormat
-  align?: GaugeLabelAlign
-  className?: string
+  centerValue: number;
+  defaultLabel?: string;
+  prefix?: string;
+  suffix?: string;
+  formatOptions?: ChartStatFlowFormat;
+  align?: GaugeLabelAlign;
+  className?: string;
 }
 
 const labelAlignClass: Record<GaugeLabelAlign, string> = {
   start: "items-start text-left",
   center: "items-center text-center",
   end: "items-end text-right",
-}
+};
 
 export function GaugeLabelShell({
   centerValue,
@@ -66,26 +66,26 @@ export function GaugeLabelShell({
         )}
       />
     </div>
-  )
+  );
 }
 
 const crossAxisSelf: Record<GaugeLabelAlign, string> = {
   start: "self-start",
   center: "self-center",
   end: "self-end",
-}
+};
 
 const crossAxisAlign: Record<GaugeLabelAlign, string> = {
   start: "items-start",
   center: "items-center",
   end: "items-end",
-}
+};
 
 const inlineAxisAlign: Record<GaugeLabelAlign, string> = {
   start: "justify-start",
   center: "justify-center",
   end: "justify-end",
-}
+};
 
 export function GaugeLabelLayout({
   placement,
@@ -94,14 +94,14 @@ export function GaugeLabelLayout({
   children,
   className,
 }: {
-  placement: GaugeLabelPlacement
-  align: GaugeLabelAlign
-  label: ReactNode | null
-  children: ReactNode
-  className?: string
+  placement: GaugeLabelPlacement;
+  align: GaugeLabelAlign;
+  label: ReactNode | null;
+  children: ReactNode;
+  className?: string;
 }) {
   if (!label) {
-    return <div className={cn("w-full min-w-0", className)}>{children}</div>
+    return <div className={cn("w-full min-w-0", className)}>{children}</div>;
   }
 
   if (placement === "top") {
@@ -116,7 +116,7 @@ export function GaugeLabelLayout({
         <div className={crossAxisSelf[align]}>{label}</div>
         <div className="w-full min-w-0">{children}</div>
       </div>
-    )
+    );
   }
 
   if (placement === "bottom") {
@@ -131,7 +131,7 @@ export function GaugeLabelLayout({
         <div className="w-full min-w-0">{children}</div>
         <div className={crossAxisSelf[align]}>{label}</div>
       </div>
-    )
+    );
   }
 
   if (placement === "left") {
@@ -146,7 +146,7 @@ export function GaugeLabelLayout({
         <div className="shrink-0">{label}</div>
         <div className="min-w-0 flex-1">{children}</div>
       </div>
-    )
+    );
   }
 
   return (
@@ -160,5 +160,5 @@ export function GaugeLabelLayout({
       <div className="min-w-0 flex-1">{children}</div>
       <div className="shrink-0">{label}</div>
     </div>
-  )
+  );
 }

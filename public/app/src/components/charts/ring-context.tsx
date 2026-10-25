@@ -1,13 +1,13 @@
-"use client"
+"use client";
 
-import type { Transition } from "motion/react"
+import type { Transition } from "motion/react";
 import {
   createContext,
   type ReactNode,
   type RefObject,
   useContext,
   useMemo,
-} from "react"
+} from "react";
 
 // CSS variable references for ring chart theming
 export const ringCssVars = {
@@ -22,7 +22,7 @@ export const ringCssVars = {
   ring3: "var(--chart-3)",
   ring4: "var(--chart-4)",
   ring5: "var(--chart-5)",
-}
+};
 
 // Default ring color palette
 export const defaultRingColors = [
@@ -31,17 +31,17 @@ export const defaultRingColors = [
   ringCssVars.ring3,
   ringCssVars.ring4,
   ringCssVars.ring5,
-]
+];
 
 export interface RingData {
   /** Display label for the ring */
-  label: string
+  label: string;
   /** Current value */
-  value: number
+  value: number;
   /** Maximum value (determines progress percentage) */
-  maxValue: number
+  maxValue: number;
   /** Optional color override - falls back to palette */
-  color?: string
+  color?: string;
 }
 
 /**
@@ -58,70 +58,70 @@ export function getRingHitRadii(
   strokeWidth: number,
   ringGap: number
 ): { innerRadius: number; outerRadius: number } {
-  const halfGap = Math.max(0, ringGap) / 2
-  const bandInner = baseInnerRadius + index * (strokeWidth + ringGap)
+  const halfGap = Math.max(0, ringGap) / 2;
+  const bandInner = baseInnerRadius + index * (strokeWidth + ringGap);
   return {
     innerRadius: Math.max(0, bandInner - halfGap),
     outerRadius: bandInner + strokeWidth + halfGap,
-  }
+  };
 }
 
 export interface RingHoverContextValue {
-  hoveredIndex: number | null
-  setHoveredIndex: (index: number | null) => void
+  hoveredIndex: number | null;
+  setHoveredIndex: (index: number | null) => void;
 }
 
 export interface RingStableContextValue {
   // Data
-  data: RingData[]
+  data: RingData[];
 
   // Dimensions
-  size: number
-  center: number
-  strokeWidth: number
-  ringGap: number
-  baseInnerRadius: number
+  size: number;
+  center: number;
+  strokeWidth: number;
+  ringGap: number;
+  baseInnerRadius: number;
 
   // Animation state
-  animationKey: number
-  isLoaded: boolean
-  enterTransition?: Transition
-  enterStaggerScale: number
+  animationKey: number;
+  isLoaded: boolean;
+  enterTransition?: Transition;
+  enterStaggerScale: number;
 
   // Container ref for portals
-  containerRef: RefObject<HTMLDivElement | null>
+  containerRef: RefObject<HTMLDivElement | null>;
 
   // Computed values
-  totalValue: number
+  totalValue: number;
 
   // Get color for a ring index
-  getColor: (index: number) => string
+  getColor: (index: number) => string;
 
   // Get ring radii for an index
-  getRingRadii: (index: number) => { innerRadius: number; outerRadius: number }
+  getRingRadii: (index: number) => { innerRadius: number; outerRadius: number };
 
   // Arc angle range
-  startAngle: number
-  endAngle: number
+  startAngle: number;
+  endAngle: number;
 
   /**
    * Studio geometry scrub — skip Motion path morphing and use plain SVG paths.
    * @default false
    */
-  geometryScrubbing: boolean
+  geometryScrubbing: boolean;
 }
 
-export type RingContextValue = RingStableContextValue & RingHoverContextValue
+export type RingContextValue = RingStableContextValue & RingHoverContextValue;
 
-const RingStableContext = createContext<RingStableContextValue | null>(null)
-const RingHoverContext = createContext<RingHoverContextValue | null>(null)
+const RingStableContext = createContext<RingStableContextValue | null>(null);
+const RingHoverContext = createContext<RingHoverContextValue | null>(null);
 
 export function RingProvider({
   children,
   value,
 }: {
-  children: ReactNode
-  value: RingContextValue
+  children: ReactNode;
+  value: RingContextValue;
 }) {
   const stable = useMemo<RingStableContextValue>(
     () => ({
@@ -162,7 +162,7 @@ export function RingProvider({
       value.endAngle,
       value.geometryScrubbing,
     ]
-  )
+  );
 
   const hover = useMemo<RingHoverContextValue>(
     () => ({
@@ -170,7 +170,7 @@ export function RingProvider({
       setHoveredIndex: value.setHoveredIndex,
     }),
     [value.hoveredIndex, value.setHoveredIndex]
-  )
+  );
 
   return (
     <RingStableContext.Provider value={stable}>
@@ -178,33 +178,33 @@ export function RingProvider({
         {children}
       </RingHoverContext.Provider>
     </RingStableContext.Provider>
-  )
+  );
 }
 
 export function useRingStable(): RingStableContextValue {
-  const context = useContext(RingStableContext)
+  const context = useContext(RingStableContext);
   if (!context) {
     throw new Error(
       "useRingStable must be used within a RingProvider. " +
         "Make sure your component is wrapped in <RingChart>."
-    )
+    );
   }
-  return context
+  return context;
 }
 
 export function useRingHover(): RingHoverContextValue {
-  const context = useContext(RingHoverContext)
+  const context = useContext(RingHoverContext);
   if (!context) {
     throw new Error(
       "useRingHover must be used within a RingProvider. " +
         "Make sure your component is wrapped in <RingChart>."
-    )
+    );
   }
-  return context
+  return context;
 }
 
 export function useRing(): RingContextValue {
-  return { ...useRingStable(), ...useRingHover() }
+  return { ...useRingStable(), ...useRingHover() };
 }
 
-export default RingStableContext
+export default RingStableContext;

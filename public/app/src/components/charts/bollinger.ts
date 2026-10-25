@@ -1,23 +1,23 @@
 export interface BollingerBandsOptions {
   /** Numeric key to compute bands for. */
-  dataKey: string
+  dataKey: string;
   /** Rolling window length. Default: 20 */
-  period?: number
+  period?: number;
   /** Standard deviations above / below the SMA. Default: 2 */
-  multiplier?: number
+  multiplier?: number;
   /**
    * Minimum finite values in the window needed to emit a row (pandas
    * `min_periods`). Clamped to [1, `period`]. Default: `period` — a gap until
    * the window fills. Use `1` to warm up from the first row over a partial
    * window.
    */
-  minPeriods?: number
+  minPeriods?: number;
   /** Default: `${dataKey}Upper` */
-  upperKey?: string
+  upperKey?: string;
   /** Default: `${dataKey}Lower` */
-  lowerKey?: string
+  lowerKey?: string;
   /** Default: `${dataKey}Sma` */
-  middleKey?: string
+  middleKey?: string;
 }
 
 /**
@@ -40,41 +40,41 @@ export function withBollingerBands<T extends Record<string, unknown>>(
     lowerKey = `${dataKey}Lower`,
     middleKey = `${dataKey}Sma`,
     minPeriods = period,
-  } = options
-  const windowSize = Math.max(1, Math.floor(period))
+  } = options;
+  const windowSize = Math.max(1, Math.floor(period));
   const requiredCount = Math.min(
     windowSize,
     Math.max(
       1,
       Number.isFinite(minPeriods) ? Math.floor(minPeriods) : windowSize
     )
-  )
+  );
 
   return data.map((row, index) => {
-    let upper: number | null = null
-    let lower: number | null = null
-    let middle: number | null = null
+    let upper: number | null = null;
+    let lower: number | null = null;
+    let middle: number | null = null;
 
-    const values: number[] = []
+    const values: number[] = [];
     for (
       let offset = Math.max(0, index - windowSize + 1);
       offset <= index;
       offset++
     ) {
-      const value = data[offset]?.[dataKey]
+      const value = data[offset]?.[dataKey];
       if (typeof value === "number" && Number.isFinite(value)) {
-        values.push(value)
+        values.push(value);
       }
     }
     if (values.length >= requiredCount) {
-      const count = values.length
-      const mean = values.reduce((sum, value) => sum + value, 0) / count
+      const count = values.length;
+      const mean = values.reduce((sum, value) => sum + value, 0) / count;
       const variance =
-        values.reduce((sum, value) => sum + (value - mean) ** 2, 0) / count
-      const spread = multiplier * Math.sqrt(variance)
-      middle = mean
-      upper = mean + spread
-      lower = mean - spread
+        values.reduce((sum, value) => sum + (value - mean) ** 2, 0) / count;
+      const spread = multiplier * Math.sqrt(variance);
+      middle = mean;
+      upper = mean + spread;
+      lower = mean - spread;
     }
 
     return {
@@ -82,6 +82,6 @@ export function withBollingerBands<T extends Record<string, unknown>>(
       [upperKey]: upper,
       [lowerKey]: lower,
       [middleKey]: middle,
-    } as T & Record<string, number | null>
-  })
+    } as T & Record<string, number | null>;
+  });
 }

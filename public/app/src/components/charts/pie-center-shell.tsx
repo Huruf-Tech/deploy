@@ -1,32 +1,32 @@
-"use client"
+"use client";
 
-import { pie as d3Pie } from "d3-shape"
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { PieCenter, type PieCenterProps } from "./pie-center"
+import { pie as d3Pie } from "d3-shape";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { PieCenter, type PieCenterProps } from "./pie-center";
 import {
   defaultPieColors,
   type PieArcData,
   type PieContextValue,
   type PieData,
   PieProvider,
-} from "./pie-context"
+} from "./pie-context";
 
-const SHELL_HOVER_OFFSET = 10
+const SHELL_HOVER_OFFSET = 10;
 
 export type PieCenterShellProps = Omit<PieCenterProps, "children"> & {
   /** Value shown with NumberFlow (same role as pie total when not hovering) */
-  centerValue: number
+  centerValue: number;
   /** Square reference size for pie context (matches `PieChart` `size`) */
-  contextSize: number
+  contextSize: number;
   /** Inner radius in px — must be > 0 so `PieCenter` renders */
-  innerRadiusPx: number
+  innerRadiusPx: number;
   /**
    * When true (default), the first paint uses `0` then updates to `centerValue`
    * on the next frame so NumberFlow can run an entrance transition. Subsequent
    * `centerValue` updates animate as usual.
    */
-  animateEntrance?: boolean
-}
+  animateEntrance?: boolean;
+};
 
 /**
  * Renders {@link PieCenter} with a minimal {@link PieProvider} so you can reuse
@@ -39,50 +39,50 @@ export function PieCenterShell({
   animateEntrance = true,
   ...pieCenterProps
 }: PieCenterShellProps) {
-  const containerRef = useRef<HTMLDivElement>(null)
+  const containerRef = useRef<HTMLDivElement>(null);
   // Value the entrance has counted up to. `null` until the intro frame has
   // painted at 0, so NumberFlow animates 0 → value; any change to
   // `centerValue` replays the count-up from 0 (as before). `flowTotal` is
   // derived instead of being synced with setState in an effect.
-  const [introValue, setIntroValue] = useState<number | null>(null)
+  const [introValue, setIntroValue] = useState<number | null>(null);
 
   useEffect(() => {
     if (!animateEntrance) {
-      return
+      return;
     }
-    let innerRaf = 0
+    let innerRaf = 0;
     const outerRaf = requestAnimationFrame(() => {
-      innerRaf = requestAnimationFrame(() => setIntroValue(centerValue))
-    })
+      innerRaf = requestAnimationFrame(() => setIntroValue(centerValue));
+    });
     return () => {
-      cancelAnimationFrame(outerRaf)
-      cancelAnimationFrame(innerRaf)
-      setIntroValue(null)
-    }
-  }, [animateEntrance, centerValue])
+      cancelAnimationFrame(outerRaf);
+      cancelAnimationFrame(innerRaf);
+      setIntroValue(null);
+    };
+  }, [animateEntrance, centerValue]);
 
-  let flowTotal = centerValue
+  let flowTotal = centerValue;
   if (animateEntrance && introValue !== centerValue) {
-    flowTotal = 0
+    flowTotal = 0;
   }
 
   const data: PieData[] = useMemo(
     () => [{ label: "_pieCenterShell", value: Math.max(flowTotal, 0) }],
     [flowTotal]
-  )
+  );
 
-  const totalValue = flowTotal
+  const totalValue = flowTotal;
 
   const arcs = useMemo((): PieArcData[] => {
-    const v = data[0]?.value ?? 0
+    const v = data[0]?.value ?? 0;
     if (v > 0) {
       const pieGenerator = d3Pie<PieData>()
         .value((d) => d.value)
         .startAngle(-Math.PI / 2)
         .endAngle((3 * Math.PI) / 2)
         .padAngle(0)
-        .sort(null)
-      const computed = pieGenerator(data)
+        .sort(null);
+      const computed = pieGenerator(data);
       return computed.map((arc, index) => ({
         data: arc.data,
         index,
@@ -90,11 +90,11 @@ export function PieCenterShell({
         endAngle: arc.endAngle,
         padAngle: arc.padAngle,
         value: arc.value,
-      })) as PieArcData[]
+      })) as PieArcData[];
     }
-    const d0 = data[0]
+    const d0 = data[0];
     if (!d0) {
-      return []
+      return [];
     }
     return [
       {
@@ -105,26 +105,26 @@ export function PieCenterShell({
         padAngle: 0,
         value: 0,
       },
-    ]
-  }, [data])
+    ];
+  }, [data]);
 
   const getColor = useCallback((index: number) => {
-    return defaultPieColors[index % defaultPieColors.length] as string
-  }, [])
+    return defaultPieColors[index % defaultPieColors.length] as string;
+  }, []);
 
   const getFill = useCallback(
     (index: number) => {
-      const item = data[index]
+      const item = data[index];
       if (item?.fill) {
-        return item.fill
+        return item.fill;
       }
-      return getColor(index)
+      return getColor(index);
     },
     [data, getColor]
-  )
+  );
 
-  const center = contextSize / 2
-  const outerRadius = center - SHELL_HOVER_OFFSET
+  const center = contextSize / 2;
+  const outerRadius = center - SHELL_HOVER_OFFSET;
 
   const contextValue: PieContextValue = useMemo(
     () => ({
@@ -160,13 +160,13 @@ export function PieCenterShell({
       getColor,
       getFill,
     ]
-  )
+  );
 
   return (
     <PieProvider value={contextValue}>
       <PieCenter {...pieCenterProps} />
     </PieProvider>
-  )
+  );
 }
 
-PieCenterShell.displayName = "PieCenterShell"
+PieCenterShell.displayName = "PieCenterShell";

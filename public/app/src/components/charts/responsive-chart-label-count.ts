@@ -1,12 +1,12 @@
 export interface ResponsiveChartLabelCount {
-  base?: number
-  sm?: number
-  md?: number
-  lg?: number
-  xl?: number
+  base?: number;
+  sm?: number;
+  md?: number;
+  lg?: number;
+  xl?: number;
 }
 
-export type ChartLabelCount = number | ResponsiveChartLabelCount
+export type ChartLabelCount = number | ResponsiveChartLabelCount;
 
 export function resolveResponsiveChartLabelCount(
   value: ChartLabelCount,
@@ -14,7 +14,7 @@ export function resolveResponsiveChartLabelCount(
   fallback: number
 ): number {
   if (typeof value === "number") {
-    return value
+    return value;
   }
 
   const candidates = [
@@ -23,11 +23,11 @@ export function resolveResponsiveChartLabelCount(
     [768, value.md],
     [640, value.sm],
     [0, value.base],
-  ] as const
+  ] as const;
 
   return (
     candidates.find(
       ([minWidth, count]) => containerWidth >= minWidth && count != null
     )?.[1] ?? fallback
-  )
+  );
 }

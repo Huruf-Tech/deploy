@@ -1,29 +1,29 @@
-import { cn } from "@/lib/utils"
-import { Pattern } from "./pattern"
+import { cn } from "@/lib/utils";
+import { Pattern } from "./pattern";
 
 export interface PatternCirclesProps {
   /** Unique id for the pattern. */
-  id: string
+  id: string;
   /** Width of the pattern element. */
-  width: number
+  width: number;
   /** Height of the pattern element. */
-  height: number
+  height: number;
   /** Radius of the pattern circles. */
-  radius?: number
+  radius?: number;
   /** Fill applied to circles. */
-  fill?: string
+  fill?: string;
   /** className applied to circles. */
-  className?: string
+  className?: string;
   /** stroke applied to circles. */
-  stroke?: string
+  stroke?: string;
   /** strokeWidth applied to circles. */
-  strokeWidth?: number | string
+  strokeWidth?: number | string;
   /** strokeDasharray applied to circles. */
-  strokeDasharray?: number | string
+  strokeDasharray?: number | string;
   /** Whether to fill in circles within the pattern gaps to increase pattern density. */
-  complement?: boolean
+  complement?: boolean;
   /** Background color applied behind circles. */
-  background?: string
+  background?: string;
 }
 
 export function Circles({
@@ -39,14 +39,14 @@ export function Circles({
   complement = false,
   className,
 }: PatternCirclesProps) {
-  let corners: [number, number][] | undefined
+  let corners: [number, number][] | undefined;
   if (complement) {
     corners = [
       [0, 0],
       [0, height],
       [width, 0],
       [width, height],
-    ]
+    ];
   }
   return (
     <Pattern height={height} id={id} width={width}>
@@ -78,5 +78,5 @@ export function Circles({
         />
       ))}
     </Pattern>
-  )
+  );
 }

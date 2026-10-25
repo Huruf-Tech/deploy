@@ -1,18 +1,18 @@
-"use client"
+"use client";
 
-import type { scaleBand, scaleLinear, scaleTime } from "@visx/scale"
+import type { scaleBand, scaleLinear, scaleTime } from "@visx/scale";
 
 type ScaleLinear<Output, _Input = number> = ReturnType<
   typeof scaleLinear<Output>
->
+>;
 type ScaleTime<Output, _Input = Date | number> = ReturnType<
   typeof scaleTime<Output>
->
+>;
 type ScaleBand<Domain extends { toString(): string }> = ReturnType<
   typeof scaleBand<Domain>
->
+>;
 
-import type { Transition } from "motion/react"
+import type { Transition } from "motion/react";
 import {
   createContext,
   type Dispatch,
@@ -23,12 +23,12 @@ import {
   useEffect,
   useMemo,
   useState,
-} from "react"
-import type { ChartPhase, ChartStatus } from "./chart-phase"
-import type { ReferenceAreaConfig } from "./reference-area-config"
-import type { ChartSelection } from "./use-chart-interaction"
-import { DEFAULT_Y_AXIS_ID } from "./y-axis-scales"
-import type { YDomain } from "./y-domain-utils"
+} from "react";
+import type { ChartPhase, ChartStatus } from "./chart-phase";
+import type { ReferenceAreaConfig } from "./reference-area-config";
+import type { ChartSelection } from "./use-chart-interaction";
+import { DEFAULT_Y_AXIS_ID } from "./y-axis-scales";
+import type { YDomain } from "./y-domain-utils";
 
 // CSS variable references for theming
 export const chartCssVars = {
@@ -51,7 +51,7 @@ export const chartCssVars = {
   segmentLine: "var(--chart-segment-line)",
   brushBorder: "var(--chart-brush-border)",
   tooltipBackground: "var(--chart-tooltip-background)",
-}
+};
 
 /** Default scatter series colors from the chart palette (`--chart-1` … `--chart-5`). */
 export const defaultScatterColors = [
@@ -60,53 +60,53 @@ export const defaultScatterColors = [
   "var(--chart-3)",
   "var(--chart-4)",
   "var(--chart-5)",
-] as const
+] as const;
 
 export interface Margin {
-  top: number
-  right: number
-  bottom: number
-  left: number
+  top: number;
+  right: number;
+  bottom: number;
+  left: number;
 }
 
 export interface TooltipData {
   /** The data point being hovered */
-  point: Record<string, unknown>
+  point: Record<string, unknown>;
   /** Index in the data array */
-  index: number
+  index: number;
   /** X position in pixels (relative to chart area) */
-  x: number
+  x: number;
   /** Y positions for each line, keyed by dataKey */
-  yPositions: Record<string, number>
+  yPositions: Record<string, number>;
   /** X positions for each series (for grouped bars), keyed by dataKey */
-  xPositions?: Record<string, number>
+  xPositions?: Record<string, number>;
   /**
    * Series whose point is hovered when hover snaps to the nearest point
    * (`ScatterChart` with `jitter`). The tooltip dot and panel follow this
    * point.
    */
-  activeDataKey?: string
+  activeDataKey?: string;
 }
 
 export interface LineConfig {
-  dataKey: string
-  stroke: string
-  strokeWidth: number
+  dataKey: string;
+  stroke: string;
+  strokeWidth: number;
   /** Scale group id (Recharts `yAxisId`). Default: `"left"`. */
-  yAxisId?: string | number
+  yAxisId?: string | number;
 }
 
 /** Y-domain and tooltip inputs collected from a `<Band>` child. */
 export interface BandConfig {
-  yAxisId: string
-  upperKey: string
-  lowerKey: string
+  yAxisId: string;
+  upperKey: string;
+  lowerKey: string;
   /** Tooltip swatch / edge-dot colour (the band's `fill`). */
-  color: string
+  color: string;
   /** Tooltip row label. */
-  label: string
+  label: string;
   /** Whether the band adds a range row and edge dots to `ChartTooltip`. */
-  showInTooltip: boolean
+  showInTooltip: boolean;
 }
 
 /**
@@ -116,136 +116,136 @@ export interface BandConfig {
  */
 export interface ChartHoverContextValue {
   // Tooltip state
-  tooltipData: TooltipData | null
-  setTooltipData: Dispatch<SetStateAction<TooltipData | null>>
+  tooltipData: TooltipData | null;
+  setTooltipData: Dispatch<SetStateAction<TooltipData | null>>;
 
   // Selection state (optional - only present when useChartInteraction is used)
   /** Current drag/pinch selection range */
-  selection?: ChartSelection | null
+  selection?: ChartSelection | null;
   /** Clear the current selection */
-  clearSelection?: () => void
+  clearSelection?: () => void;
 
   // Bar chart hover (optional - only present in BarChart)
   /** Index of currently hovered bar */
-  hoveredBarIndex?: number | null
+  hoveredBarIndex?: number | null;
   /** Setter for hovered bar index */
-  setHoveredBarIndex?: (index: number | null) => void
+  setHoveredBarIndex?: (index: number | null) => void;
 
   // Candlestick hover (optional - only present in CandlestickChart)
   /** Index of currently hovered candle */
-  hoveredCandleIndex?: number | null
+  hoveredCandleIndex?: number | null;
   /** Setter for hovered candle index */
-  setHoveredCandleIndex?: (index: number | null) => void
+  setHoveredCandleIndex?: (index: number | null) => void;
 }
 
 export interface ChartContextValue extends ChartHoverContextValue {
   // Data
-  data: Record<string, unknown>[]
+  data: Record<string, unknown>[];
   /** Decimated subset for SVG path rendering; equals `data` when no decimation is needed. */
-  renderData: Record<string, unknown>[]
+  renderData: Record<string, unknown>[];
 
   // Scales
-  xScale: ScaleTime<number, number>
+  xScale: ScaleTime<number, number>;
   /** Primary (left) y-scale — alias for `yScales[DEFAULT_Y_AXIS_ID]`. */
-  yScale: ScaleLinear<number, number>
+  yScale: ScaleLinear<number, number>;
   /** Per-axis y-scales keyed by `yAxisId`. */
-  yScales: Record<string, ScaleLinear<number, number>>
+  yScales: Record<string, ScaleLinear<number, number>>;
 
   // Dimensions
-  width: number
-  height: number
-  innerWidth: number
-  innerHeight: number
-  margin: Margin
+  width: number;
+  height: number;
+  innerWidth: number;
+  innerHeight: number;
+  margin: Margin;
 
   // Column width for spacing calculations
-  columnWidth: number
+  columnWidth: number;
 
   // Container ref for portals
-  containerRef: RefObject<HTMLDivElement | null>
+  containerRef: RefObject<HTMLDivElement | null>;
 
   // Line configurations (extracted from children)
-  lines: LineConfig[]
+  lines: LineConfig[];
 
   /** `<Band>` configs (time-series charts) — tooltip range rows and edge dots. */
-  bands?: BandConfig[]
+  bands?: BandConfig[];
 
   /** {@link ReferenceArea} bands — drives y-axis label colors in range. */
-  referenceAreas: ReferenceAreaConfig[]
+  referenceAreas: ReferenceAreaConfig[];
 
   // Loading / lifecycle (LineChart status transitions)
-  chartPhase: ChartPhase
-  chartStatus: ChartStatus
+  chartPhase: ChartPhase;
+  chartStatus: ChartStatus;
   /** Centered label while `chartPhase` shows loading chrome. */
-  loadingLabel?: string
+  loadingLabel?: string;
   /** Y-domain tween duration when transitioning loading ↔ ready (ms). */
-  yDomainTweenDuration: number
+  yDomainTweenDuration: number;
   /** Nice’d y-domains per axis from skeleton data (placeholder). */
-  yDomainSkeletonByAxis: Record<string, YDomain>
+  yDomainSkeletonByAxis: Record<string, YDomain>;
   /** Nice’d y-domains per axis from the current target data. */
-  yDomainTargetByAxis: Record<string, YDomain>
+  yDomainTargetByAxis: Record<string, YDomain>;
 
   // Animation state
-  isLoaded: boolean
-  animationDuration: number
+  isLoaded: boolean;
+  animationDuration: number;
   /** CSS easing for clip-reveal / line draw (cartesian charts). */
-  animationEasing?: string
+  animationEasing?: string;
   /** Motion enter transition (spring or tween) — drives clip reveal when spring. */
-  enterTransition?: Transition
+  enterTransition?: Transition;
   /** Increments when enter animation should replay. */
-  revealEpoch?: number
+  revealEpoch?: number;
   /** Fired when a one-shot loading pulse (exit / enter) completes. */
-  notifyLoadingPulseComplete?: () => void
+  notifyLoadingPulseComplete?: () => void;
 
   // X accessor - how to get the x value from data points
-  xAccessor: (d: Record<string, unknown>) => Date
+  xAccessor: (d: Record<string, unknown>) => Date;
 
   // Pre-computed date labels for ticker animation
-  dateLabels: string[]
+  dateLabels: string[];
 
   /** Active brush zoom range — when set, axis ticks align to visible data rows. */
-  xDomain?: [Date, Date]
+  xDomain?: [Date, Date];
   /** Full dataset length when brush zoom is enabled (for zoom vs full-range detection). */
-  xDomainSlotCount?: number
+  xDomainSlotCount?: number;
 
   // Bar chart specific (optional - only present in BarChart)
   /** Band scale for categorical x-axis (bar charts) */
-  barScale?: ScaleBand<string>
+  barScale?: ScaleBand<string>;
   /** Width of each bar band */
-  bandWidth?: number
+  bandWidth?: number;
   /** X accessor for bar charts (returns string instead of Date) */
-  barXAccessor?: (d: Record<string, unknown>) => string
+  barXAccessor?: (d: Record<string, unknown>) => string;
   /** Bar chart orientation */
-  orientation?: "vertical" | "horizontal"
+  orientation?: "vertical" | "horizontal";
   /** Whether bars are stacked */
-  stacked?: boolean
+  stacked?: boolean;
   /** Stack offsets: Map of data index -> Map of dataKey -> cumulative offset */
-  stackOffsets?: Map<number, Map<string, number>>
+  stackOffsets?: Map<number, Map<string, number>>;
   /** Squares variant — snap tooltip to top square and size ring dots. */
-  squareSnap?: { squareGap: number; groupGap?: number; fit?: boolean }
+  squareSnap?: { squareGap: number; groupGap?: number; fit?: boolean };
 
   // ComposedChart + SeriesBar (optional)
   /** `SeriesBar` dataKeys in tree order, for grouped columns at each x */
-  composedBarDataKeys?: string[]
+  composedBarDataKeys?: string[];
   /** Target bar width in px (Recharts `barSize` style). */
-  composedBarSize?: number
+  composedBarSize?: number;
   /** Max bar width in px (Recharts `maxBarSize`). */
-  composedMaxBarSize?: number
+  composedMaxBarSize?: number;
   /** Gap between grouped `SeriesBar` columns in px. */
-  composedBarGap?: number
+  composedBarGap?: number;
   /** When true, `SeriesBar` segments stack in child order at each x. */
-  composedStacked?: boolean
+  composedStacked?: boolean;
   /** Per-row cumulative offsets for stacked `SeriesBar` (data index → dataKey → offset). */
-  composedStackOffsets?: Map<number, Map<string, number>>
+  composedStackOffsets?: Map<number, Map<string, number>>;
   /** Vertical gap in px between stacked `SeriesBar` segments. Default: 0 */
-  composedStackGap?: number
+  composedStackGap?: number;
 
   /**
    * Hover resolves to the nearest point in 2D rather than the nearest x column
    * (e.g. `ScatterChart` with `jitter`). `ChartTooltip` hides its crosshair
    * line by default when set, since the line would not mark a single x value.
    */
-  nearestPointHover?: boolean
+  nearestPointHover?: boolean;
 }
 
 /**
@@ -256,10 +256,10 @@ export interface ChartContextValue extends ChartHoverContextValue {
 export type ChartStableContextValue = Omit<
   ChartContextValue,
   keyof ChartHoverContextValue
->
+>;
 
-const ChartStableContext = createContext<ChartStableContextValue | null>(null)
-const ChartHoverContext = createContext<ChartHoverContextValue | null>(null)
+const ChartStableContext = createContext<ChartStableContextValue | null>(null);
+const ChartHoverContext = createContext<ChartHoverContextValue | null>(null);
 
 /**
  * Splits the merged `value` into a stable slice and a volatile hover slice,
@@ -271,8 +271,8 @@ export function ChartProvider({
   children,
   value,
 }: {
-  children: ReactNode
-  value: ChartContextValue
+  children: ReactNode;
+  value: ChartContextValue;
 }) {
   const stable = useMemo<ChartStableContextValue>(
     () => ({
@@ -369,7 +369,7 @@ export function ChartProvider({
       value.composedStackGap,
       value.nearestPointHover,
     ]
-  )
+  );
 
   const hover = useMemo<ChartHoverContextValue>(
     () => ({
@@ -392,7 +392,7 @@ export function ChartProvider({
       value.hoveredCandleIndex,
       value.setHoveredCandleIndex,
     ]
-  )
+  );
 
   return (
     <ChartStableContext.Provider value={stable}>
@@ -400,7 +400,7 @@ export function ChartProvider({
         {children}
       </ChartHoverContext.Provider>
     </ChartStableContext.Provider>
-  )
+  );
 }
 
 /**
@@ -409,14 +409,14 @@ export function ChartProvider({
  * context). Prefer this in cold consumers like axes, grid, pattern fills.
  */
 export function useChartStable(): ChartStableContextValue {
-  const context = useContext(ChartStableContext)
+  const context = useContext(ChartStableContext);
   if (!context) {
     throw new Error(
       "useChartStable must be used within a ChartProvider. " +
         "Make sure your component is wrapped in <LineChart>, <AreaChart>, <BarChart>, or <ComposedChart>."
-    )
+    );
   }
-  return context
+  return context;
 }
 
 /**
@@ -430,21 +430,21 @@ export function useChartStable(): ChartStableContextValue {
 export function useChartPortalContainer<T extends HTMLElement>(
   containerRef: RefObject<T | null> | undefined
 ): T | null {
-  const [container, setContainer] = useState<T | null>(null)
+  const [container, setContainer] = useState<T | null>(null);
   useEffect(() => {
-    setContainer(containerRef?.current ?? null)
-  }, [containerRef])
-  return container
+    setContainer(containerRef?.current ?? null);
+  }, [containerRef]);
+  return container;
 }
 
 /** Y-scale for a series axis (`yAxisId` on Line / Area / YAxis). */
 export function useYScale(
   yAxisId?: string | number
 ): ScaleLinear<number, number> {
-  const { yScales, yScale } = useChartStable()
+  const { yScales, yScale } = useChartStable();
   const id =
-    yAxisId == null || yAxisId === "" ? DEFAULT_Y_AXIS_ID : String(yAxisId)
-  return yScales[id] ?? yScale
+    yAxisId == null || yAxisId === "" ? DEFAULT_Y_AXIS_ID : String(yAxisId);
+  return yScales[id] ?? yScale;
 }
 
 /**
@@ -453,14 +453,14 @@ export function useYScale(
  * actually reads hover state.
  */
 export function useChartHover(): ChartHoverContextValue {
-  const context = useContext(ChartHoverContext)
+  const context = useContext(ChartHoverContext);
   if (!context) {
     throw new Error(
       "useChartHover must be used within a ChartProvider. " +
         "Make sure your component is wrapped in <LineChart>, <AreaChart>, <BarChart>, or <ComposedChart>."
-    )
+    );
   }
-  return context
+  return context;
 }
 
 /**
@@ -470,12 +470,12 @@ export function useChartHover(): ChartHoverContextValue {
  * one slice.
  */
 export function useChart(): ChartContextValue {
-  const stable = useChartStable()
-  const hover = useChartHover()
+  const stable = useChartStable();
+  const hover = useChartHover();
   // Identity changes on every hover (hover is the volatile slice) — that's
   // fine for consumers using this merged hook; they explicitly opted in to
   // re-rendering on hover.
-  return { ...stable, ...hover }
+  return { ...stable, ...hover };
 }
 
-export default ChartStableContext
+export default ChartStableContext;

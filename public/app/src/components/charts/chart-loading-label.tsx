@@ -1,20 +1,20 @@
-"use client"
+"use client";
 
-import { motion } from "motion/react"
-import { cn } from "@/lib/utils"
-import { ShimmeringText } from "../shimmering-text"
+import { motion } from "motion/react";
+import { cn } from "@/lib/utils";
+import { ShimmeringText } from "../shimmering-text";
 import {
   LINE_LOADING_PULSE_EASE,
   LOADING_LABEL_EXIT_S,
   LOADING_LABEL_EXIT_Y_PX,
-} from "./line-loading-timing"
+} from "./line-loading-timing";
 
 export interface ChartLoadingLabelProps {
   /** Label shown centered over the chart. */
-  text?: string
-  className?: string
+  text?: string;
+  className?: string;
   /** Animate down, fade, and blur during loading → ready handoff. */
-  exiting?: boolean
+  exiting?: boolean;
 }
 
 export function ChartLoadingLabel({
@@ -23,7 +23,7 @@ export function ChartLoadingLabel({
   exiting = false,
 }: ChartLoadingLabelProps) {
   if (!text.trim()) {
-    return null
+    return null;
   }
 
   return (
@@ -46,11 +46,11 @@ export function ChartLoadingLabel({
       }}
     >
       <ShimmeringText
-        className="text-sm font-medium tracking-normal whitespace-nowrap [--color:var(--muted-foreground)] [--shimmering-color:var(--foreground)]"
+        className="whitespace-nowrap font-medium text-sm tracking-normal [--color:var(--muted-foreground)] [--shimmering-color:var(--foreground)]"
         text={text}
       />
     </motion.div>
-  )
+  );
 }
 
-export default ChartLoadingLabel
+export default ChartLoadingLabel;

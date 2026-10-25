@@ -6,25 +6,25 @@ import {
   isValidElement,
   type ReactElement,
   type ReactNode,
-} from "react"
+} from "react";
 
 /** Marker on wrapper components whose single child should inherit clip classification. */
-export const CHART_CLIP_PASSTHROUGH = "__chartClipPassthrough" as const
+export const CHART_CLIP_PASSTHROUGH = "__chartClipPassthrough" as const;
 
 export function isChartClipPassthrough(type: unknown): boolean {
   return (
     typeof type === "function" &&
     (type as { [CHART_CLIP_PASSTHROUGH]?: boolean })[CHART_CLIP_PASSTHROUGH] ===
       true
-  )
+  );
 }
 
-const REACT_LAZY_TYPE = Symbol.for("react.lazy")
+const REACT_LAZY_TYPE = Symbol.for("react.lazy");
 
 interface LazyComponentType {
-  $$typeof: symbol
-  _init: (payload: unknown) => unknown
-  _payload: unknown
+  $$typeof: symbol;
+  _init: (payload: unknown) => unknown;
+  _payload: unknown;
 }
 
 function isLazyComponentType(type: unknown): type is LazyComponentType {
@@ -33,7 +33,7 @@ function isLazyComponentType(type: unknown): type is LazyComponentType {
     type !== null &&
     (type as { $$typeof?: unknown }).$$typeof === REACT_LAZY_TYPE &&
     typeof (type as { _init?: unknown })._init === "function"
-  )
+  );
 }
 
 /**
@@ -46,22 +46,22 @@ function isLazyComponentType(type: unknown): type is LazyComponentType {
  * which cuts off marker count badges above the plot.
  */
 export function resolveLazyChartChild(child: ReactElement): ReactElement {
-  const type: unknown = child.type
+  const type: unknown = child.type;
   if (!isLazyComponentType(type)) {
-    return child
+    return child;
   }
-  let resolved: unknown
+  let resolved: unknown;
   try {
-    resolved = type._init(type._payload)
+    resolved = type._init(type._payload);
   } catch {
     // Module still loading (lazy init throws a thenable) — keep the lazy element.
-    return child
+    return child;
   }
   if (
     typeof resolved !== "function" &&
     !(typeof resolved === "object" && resolved !== null)
   ) {
-    return child
+    return child;
   }
   // Only forward a real key: `createElement` stringifies any non-undefined
   // key, so `key: null` would become the literal key "null" on every
@@ -70,7 +70,7 @@ export function resolveLazyChartChild(child: ReactElement): ReactElement {
   return createElement(resolved as Parameters<typeof createElement>[0], {
     ...(child.props as object),
     ...(child.key == null ? {} : { key: child.key }),
-  })
+  });
 }
 
 /**
@@ -80,14 +80,14 @@ export function resolveLazyChartChild(child: ReactElement): ReactElement {
  * instead, or a wrapper that hides its child (Studio layer toggles) is bypassed.
  */
 export function resolveChartChildElement(child: ReactElement): ReactElement {
-  const element = resolveLazyChartChild(child)
+  const element = resolveLazyChartChild(child);
   if (isChartClipPassthrough(element.type)) {
-    const inner = (element.props as { children?: unknown }).children
+    const inner = (element.props as { children?: unknown }).children;
     if (isValidElement(inner)) {
-      return resolveChartChildElement(inner)
+      return resolveChartChildElement(inner);
     }
   }
-  return element
+  return element;
 }
 
 /**
@@ -95,7 +95,7 @@ export function resolveChartChildElement(child: ReactElement): ReactElement {
  * passthrough wrappers kept so they can still render `null` when hidden.
  */
 export function renderableChartChild(child: ReactElement): ReactElement {
-  return resolveLazyChartChild(child)
+  return resolveLazyChartChild(child);
 }
 
 /** Walk chart children, flattening React fragments (studio often groups layers in `<>...</>`). */
@@ -103,21 +103,21 @@ export function forEachChartChild(
   children: ReactNode,
   callback: (child: ReactElement, index: number) => void
 ) {
-  let index = 0
+  let index = 0;
   const visit = (nodes: ReactNode) => {
     Children.forEach(nodes, (child) => {
       if (!isValidElement(child)) {
-        return
+        return;
       }
       if (child.type === Fragment) {
-        visit((child.props as { children?: ReactNode }).children)
-        return
+        visit((child.props as { children?: ReactNode }).children);
+        return;
       }
-      callback(resolveLazyChartChild(child), index)
-      index += 1
-    })
-  }
-  visit(children)
+      callback(resolveLazyChartChild(child), index);
+      index += 1;
+    });
+  };
+  visit(children);
 }
 
 const CLIP_EXCLUDED_COMPONENT_NAMES = new Set([
@@ -129,63 +129,63 @@ const CLIP_EXCLUDED_COMPONENT_NAMES = new Set([
   "BarYAxis",
   "LiveXAxis",
   "LiveYAxis",
-])
+]);
 
 const UNDERLAY_COMPONENT_NAMES = new Set([
   "ReferenceArea",
   "BarColumnTrack",
   "Weekends",
   "Deadline",
-])
+]);
 
 /** Markers render after the interaction overlay so they stay clickable. */
 export function isPostOverlayComponent(child: ReactElement): boolean {
   const childType = child.type as {
-    displayName?: string
-    name?: string
-    __isChartMarkers?: boolean
-    __isPostOverlay?: boolean
-  }
+    displayName?: string;
+    name?: string;
+    __isChartMarkers?: boolean;
+    __isPostOverlay?: boolean;
+  };
 
   if (childType.__isChartMarkers || childType.__isPostOverlay) {
-    return true
+    return true;
   }
 
   const componentName =
     typeof child.type === "function"
       ? childType.displayName || childType.name || ""
-      : ""
+      : "";
 
   return (
     componentName === "ChartMarkers" ||
     componentName === "MarkerGroup" ||
     componentName === "ChartBrush"
-  )
+  );
 }
 
 /** Renders above grid/axes but below series; excluded from grow-clip reveal. */
 export function isUnderlayComponent(child: ReactElement): boolean {
-  const childType = child.type as { displayName?: string; name?: string }
+  const childType = child.type as { displayName?: string; name?: string };
   const componentName =
     typeof child.type === "function"
       ? childType.displayName || childType.name || ""
-      : ""
-  return UNDERLAY_COMPONENT_NAMES.has(componentName)
+      : "";
+  return UNDERLAY_COMPONENT_NAMES.has(componentName);
 }
 
 /** Grid and axes stay visible during series clip reveal (e.g. loading → ready). */
 export function isClipExcludedComponent(child: ReactElement): boolean {
-  const childType = child.type as { displayName?: string; name?: string }
+  const childType = child.type as { displayName?: string; name?: string };
   const componentName =
     typeof child.type === "function"
       ? childType.displayName || childType.name || ""
-      : ""
-  return CLIP_EXCLUDED_COMPONENT_NAMES.has(componentName)
+      : "";
+  return CLIP_EXCLUDED_COMPONENT_NAMES.has(componentName);
 }
 
 /** SVG layer lists from chart shells need stable keys when rendered as arrays. */
 export function renderKeyedChartLayers(children: ReactElement[]) {
   return children.map((child, index) =>
     cloneElement(child, { key: child.key ?? `chart-layer-${index}` })
-  )
+  );
 }
