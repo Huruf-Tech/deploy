@@ -236,6 +236,11 @@ export const syncDeployIndexes = async () => {
       partialFilterExpression: { verifiedAt: { $exists: true } },
     }),
     domainModel.createIndex({ project: 1 }, { name: "project" }),
+    serverModel.createIndex({ tunnelPort: 1 }, {
+      name: "uniqueTunnelPort",
+      unique: true,
+      partialFilterExpression: { tunnelPort: { $exists: true } },
+    }),
     domainModel.createIndex({ issueAt: 1 }, {
       name: "dueIssues",
       partialFilterExpression: { issueAt: { $exists: true } },

@@ -124,8 +124,8 @@ func (m *Mesh) saveKey(raw []byte) error {
 	return os.WriteFile(m.keyPath(), raw, 0o600)
 }
 
-// Apply makes the interface, peers, routes and registry match the spec. A nil
-// mesh tears the interface down.
+// Apply makes the interface, peers, routes, registry and ingress tunnels
+// match the spec. A nil mesh tears the interface down; tunnels don't need it.
 func (m *Mesh) Apply(ctx context.Context, spec protocol.DesiredSpec) error {
 	m.mu.Lock()
 	m.last, m.spec, m.registry = &spec, spec.Mesh, spec.Registry
@@ -135,6 +135,7 @@ func (m *Mesh) Apply(ctx context.Context, spec protocol.DesiredSpec) error {
 	if err == nil {
 		err = m.applyRegistry(ctx, spec.Registry)
 	}
+	err = errors.Join(err, m.applyTunnels(ctx, spec.Ingress))
 	m.mu.Lock()
 	m.lastErr = ""
 	if err != nil {

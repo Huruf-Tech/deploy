@@ -320,6 +320,9 @@ export const $workload = z.object({
   dnsNames: z.array(z.string()).describe("e.g. shop.internal"),
   strategy: z.enum(["rolling", "allAtOnce", "stopFirst"]),
   publicPort: z.number().int().min(1).max(65_535).optional(),
+  ingress: z.boolean().optional().describe(
+    "Served on the ingress listener to requests whose X-Huruf-Project is this project (custom domains, PLAN §14)",
+  ),
   releases: z.array($workloadRelease).max(2),
   reserve: z.object({
     cpu: z.number().min(0),
@@ -387,6 +390,21 @@ export const $desiredSpec = z.object({
     image: z.string(),
   }).optional().describe(
     "Run the tenant's built-in registry here (primary server)",
+  ),
+  ingress: z.object({
+    user: z.string().describe("This server's id, its tunnel login"),
+    token: z.string().describe("Tunnel login token"),
+    tunnelPort: z.number().int().min(1).max(65_535).describe(
+      "Port the tunnel opens on each control plane instance",
+    ),
+    servers: z.array(z.string()).min(1).describe(
+      "frps addresses (host:port), one per control plane instance",
+    ),
+    ca: z.string().describe("PEM certificate frps' TLS is checked against"),
+    serverName: z.string(),
+    image: z.string().describe("frpc image"),
+  }).optional().describe(
+    "Reverse tunnels from this server's ingress listener to the control plane (PLAN §14); absent means none",
   ),
 });
 

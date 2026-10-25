@@ -1321,6 +1321,10 @@
                 "minimum": 1,
                 "maximum": 65535
               },
+              "ingress": {
+                "description": "Served on the ingress listener to requests whose X-Huruf-Project is this project (custom domains, PLAN §14)",
+                "type": "boolean"
+              },
               "releases": {
                 "maxItems": 2,
                 "type": "array",
@@ -1715,6 +1719,55 @@
             "listen",
             "username",
             "password",
+            "image"
+          ],
+          "additionalProperties": false
+        },
+        "ingress": {
+          "description": "Reverse tunnels from this server's ingress listener to the control plane (PLAN §14); absent means none",
+          "type": "object",
+          "properties": {
+            "user": {
+              "type": "string",
+              "description": "This server's id, its tunnel login"
+            },
+            "token": {
+              "type": "string",
+              "description": "Tunnel login token"
+            },
+            "tunnelPort": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 65535,
+              "description": "Port the tunnel opens on each control plane instance"
+            },
+            "servers": {
+              "minItems": 1,
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "frps addresses (host:port), one per control plane instance"
+            },
+            "ca": {
+              "type": "string",
+              "description": "PEM certificate frps' TLS is checked against"
+            },
+            "serverName": {
+              "type": "string"
+            },
+            "image": {
+              "type": "string",
+              "description": "frpc image"
+            }
+          },
+          "required": [
+            "user",
+            "token",
+            "tunnelPort",
+            "servers",
+            "ca",
+            "serverName",
             "image"
           ],
           "additionalProperties": false

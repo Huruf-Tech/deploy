@@ -313,3 +313,22 @@ func TestAutoscaledReplicasStayWithinBounds(t *testing.T) {
 		t.Fatalf("scaled down: %d", got)
 	}
 }
+
+func TestIngressWorkloadsAreRoutedByProject(t *testing.T) {
+	h := newHarness()
+	yes := true
+	h.r.Apply(context.Background(), protocol.DesiredSpec{
+		Version: 1, Network: "huruf-internal",
+		Workloads: []protocol.Workload{{
+			Project: "p1", Name: "shop", Strategy: "rolling", Ingress: &yes,
+			DnsNames: []string{"shop.internal"},
+			Releases: []protocol.WorkloadRelease{release(1, true, "app:1")},
+		}},
+	})
+	h.r.Wait()
+
+	got := h.router.last()
+	if len(got) != 1 || got[0].Port != 0 || got[0].Project != "p1" || len(got[0].Upstreams) != 2 || got[0].HealthPath != "/" {
+		t.Fatalf("routes = %+v", got)
+	}
+}

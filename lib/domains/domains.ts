@@ -1,4 +1,5 @@
-import { MongoServerError, ObjectId, type WithId } from "mongodb";
+import { ObjectId, type WithId } from "mongodb";
+import { isDuplicateKeyError } from "@/database.ts";
 import { Response } from "@/core/http/response.ts";
 import { Env } from "@/core/utils/env.ts";
 import { entitlements, quotaGuard } from "@/lib/services.ts";
@@ -11,6 +12,8 @@ import {
   ownershipName,
 } from "@/lib/domains/dns.ts";
 import { orderCertificate } from "@/lib/domains/acme.ts";
+import { refreshSpecs } from "@/lib/deploy/specs.ts";
+import { projectModel } from "@/schemas/applications/project.ts";
 import {
   domainJobSlotModel,
   domainModel,
@@ -62,9 +65,6 @@ export async function normalizeHostname(input: string) {
   return hostname;
 }
 
-const isDuplicate = (error: unknown) =>
-  error instanceof MongoServerError && error.code === 11000;
-
 const verifiedElsewhere = (hostname: string, tenant: ObjectId) =>
   domainModel.findOne(
     { hostname, verifiedAt: { $exists: true }, tenant: { $ne: tenant } },
@@ -104,7 +104,7 @@ export async function addDomain(
     });
   } catch (error) {
     await quotaGuard.release(tenant, "domains");
-    if (isDuplicate(error)) {
+    if (isDuplicateKeyError(error)) {
       throw Response.badRequest(`${hostname} is already added`);
     }
     throw error;
@@ -152,7 +152,7 @@ export async function checkOnce(domain: WithId<TDomain>, now = new Date()) {
         $unset: { nextCheckAt: "", checkUntil: "", error: "" },
       });
     } catch (error) {
-      if (!isDuplicate(error)) throw error;
+      if (!isDuplicateKeyError(error)) throw error;
       await domainModel.updateOne(filter, {
         $set: {
           status: "failed",
@@ -275,6 +275,7 @@ export async function issueOnce(id: ObjectId, now = new Date()) {
   const orders = [...recent, now];
   try {
     const certificate = await orderCertificate(domain.hostname, domain.tenant);
+    const first = domain.status === "issuing";
     await domainModel.updateOne({ _id: id }, {
       $set: {
         status: "active",
@@ -286,6 +287,13 @@ export async function issueOnce(id: ObjectId, now = new Date()) {
       },
       $unset: { issueLockedUntil: "", error: "" },
     });
+    if (first) {
+      // Servers set up before the tunnels were configured get them now.
+      const project = await projectModel.findOne({ _id: domain.project }, {
+        projection: { placedOn: 1 },
+      });
+      if (project?.placedOn.length) await refreshSpecs(project.placedOn);
+    }
   } catch (error) {
     const failures = (domain.issueFailures ?? 0) + 1;
     const message = String((error as Error)?.message ?? error).slice(0, 450);

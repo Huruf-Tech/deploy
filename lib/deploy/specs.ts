@@ -6,6 +6,7 @@ import { readNumberSetting } from "@/lib/core/settings.ts";
 import { sealTo } from "@/lib/agents/sealing.ts";
 import { PROJECT_NETWORK } from "@/lib/agents/commands.ts";
 import { builtinRegistry, meshSpecFor } from "@/lib/network/mesh.ts";
+import { ingressSpecFor } from "@/lib/domains/tunnels.ts";
 import { projectModel } from "@/schemas/applications/project.ts";
 import {
   deploymentModel,
@@ -219,6 +220,8 @@ export async function computeSpec(
         ...(project.publicPort && service === primary
           ? { publicPort: project.publicPort }
           : {}),
+        // Custom domains reach the primary service through the tunnel (PLAN §14).
+        ...(service === primary && service.port ? { ingress: true } : {}),
         reserve: {
           cpu: project.runtime.cpuReserve,
           memMb: project.runtime.memReserveMb,
@@ -322,6 +325,7 @@ export async function computeSpec(
       ])
       : [],
     ...(serverDoc ? await meshSpecFor(serverDoc) : {}),
+    ...(serverDoc ? await ingressSpecFor(serverDoc) : {}),
   };
 }
 

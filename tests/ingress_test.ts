@@ -39,67 +39,67 @@ Deno.test({
       identity: { fingerprint: String(_id) },
       ...(tunnelPort ? { tunnelPort } : {}),
     });
-    await db.collection("servers").insertMany([
-      server(a, 20001),
-      server(b, 20002),
-      server(offline, 20003),
-      server(untunneled),
-    ]);
-    await db.collection("serverLeases").insertMany(
-      [a, b, offline, untunneled].map((_id) => ({
-        _id,
-        tenant,
-        offline: _id === offline,
-      })),
-    );
-    await db.collection("projects").insertOne({
-      _id: project,
-      tenant,
-      placedOn: [a, b, offline, untunneled],
-      replicasPerServer: 1,
-      autoscaled: [{ server: b, replicas: 3, reason: "cpu", at: new Date() }],
-      runtime: { healthcheckPath: "/health" },
-    });
-    const certificate = async (at: Date) => ({
-      pem: `CERT ${at.getTime()}`,
-      keyEnc: await keyring.encrypt(
-        { kind: "tenant", ref: tenant },
-        `KEY ${at.getTime()}`,
-        `certificate:${hostname}`,
-      ),
-      notAfter: new Date(Date.now() + 90 * 86_400_000),
-      issuedAt: at,
-    });
-    await domainModel.insertOne({
-      _id: domain,
-      tenant,
-      project,
-      hostname,
-      token: "t",
-      status: "active",
-      verifiedAt: issuedAt,
-      certificate: await certificate(issuedAt),
-      createdBy: new ObjectId(),
-      createdAt: issuedAt,
-      updatedAt: issuedAt,
-    });
-
-    const poll = async (token = TOKEN) => {
-      const res = await handler(
-        new Request("http://localhost/ingress/api/traefik", {
-          headers: { "x-ingress-token": token },
-        }),
-      );
-      const text = await res.text();
-      return { status: res.status, json: res.ok ? JSON.parse(text) : text };
-    };
-    const files = async () => {
-      const names: string[] = [];
-      for await (const e of Deno.readDir(dir)) names.push(e.name);
-      return names.sort();
-    };
-
     try {
+      await db.collection("servers").insertMany([
+        server(a, 20001),
+        server(b, 20002),
+        server(offline, 20003),
+        server(untunneled),
+      ]);
+      await db.collection("serverLeases").insertMany(
+        [a, b, offline, untunneled].map((_id) => ({
+          _id,
+          tenant,
+          offline: _id === offline,
+        })),
+      );
+      await db.collection("projects").insertOne({
+        _id: project,
+        tenant,
+        placedOn: [a, b, offline, untunneled],
+        replicasPerServer: 1,
+        autoscaled: [{ server: b, replicas: 3, reason: "cpu", at: new Date() }],
+        runtime: { healthcheckPath: "/health" },
+      });
+      const certificate = async (at: Date) => ({
+        pem: `CERT ${at.getTime()}`,
+        keyEnc: await keyring.encrypt(
+          { kind: "tenant", ref: tenant },
+          `KEY ${at.getTime()}`,
+          `certificate:${hostname}`,
+        ),
+        notAfter: new Date(Date.now() + 90 * 86_400_000),
+        issuedAt: at,
+      });
+      await domainModel.insertOne({
+        _id: domain,
+        tenant,
+        project,
+        hostname,
+        token: "t",
+        status: "active",
+        verifiedAt: issuedAt,
+        certificate: await certificate(issuedAt),
+        createdBy: new ObjectId(),
+        createdAt: issuedAt,
+        updatedAt: issuedAt,
+      });
+
+      const poll = async (token = TOKEN) => {
+        const res = await handler(
+          new Request("http://localhost/ingress/api/traefik", {
+            headers: { "x-ingress-token": token },
+          }),
+        );
+        const text = await res.text();
+        return { status: res.status, json: res.ok ? JSON.parse(text) : text };
+      };
+      const files = async () => {
+        const names: string[] = [];
+        for await (const e of Deno.readDir(dir)) names.push(e.name);
+        return names.sort();
+      };
+
       await t.step("a wrong token gets nothing", async () => {
         assertEquals((await poll("nope")).status, 401);
         assertEquals((await poll("")).status, 401);
@@ -181,6 +181,121 @@ Deno.test({
       ]);
       config.TRAEFIK_CERTS_DIR = "";
       await Deno.remove(dir, { recursive: true });
+    }
+  },
+});
+
+Deno.test({
+  name: "ingress: tunnels log in with their own token and port only",
+  sanitizeOps: false,
+  sanitizeResources: false,
+  fn: async (t) => {
+    const { ensureTunnelPort, ingressSpecFor, tunnelToken, TUNNEL_PORTS } =
+      await import("@/lib/domains/tunnels.ts");
+    const ca = await Deno.makeTempFile({ suffix: ".pem" });
+    await Deno.writeTextFile(ca, "-----BEGIN CERTIFICATE-----\nX\n");
+    const config = Env.getAll<Record<string, string>>();
+    config.INGRESS_CONFIG_TOKEN = TOKEN;
+    config.INGRESS_TUNNEL_ADDRS = "203.0.113.10:7000, 203.0.113.11:7000";
+    config.INGRESS_TUNNEL_CA_FILE = ca;
+
+    const db = mongodb.db();
+    const tenant = new ObjectId();
+    const [active, pending] = [new ObjectId(), new ObjectId()];
+    await db.collection("servers").insertMany([
+      {
+        _id: active,
+        tenant,
+        status: "active",
+        identity: { fingerprint: String(active) },
+      },
+      {
+        _id: pending,
+        tenant,
+        status: "pending",
+        identity: { fingerprint: String(pending) },
+      },
+    ]);
+    const frp = async (op: string, content: object) => {
+      const res = await handler(
+        new Request("http://localhost/ingress/api/frp?version=0.1.0&op=" + op, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ version: "0.1.0", op, content }),
+        }),
+      );
+      assertEquals(res.status, 200);
+      return await res.json();
+    };
+
+    try {
+      let port = 0;
+      await t.step("an active server gets a tunnel in its spec", async () => {
+        const server =
+          (await db.collection("servers").findOne({ _id: active }))!;
+        // deno-lint-ignore no-explicit-any
+        const { ingress } = await ingressSpecFor(server as any);
+        assert(ingress);
+        port = ingress.tunnelPort;
+        assert(port >= TUNNEL_PORTS.min && port <= TUNNEL_PORTS.max);
+        assertEquals(ingress.servers, [
+          "203.0.113.10:7000",
+          "203.0.113.11:7000",
+        ]);
+        assertEquals(ingress.user, String(active));
+        assertEquals(ingress.token, await tunnelToken(active));
+        assertMatch(ingress.ca, /BEGIN CERTIFICATE/);
+        // deno-lint-ignore no-explicit-any
+        assertEquals(await ensureTunnelPort(server as any), port, "kept");
+        const other =
+          (await db.collection("servers").findOne({ _id: pending }))!;
+        // deno-lint-ignore no-explicit-any
+        assertEquals(await ingressSpecFor(other as any), {});
+      });
+
+      await t.step("frps: login and proxy checks", async () => {
+        const token = (await tunnelToken(active))!;
+        const user = String(active);
+        assertEquals(await frp("Login", { user, metas: { token } }), {
+          reject: false,
+          unchange: true,
+        });
+        for (
+          const bad of [
+            { user, metas: { token: "wrong" } },
+            { user, metas: {} },
+            { user: "not-an-id", metas: { token } },
+            {
+              user: String(pending),
+              metas: { token: await tunnelToken(pending) },
+            },
+          ]
+        ) {
+          assertEquals(
+            (await frp("Login", bad)).reject,
+            true,
+            JSON.stringify(bad),
+          );
+        }
+        const proxy = (remote_port: number, proxy_type = "tcp") =>
+          frp("NewProxy", {
+            user: { user, metas: { token } },
+            proxy_name: `${user}.ingress`,
+            proxy_type,
+            remote_port,
+          });
+        assertEquals((await proxy(port)).reject, false);
+        assertEquals((await proxy(port + 1)).reject, true, "another port");
+        assertEquals((await proxy(port, "http")).reject, true, "not tcp");
+        assertEquals(
+          (await frp("Ping", { user, metas: { token } })).reject,
+          true,
+        );
+      });
+    } finally {
+      await db.collection("servers").deleteMany({ tenant });
+      config.INGRESS_TUNNEL_ADDRS = "";
+      await Deno.remove(ca);
     }
   },
 });

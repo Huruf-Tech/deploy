@@ -1,5 +1,6 @@
 import * as acme from "acme-client";
-import { MongoServerError, type ObjectId } from "mongodb";
+import type { ObjectId } from "mongodb";
+import { isDuplicateKeyError } from "@/database.ts";
 import { keyring } from "@/lib/services.ts";
 import { readTextSetting } from "@/lib/core/settings.ts";
 import { PLATFORM_OWNER } from "@/schemas/monitoring/alert.ts";
@@ -42,9 +43,7 @@ async function account(
     return { key };
   } catch (error) {
     // Another instance created it first: use theirs.
-    if (!(error instanceof MongoServerError && error.code === 11000)) {
-      throw error;
-    }
+    if (!isDuplicateKeyError(error)) throw error;
     return await account(directoryUrl);
   }
 }

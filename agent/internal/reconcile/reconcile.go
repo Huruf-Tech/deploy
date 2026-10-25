@@ -56,9 +56,11 @@ type ContainerSpec struct {
 	Release  protocol.WorkloadRelease
 }
 
-// Route sends a public port to the routed replicas of one workload.
+// Route sends a public port, or the ingress listener's requests for one
+// project (Project set, Port 0), to the routed replicas of one workload.
 type Route struct {
 	Port       int64
+	Project    string
 	Upstreams  []string // ip:port
 	HealthPath string
 }
@@ -93,6 +95,7 @@ type Reconciler struct {
 
 type routing struct {
 	publicPort *int64
+	ingress    string // project id, when served on the ingress listener
 	port       *int64
 	healthPath string
 	dnsNames   []string
@@ -329,6 +332,7 @@ func (r *Reconciler) converge(ctx context.Context, spec protocol.DesiredSpec, w 
 	}
 	r.setRouting(w.Name, &routing{
 		publicPort: w.PublicPort,
+		ingress:    ingressOf(w),
 		port:       routedPort(w),
 		healthPath: routedHealthPath(w),
 		dnsNames:   w.DnsNames,
@@ -424,7 +428,7 @@ func (r *Reconciler) replace(ctx context.Context, spec protocol.DesiredSpec, w p
 	}
 	route := func() error {
 		r.setRouting(w.Name, &routing{
-			publicPort: w.PublicPort, port: rel.Port, healthPath: rel.Healthcheck.Path,
+			publicPort: w.PublicPort, ingress: ingressOf(w), port: rel.Port, healthPath: rel.Healthcheck.Path,
 			dnsNames: w.DnsNames, ips: ips(append(slices.Clone(fresh), serving...)),
 		})
 		return r.publish(ctx)
@@ -505,6 +509,13 @@ func (r *Reconciler) setRouting(workload string, route *routing) {
 	r.routing[workload] = *route
 }
 
+func ingressOf(w protocol.Workload) string {
+	if w.Ingress != nil && *w.Ingress {
+		return w.Project
+	}
+	return ""
+}
+
 // publish pushes the whole route table and DNS records from the current routing.
 func (r *Reconciler) publish(ctx context.Context) error {
 	r.mu.Lock()
@@ -514,18 +525,28 @@ func (r *Reconciler) publish(ctx context.Context) error {
 		for _, name := range rt.dnsNames {
 			records[name] = append(records[name], rt.ips...)
 		}
-		if rt.publicPort == nil || rt.port == nil {
+		if rt.port == nil {
 			continue
 		}
-		route := Route{Port: *rt.publicPort, HealthPath: rt.healthPath}
+		var upstreams []string
 		for _, ip := range rt.ips {
-			route.Upstreams = append(route.Upstreams, fmt.Sprintf("%s:%d", ip, *rt.port))
+			upstreams = append(upstreams, fmt.Sprintf("%s:%d", ip, *rt.port))
 		}
-		routes = append(routes, route)
+		if rt.publicPort != nil {
+			routes = append(routes, Route{Port: *rt.publicPort, Upstreams: upstreams, HealthPath: rt.healthPath})
+		}
+		if rt.ingress != "" {
+			routes = append(routes, Route{Project: rt.ingress, Upstreams: upstreams, HealthPath: rt.healthPath})
+		}
 	}
 	r.mu.Unlock()
 
-	sort.Slice(routes, func(i, j int) bool { return routes[i].Port < routes[j].Port })
+	sort.Slice(routes, func(i, j int) bool {
+		if routes[i].Port != routes[j].Port {
+			return routes[i].Port < routes[j].Port
+		}
+		return routes[i].Project < routes[j].Project
+	})
 	if r.Names != nil {
 		r.Names.Set(records)
 	}

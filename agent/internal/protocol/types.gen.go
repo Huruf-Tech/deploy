@@ -377,6 +377,9 @@ type DesiredSpec struct {
 
 	// Run the tenant's built-in registry here (primary server)
 	Registry *DesiredSpecRegistry `json:"registry,omitempty"`
+
+	// Reverse tunnels from this server's ingress listener to the control plane (PLAN §14); absent means none
+	Ingress *DesiredSpecIngress `json:"ingress,omitempty"`
 }
 
 type Workload struct {
@@ -392,6 +395,9 @@ type Workload struct {
 	Strategy string `json:"strategy"`
 
 	PublicPort *int64 `json:"publicPort,omitempty"`
+
+	// Served on the ingress listener to requests whose X-Huruf-Project is this project (custom domains, PLAN §14)
+	Ingress *bool `json:"ingress,omitempty"`
 
 	Releases []WorkloadRelease `json:"releases"`
 
@@ -554,6 +560,28 @@ type DesiredSpecRegistry struct {
 	// Hashed on the server with the edge proxy's `caddy hash-password` (bcrypt)
 	Password string `json:"password"`
 
+	Image string `json:"image"`
+}
+
+type DesiredSpecIngress struct {
+	// This server's id, its tunnel login
+	User string `json:"user"`
+
+	// Tunnel login token
+	Token string `json:"token"`
+
+	// Port the tunnel opens on each control plane instance
+	TunnelPort int64 `json:"tunnelPort"`
+
+	// frps addresses (host:port), one per control plane instance
+	Servers []string `json:"servers"`
+
+	// PEM certificate frps' TLS is checked against
+	Ca string `json:"ca"`
+
+	ServerName string `json:"serverName"`
+
+	// frpc image
 	Image string `json:"image"`
 }
 

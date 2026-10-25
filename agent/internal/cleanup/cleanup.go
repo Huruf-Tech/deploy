@@ -258,11 +258,11 @@ func dockerSteps(ctx context.Context, o Options, entries []ledger.Entry, purge b
 
 	steps = append(steps, Step{
 		ID:     "base-images",
-		Item:   "Base images (caddy, registry) and the build cache",
-		Reason: "shared with other tools: removing clears every unused caddy/registry image and all build cache",
+		Item:   "Base images (caddy, registry, frpc) and the build cache",
+		Reason: "shared with other tools: removing clears every unused caddy/registry/frpc image and all build cache",
 		do: func(ctx context.Context) error {
 			// rmi without -f: an image a container still uses stays.
-			for _, id := range unique(lines("images", "-q", "--filter", "reference=caddy", "--filter", "reference=registry")) {
+			for _, id := range unique(lines("images", "-q", "--filter", "reference=caddy", "--filter", "reference=registry", "--filter", "reference=fatedier/frpc")) {
 				_, _ = o.Run(ctx, "docker", "rmi", id)
 			}
 			_, err := o.Run(ctx, "docker", "builder", "prune", "-af")
