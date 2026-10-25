@@ -9,6 +9,13 @@ services:
       - "8000:8000"
     env_file:
       - .env
+    environment:
+      # Written on Traefik's polls; unused without the ingress profile.
+      TRAEFIK_CERTS_DIR: /ingress/certs
+      FRPS_DIR: /ingress/frps
+    volumes:
+      - ingress-certs:/ingress/certs
+      - ingress-frps:/ingress/frps
     restart: unless-stopped
     mem_limit: 3g
     logging:
@@ -16,3 +23,54 @@ services:
       options:
         max-size: "10m"
         max-file: "5"
+
+  # Custom domains (PLAN §14): enable with COMPOSE_PROFILES=ingress once ports
+  # 80, 443 and 7000 are free on this host, and INGRESS_CONFIG_TOKEN is set.
+  traefik:
+    image: traefik:v3.5.3
+    profiles: ["ingress"]
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    command:
+      - --entrypoints.web.address=:80
+      - --entrypoints.websecure.address=:443
+      - --providers.http.endpoint=http://web:8000/ingress/api/traefik
+      - --providers.http.pollInterval=5s
+      - --providers.http.headers.X-Ingress-Token=${INGRESS_CONFIG_TOKEN}
+      - --providers.file.directory=/ingress/certs
+      - --providers.file.watch=true
+      - --certificatesresolvers.platform.acme.tlschallenge=true
+      - --certificatesresolvers.platform.acme.email=${ACME_EMAIL}
+      - --certificatesresolvers.platform.acme.storage=/acme/acme.json
+    volumes:
+      - ingress-certs:/ingress/certs:ro
+      - ingress-acme:/acme
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  # Agents' tunnels arrive on 7000; their ports stay on this network, for Traefik.
+  frps:
+    image: fatedier/frps:v0.65.0
+    profiles: ["ingress"]
+    restart: unless-stopped
+    ports:
+      - "7000:7000"
+    working_dir: /ingress/frps
+    command: ["-c", "frps.toml"]
+    volumes:
+      - ingress-frps:/ingress/frps:ro
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+volumes:
+  ingress-certs:
+  ingress-frps:
+  ingress-acme:

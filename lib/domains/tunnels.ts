@@ -1,8 +1,13 @@
 import { ObjectId, type WithId } from "mongodb";
 import { encodeHex } from "@std/encoding/hex";
+import { join } from "@std/path";
+import * as x509 from "@peculiar/x509";
 import { cache } from "@/core/utils/cache.ts";
 import { isDuplicateKeyError } from "@/database.ts";
+import { keyring } from "@/lib/services.ts";
 import { readTextSetting } from "@/lib/core/settings.ts";
+import { tunnelCertModel } from "@/schemas/applications/domain.ts";
+import { PLATFORM_OWNER } from "@/schemas/monitoring/alert.ts";
 import { serverModel, type TServer } from "@/schemas/infrastructure/server.ts";
 import type { TDesiredSpec } from "@/schemas/protocol/agent.ts";
 
@@ -12,8 +17,10 @@ import type { TDesiredSpec } from "@/schemas/protocol/agent.ts";
  * opened on them. frps asks `frpDecision` before accepting a login or a proxy.
  */
 export const TUNNEL_PORTS = { min: 20_000, max: 39_999 };
-/** The SAN in frps' certificate (made at setup, PLAN §14). */
+/** The name in frps' certificate, which agents check. */
 export const TUNNEL_SERVER_NAME = "huruf-tunnel";
+/** What frps listens on for agents; publish it on every instance. */
+export const FRPS_PORT = 7000;
 export const FRPC_IMAGE = "fatedier/frpc:v0.65.0";
 
 const hmacKey = cache(async (secret: string) =>
@@ -60,13 +67,94 @@ export async function ensureTunnelPort(server: WithId<TServer>) {
   throw new Error("No free tunnel port");
 }
 
-const readCa = cache(async (path: string) => {
+const PLATFORM = { kind: "tenant" as const, ref: PLATFORM_OWNER };
+const CERT_ID = "frps";
+
+/**
+ * frps' self-signed certificate, made once and shared by every instance
+ * (its key sealed), so agents check every instance against the same one.
+ */
+export const tunnelCert = cache(async (): Promise<string> => {
+  const found = await tunnelCertModel.findOne({ _id: CERT_ID });
+  if (found) return found.cert;
+
+  const alg = { name: "ECDSA", namedCurve: "P-256", hash: "SHA-256" };
+  const keys = await crypto.subtle.generateKey(alg, true, ["sign", "verify"]);
+  x509.cryptoProvider.set(crypto);
+  const cert = await x509.X509CertificateGenerator.createSelfSigned({
+    serialNumber: encodeHex(crypto.getRandomValues(new Uint8Array(8))),
+    name: `CN=${TUNNEL_SERVER_NAME}`,
+    notBefore: new Date(Date.now() - 60_000),
+    notAfter: new Date(Date.now() + 20 * 365 * 86_400_000),
+    keys,
+    signingAlgorithm: alg,
+    extensions: [
+      new x509.BasicConstraintsExtension(true, undefined, true),
+      new x509.SubjectAlternativeNameExtension([{
+        type: "dns",
+        value: TUNNEL_SERVER_NAME,
+      }]),
+    ],
+  });
+  const key = x509.PemConverter.encode(
+    await crypto.subtle.exportKey("pkcs8", keys.privateKey),
+    "PRIVATE KEY",
+  );
   try {
-    return (await Deno.readTextFile(path)).trim();
-  } catch {
-    return "";
+    await tunnelCertModel.insertOne({
+      _id: CERT_ID,
+      cert: cert.toString("pem"),
+      keyEnc: await keyring.encrypt(PLATFORM, key, `tunnel:${CERT_ID}`),
+      createdAt: new Date(),
+    });
+    return cert.toString("pem");
+  } catch (error) {
+    if (!isDuplicateKeyError(error)) throw error;
+    return (await tunnelCertModel.findOne({ _id: CERT_ID }))!.cert;
   }
 }, 60_000);
+
+const writeIfChanged = async (path: string, text: string, mode = 0o644) => {
+  const current = await Deno.readTextFile(path).catch(() => undefined);
+  if (current !== text) await Deno.writeTextFile(path, text, { mode });
+};
+
+/**
+ * frps' files, written by this instance into `FRPS_DIR` (shared with its
+ * frps, which runs from that directory): config, certificate and key. frps
+ * restarts until they exist.
+ */
+export async function syncFrps() {
+  const dir = await readTextSetting("FRPS_DIR", "");
+  if (!dir) return;
+  await tunnelCert();
+  const doc = (await tunnelCertModel.findOne({ _id: CERT_ID }))!;
+  const plugin = new URL(
+    await readTextSetting("INGRESS_PLATFORM_URL", "http://web:8000"),
+  ).host;
+  await Deno.mkdir(dir, { recursive: true });
+  await writeIfChanged(join(dir, "frps.crt"), doc.cert);
+  await writeIfChanged(
+    join(dir, "frps.key"),
+    await keyring.decrypt(PLATFORM, doc.keyEnc, `tunnel:${CERT_ID}`),
+    0o600,
+  );
+  await writeIfChanged(
+    join(dir, "frps.toml"),
+    `bindPort = ${FRPS_PORT}
+allowPorts = [{ start = ${TUNNEL_PORTS.min}, end = ${TUNNEL_PORTS.max} }]
+transport.tls.force = true
+transport.tls.certFile = "frps.crt"
+transport.tls.keyFile = "frps.key"
+
+[[httpPlugins]]
+name = "huruf"
+addr = "${plugin}"
+path = "/ingress/api/frp"
+ops = ["Login", "NewProxy"]
+`,
+  );
+}
 
 /** The spec's `ingress`: absent until the platform's tunnels are configured. */
 export async function ingressSpecFor(
@@ -75,19 +163,15 @@ export async function ingressSpecFor(
   if (server.status !== "active") return {};
   const servers = (await readTextSetting("INGRESS_TUNNEL_ADDRS", ""))
     .split(",").map((s) => s.trim()).filter(Boolean);
-  const caFile = await readTextSetting("INGRESS_TUNNEL_CA_FILE", "");
-  const [token, ca] = await Promise.all([
-    tunnelToken(server._id),
-    caFile ? readCa(caFile) : "",
-  ]);
-  if (!servers.length || !token || !ca) return {};
+  const token = await tunnelToken(server._id);
+  if (!servers.length || !token) return {};
   return {
     ingress: {
       user: server._id.toHexString(),
       token,
       tunnelPort: await ensureTunnelPort(server),
       servers,
-      ca,
+      ca: await tunnelCert(),
       serverName: TUNNEL_SERVER_NAME,
       image: FRPC_IMAGE,
     },

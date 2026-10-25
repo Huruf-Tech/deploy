@@ -9,7 +9,7 @@ import {
   syncCertificates,
   traefikConfig,
 } from "@/lib/domains/ingress.ts";
-import { frpDecision } from "@/lib/domains/tunnels.ts";
+import { frpDecision, syncFrps } from "@/lib/domains/tunnels.ts";
 
 /**
  * What the ingress (Traefik) calls (PLAN §14). Open to guests: Let's Encrypt
@@ -41,7 +41,7 @@ export default new Router("/api", function ingress(router) {
         if (!await isIngressToken(req.headers.get(INGRESS_TOKEN_HEADER))) {
           throw Response.unauthorized("Invalid ingress token");
         }
-        await syncCertificates();
+        await Promise.all([syncCertificates(), syncFrps()]);
         return Response.json(await traefikConfig());
       },
     };

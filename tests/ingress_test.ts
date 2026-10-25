@@ -3,6 +3,7 @@ import { assert, assertEquals, assertMatch } from "@std/assert";
 import handler from "@/serve.base.ts";
 import { ObjectId } from "mongodb";
 import { join } from "@std/path";
+import { parse } from "@std/yaml";
 import { Env } from "@/core/utils/env.ts";
 import { mongodb } from "@/database.ts";
 import { keyring } from "@/lib/services.ts";
@@ -23,6 +24,7 @@ Deno.test({
     const config = Env.getAll<Record<string, string>>();
     config.INGRESS_CONFIG_TOKEN = TOKEN;
     config.TRAEFIK_CERTS_DIR = dir;
+    config.INGRESS_TUNNEL_HOST = "127.0.0.1";
 
     const db = mongodb.db();
     const tenant = new ObjectId();
@@ -94,6 +96,11 @@ Deno.test({
         const text = await res.text();
         return { status: res.status, json: res.ok ? JSON.parse(text) : text };
       };
+      const certificates = () =>
+        Deno.readTextFile(join(dir, "certificates.yml"));
+      type TTls = {
+        tls: { certificates: { certFile: string; keyFile: string }[] };
+      };
       const files = async () => {
         const names: string[] = [];
         for await (const e of Deno.readDir(dir)) names.push(e.name);
@@ -133,45 +140,38 @@ Deno.test({
       });
 
       await t.step("the certificate is written for Traefik", async () => {
-        const base = `${domain}-${issuedAt.getTime()}`;
-        assertEquals(await files(), [
-          `${base}.crt`,
-          `${base}.key`,
-          "certificates.yml",
-        ]);
-        assertEquals(
-          await Deno.readTextFile(join(dir, `${base}.key`)),
-          `KEY ${issuedAt.getTime()}`,
+        assertEquals(await files(), ["certificates.yml"]);
+        const { tls } = parse(await certificates()) as TTls;
+        const mine = tls.certificates.find((c) =>
+          c.certFile === `CERT ${issuedAt.getTime()}`
         );
-        assertMatch(
-          await Deno.readTextFile(join(dir, "certificates.yml")),
-          new RegExp(`${base}\\.crt`),
-        );
+        assertEquals(mine?.keyFile, `KEY ${issuedAt.getTime()}`);
       });
 
-      await t.step("a renewal swaps the files", async () => {
+      await t.step("a renewal replaces it", async () => {
         const renewed = new Date(issuedAt.getTime() + 1_000);
         await domainModel.updateOne({ _id: domain }, {
           $set: { certificate: await certificate(renewed) },
         });
         await poll();
-        const base = `${domain}-${renewed.getTime()}`;
-        assertEquals(await files(), [
-          `${base}.crt`,
-          `${base}.key`,
-          "certificates.yml",
-        ]);
-      });
-
-      await t.step("an expired certificate: no route, no files", async () => {
-        await domainModel.updateOne({ _id: domain }, {
-          $set: { "certificate.notAfter": new Date(Date.now() - 1_000) },
-        });
-        await sleep(2_100); // the config is shared for 2 s
-        const { json } = await poll();
-        assert(!json.http.routers[`d-${domain}`]);
+        const text = await certificates();
+        assertMatch(text, new RegExp(`KEY ${renewed.getTime()}`));
+        assert(!text.includes(`KEY ${issuedAt.getTime()}`));
         assertEquals(await files(), ["certificates.yml"]);
       });
+
+      await t.step(
+        "an expired certificate: no route, no file entry",
+        async () => {
+          await domainModel.updateOne({ _id: domain }, {
+            $set: { "certificate.notAfter": new Date(Date.now() - 1_000) },
+          });
+          await sleep(2_100); // the config is shared for 2 s
+          const { json } = await poll();
+          assert(!json.http.routers[`d-${domain}`]);
+          assert(!(await certificates()).includes("CERT "));
+        },
+      );
     } finally {
       await Promise.all([
         domainModel.deleteMany({ tenant }),

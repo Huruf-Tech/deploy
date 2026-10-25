@@ -99,6 +99,7 @@
     "zod-openapi": "npm:zod-openapi@^5.4.6",
     "picomatch": "npm:picomatch@^4.0.4",
     "acme-client": "npm:acme-client@^5.4.0",
+    "@peculiar/x509": "npm:@peculiar/x509@^1.14.3",
     "@plugins/Huruf-Tech/thunder-core/": "./plugins/Huruf-Tech/thunder-core/"
   },
   "scopes": {

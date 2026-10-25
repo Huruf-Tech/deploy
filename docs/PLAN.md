@@ -1096,14 +1096,19 @@ Each phase ends with a **review checkpoint** (demo + code review + approval). Ph
   - **Not done:** wallet top-up (decided separately).
 
 ### Phase 11 — Custom domains and built-in ingress (planned, D43, §14)
-- **Package:** Traefik and frps in the Compose file. The control plane serves `GET /ingress/api/traefik` (routes) and `/.well-known/acme-challenge/*`, and keeps the certificate directory in sync for Traefik's file provider.
+- **Package:** Traefik and frps in `deploy.docker-compose.yml`, behind the `ingress` profile (`COMPOSE_PROFILES=ingress`), so a host is unchanged until it opts in. Traefik is configured by flags; on each of its polls the control plane writes Traefik's certificate file (PEMs inline) and frps' config, certificate and key into shared volumes. The control plane serves `GET /ingress/api/traefik` (routes, with the `X-Ingress-Token` header), `/ingress/api/acme-challenge/*` (Traefik rewrites `/.well-known/acme-challenge/*` there) and `POST /ingress/api/frp` (frps' login plugin). The platform's own hostname gets its certificate from Traefik's `platform` resolver (TLS-ALPN, so it never competes with the HTTP challenges on port 80).
 - **Domains:**
   - A `domains` collection: domain unique across the platform, tenant, project, ownership token, status, certificate metadata, and the last error.
   - Project → Domains in the dashboard: add a domain, the exact DNS records to create, a step-by-step status, and remove.
   - A `domains` plan limit (Free: 3).
-- **Agent:** an ingress listener on Caddy at `127.0.0.1`, routing by host name to each project's live replicas, and `frpc` keeping one outbound tunnel to each control plane instance. No port is opened on the server.
+- **Agent:** an ingress listener on Caddy at `127.0.0.1:7480`, routing on `X-Huruf-Project` (set by Traefik, so domain changes never touch agents) to each project's live replicas, and one `frpc` container per control plane instance keeping an outbound tunnel. frps' TLS is checked against a self-signed certificate the control plane makes once and shares through MongoDB. Each server logs in with a token derived from its id (HMAC with `INGRESS_CONFIG_TOKEN`) and may open only its own tunnel port. No port is opened on the server.
 - **ACME:** Let's Encrypt HTTP-01 with checks before ordering, backoff, renewal through the piggyback scheduler, keys encrypted with the keyring.
-- **Settings:** `INGRESS_HOSTNAME`, `INGRESS_IPV4`, `ACME_EMAIL`, `ACME_DIRECTORY` (staging for tests), `INGRESS_CONFIG_TOKEN`, `TRAEFIK_CERTS_DIR`.
+- **Settings:**
+  - `INGRESS_HOSTNAME` (CNAME target) and `INGRESS_IPV4` (A records, comma-separated): what users point their domains at.
+  - `ACME_EMAIL`, and `ACME_DIRECTORY` (Let's Encrypt production by default; staging or Pebble for tests).
+  - `INGRESS_CONFIG_TOKEN`: authorizes Traefik's polls and keys the tunnel logins.
+  - `INGRESS_TUNNEL_ADDRS`: each instance's frps address for agents, e.g. `3.74.42.148:7000,…`. Agents get no tunnels until it's set.
+  - Set by the Compose file: `TRAEFIK_CERTS_DIR`, `FRPS_DIR`. Defaults that fit it: `INGRESS_PLATFORM_URL` (`http://web:8000`), `INGRESS_TUNNEL_HOST` (`frps`).
 - **Acceptance:**
   1. A domain added to a running project serves traffic without a redeploy, within 10 s of its certificate being issued.
   2. A wrong DNS record shows "waiting for DNS" and spends no Let's Encrypt attempts. Every failure names its step and the fix.

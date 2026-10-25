@@ -75,6 +75,11 @@ export const acmeAccountModel = mongodb.db().collection<
   { _id: string; keyEnc: string; url?: string; createdAt: Date }
 >("acmeAccounts");
 
+/** frps' TLS certificate, shared by every instance; agents trust it. */
+export const tunnelCertModel = mongodb.db().collection<
+  { _id: string; cert: string; keyEnc: string; createdAt: Date }
+>("tunnelCerts");
+
 /** One slot for the domain checker's piggybacked ticks (PLAN §3.4). */
 export const domainJobSlotModel = mongodb.db().collection<
   { _id: number; nextRunAt: Date }

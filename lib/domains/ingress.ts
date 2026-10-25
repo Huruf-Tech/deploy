@@ -2,6 +2,7 @@ import { join } from "@std/path";
 import { stringify } from "@std/yaml";
 import type { ObjectId } from "mongodb";
 import { cache } from "@/core/utils/cache.ts";
+import { Env } from "@/core/utils/env.ts";
 import { Logger } from "@/core/utils/logger.ts";
 import { keyring } from "@/lib/services.ts";
 import { readTextSetting } from "@/lib/core/settings.ts";
@@ -21,7 +22,56 @@ import { serverLeaseModel } from "@/schemas/infrastructure/serverLease.ts";
  * it to the project's replicas.
  */
 export const PROJECT_HEADER = "X-Huruf-Project";
-const TUNNEL_HOST = "127.0.0.1"; // frps binds tunnels next to Traefik
+
+/**
+ * Always served: the platform's own hostname (its certificate from Traefik's
+ * `platform` resolver), Let's Encrypt's challenges for custom domains, and
+ * HTTP to HTTPS for everything else.
+ */
+async function platformConfig() {
+  const url = await readTextSetting("INGRESS_PLATFORM_URL", "http://web:8000");
+  const host = new URL(Env.getSync("BASE_URL", true) || "http://localhost")
+    .hostname;
+  return {
+    routers: {
+      ...(host !== "localhost"
+        ? {
+          platform: {
+            rule: `Host(\`${host}\`)`,
+            entryPoints: ["websecure"],
+            service: "platform",
+            tls: { certResolver: "platform" },
+          },
+        }
+        : {}),
+      "acme-challenge": {
+        rule: "PathPrefix(`/.well-known/acme-challenge/`)",
+        entryPoints: ["web"],
+        priority: 10_000,
+        middlewares: ["acme-challenge"],
+        service: "platform",
+      },
+      "to-https": {
+        rule: "PathPrefix(`/`)",
+        entryPoints: ["web"],
+        priority: 1,
+        middlewares: ["to-https"],
+        service: "noop@internal",
+      },
+    },
+    services: { platform: { loadBalancer: { servers: [{ url }] } } },
+    middlewares: {
+      "acme-challenge": {
+        replacePathRegex: {
+          regex: "^/\\.well-known/acme-challenge/(.*)",
+          replacement: "/ingress/api/acme-challenge/$1",
+        },
+      },
+      "to-https": { redirectScheme: { scheme: "https", permanent: true } },
+      "huruf-retry": { retry: { attempts: 2 } },
+    },
+  };
+}
 
 const ids = (list: ObjectId[]) => [...new Set(list.map(String))];
 
@@ -65,11 +115,12 @@ async function buildConfig() {
     ]),
   );
 
-  const routers: Record<string, unknown> = {};
-  const services: Record<string, unknown> = {};
-  const middlewares: Record<string, unknown> = {
-    "huruf-retry": { retry: { attempts: 2 } },
-  };
+  // frps' container: tunnel ports are only reachable on Traefik's network.
+  const tunnelHost = await readTextSetting("INGRESS_TUNNEL_HOST", "frps");
+  const platform = await platformConfig();
+  const routers: Record<string, unknown> = platform.routers;
+  const services: Record<string, unknown> = platform.services;
+  const middlewares: Record<string, unknown> = platform.middlewares;
 
   for (const project of projects) {
     const id = String(project._id);
@@ -88,7 +139,7 @@ async function buildConfig() {
     for (const { server, port } of entries) {
       services[`p-${id}-s-${server}`] = {
         loadBalancer: {
-          servers: [{ url: `http://${TUNNEL_HOST}:${port}` }],
+          servers: [{ url: `http://${tunnelHost}:${port}` }],
           passHostHeader: true,
           ...(health
             ? {
@@ -154,12 +205,11 @@ export async function isIngressToken(header: string | null) {
 
 /**
  * Traefik only takes certificates from files: on each poll, this instance
- * writes the active certificates into `TRAEFIK_CERTS_DIR`, watched by
- * Traefik's file provider. A new version gets new file names, written before
- * `certificates.yml` points at them; files nothing points at are removed.
+ * writes the active ones into `TRAEFIK_CERTS_DIR/certificates.yml`, watched
+ * by Traefik's file provider. The PEMs are inline, so the file means the same
+ * wherever it's mounted; it's replaced atomically, and only on a change.
  */
-const written = new Set<string>();
-let seeded = false;
+let written: string | undefined;
 let syncing: Promise<void> | undefined;
 
 /** Never throws: Traefik keeps its last certificates if a sync fails. */
@@ -176,63 +226,34 @@ async function sync() {
 
   const domains = await domainModel.find(
     { status: "active", "certificate.notAfter": { $gt: new Date() } },
-    { projection: { hostname: 1, tenant: 1, "certificate.issuedAt": 1 } },
+    { projection: { "certificate.issuedAt": 1 }, sort: { _id: 1 } },
   ).toArray();
-  const name = (d: (typeof domains)[number]) =>
-    `${d._id}-${d.certificate!.issuedAt.getTime()}`;
-  const wanted = new Map(domains.map((d) => [name(d), d]));
+  const version = domains.map((d) =>
+    `${d._id}-${d.certificate!.issuedAt.getTime()}`
+  ).join(",");
+  if (version === written) return;
 
-  const firstRun = !seeded;
-  if (firstRun) {
-    // Files from before a restart are reused, and the list rewritten once.
-    await Deno.mkdir(dir, { recursive: true });
-    for await (const entry of Deno.readDir(dir)) {
-      if (entry.name.endsWith(".crt")) written.add(entry.name.slice(0, -4));
-    }
-    seeded = true;
-  }
-
-  const missing = [...wanted].filter(([n]) => !written.has(n));
-  for (const [file, d] of missing) {
-    const full = await domainModel.findOne({ _id: d._id }, {
-      projection: { certificate: 1 },
-    });
-    if (!full?.certificate) continue;
-    const key = await keyring.decrypt(
-      { kind: "tenant", ref: d.tenant },
-      full.certificate.keyEnc,
-      `certificate:${d.hostname}`,
-    );
-    await Deno.writeTextFile(join(dir, `${file}.key`), key, { mode: 0o600 });
-    await Deno.writeTextFile(join(dir, `${file}.crt`), full.certificate.pem);
-    written.add(file);
-  }
-
-  const stale = [...written].filter((n) => !wanted.has(n));
-  if (!firstRun && !missing.length && !stale.length) return;
-
-  const config = stringify({
-    tls: {
-      certificates: [...wanted.keys()].filter((n) => written.has(n)).map((
-        n,
-      ) => ({
-        certFile: join(dir, `${n}.crt`),
-        keyFile: join(dir, `${n}.key`),
-      })),
+  const full = await domainModel.find(
+    { _id: { $in: domains.map((d) => d._id) } },
+    {
+      projection: { hostname: 1, tenant: 1, certificate: 1 },
+      sort: { _id: 1 },
     },
-  });
-  await Deno.writeTextFile(join(dir, "certificates.yml.tmp"), config);
-  await Deno.rename(
-    join(dir, "certificates.yml.tmp"),
-    join(dir, "certificates.yml"),
-  );
+  ).toArray();
+  const certificates = await Promise.all(full.map(async (d) => ({
+    certFile: d.certificate!.pem,
+    keyFile: await keyring.decrypt(
+      { kind: "tenant", ref: d.tenant },
+      d.certificate!.keyEnc,
+      `certificate:${d.hostname}`,
+    ),
+  })));
 
-  for (const n of stale) {
-    for (const ext of [".crt", ".key"]) {
-      await Deno.remove(join(dir, n + ext)).catch((error) =>
-        Logger.warn(`Couldn't remove certificate file ${n}${ext}`, error)
-      );
-    }
-    written.delete(n);
-  }
+  await Deno.mkdir(dir, { recursive: true });
+  const tmp = join(dir, ".certificates.yml.tmp");
+  await Deno.writeTextFile(tmp, stringify({ tls: { certificates } }), {
+    mode: 0o600,
+  });
+  await Deno.rename(tmp, join(dir, "certificates.yml"));
+  written = version;
 }
