@@ -75,6 +75,11 @@ export const acmeAccountModel = mongodb.db().collection<
   { _id: string; keyEnc: string; url?: string; createdAt: Date }
 >("acmeAccounts");
 
+/** Platform secrets made once and never rotated, sealed (e.g. `domainTokens`). */
+export const platformSecretModel = mongodb.db().collection<
+  { _id: string; valueEnc: string; createdAt: Date }
+>("platformSecrets");
+
 /** frps' TLS certificate, shared by every instance; agents trust it. */
 export const tunnelCertModel = mongodb.db().collection<
   { _id: string; cert: string; keyEnc: string; createdAt: Date }

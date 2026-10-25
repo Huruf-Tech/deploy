@@ -5,7 +5,11 @@ import { ObjectId } from "mongodb";
 import { Env } from "@/core/utils/env.ts";
 import { mongodb } from "@/database.ts";
 import { resolver } from "@/lib/domains/dns.ts";
-import { CHECK_WINDOW_MS, checkDue } from "@/lib/domains/domains.ts";
+import {
+  CHECK_WINDOW_MS,
+  checkDue,
+  ownershipToken,
+} from "@/lib/domains/domains.ts";
 import { domainModel } from "@/schemas/applications/domain.ts";
 
 // Custom domains (PLAN §14, Phase 11): add, DNS records, Check now, rechecks.
@@ -169,6 +173,50 @@ Deno.test({
           hostname: `fourth.${host}`,
         });
         assertEquals(retry.status, 200);
+      });
+
+      await t.step(
+        "re-added: the same TXT record, verified at once",
+        async () => {
+          const [before] = (await get(a.call, pa)).filter((
+            x: { hostname: string },
+          ) => x.hostname === host);
+          assertEquals(
+            (await a.call("DELETE", `/domains/api/${before._id}`)).status,
+            200,
+          );
+          const again = await a.call("POST", "/domains/api", {
+            project: pa,
+            hostname: host,
+          });
+          assertEquals(again.status, 200, JSON.stringify(again.json));
+          const [after] = (await get(a.call, pa)).filter((
+            x: { hostname: string },
+          ) => x.hostname === host);
+          assertEquals(
+            after.records.ownership.value,
+            before.records.ownership.value,
+          );
+          // The records were still in DNS: no "Check now" needed.
+          assertEquals(after.status, "issuing");
+        },
+      );
+
+      await t.step("another tenant gets another TXT record", async () => {
+        const shared = `shared-${Date.now()}.example.test`;
+        await b.call("POST", "/domains/api", { project: pb, hostname: shared });
+        const [d] = (await get(b.call, pb)).filter((x: { hostname: string }) =>
+          x.hostname === shared
+        );
+        assertEquals(d.status, "pending");
+        assertEquals(
+          d.records.ownership.value,
+          `huruf-verify=${await ownershipToken(b.tenantId, shared)}`,
+        );
+        assert(
+          d.records.ownership.value !==
+            `huruf-verify=${await ownershipToken(a.tenantId, shared)}`,
+        );
       });
     } finally {
       Object.assign(resolver, real);

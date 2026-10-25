@@ -2,7 +2,10 @@ import { ObjectId, type WithId } from "mongodb";
 import { isDuplicateKeyError } from "@/database.ts";
 import { Response } from "@/core/http/response.ts";
 import { Env } from "@/core/utils/env.ts";
-import { entitlements, quotaGuard } from "@/lib/services.ts";
+import { encodeHex } from "@std/encoding/hex";
+import { cache } from "@/core/utils/cache.ts";
+import { entitlements, keyring, quotaGuard } from "@/lib/services.ts";
+import { PLATFORM_OWNER } from "@/schemas/monitoring/alert.ts";
 import { getProject } from "@/lib/deploy/projects.ts";
 import { PiggybackScheduler } from "@/lib/core/piggybackScheduler.ts";
 import {
@@ -17,6 +20,7 @@ import { projectModel } from "@/schemas/applications/project.ts";
 import {
   domainJobSlotModel,
   domainModel,
+  platformSecretModel,
   type TDomain,
 } from "@/schemas/applications/domain.ts";
 
@@ -96,7 +100,7 @@ export async function addDomain(
       tenant,
       project: projectId,
       hostname,
-      token: crypto.randomUUID().replaceAll("-", ""),
+      token: await ownershipToken(tenant, hostname),
       status: "pending",
       createdBy: user,
       createdAt: now,
@@ -109,7 +113,61 @@ export async function addDomain(
     }
     throw error;
   }
+  // Records already in place (e.g. re-adding a domain): verified right away.
+  // Otherwise it waits for "Check now", as nothing is checked unprompted.
+  const ready = await checkDomain(
+    hostname,
+    await ownershipToken(tenant, hostname),
+  )
+    .catch(() => undefined);
+  if (ready?.ownership && ready.dns) await startCheck(tenant, _id);
   return _id;
+}
+
+const PLATFORM = { kind: "tenant" as const, ref: PLATFORM_OWNER };
+const TOKEN_SECRET = "domainTokens";
+
+/** The ownership token's key: made once, sealed, never rotated. */
+const tokenKey = cache(async () => {
+  let doc = await platformSecretModel.findOne({ _id: TOKEN_SECRET });
+  if (!doc) {
+    const value = encodeHex(crypto.getRandomValues(new Uint8Array(32)));
+    await platformSecretModel.insertOne({
+      _id: TOKEN_SECRET,
+      valueEnc: await keyring.encrypt(
+        PLATFORM,
+        value,
+        `secret:${TOKEN_SECRET}`,
+      ),
+      createdAt: new Date(),
+    }).catch((error) => {
+      if (!isDuplicateKeyError(error)) throw error; // another instance won
+    });
+    doc = (await platformSecretModel.findOne({ _id: TOKEN_SECRET }))!;
+  }
+  return await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(
+      await keyring.decrypt(PLATFORM, doc.valueEnc, `secret:${TOKEN_SECRET}`),
+    ),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+}, 60 * 60_000);
+
+/**
+ * The TXT ownership value for a tenant's domain: derived (HMAC of tenant and
+ * hostname), so re-adding a domain gives the same record that's already in
+ * DNS, while another tenant gets a different one.
+ */
+export async function ownershipToken(tenant: ObjectId, hostname: string) {
+  const signature = await crypto.subtle.sign(
+    "HMAC",
+    await tokenKey(),
+    new TextEncoder().encode(`${tenant}:${hostname}`),
+  );
+  return encodeHex(new Uint8Array(signature)).slice(0, 32);
 }
 
 /** The DNS records the user creates, shown next to each domain. */
