@@ -868,5 +868,6 @@
   "Uses the template {{name}}": "يستخدم القالب {{name}}",
   "{{domain}}: {{error}}": "{{domain}}: {{error}}",
   "Project created. Add its variables, then deploy it.": "تم إنشاء المشروع. أضف متغيراته، ثم انشره.",
-  "Create project": "إنشاء المشروع"
+  "Create project": "إنشاء المشروع",
+  "Not live yet": "لم يُفعَّل بعد"
 }

@@ -828,7 +828,16 @@ export default function ProjectDetail() {
       })
   )
   const { data: deployments } = use(history)
-  useFresh(request, history)
+  // Same cache entry as the Domains tab, so changes there show here too.
+  const domainsRequest = ThunderSDK.useCaching(
+    ["domains", id],
+    async ({ signal }) =>
+      canDomains
+        ? await ThunderSDK.domains.list({ signal, query: { project: id } })
+        : []
+  )
+  const { data: domains } = use(domainsRequest)
+  useFresh(request, history, domainsRequest)
   useBreadcrumbTitle(project?.name)
 
   const refresh = () => {
@@ -987,6 +996,30 @@ export default function ProjectDetail() {
                   {project.slug}.internal
                   {project.runtime.port ? `:${project.runtime.port}` : ""}
                 </code>
+                {(domains ?? []).map((d) =>
+                  d.status === "active" ? (
+                    <a
+                      key={d._id}
+                      href={`https://${d.hostname}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1 font-mono text-xs text-primary underline-offset-4 hover:underline"
+                    >
+                      https://{d.hostname}{" "}
+                      <IconExternalLink className="size-3" aria-hidden />
+                    </a>
+                  ) : (
+                    <span
+                      key={d._id}
+                      className="font-mono text-xs text-muted-foreground"
+                    >
+                      {d.hostname} ·{" "}
+                      {d.status === "failed"
+                        ? t("Needs attention")
+                        : t("Not live yet")}
+                    </span>
+                  )
+                )}
                 {urls.map((url) => (
                   <a
                     key={url}
@@ -1005,11 +1038,12 @@ export default function ProjectDetail() {
                     })}
                   </span>
                 )}
-                {!project.publicPort && (
-                  <span className="text-xs text-muted-foreground">
-                    {t("Not public")}
-                  </span>
-                )}
+                {!project.publicPort &&
+                  !domains?.some((d) => d.status === "active") && (
+                    <span className="text-xs text-muted-foreground">
+                      {t("Not public")}
+                    </span>
+                  )}
               </CardContent>
             </Card>
           </div>

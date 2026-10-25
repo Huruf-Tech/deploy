@@ -868,5 +868,6 @@
   "Uses the template {{name}}": "Uses the template {{name}}",
   "{{domain}}: {{error}}": "{{domain}}: {{error}}",
   "Project created. Add its variables, then deploy it.": "Project created. Add its variables, then deploy it.",
-  "Create project": "Create project"
+  "Create project": "Create project",
+  "Not live yet": "Not live yet"
 }
