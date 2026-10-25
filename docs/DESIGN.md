@@ -29,26 +29,52 @@ Status: **plan, awaiting the owner's go.** Phases are in §9.
 
 ## 3. Foundations (tokens in `src/index.css`)
 
-### Color
+### The Huruf theme (from huruftech.com, keep it)
+
+The dashboard wears Huruf's own theme, taken from the site's stylesheet. These values are the source of truth; anything below refines around them, never replaces them.
+
+| | Light | Dark |
+|---|---|---|
+| Background | `oklch(100% 0 0)` (white) | `oklch(0% 0 0)` (black) |
+| Foreground | `oklch(0% 0 0)` | `oklch(98.5% 0 0)` |
+| Card / popover | `oklch(100% 0 0)` | `oklch(13% 0 0)` |
+| Secondary | `oklch(96.7% .001 286.375)` | `oklch(17% 0 0)` |
+| Muted / accent surface | `oklch(97% 0 0)` | `oklch(15% 0 0)` / `oklch(20% 0 0)` |
+| Muted foreground | `oklch(55.6% 0 0)` | `oklch(70.8% 0 0)` |
+| Border / input | `oklch(92.2% 0 0)` | `oklch(100% 0 0 / .1)` / `/ .15` |
+| Sidebar | `oklch(98.5% 0 0)` | `oklch(10% 0 0)` |
+| **Primary (Huruf orange)** | `oklch(70.5% .213 47.604)` (≈ #FF6900) | same |
+| Primary foreground | `oklch(98% .016 73.684)` | same |
+| Destructive | `oklch(58% .22 27)` | `oklch(70.4% .191 22.216)` |
+| Charts 1–5 | `oklch(83.7% .128 66.29)`, `oklch(70.5% .213 47.604)`, `oklch(64.6% .222 41.116)`, `oklch(55.3% .195 38.402)`, `oklch(47% .157 37.304)` (the orange ramp) | same |
+| Radius | `.625rem` | |
+
+- **Neutrals are achromatic** (zero chroma): no blue-grey tints anywhere.
+- **Fonts:** Geist for UI and headings, Geist Mono for code, ids and numbers, Noto Sans Arabic for Arabic, Instrument Serif only for rare display accents (e.g. an empty state's headline), never in data UI. Geist Mono and Noto Sans Arabic are added as `@fontsource-variable` packages (bundled, offline-safe like core's fonts).
+- **Charts** use the orange ramp first; when a chart needs more distinct series than a ramp can separate, the extra series use the neutral greys, never the status colors.
+- **Status colors** (success green, warning amber, info blue, plus the destructive red above) are the only other hues. Warning amber is kept clearly yellower than the brand orange so the two never read as the same thing.
+- The dashboard's current darker orange (`oklch(55.3% …)`, chart 4 of the ramp) was a drift from the brand. It's only used where contrast requires it (see the primary-button note under §8).
+
+### Color roles
 
 | Token | Use |
 |---|---|
-| `--background` | App canvas. Light: near-white. Dark: near-black (not pure black). |
-| `--surface` (new) | Panels and cards: one step above the canvas. |
-| `--surface-raised` (new) | Popovers, sheets, sticky headers. |
-| `--border`, `--border-strong` (new) | Hairlines (1 px) between rows and around panels; stronger for inputs. |
+| `--background` | App canvas: Huruf's white / black. |
+| `--card` | Panels: white in light (separated by hairlines), `13%` in dark. |
+| `--popover` | Popovers, sheets, sticky headers (with a soft shadow in light). |
+| `--border`, `--input` | Hairlines (1 px) between rows and around panels; inputs one step stronger. |
 | `--muted-foreground` | Secondary text. At least 4.5:1 contrast on `--surface`. |
-| `--primary` | The brand accent (current orange, refined in OKLCH): primary buttons, links, focus ring, selection. Never used for status. |
+| `--primary` | Huruf orange: primary buttons, links, focus ring, selection, active nav. Never used for status. |
 | `--success`, `--warning`, `--danger`, `--info` (+ `-soft`, `-foreground`) | Status only: dots, badges, meter fills, banners. One hue each, tuned for both themes and AA contrast. |
-| `--chart-1…5` | Chart series, a categorical palette distinct from the status colors. |
+| `--chart-1…5` | Huruf's orange ramp for chart series. |
 
 Hues identify kinds of resources only where the kit says so: CPU, memory and disk meters have fixed hues (sky, violet, emerald), as today. Everything else is neutral.
 
 ### Type
 
-- Inter for UI, Geist for headings, JetBrains Mono (or the system mono) for ids, hashes, hostnames, code and numbers in tables; all numbers use `tabular-nums`.
+- Geist for UI and headings, Geist Mono for ids, hashes, hostnames, code and numbers in tables (Huruf's fonts); all numbers use `tabular-nums`.
 - Scale: 12 (captions, table meta), **13 (tables, dense lists, the default)**, 14 (body, forms), 16 (section titles), 20 (page titles), 28 (single hero numbers only).
-- Arabic resolves to Cairo per character (core's font setup).
+- Arabic uses Noto Sans Arabic, as on huruftech.com (replacing core's Cairo through our `--font-sans` stack).
 
 ### Space, size, radius
 
@@ -59,7 +85,7 @@ Hues identify kinds of resources only where the kit says so: CPU, memory and dis
 
 ### Elevation and depth
 
-Flat by default: canvas → surface (border) → raised (border + soft shadow). No glass effects on content; the shell may use core's `glass` utility for the top bar.
+Flat by default: canvas → card (hairline border) → popover (border + soft shadow). No glass effects on content; the shell may use core's `glass` utility for the top bar.
 
 ---
 
@@ -138,6 +164,7 @@ Rules: pages compose these; new patterns get added here first, then used. The ki
 ## 8. Accessibility checklist (every page)
 
 - Contrast AA (4.5:1 text, 3:1 large text and UI parts) in both themes; status always has text or an icon besides color.
+- **Text on Huruf orange:** light text on `oklch(70.5% …)` is about 2.6:1, below AA for normal-size text. Primary buttons keep the brand orange fill; their label weight and color follow the owner's decision recorded here (open: dark labels for AA, or the site's light labels for brand fidelity). Orange text on white uses the ramp's `55.3%` step so links stay readable.
 - One `h1` per page (`PageHeader`), headings in order, landmarks (`nav`, `main`, `aside`).
 - Visible focus ring (2 px, accent) on every interactive element; logical tab order; Esc closes overlays; focus returns to the trigger.
 - Tables use real `table` markup with header cells and an accessible name; icon-only buttons have `aria-label`; live regions announce async results (deploy started, check finished).
