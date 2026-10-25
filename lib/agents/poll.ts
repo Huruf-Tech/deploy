@@ -44,7 +44,12 @@ const lastPollAt = new BoundedCache<string, number>({
   ttlMs: 2 * 60_000,
 });
 
-type TPollResult = { status: number; body: Record<string, unknown> };
+type TPollResult = {
+  status: number;
+  body: Record<string, unknown>;
+  /** Time spent held (long polling), left out of the request metrics. */
+  heldMs?: number;
+};
 
 /**
  * `POST /agents/api/poll` (PLAN §3.3). An idle poll where nothing changed is
@@ -81,12 +86,13 @@ export const pollAgent = async (
   // Registered before anything is read, so a wake in between isn't lost.
   const waiter = holdMs ? serverWakeups.register(key) : undefined;
   try {
-    return await poll(identity, fingerprint, request, {
+    const result = await poll(identity, fingerprint, request, {
       nowMs,
       holdMs,
       waiter,
       minIntervalMs: minInterval,
     });
+    return waiter ? { ...result, heldMs: waiter.heldMs } : result;
   } finally {
     waiter?.cancel();
   }

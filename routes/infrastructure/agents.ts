@@ -7,6 +7,7 @@ import {
 import { registerAgent } from "@/lib/agents/servers.ts";
 import { ingestEvents, pollAgent } from "@/lib/agents/poll.ts";
 import { getAgentConfig } from "@/lib/agents/config.ts";
+import { HELD_HEADER } from "@/lib/agents/wakeups.ts";
 import { installerScript } from "@/lib/agents/bootstrap.ts";
 import {
   $agentConfigResponse,
@@ -53,7 +54,12 @@ export default new Router("/api", function agents(router) {
           $pollRequest,
         );
         const result = await pollAgent(identity, fingerprint, body);
-        return Response.json(result.body, { status: result.status });
+        return Response.json(result.body, {
+          status: result.status,
+          headers: result.heldMs
+            ? { [HELD_HEADER]: String(Math.round(result.heldMs)) }
+            : {},
+        });
       },
     };
   });

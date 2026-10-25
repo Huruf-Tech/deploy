@@ -235,7 +235,8 @@ export const readStream = async (
   // Registered before reading, so output landing in between isn't missed.
   const waiter = wait ? sessionWakeups.register(key) : undefined;
   try {
-    return await read(session, key, after, waiter);
+    const result = await read(session, key, after, waiter);
+    return { ...result, heldMs: waiter?.heldMs ?? 0 };
   } finally {
     waiter?.cancel();
   }

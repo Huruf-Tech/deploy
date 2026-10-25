@@ -9,6 +9,8 @@ import { issueCommand } from "@/lib/agents/commands.ts";
 import { longPollOptions } from "@/lib/agents/poll.ts";
 import { readStream } from "@/lib/agents/streams.ts";
 import { stopWatching } from "@/lib/agents/wakeups.ts";
+import { flush, INSTANCE } from "@/lib/monitoring/controlPlane.ts";
+import { controlPlaneSampleModel } from "@/schemas/monitoring/controlPlane.ts";
 import { createState, SimAgent } from "@/tools/agent-sim/agent.ts";
 
 // Long polling (PLAN Phase 13): held polls and reads, woken by new work.
@@ -174,6 +176,24 @@ Deno.test({
           running = false;
           await loop;
         }
+      });
+
+      await t.step("held time isn't counted as poll time", async () => {
+        await flush(); // start from an empty window
+        await sleep(120);
+        const { ms } = await timed(() =>
+          agent.poll({ wait: true }) as Promise<TPoll>
+        );
+        assert(ms >= HOLD_MS - 50, "it was held");
+        await flush();
+        const sample = await controlPlaneSampleModel.findOne(
+          { instance: INSTANCE },
+          { sort: { at: -1 } },
+        );
+        const poll = sample!.routes.find((r) => r.route === "agents.poll");
+        assert(poll, "the poll was recorded");
+        assert(poll.maxMs < 500, `recorded ${poll.maxMs} ms`);
+        await controlPlaneSampleModel.deleteMany({ instance: INSTANCE });
       });
 
       await t.step("an agent that doesn't ask isn't held", async () => {

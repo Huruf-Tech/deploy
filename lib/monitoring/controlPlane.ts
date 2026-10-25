@@ -494,9 +494,18 @@ async function clusterState() {
     onlineAgents: online,
     activeServers: servers,
     pendingCommands: pending,
-    idlePollMs: config.config.poll.idleMs,
-    // Idle agents poll every idleMs; busy ones faster, so this is the floor.
-    expectedPollsPerMin: round(online * (60_000 / config.config.poll.idleMs)),
+    // The slowest pace an idle agent keeps: a held poll (long polling, PLAN
+    // Phase 13) lasts up to waitMs, older agents poll every idleMs. Busier
+    // agents poll faster, so this is the floor.
+    idlePollMs: Math.max(
+      config.config.poll.idleMs,
+      config.config.poll.waitMs ?? 0,
+    ),
+    expectedPollsPerMin: round(
+      online *
+        (60_000 /
+          Math.max(config.config.poll.idleMs, config.config.poll.waitMs ?? 0)),
+    ),
     db: dbStats
       ? {
         dataMb: mb(dbStats.dataSize),

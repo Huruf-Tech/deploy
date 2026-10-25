@@ -10,6 +10,12 @@ import { Logger } from "@/core/utils/logger.ts";
  * between the check and the wait isn't lost. Writes on this instance wake
  * directly; one change stream per instance carries writes made elsewhere.
  */
+/**
+ * Set on held responses: the milliseconds spent waiting, which the request
+ * metrics leave out (a held poll isn't a slow one).
+ */
+export const HELD_HEADER = "x-held-ms";
+
 export class Wakeups {
   private readonly waiting = new Map<string, Set<() => void>>();
 
@@ -19,6 +25,7 @@ export class Wakeups {
     const promise = new Promise<boolean>((resolve) => (done = resolve));
     const wake = () => done(true);
     let timer: ReturnType<typeof setTimeout> | undefined;
+    let heldMs = 0;
     const cancel = () => {
       clearTimeout(timer);
       const set = this.waiting.get(key);
@@ -31,12 +38,18 @@ export class Wakeups {
     return {
       /** Waits up to `ms`; always unregisters. */
       wait: async (ms: number) => {
+        const start = performance.now();
         timer = setTimeout(() => done(false), ms);
         try {
           return await promise;
         } finally {
+          heldMs += performance.now() - start;
           cancel();
         }
+      },
+      /** How long this request waited, for HELD_HEADER. */
+      get heldMs() {
+        return heldMs;
       },
       cancel,
     };

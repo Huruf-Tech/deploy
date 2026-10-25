@@ -11,6 +11,7 @@ import {
   writeTerminalInput,
 } from "@/lib/agents/streams.ts";
 import { $terminalInput } from "@/schemas/protocol/agent.ts";
+import { HELD_HEADER } from "@/lib/agents/wakeups.ts";
 
 /**
  * Live views of data that stays on the agent (PLAN §3.6). Each kind has its own
@@ -144,7 +145,15 @@ export default new Router("/api", function streams(router) {
         const { id } = $params.parse(paramsAsJson(req));
         const { after, wait } = $query.parse(queryAsJson(req));
         const { tenant } = await withTenant(req);
-        return Response.json(await readStream(id, tenant._id, after, wait));
+        const { heldMs, ...result } = await readStream(
+          id,
+          tenant._id,
+          after,
+          wait,
+        );
+        return Response.json(result, {
+          headers: heldMs ? { [HELD_HEADER]: String(Math.round(heldMs)) } : {},
+        });
       },
     };
   });
