@@ -199,6 +199,9 @@ export const $projectInput = z.object({
   acknowledgeVolumeRisk: z.boolean().optional().describe(
     "Required for rolling or all-at-once with local volumes (PLAN §10)",
   ),
+  deployNow: z.boolean().default(false).describe(
+    "Start the first deploy right away. Not the same as autoDeploy (deploy on every push). A generic Git source waits for its deploy key either way.",
+  ),
 });
 
 export const $projectUpdate = z.object({

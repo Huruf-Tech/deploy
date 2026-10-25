@@ -7,7 +7,7 @@ import {
   IconArrowUp,
   IconBrandGithub,
   IconLoader2,
-  IconRocket,
+  IconPlus,
   IconSparkles,
   IconX,
 } from "@tabler/icons-react"
@@ -49,8 +49,8 @@ const freeSlug = (name: string, taken: Set<string>) => {
 
 /**
  * "What do you want to deploy?" on the overview (PLAN Phase 12): one prompt,
- * optionally a repository, then a short review (inputs, servers, name) and a
- * single Deploy that saves the template, creates the project and deploys it.
+ * optionally a repository, then a short review (inputs, servers, name) and
+ * Create project. It isn't deployed: the user adds its variables first.
  */
 export function AiPrompt({ servers }: { servers: TPlacement[] }) {
   const { t } = useTranslation()
@@ -175,9 +175,6 @@ export function AiPrompt({ servers }: { servers: TPlacement[] }) {
           distribution: "auto",
         },
       })
-      await ThunderSDK.projects
-        .deployProject({ params: { id: _id }, body: { noCache: false } })
-        .catch(() => {})
       // Domains wait for their DNS records: the project's Domains tab says which.
       for (const hostname of domains) {
         await ThunderSDK.domains
@@ -191,8 +188,12 @@ export function AiPrompt({ servers }: { servers: TPlacement[] }) {
             )
           )
       }
-      toast.success(t("Project created; the first deploy has started"))
-      navigate(getLocalPath(`applications/projects/${_id}`))
+      // Not deployed yet: the app's variables (API keys, database URLs…)
+      // aren't known, so the user adds them and deploys.
+      toast.success(t("Project created. Add its variables, then deploy it."))
+      navigate(getLocalPath(`applications/projects/${_id}`), {
+        state: { tab: "variables" },
+      })
     } catch (e) {
       toast.error(errorMessage(e) ?? t("Could not create the project"))
     } finally {
@@ -442,9 +443,9 @@ export function AiPrompt({ servers }: { servers: TPlacement[] }) {
               {busy === "deploy" ? (
                 <IconLoader2 className="animate-spin" aria-hidden />
               ) : (
-                <IconRocket aria-hidden />
+                <IconPlus aria-hidden />
               )}
-              {t("Deploy")}
+              {t("Create project")}
             </Button>
           </div>
         </div>

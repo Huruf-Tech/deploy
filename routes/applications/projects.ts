@@ -342,6 +342,9 @@ export default new Router("/api", function projects(router) {
     const $return = z.object({
       _id: z.string(),
       deployKeyPublic: z.string().optional(),
+      /** With `deployNow`: the first deployment, or why it didn't start. */
+      deployment: z.string().optional(),
+      deployError: z.string().optional(),
     });
 
     return {
@@ -354,7 +357,29 @@ export default new Router("/api", function projects(router) {
           user: user._id,
           input,
         });
-        return Response.json({ _id: _id.toString(), deployKeyPublic });
+        // The project exists either way; a deploy that can't start says why.
+        let first: { deployment?: string; deployError?: string } = {};
+        if (input.deployNow && !deployKeyPublic) {
+          first = await deploy({
+            tenant: tenant._id,
+            project: _id,
+            user: user._id,
+            trigger: "manual",
+            noCache: false,
+          }).then(
+            (deployment) => ({ deployment: deployment.toString() }),
+            async (error) => ({
+              deployError: error instanceof Response
+                ? await error.text()
+                : (error as Error).message,
+            }),
+          );
+        }
+        return Response.json({
+          _id: _id.toString(),
+          deployKeyPublic,
+          ...first,
+        });
       },
     };
   });

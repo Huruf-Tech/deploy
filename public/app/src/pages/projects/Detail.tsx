@@ -795,7 +795,9 @@ export default function ProjectDetail() {
   const { t } = useTranslation()
   const { id = "" } = useParams()
   const location = useLocation()
-  const [tab, setTab] = React.useState("overview")
+  const [tab, setTab] = React.useState(
+    (location.state as { tab?: string } | null)?.tab ?? "overview"
+  )
   const canDomains = ThunderSDK.isPermitted("domains", "list")
   const [open, setOpen] = React.useState<string | null>(null)
   const [logs, setLogs] = React.useState<{

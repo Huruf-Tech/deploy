@@ -123,10 +123,14 @@ export type create$body = {
     registry?: string | undefined;
     /** Required for rolling or all-at-once with local volumes (PLAN §10) */
     acknowledgeVolumeRisk?: boolean | undefined;
+    /** Start the first deploy right away. Not the same as autoDeploy (deploy on every push). A generic Git source waits for its deploy key either way. */
+    deployNow?: boolean;
 };
 export type create$return = {
     _id: string;
     deployKeyPublic?: string | undefined;
+    deployment?: string | undefined;
+    deployError?: string | undefined;
 };
 export type placementInfo$return = {
     server: string;

@@ -66,6 +66,9 @@ export async function aiAllowance(tenant: ObjectId) {
   };
 }
 
+/** The model declined (out of scope, or an attempt to change its rules). */
+export class AiRefusal extends Error {}
+
 /**
  * Counts one call before it's made, and refunds it if the call fails, so a
  * provider error never uses up the tenant's month.
@@ -92,6 +95,8 @@ export async function withAiQuota<T>(tenant: ObjectId, fn: () => Promise<T>) {
   try {
     return await fn();
   } catch (error) {
+    // A refusal still used the provider: it counts, so probing isn't free.
+    if (error instanceof AiRefusal) throw Response.badRequest(error.message);
     await refund();
     throw error;
   }

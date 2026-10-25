@@ -502,43 +502,43 @@ export default function NewProject() {
               : { type: "template" as const }
     setBusy(true)
     try {
-      const { _id, deployKeyPublic } = await ThunderSDK.projects.create({
-        body: {
-          name,
-          slug,
-          source,
-          ...(kind === "github" || kind === "git"
-            ? {
-                build: {
-                  mode: usesTemplate ? "template" : mode,
-                  rootDir,
-                  dockerfilePath,
-                },
-              }
-            : {}),
-          ...(usesTemplate && templateId
-            ? { template: { template: templateId } }
-            : {}),
-          inputs,
-          ...(kind === "compose" ? { compose } : {}),
-          runtime: {
-            ...(port ? { port: Number(port) } : {}),
-            ...(healthPath ? { healthcheckPath: healthPath } : {}),
+      const { _id, deployKeyPublic, deployError } =
+        await ThunderSDK.projects.create({
+          body: {
+            name,
+            slug,
+            source,
+            ...(kind === "github" || kind === "git"
+              ? {
+                  build: {
+                    mode: usesTemplate ? "template" : mode,
+                    rootDir,
+                    dockerfilePath,
+                  },
+                }
+              : {}),
+            ...(usesTemplate && templateId
+              ? { template: { template: templateId } }
+              : {}),
+            inputs,
+            ...(kind === "compose" ? { compose } : {}),
+            runtime: {
+              ...(port ? { port: Number(port) } : {}),
+              ...(healthPath ? { healthcheckPath: healthPath } : {}),
+            },
+            servers,
+            replicasPerServer: replicas,
+            ...(publicPort ? { publicPort: Number(publicPort) } : {}),
+            // Compose files and one-click services declare their own volumes.
+            volumes: composeLike ? [] : volumes,
+            variables,
+            autoDeploy: true,
+            distribution: "auto",
+            deployNow: true,
           },
-          servers,
-          replicasPerServer: replicas,
-          ...(publicPort ? { publicPort: Number(publicPort) } : {}),
-          // Compose files and one-click services declare their own volumes.
-          volumes: composeLike ? [] : volumes,
-          variables,
-          autoDeploy: true,
-          distribution: "auto",
-        },
-      })
-      if (!deployKeyPublic) {
-        await ThunderSDK.projects
-          .deployProject({ params: { id: _id }, body: { noCache: false } })
-          .catch(() => {})
+        })
+      if (deployError) toast.error(deployError)
+      else if (!deployKeyPublic) {
         toast.success(t("Project created; the first deploy has started"))
       }
       navigate(`../${_id}`, { relative: "path", state: { deployKeyPublic } })

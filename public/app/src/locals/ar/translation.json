@@ -866,5 +866,7 @@
   "No new template needed: {{name}} already does this. Open it to deploy with it.": "لا حاجة لقالب جديد: القالب {{name}} يؤدي ذلك بالفعل. افتحه للنشر به.",
   "Show the new template": "عرض القالب الجديد",
   "Uses the template {{name}}": "يستخدم القالب {{name}}",
-  "{{domain}}: {{error}}": "{{domain}}: {{error}}"
+  "{{domain}}: {{error}}": "{{domain}}: {{error}}",
+  "Project created. Add its variables, then deploy it.": "تم إنشاء المشروع. أضف متغيراته، ثم انشره.",
+  "Create project": "إنشاء المشروع"
 }

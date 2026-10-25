@@ -87,6 +87,7 @@ Deno.test({
 
           const created = await call("POST", "/projects/api", body);
           assertEquals(created.status, 200, JSON.stringify(created.json));
+          assertEquals(created.json.deployment, undefined, "deployNow is off");
           project = created.json._id;
 
           // Variables: runtime ones become env, build ones go to the build only.
@@ -417,6 +418,34 @@ Deno.test({
           );
           await poll(agents[0]);
           assertEquals(agents[0].spec!.workloads.map((w) => w.name), ["shop"]);
+        },
+      );
+
+      await t.step(
+        "deployNow starts the first deploy on creation",
+        async () => {
+          const base = {
+            source: { type: "image", image: "nginx:1.27" },
+            runtime: { port: 80, memReserveMb: 32, cpuReserve: 0.05 },
+            servers: [servers[0]],
+          };
+          const quiet = await call("POST", "/projects/api", {
+            ...base,
+            name: "Quiet",
+            slug: "quiet",
+          });
+          assertEquals(quiet.json.deployment, undefined, "off by default");
+          const now = await call("POST", "/projects/api", {
+            ...base,
+            name: "Now",
+            slug: "now",
+            deployNow: true,
+          });
+          assertEquals(now.status, 200, JSON.stringify(now.json));
+          assert(now.json.deployment, JSON.stringify(now.json));
+          const deployment = await mongodb.db().collection("deployments")
+            .findOne({ _id: new ObjectId(now.json.deployment) });
+          assertEquals(String(deployment!.project), now.json._id);
         },
       );
     } finally {
