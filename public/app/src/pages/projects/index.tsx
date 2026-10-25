@@ -1,8 +1,14 @@
 import React from "react"
 import { ThunderSDK } from "thunder-sdk"
-import { Link, useNavigate } from "react-router"
+import { Link, useNavigate, useSearchParams } from "react-router"
 import { useTranslation } from "react-i18next"
-import { IconPlus, IconRocket } from "@tabler/icons-react"
+import {
+  IconArrowLeft,
+  IconFolderPlus,
+  IconFolderSymlink,
+  IconPlus,
+  IconRocket,
+} from "@tabler/icons-react"
 
 import { Page } from "@/components/page"
 import { use } from "@/core/hooks/use"
@@ -28,6 +34,14 @@ import {
   SourceIcon,
   type TProjectSummary,
 } from "./shared"
+import {
+  FolderActions,
+  FolderCard,
+  FolderDialog,
+  MoveMenu,
+  useFolders,
+  type TFolder,
+} from "./folders"
 
 /** Projects (PLAN §15.6): what runs, where, and how the last deploy went. */
 export default function ProjectsPage() {
@@ -41,6 +55,22 @@ export default function ProjectsPage() {
   const { data, isLoading } = use(request)
   const selection = useSelection()
   const [search, setSearch] = React.useState("")
+  const foldersRequest = useFolders()
+  const folders = use(foldersRequest).data ?? []
+  // The open folder lives in the URL, so back/forward and links work.
+  const [params, setParams] = useSearchParams()
+  const open = folders.find((f) => f._id === params.get("folder"))
+  const [editing, setEditing] = React.useState<TFolder | "new" | null>(null)
+  const openFolder = (id: string | null) => {
+    selection.clear()
+    setParams(id ? { folder: id } : {})
+  }
+  const refresh = () => {
+    request.invalidate()
+    foldersRequest.invalidate()
+  }
+  const folderOf = (p: TProjectSummary) =>
+    folders.some((f) => f._id === p.group) ? p.group : undefined
 
   // Refresh while something is building or deploying.
   usePolling(() => {
@@ -49,19 +79,30 @@ export default function ProjectsPage() {
   }, 4_000)
 
   const q = search.trim().toLowerCase()
+  // Searching looks everywhere; otherwise the open folder, or what's in none.
   const rows = q
     ? data?.filter((p) =>
         [p.name, p.slug, p.source].some((s) => s.toLowerCase().includes(q))
       )
-    : data
+    : data?.filter((p) => folderOf(p) === open?._id)
+  const inFolder = (id: string) => (data ?? []).filter((p) => p.group === id)
   const live = data?.filter((p) => isLive(p.lastDeployment?.status)).length
   const failed = data?.filter(
     (p) => p.lastDeployment?.status === "failed"
   ).length
 
   const create = (
-    <Button size="sm" render={<Link to="./new" />} nativeButton={false}>
+    <Button
+      size="sm"
+      render={<Link to={open ? `./new?group=${open._id}` : "./new"} />}
+      nativeButton={false}
+    >
       <IconPlus aria-hidden /> {t("New project")}
+    </Button>
+  )
+  const newFolder = ThunderSDK.isPermitted("projectGroups", "create") && (
+    <Button size="sm" variant="outline" onClick={() => setEditing("new")}>
+      <IconFolderPlus aria-hidden /> {t("New folder")}
     </Button>
   )
 
@@ -174,36 +215,108 @@ export default function ProjectsPage() {
         </span>
       ),
     },
+    ...(q && folders.length
+      ? [
+          {
+            id: "folder",
+            header: t("Folder"),
+            className: "max-md:hidden",
+            sortValue: (p: TProjectSummary) =>
+              folders.find((f) => f._id === folderOf(p))?.name,
+            cell: (p: TProjectSummary) => (
+              <span className="text-muted-foreground">
+                {folders.find((f) => f._id === folderOf(p))?.name ?? "—"}
+              </span>
+            ),
+          },
+        ]
+      : []),
+    {
+      id: "move",
+      header: <span className="sr-only">{t("Actions")}</span>,
+      align: "end",
+      className: "w-10",
+      cell: (p) => (
+        <MoveMenu
+          ids={[p._id]}
+          folders={folders}
+          current={folderOf(p)}
+          onMoved={refresh}
+        />
+      ),
+    },
   ]
 
   return (
     <Page className="flex flex-col gap-4 py-5">
-      <PageHeader
-        title={t("Projects")}
-        status={
-          !!data?.length && (
-            <span className="flex items-center gap-2 text-xs text-muted-foreground tabular-nums">
-              {t("{{count}} projects", { count: data.length })}
-              {!!live && (
-                <StatusBadge
-                  state="building"
-                  label={t("{{n}} building", { n: live })}
+      {open ? (
+        <>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="-mb-2 self-start text-muted-foreground"
+            onClick={() => openFolder(null)}
+          >
+            <IconArrowLeft className="icon-flip-rtl" aria-hidden />
+            {t("All projects")}
+          </Button>
+          <PageHeader
+            title={open.name}
+            status={
+              <span className="text-xs text-muted-foreground tabular-nums">
+                {t("{{count}} projects", { count: rows?.length ?? 0 })}
+              </span>
+            }
+            description={open.description || t("A folder of projects.")}
+            actions={
+              <>
+                <FolderActions
+                  folder={open}
+                  projects={inFolder(open._id)}
+                  onRename={() => setEditing(open)}
+                  onDeleted={() => {
+                    openFolder(null)
+                    refresh()
+                  }}
                 />
-              )}
-              {!!failed && (
-                <StatusBadge
-                  state="failed"
-                  label={t("{{n}} failed", { n: failed })}
-                />
-              )}
-            </span>
-          )
-        }
-        description={t("Apps and services running on your servers.")}
-        actions={create}
-      />
+                {create}
+              </>
+            }
+          />
+        </>
+      ) : (
+        <PageHeader
+          title={t("Projects")}
+          status={
+            !!data?.length && (
+              <span className="flex items-center gap-2 text-xs text-muted-foreground tabular-nums">
+                {t("{{count}} projects", { count: data.length })}
+                {!!live && (
+                  <StatusBadge
+                    state="building"
+                    label={t("{{n}} building", { n: live })}
+                  />
+                )}
+                {!!failed && (
+                  <StatusBadge
+                    state="failed"
+                    label={t("{{n}} failed", { n: failed })}
+                  />
+                )}
+              </span>
+            )
+          }
+          description={t("Apps and services running on your servers.")}
+          actions={
+            <>
+              {newFolder}
+              {create}
+            </>
+          }
+        />
+      )}
 
-      {!isLoading && !data?.length ? (
+      {!isLoading && !data?.length && !folders.length ? (
         <EmptyState
           icon={IconRocket}
           title={t("Deploy your first project")}
@@ -218,7 +331,51 @@ export default function ProjectsPage() {
             search={search}
             onSearch={setSearch}
             placeholder={t("Filter projects…")}
+            actions={
+              selection.ids.length > 0 && (
+                <MoveMenu
+                  ids={selection.ids}
+                  folders={folders}
+                  current={open?._id}
+                  onMoved={() => {
+                    selection.clear()
+                    refresh()
+                  }}
+                  trigger={
+                    <Button size="sm" variant="outline">
+                      <IconFolderSymlink aria-hidden />
+                      {t("Move {{n}} to folder", { n: selection.ids.length })}
+                    </Button>
+                  }
+                />
+              )
+            }
           />
+          {!q && !open && folders.length > 0 && (
+            <section
+              aria-labelledby="folders-title"
+              className="flex flex-col gap-2"
+            >
+              <h2 id="folders-title" className="text-sm font-semibold">
+                {t("Folders")}
+              </h2>
+              <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                {folders.map((f) => (
+                  <FolderCard
+                    key={f._id}
+                    folder={f}
+                    projects={inFolder(f._id)}
+                    onOpen={() => openFolder(f._id)}
+                  />
+                ))}
+              </ul>
+            </section>
+          )}
+          {!q && !open && folders.length > 0 && (
+            <h2 className="-mb-2 text-sm font-semibold">
+              {t("Not in a folder")}
+            </h2>
+          )}
           <div aria-live="polite">
             <DataTable
               label={t("Projects")}
@@ -227,12 +384,32 @@ export default function ProjectsPage() {
               rowId={(p) => p._id}
               isSelected={(p) => selection.has(p._id)}
               loading={isLoading}
-              empty={t("No projects match the filter.")}
+              empty={
+                q
+                  ? t("No projects match the filter.")
+                  : open
+                    ? t(
+                        "This folder is empty. Move projects here from their menu, or create one."
+                      )
+                    : data?.length
+                      ? t("Every project is in a folder.")
+                      : t("No projects yet.")
+              }
               onRowClick={(p) => navigate(`./${p._id}`)}
             />
           </div>
         </>
       )}
+
+      <FolderDialog
+        open={!!editing}
+        folder={editing === "new" ? undefined : (editing ?? undefined)}
+        onOpenChange={(o) => !o && setEditing(null)}
+        onSaved={(id) => {
+          foldersRequest.invalidate()
+          if (editing === "new") openFolder(id)
+        }}
+      />
 
       <SelectionBar
         selection={selection}

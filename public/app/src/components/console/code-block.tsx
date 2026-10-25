@@ -1,18 +1,21 @@
 import { CopyButton } from "@/components/ui/copy-button"
 import { cn } from "@/lib/utils"
+import { highlight, type TLang } from "./highlight"
 
-/** Mono text with a copy button: DNS records, commands, logs. */
+/** Mono text with a copy button: DNS records, commands, logs; `lang` colours it. */
 export function CodeBlock({
   code,
   wrap,
   label,
   maxHeight,
+  lang,
   className,
 }: {
   code: string
   wrap?: boolean
   /** Scrolls the code past this height (e.g. "18rem"); the copy button stays put. */
   maxHeight?: string
+  lang?: TLang
   label?: React.ReactNode
   className?: string
 }) {
@@ -31,7 +34,7 @@ export function CodeBlock({
           wrap ? "break-all whitespace-pre-wrap" : "whitespace-pre"
         )}
       >
-        {code}
+        {lang ? highlight(code, lang) : code}
       </pre>
       <CopyButton
         value={code}

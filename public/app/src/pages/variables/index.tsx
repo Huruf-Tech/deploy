@@ -433,7 +433,7 @@ function ScriptAccess() {
           "Returns this tenant's resolved variables (references expanded) as env and files. Create an API key with the variableApi scope so it can read nothing else."
         )}
       </p>
-      <CodeBlock code={command} />
+      <CodeBlock code={command} lang="shell" />
     </Panel>
   )
 }

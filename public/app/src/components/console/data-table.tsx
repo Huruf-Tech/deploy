@@ -1,6 +1,12 @@
 import React from "react"
 import { useTranslation } from "react-i18next"
-import { IconArrowDown, IconArrowUp, IconSelector } from "@tabler/icons-react"
+import {
+  IconArrowDown,
+  IconArrowUp,
+  IconChevronDown,
+  IconChevronUp,
+  IconSelector,
+} from "@tabler/icons-react"
 
 import {
   Table,
@@ -11,6 +17,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 
 export type TColumn<T> = {
@@ -37,6 +44,7 @@ export function DataTable<T>({
   empty,
   onRowClick,
   isSelected,
+  limit,
   className,
 }: {
   /** Accessible name of the table. */
@@ -49,10 +57,13 @@ export function DataTable<T>({
   onRowClick?: (row: T) => void
   /** Highlights selected rows (selection itself is a column). */
   isSelected?: (row: T) => boolean
+  /** Shows the first rows (after sorting) with a "Show more" toggle for the rest. */
+  limit?: number
   className?: string
 }) {
   const { t } = useTranslation()
   const [sort, setSort] = React.useState<{ id: string; desc: boolean }>()
+  const [expanded, setExpanded] = React.useState(false)
 
   const sorted = React.useMemo(() => {
     const col = columns.find((c) => c.id === sort?.id)
@@ -69,6 +80,9 @@ export function DataTable<T>({
     })
   }, [rows, columns, sort])
 
+  const hidden = limit && sorted ? Math.max(0, sorted.length - limit) : 0
+  const shown = hidden && !expanded ? sorted!.slice(0, limit) : sorted
+
   const toggle = (id: string) =>
     setSort((s) =>
       s?.id !== id
@@ -79,7 +93,13 @@ export function DataTable<T>({
     )
 
   return (
-    <div className={cn("min-w-0 rounded-[10px] border bg-card", className)}>
+    // Clipped, so the header's square background stays inside the corners.
+    <div
+      className={cn(
+        "min-w-0 overflow-hidden rounded-[10px] border bg-card",
+        className
+      )}
+    >
       <Table aria-label={label} className="text-[13px]">
         <TableHeader className="sticky top-0 z-10 bg-card">
           <TableRow className="hover:bg-transparent">
@@ -150,7 +170,7 @@ export function DataTable<T>({
               </TableCell>
             </TableRow>
           ) : (
-            sorted.map((row) => (
+            shown!.map((row) => (
               <TableRow
                 key={rowId(row)}
                 tabIndex={onRowClick ? 0 : undefined}
@@ -185,6 +205,24 @@ export function DataTable<T>({
           )}
         </TableBody>
       </Table>
+      {hidden > 0 && (
+        <div className="border-t px-3 py-1.5">
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-7 text-xs text-muted-foreground"
+            aria-expanded={expanded}
+            onClick={() => setExpanded((e) => !e)}
+          >
+            {expanded ? (
+              <IconChevronUp aria-hidden />
+            ) : (
+              <IconChevronDown aria-hidden />
+            )}
+            {expanded ? t("Show less") : t("Show {{n}} more", { n: hidden })}
+          </Button>
+        </div>
+      )}
     </div>
   )
 }

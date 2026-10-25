@@ -124,11 +124,13 @@ export const routes: TRoutesOverride = {
       { path: ":id", display: false, Component: ProjectDetail },
     ],
   },
+  // Groups are folders on the Projects page, not a page of their own.
   projectGroups: {
     merge: true,
     name: "Groups",
     icon: IconFolders,
     priority: 1,
+    display: false,
   },
   networks: {
     name: "Private network",

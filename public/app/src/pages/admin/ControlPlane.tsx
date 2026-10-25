@@ -235,6 +235,7 @@ export default function ControlPlane() {
                   label={t("Busiest routes")}
                   rows={o.routes}
                   rowId={(r) => r.route}
+                  limit={5}
                   columns={[
                     {
                       id: "route",
@@ -286,6 +287,7 @@ export default function ControlPlane() {
                 <DataTable
                   label={t("Slowest database operations")}
                   rows={o.slowQueries}
+                  limit={5}
                   rowId={(q) => `${q.at}-${q.host}-${q.command}-${q.ms}`}
                   empty={t("No database operation took 100 ms or more.")}
                   columns={[

@@ -1,6 +1,6 @@
 import * as React from "react"
 import { ThunderSDK } from "thunder-sdk"
-import { Link, useNavigate } from "react-router"
+import { Link, useNavigate, useSearchParams } from "react-router"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
 import {
@@ -351,6 +351,8 @@ export function GitHubPicker({
 export default function NewProject() {
   const { t } = useTranslation()
   const navigate = useNavigate()
+  const [params] = useSearchParams()
+  const group = params.get("group")
   useBreadcrumbTitle(t("New project"))
 
   const [kind, setKind] = React.useState<TSourceKind>("github")
@@ -527,6 +529,8 @@ export default function NewProject() {
           body: {
             name,
             slug,
+            // Opened from a folder: the project goes in it.
+            ...(group ? { group } : {}),
             source,
             ...(kind === "github" || kind === "git"
               ? {

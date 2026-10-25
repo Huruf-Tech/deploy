@@ -11,6 +11,7 @@ import { PageHeader } from "@/components/console/page-header"
 import { Panel } from "@/components/console/panel"
 import { KeyValue } from "@/components/console/key-value"
 import { CodeBlock } from "@/components/console/code-block"
+import { langOf } from "@/components/console/highlight"
 import { DataTable } from "@/components/console/data-table"
 import { use } from "@/core/hooks/use"
 import { useBreadcrumbTitle } from "@/core/layouts/shared/breadcrumb"
@@ -301,6 +302,7 @@ function Preview({ id, content }: { id: string; content: TContent }) {
                 key={name}
                 label={<span className="font-mono">{name}</span>}
                 code={text}
+                lang={langOf(name)}
               />
             ))}
           </>
@@ -516,7 +518,10 @@ export default function TemplateDetail() {
                     {t("Built-in templates are read-only. Clone it to edit.")}
                   </p>
                 )}
-                <CodeBlock code={source} />
+                <CodeBlock
+                  code={source}
+                  lang={template.kind === "app" ? "dockerfile" : "yaml"}
+                />
               </div>
             )}
           </TabsContent>

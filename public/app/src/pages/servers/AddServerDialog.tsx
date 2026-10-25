@@ -269,7 +269,7 @@ function ManualInstall() {
         )}
       </p>
       {command ? (
-        <CodeBlock code={command} wrap />
+        <CodeBlock code={command} wrap lang="shell" />
       ) : (
         <div className="h-11 rounded-lg border bg-muted/50" aria-hidden />
       )}

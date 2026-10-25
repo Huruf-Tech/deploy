@@ -20,6 +20,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { getLocalPath } from "@/core/lib/utils"
 import { useAiStatus } from "@/hooks/use-ai"
 import { cn, errorMessage } from "@/lib/utils"
+import { CodeBlock } from "@/components/console/code-block"
 import { GitHubPicker } from "@/pages/projects/NewProject"
 import { InputField } from "@/pages/templates/Detail"
 import { slugify } from "@/pages/templates/shared"
@@ -418,13 +419,16 @@ export function AiPrompt({ servers }: { servers: TPlacement[] }) {
                 : t("Show the new template")}
             </summary>
             {draft.template && (
-              <pre
-                dir="ltr"
-                className="mt-2 max-h-72 overflow-auto rounded-lg border bg-muted/50 p-3 font-mono text-xs leading-relaxed"
-              >
-                {draft.template.content.dockerfile ??
-                  draft.template.content.compose}
-              </pre>
+              <CodeBlock
+                className="mt-2"
+                maxHeight="18rem"
+                code={
+                  draft.template.content.dockerfile ??
+                  draft.template.content.compose ??
+                  ""
+                }
+                lang={draft.template.content.dockerfile ? "dockerfile" : "yaml"}
+              />
             )}
           </details>
 

@@ -67,9 +67,27 @@ import {
 } from "@/components/ui/sidebar"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { CommandMenu, type TNavGroup } from "./command-menu"
+import { canOpenShell, ShellDock } from "./shell-dock"
 
-/** The sidebar primitive writes this cookie on toggle but never reads it back. */
-const sidebarOpen = () => !document.cookie.includes("sidebar_state=false")
+/**
+ * Open unless the viewer collapsed it. Our own key: the primitive's
+ * `sidebar_state` cookie still holds core navbar's closed default.
+ */
+const SIDEBAR_KEY = "console-sidebar"
+const sidebarOpen = () => {
+  try {
+    return localStorage.getItem(SIDEBAR_KEY) !== "closed"
+  } catch {
+    return true
+  }
+}
+const rememberSidebar = (open: boolean) => {
+  try {
+    localStorage.setItem(SIDEBAR_KEY, open ? "open" : "closed")
+  } catch {
+    // Storage may be blocked; it just isn't remembered.
+  }
+}
 
 /**
  * The console shell (docs/DESIGN.md §4): a grouped sidebar that collapses to
@@ -79,6 +97,9 @@ const sidebarOpen = () => !document.cookie.includes("sidebar_state=false")
 export function Layout({ children }: { children: React.ReactNode }) {
   const { router } = useLayout()
   const [paletteOpen, setPaletteOpen] = React.useState(false)
+  const [shellOpen, setShellOpen] = React.useState(false)
+  const shell = canOpenShell()
+  const [sidebar, setSidebar] = React.useState(sidebarOpen)
   const { pathname } = useLocation()
   const { t, i18n } = useTranslation()
 
@@ -110,14 +131,22 @@ export function Layout({ children }: { children: React.ReactNode }) {
         e.preventDefault()
         setPaletteOpen((open) => !open)
       }
+      if (e.key === "`" && (e.metaKey || e.ctrlKey) && shell) {
+        e.preventDefault()
+        setShellOpen((open) => !open)
+      }
     }
     window.addEventListener("keydown", onKey)
     return () => window.removeEventListener("keydown", onKey)
-  }, [])
+  }, [shell])
 
   return (
     <SidebarProvider
-      defaultOpen={sidebarOpen()}
+      open={sidebar}
+      onOpenChange={(open) => {
+        setSidebar(open)
+        rememberSidebar(open)
+      }}
       style={
         {
           "--sidebar-width": "14.5rem",
@@ -154,11 +183,13 @@ export function Layout({ children }: { children: React.ReactNode }) {
         >
           {children}
         </div>
+        {shell && <ShellDock open={shellOpen} onOpenChange={setShellOpen} />}
       </SidebarInset>
       <CommandMenu
         open={paletteOpen}
         onOpenChange={setPaletteOpen}
         groups={groups}
+        onShell={shell ? () => setShellOpen(true) : undefined}
       />
     </SidebarProvider>
   )
@@ -187,8 +218,16 @@ function ConsoleSidebar({
     void navigate(getLocalPath(path))
   }
 
-  const single = groups.filter((g) => !g.items.length)
-  const grouped = groups.filter((g) => g.items.length)
+  // Loose pages (and groups of a single page) sit unlabelled at the top.
+  const loose = groups.flatMap((g) =>
+    g.items.length <= 1 ? (g.items.length ? g.items : [g]) : []
+  )
+  const sections = [
+    { key: "loose", label: undefined as string | undefined, items: loose },
+    ...groups
+      .filter((g) => g.items.length > 1)
+      .map((g) => ({ key: g.path, label: t(g.title), items: g.items })),
+  ]
 
   return (
     <Sidebar side={side} collapsible="icon" className="border-e">
@@ -209,12 +248,11 @@ function ConsoleSidebar({
       </SidebarHeader>
 
       <SidebarContent className="gap-0 py-2">
-        <NavGroup items={single} isActive={isActive} onGo={go} />
-        {grouped.map((group) => (
+        {sections.map((section) => (
           <NavGroup
-            key={group.path}
-            label={t(group.title)}
-            items={group.items}
+            key={section.key}
+            label={section.label}
+            items={section.items}
             isActive={isActive}
             onGo={go}
           />

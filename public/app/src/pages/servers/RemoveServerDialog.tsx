@@ -154,7 +154,7 @@ export function RemoveServerDialog({
                     "The server is offline, so it can't clean up now. Over SSH, this shows the plan; add -yes to remove, and -keep / -remove with the ids it prints to change it:"
                   )}
                 </p>
-                <CodeBlock code={command} wrap />
+                <CodeBlock code={command} wrap lang="shell" />
               </div>
               <label className="flex items-start gap-2">
                 <Checkbox

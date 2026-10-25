@@ -453,7 +453,10 @@ function ServerTable({
             hue="violet"
             used={s.inventory.memory - s.resources.memFree}
             total={s.inventory.memory}
-            detail={pct(s.inventory.memory - s.resources.memFree, s.inventory.memory)}
+            detail={pct(
+              s.inventory.memory - s.resources.memFree,
+              s.inventory.memory
+            )}
           />
         ) : (
           <span className="text-muted-foreground">—</span>
@@ -476,7 +479,10 @@ function ServerTable({
             hue="emerald"
             used={s.inventory.disk - s.resources.diskFree}
             total={s.inventory.disk}
-            detail={pct(s.inventory.disk - s.resources.diskFree, s.inventory.disk)}
+            detail={pct(
+              s.inventory.disk - s.resources.diskFree,
+              s.inventory.disk
+            )}
           />
         ) : (
           <span className="text-muted-foreground">—</span>

@@ -51,6 +51,7 @@
     "@visx/shape": "^4.0.0",
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/xterm": "^6.0.0",
+    "@xyflow/react": "^12.8.6",
     "axios": "^1.18.1",
     "border-beam": "^1.2.0",
     "capacitor": "^0.5.6",

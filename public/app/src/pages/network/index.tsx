@@ -35,6 +35,9 @@ import { Switch } from "@/components/ui/switch"
 import { usePolling } from "@/hooks/use-polling"
 import { errorMessage } from "@/lib/utils"
 
+// React Flow loads with this panel only (PLAN §15.5 per-route bundles).
+const ReachGraph = React.lazy(() => import("./ReachGraph"))
+
 type TNetwork = Awaited<ReturnType<typeof ThunderSDK.networks.get>>
 type TMember = TNetwork["servers"][number]
 
@@ -383,7 +386,39 @@ export default function NetworkPage() {
                   "From recent WireGuard handshakes, updated every 30 seconds or so. Two servers that can't reach each other keep running their apps; only cross-server traffic between them fails."
                 )}
               </p>
-              <Matrix network={data} />
+              <React.Suspense
+                fallback={<Skeleton className="h-80 rounded-lg" />}
+              >
+                <ReachGraph network={data} />
+              </React.Suspense>
+              <ul className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                <li className="flex items-center gap-1.5">
+                  <span aria-hidden className="h-0.5 w-5 bg-success" />
+                  {t("Reachable both ways")}
+                </li>
+                <li className="flex items-center gap-1.5">
+                  <span
+                    aria-hidden
+                    className="h-0 w-5 border-t-2 border-dashed border-destructive"
+                  />
+                  {t("One way")}
+                </li>
+                <li className="flex items-center gap-1.5">
+                  <span aria-hidden className="h-0.5 w-5 bg-destructive" />
+                  {t("No link")}
+                </li>
+                <li className="flex items-center gap-1.5">
+                  <span
+                    aria-hidden
+                    className="h-0 w-5 border-t-2 border-dotted border-muted-foreground"
+                  />
+                  {t("Not in the network")}
+                </li>
+              </ul>
+              {/* The graph is visual; screen readers get the same as a table. */}
+              <div className="sr-only">
+                <Matrix network={data} />
+              </div>
             </Panel>
 
             <Panel

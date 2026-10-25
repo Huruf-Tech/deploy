@@ -111,7 +111,9 @@ Flat by default: canvas → card (hairline border) → popover (border + soft sh
   232 px, collapses to a 56 px icon rail (remembered), a sheet on mobile
 ```
 
-- Built in `src/layouts/console/` (`index.tsx`, `command-menu.tsx`). Sidebar 232 px / 56 px rail, state remembered in the `sidebar_state` cookie, ⌘B toggles it.
+- Built in `src/layouts/console/` (`index.tsx`, `command-menu.tsx`, `shell-dock.tsx`). Sidebar 232 px / 56 px rail, **open by default**, remembered per browser (`localStorage` `console-sidebar`; core's `sidebar_state` cookie is ignored), ⌘B toggles it.
+- **Nav sections:** top-level pages and route groups with a single page sit unlabelled at the top (e.g. Overview, Projects, Wallet); only groups with two or more pages get a label.
+- **Shell dock:** a 32 px bar at the bottom of every page (with `streams.openHostTerminal` + `projects.placementInfo`). It opens a panel, you pick an online server, and get a root terminal; Ctrl/⌘ + ` toggles it, ⌘K has "Open a shell on a server". xterm loads on first open.
 - **Sidebar:** the logo on top (switch tenant from the account menu), nav grouped by route group (Applications, Infrastructure, Build, Configuration, Monitoring, Administration) with small group labels, active state as a filled pill, and counts or status dots where useful (e.g. servers offline, open alerts). Account and theme sit at the bottom.
 - **Top bar:** the breadcrumb (core's `useBreadcrumbTitle` keeps working), the **command palette** (⌘K / Ctrl K: jump to any page, project or server, and run quick actions), notifications and the theme toggle.
 - **Mobile:** the sidebar becomes a sheet, and the top bar keeps the breadcrumb's last item and the menu button. Safe-area utilities come from core.
@@ -134,7 +136,7 @@ Flat by default: canvas → card (hairline border) → popover (border + soft sh
 | `CodeBlock` | Mono, copy button, wraps or scrolls. For DNS records, commands and logs. |
 | `Timeline` | Deployment and event history: dot, label, time, details on expand. |
 
-Kit props worth knowing: `DataTable` takes `isSelected` (selected-row highlight) and `onRowClick`; `CodeBlock` takes `maxHeight` (the code scrolls, the copy button stays); `PageHeader` wraps a string title in the page's `h1`, while a custom title (an inline rename) renders its own.
+Kit props worth knowing: `DataTable` takes `isSelected` (selected-row highlight), `onRowClick` and `limit` (first N rows after sorting, then "Show N more"; use it for long secondary lists); its wrapper clips to the radius so the header can't square the corners. `CodeBlock` takes `lang` (`shell`, `yaml`, `dockerfile`: every command and template file is highlighted, via `highlight.tsx`, theme tokens only) and `maxHeight` (the code scrolls, the copy button stays); `PageHeader` wraps a string title in the page's `h1`, while a custom title (an inline rename) renders its own.
 
 Files: `page-header`, `status` (`StatusDot`, `StatusBadge`, `toneOf`), `stat` (`Stat`, `StatStrip`), `meter`, `panel`, `data-table` (`DataTable`, `TColumn`), `key-value`, `toolbar`, `empty-state`, `code-block`, `timeline`, `kbd`. Status tokens come as a fill (`bg-success`), text (`text-success-foreground`) and soft background (`bg-success-soft`), likewise `warning`, `info` and `destructive`.
 
@@ -193,6 +195,14 @@ Each phase ends with screenshots (light, dark, phone, Arabic), the app's checks 
 6. **D6 — Cleanup:** remove `recharts` and orphaned components, run an accessibility pass with axe on every page, and update this document with anything learned.
 
 ---
+
+## 9b. Projects and folders
+
+Project groups are **folders on the Projects page**, not a nav item: folder cards above the projects that are in none; opening one (`?folder=<id>` in the URL) lists its projects with Rename, Delete (its projects move out first) and New project (created inside it). Every project row has "Move to folder", and a selection can be moved at once.
+
+## 9c. Private network
+
+"Who reaches whom" is a React Flow graph (`src/pages/network/ReachGraph.tsx`, lazy): servers on a circle, one edge per pair (green both ways, red dashed one way, red no link, grey dotted not in the mesh), the registry host starred. The old matrix stays in the DOM, visually hidden, for screen readers.
 
 ## 9a. Known gaps (core screens)
 

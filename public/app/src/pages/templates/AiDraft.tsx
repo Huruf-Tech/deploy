@@ -209,7 +209,11 @@ export function AiDraftDialog({
                     </Badge>
                   ))}
                 </div>
-                <CodeBlock code={source} className="max-h-80 overflow-y-auto" />
+                <CodeBlock
+                  code={source}
+                  maxHeight="20rem"
+                  lang={content?.dockerfile ? "dockerfile" : "yaml"}
+                />
                 <FieldDescription>
                   {t(
                     "Saving creates a template you can still edit and preview before deploying."

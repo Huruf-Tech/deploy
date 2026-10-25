@@ -34,7 +34,7 @@ const usableSize = (terminal: Terminal) => ({
  * 50 ms; output is read every 300 ms while the server polls at terminal pace.
  * Nothing typed or printed is stored beyond ~2 minutes.
  */
-function TerminalView({
+export function TerminalView({
   server,
   container,
 }: {

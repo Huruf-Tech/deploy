@@ -8,6 +8,7 @@ import {
   IconPlus,
   IconRocket,
   IconServer,
+  IconTerminal2,
   type TablerIcon,
 } from "@tabler/icons-react"
 
@@ -39,10 +40,13 @@ export function CommandMenu({
   open,
   onOpenChange,
   groups,
+  onShell,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   groups: TNavGroup[]
+  /** Opens the shell dock; absent without the permission. */
+  onShell?: () => void
 }) {
   const { t } = useTranslation()
   const navigate = useNavigate()
@@ -95,6 +99,11 @@ export function CommandMenu({
                 onSelect={() => go("applications/projects/new")}
               >
                 {t("New project")}
+              </Item>
+            )}
+            {onShell && (
+              <Item icon={IconTerminal2} onSelect={() => run(onShell)}>
+                {t("Open a shell on a server")}
               </Item>
             )}
             <Item

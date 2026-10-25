@@ -12,6 +12,7 @@ import {
 
 import { Button } from "@/components/ui/button"
 import { Panel } from "@/components/console/panel"
+import { CodeBlock } from "@/components/console/code-block"
 import { errorMessage } from "@/lib/utils"
 import type { TServer } from "./server"
 
@@ -104,15 +105,20 @@ export function HostSetup({
       bodyClassName="flex flex-col gap-3 text-[13px]"
     >
       {setup?.status === "pending" && slow && (
-        <p className="rounded-lg bg-warning-soft px-3 py-2 text-warning-foreground">
-          {t(
-            "Still running after {{n}} minutes. On the server, this shows what it's doing:",
-            { n: slow }
-          )}
-          <code className="mt-1 block font-mono text-xs break-all">
-            sudo journalctl -u huruf-deploy-agent -n 50 --no-pager
-          </code>
-        </p>
+        <div className="flex flex-col gap-2 rounded-lg bg-warning-soft px-3 py-2 text-warning-foreground">
+          <p>
+            {t(
+              "Still running after {{n}} minutes. On the server, this shows what it's doing:",
+              { n: slow }
+            )}
+          </p>
+          <CodeBlock
+            code="sudo journalctl -u huruf-deploy-agent -n 50 --no-pager"
+            lang="shell"
+            wrap
+            className="bg-background text-foreground"
+          />
+        </div>
       )}
       {setup?.error && (
         <p className="rounded-lg bg-destructive-soft px-3 py-2 text-destructive-foreground">

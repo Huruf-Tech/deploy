@@ -67,6 +67,7 @@ export default new Router("/api", function projects(router) {
       name: z.string(),
       slug: z.string(),
       kind: z.enum(["app", "service"]),
+      group: z.string().optional().describe("Its folder (project group)"),
       status: $status,
       source: z.string().describe("Short description, e.g. acme/shop@main"),
       sourceType: z.enum(["github", "git", "image", "template", "compose"]),
@@ -137,6 +138,7 @@ export default new Router("/api", function projects(router) {
             name: p.name,
             slug: p.slug,
             kind: p.kind,
+            group: p.group,
             status: p.status,
             source: p.source.type === "github"
               ? `${p.source.repo}@${p.source.branch}`
