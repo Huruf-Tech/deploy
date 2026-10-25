@@ -154,6 +154,25 @@ function SeriesChart({
  * Control plane health (PLAN §20.2): what each instance uses, the request
  * and poll rates it serves, and what to do when a limit is near.
  */
+
+/** What a MongoDB command does, in plain words, for the slow-operations card. */
+function describeCommand(command: string, t: (key: string) => string): string {
+  const known: Record<string, string> = {
+    find: t("Query: finds documents"),
+    getMore: t("Next batch of a query's results (an open cursor)"),
+    aggregate: t("Aggregation: a query pipeline (e.g. counts, joins, reports)"),
+    count: t("Counts documents"),
+    distinct: t("Distinct values of a field"),
+    insert: t("Inserts documents"),
+    update: t("Updates documents"),
+    delete: t("Deletes documents"),
+    findAndModify: t("Finds and updates a document in one step"),
+    createIndexes: t("Creates indexes"),
+    bulkWrite: t("Several writes in one batch"),
+  }
+  return known[command] ?? t("Other database command")
+}
+
 export default function ControlPlane() {
   const { t } = useTranslation()
   const [range, setRange] = React.useState<TRange>("1h")
@@ -505,7 +524,7 @@ export default function ControlPlane() {
                     <TableHeader>
                       <TableRow>
                         <TableHead>{t("Operation")}</TableHead>
-                        <TableHead>{t("When")}</TableHead>
+                        <TableHead>{t("When · instance")}</TableHead>
                         <TableHead className="text-right">
                           {t("Time")}
                         </TableHead>
@@ -514,12 +533,25 @@ export default function ControlPlane() {
                     <TableBody>
                       {o.slowQueries.map((q, i) => (
                         <TableRow key={i}>
-                          <TableCell className="font-mono text-xs">
-                            {q.command}
-                            {q.collection && ` ${q.collection}`}
+                          <TableCell className="text-xs whitespace-normal">
+                            <span className="font-mono">
+                              {q.command}
+                              {q.collection && (
+                                <span className="text-muted-foreground">
+                                  {" "}
+                                  on {q.collection}
+                                </span>
+                              )}
+                            </span>
+                            <span className="block text-muted-foreground">
+                              {describeCommand(q.command, t)}
+                            </span>
                           </TableCell>
                           <TableCell className="text-xs text-muted-foreground">
-                            {format(new Date(q.at), "MMM d, HH:mm")} · {q.host}
+                            <span className="block whitespace-nowrap">
+                              {format(new Date(q.at), "MMM d, HH:mm")}
+                            </span>
+                            <span className="block font-mono">{q.host}</span>
                           </TableCell>
                           <TableCell className="text-right tabular-nums">
                             {num(q.ms)} ms
@@ -531,6 +563,13 @@ export default function ControlPlane() {
                 ) : (
                   <p className="text-sm text-muted-foreground">
                     {t("No database operation took 100 ms or more.")}
+                  </p>
+                )}
+                {o.slowQueries.length > 0 && (
+                  <p className="mt-3 text-xs text-muted-foreground">
+                    {t(
+                      "Operations of 100 ms or more in the selected period. Change streams' idle waits aren't counted."
+                    )}
                   </p>
                 )}
               </CardContent>

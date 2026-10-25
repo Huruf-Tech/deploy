@@ -869,5 +869,19 @@
   "{{domain}}: {{error}}": "{{domain}}: {{error}}",
   "Project created. Add its variables, then deploy it.": "Project created. Add its variables, then deploy it.",
   "Create project": "Create project",
-  "Not live yet": "Not live yet"
+  "Not live yet": "Not live yet",
+  "Aggregation: a query pipeline (e.g. counts, joins, reports)": "Aggregation: a query pipeline (e.g. counts, joins, reports)",
+  "Counts documents": "Counts documents",
+  "Creates indexes": "Creates indexes",
+  "Deletes documents": "Deletes documents",
+  "Distinct values of a field": "Distinct values of a field",
+  "Finds and updates a document in one step": "Finds and updates a document in one step",
+  "Inserts documents": "Inserts documents",
+  "Next batch of a query's results (an open cursor)": "Next batch of a query's results (an open cursor)",
+  "Operations of 100 ms or more in the selected period. Change streams' idle waits aren't counted.": "Operations of 100 ms or more in the selected period. Change streams' idle waits aren't counted.",
+  "Other database command": "Other database command",
+  "Query: finds documents": "Query: finds documents",
+  "Several writes in one batch": "Several writes in one batch",
+  "Updates documents": "Updates documents",
+  "When · instance": "When · instance"
 }

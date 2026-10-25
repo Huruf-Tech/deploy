@@ -108,17 +108,29 @@ export function recordRequest(route: string, status: number, ms: number) {
 // The setter exists at runtime; the typings leave it out.
 (mongodb as unknown as { monitorCommands: boolean }).monitorCommands = true;
 const collections = new Map<number, string>();
+/** Change streams' getMores: held by MongoDB up to ~1 s when idle, by design. */
+const waits = new Set<number>();
 mongodb.on("commandStarted", (e) => {
   if (IGNORED.has(e.commandName)) return;
   if (collections.size > 5_000) collections.clear(); // never-finished commands
-  const target = e.command?.[e.commandName];
+  if (waits.size > 5_000) waits.clear();
+  // getMore names its cursor first; the collection is a field of its own.
+  const target = e.commandName === "getMore"
+    ? e.command?.collection
+    : e.command?.[e.commandName];
+  // A database-wide change stream (long polling's wakes, PLAN Phase 13) reads
+  // from `$cmd.aggregate`: its getMores wait, they don't work.
+  if (e.commandName === "getMore" && target === "$cmd.aggregate") {
+    waits.add(e.requestId);
+    return;
+  }
   if (typeof target === "string") collections.set(e.requestId, target);
 });
 const finished = (
   e: { requestId: number; commandName: string; duration: number },
   ok: boolean,
 ) => {
-  if (IGNORED.has(e.commandName)) return;
+  if (IGNORED.has(e.commandName) || waits.delete(e.requestId)) return;
   const collection = collections.get(e.requestId);
   collections.delete(e.requestId);
   const db = window.db;
@@ -308,6 +320,16 @@ export async function controlPlaneOverview(range: TRange) {
     >([
       { $match: { at: { $gte: since }, "db.slow.0": { $exists: true } } },
       { $unwind: "$db.slow" },
+      // Samples from before change-stream waits were left out recorded them
+      // as getMore without a collection.
+      {
+        $match: {
+          $or: [
+            { "db.slow.command": { $ne: "getMore" } },
+            { "db.slow.collection": { $exists: true } },
+          ],
+        },
+      },
       { $sort: { "db.slow.ms": -1 } },
       { $limit: 20 },
       {

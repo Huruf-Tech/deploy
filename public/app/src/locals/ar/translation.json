@@ -869,5 +869,19 @@
   "{{domain}}: {{error}}": "{{domain}}: {{error}}",
   "Project created. Add its variables, then deploy it.": "تم إنشاء المشروع. أضف متغيراته، ثم انشره.",
   "Create project": "إنشاء المشروع",
-  "Not live yet": "لم يُفعَّل بعد"
+  "Not live yet": "لم يُفعَّل بعد",
+  "Aggregation: a query pipeline (e.g. counts, joins, reports)": "تجميع: سلسلة استعلام (مثل العدّ والربط والتقارير)",
+  "Counts documents": "يعدّ المستندات",
+  "Creates indexes": "ينشئ فهارس",
+  "Deletes documents": "يحذف مستندات",
+  "Distinct values of a field": "القيم المختلفة لحقل",
+  "Finds and updates a document in one step": "يبحث عن مستند ويحدّثه في خطوة واحدة",
+  "Inserts documents": "يُدرج مستندات",
+  "Next batch of a query's results (an open cursor)": "الدفعة التالية من نتائج استعلام (مؤشر مفتوح)",
+  "Operations of 100 ms or more in the selected period. Change streams' idle waits aren't counted.": "العمليات التي استغرقت 100 مللي ثانية أو أكثر في الفترة المحددة. لا تُحتسب فترات انتظار تدفقات التغييرات الخاملة.",
+  "Other database command": "أمر آخر لقاعدة البيانات",
+  "Query: finds documents": "استعلام: يبحث عن مستندات",
+  "Several writes in one batch": "عدة عمليات كتابة في دفعة واحدة",
+  "Updates documents": "يحدّث مستندات",
+  "When · instance": "الوقت · النسخة"
 }

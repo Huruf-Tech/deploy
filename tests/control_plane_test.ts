@@ -214,3 +214,36 @@ Deno.test({
     }
   },
 });
+
+Deno.test({
+  name: "control plane: a change stream's idle waits aren't slow operations",
+  sanitizeOps: false,
+  sanitizeResources: false,
+  fn: async () => {
+    await flush(); // start from an empty window
+    // Long polling's wakes (PLAN Phase 13) use one: MongoDB holds each of
+    // its getMores up to ~1 s while nothing changes.
+    const stream = mongodb.db().watch([{ $match: { "ns.coll": "nothing" } }]);
+    stream.on("change", () => {});
+    try {
+      await new Promise((r) => setTimeout(r, 2_500));
+    } finally {
+      await stream.close();
+    }
+    await flush();
+    try {
+      const sample = await controlPlaneSampleModel.findOne(
+        { instance: INSTANCE },
+        { sort: { at: -1 } },
+      );
+      assert(sample);
+      assertEquals(
+        sample.db.slow.filter((s) => s.command === "getMore"),
+        [],
+        "idle change-stream waits counted as slow",
+      );
+    } finally {
+      await controlPlaneSampleModel.deleteMany({ instance: INSTANCE });
+    }
+  },
+});
