@@ -102,8 +102,10 @@ export function RecordCards<T extends { _id: string }>({
         <ul className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {records.map((record) => {
             const card = render(record)
+            // Straight to the form, as core's list rows do: core's `<id>`
+            // redirect doubles the app's base path (`/app/app/…`).
             const open = () =>
-              navigate(`./${record._id}`, { state: { name: card.name } })
+              navigate(`./form/${record._id}`, { state: { name: card.name } })
             return (
               <li key={record._id}>
                 <Card

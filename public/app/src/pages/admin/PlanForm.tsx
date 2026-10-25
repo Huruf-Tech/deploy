@@ -27,6 +27,7 @@ import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 import { RefSelect } from "@/core/custom/RefSelect"
 import type { TField } from "@/core/lib/jsonSchemaToFields"
+import { getLocalPath } from "@/core/lib/utils"
 import { errorMessage } from "@/lib/utils"
 
 /** Same order and defaults as `$planLimits` / `$planFeatures` (the Free plan). */
@@ -117,6 +118,11 @@ const tenantsField = {
 export default function PlanForm() {
   const { t } = useTranslation()
   const navigate = useNavigate()
+  // Not history: the form may be the first page opened.
+  const toList = React.useCallback(
+    () => navigate(getLocalPath("admin/plans")),
+    [navigate]
+  )
   const { id } = useParams<{ id?: string }>()
   const [plan, setPlan] = React.useState<TPlanDraft | null>(id ? null : blank)
   const [slugTouched, setSlugTouched] = React.useState(!!id)
@@ -141,9 +147,9 @@ export default function PlanForm() {
       })
       .catch((e) => {
         toast.error(errorMessage(e) ?? t("Could not load the plan"))
-        navigate(-1)
+        toList()
       })
-  }, [id, navigate, t])
+  }, [id, toList, t])
 
   if (!plan)
     return (
@@ -167,7 +173,7 @@ export default function PlanForm() {
       if (id) await ThunderSDK.plans.update({ params: { id }, body })
       else await ThunderSDK.plans.create({ body })
       toast.success(id ? t("Plan saved") : t("Plan created"))
-      navigate(-1)
+      toList()
     } catch (e) {
       toast.error(errorMessage(e) ?? t("Could not save the plan"))
     } finally {
@@ -437,7 +443,7 @@ export default function PlanForm() {
         </Card>
 
         <div className="flex justify-end gap-2">
-          <Button type="button" variant="ghost" onClick={() => navigate(-1)}>
+          <Button type="button" variant="ghost" onClick={() => toList()}>
             {t("Cancel")}
           </Button>
           <Button type="submit" disabled={busy}>
