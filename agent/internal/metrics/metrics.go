@@ -1,6 +1,7 @@
 // Package metrics samples the host for the metrics stream (PLAN §13): a
-// 24-hour history at 1-minute resolution kept in memory on the agent (never
-// sent unless someone is watching), and live samples on demand.
+// 24-hour history at 1-minute resolution plus the last 15 minutes at 5-second
+// resolution, kept in memory on the agent (never sent unless someone is
+// watching), and live samples on demand.
 package metrics
 
 import (
@@ -20,6 +21,13 @@ import (
 
 // 24 h at 1-minute resolution: a fixed ring (PLAN §20.4).
 const historySize = 24 * 60
+
+// The last 15 minutes at 5-second resolution, so a chart opened now shows
+// what just happened in detail (180 samples, a few KB).
+const (
+	recentEvery = 5 * time.Second
+	recentSize  = 15 * 60 / 5
+)
 
 // Sampler turns cumulative counters (/proc/stat, /proc/net/dev) into rates
 // between two calls. Each consumer owns one, so their intervals don't mix.
@@ -54,24 +62,49 @@ func (s *Sampler) Sample() protocol.MetricsSample {
 	return sample
 }
 
-// Recorder keeps the history ring, sampling once a minute.
-type Recorder struct {
-	mu      sync.Mutex
+// ring is a fixed-size buffer of samples, oldest overwritten first.
+type ring struct {
 	samples []protocol.MetricsSample
 	next    int
 }
 
+func (g *ring) add(sample protocol.MetricsSample, size int) {
+	if len(g.samples) < size {
+		g.samples = append(g.samples, sample)
+		return
+	}
+	g.samples[g.next] = sample
+	g.next = (g.next + 1) % size
+}
+
+func (g *ring) list() []protocol.MetricsSample {
+	return append(append([]protocol.MetricsSample{}, g.samples[g.next:]...), g.samples[:g.next]...)
+}
+
+// Recorder keeps the minute history and the recent 5-second buffer. Each has
+// its own sampler, so a minute's CPU is the minute's average.
+type Recorder struct {
+	mu      sync.Mutex
+	minutes ring
+	recent  ring
+}
+
 func (r *Recorder) Run(ctx context.Context) {
-	var sampler Sampler
-	sampler.Sample() // prime the counters
-	ticker := time.NewTicker(time.Minute)
-	defer ticker.Stop()
+	var perMinute, perTick Sampler
+	perMinute.Sample() // prime the counters
+	perTick.Sample()
+	minute := time.NewTicker(time.Minute)
+	defer minute.Stop()
+	tick := time.NewTicker(recentEvery)
+	defer tick.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case <-ticker.C:
-			r.add(sampler.Sample())
+		case <-minute.C:
+			r.add(perMinute.Sample())
+		case <-tick.C:
+			r.addRecent(perTick.Sample())
 		}
 	}
 }
@@ -79,19 +112,30 @@ func (r *Recorder) Run(ctx context.Context) {
 func (r *Recorder) add(sample protocol.MetricsSample) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if len(r.samples) < historySize {
-		r.samples = append(r.samples, sample)
-		return
-	}
-	r.samples[r.next] = sample
-	r.next = (r.next + 1) % historySize
+	r.minutes.add(sample, historySize)
 }
 
-// History returns the recorded samples, oldest first.
+func (r *Recorder) addRecent(sample protocol.MetricsSample) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.recent.add(sample, recentSize)
+}
+
+// History returns minute samples up to where the recent buffer starts, then
+// the recent ones: oldest first, no overlap.
 func (r *Recorder) History() []protocol.MetricsSample {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	return append(append([]protocol.MetricsSample{}, r.samples[r.next:]...), r.samples[:r.next]...)
+	recent := r.recent.list()
+	minutes := r.minutes.list()
+	if len(recent) > 0 {
+		cut := len(minutes)
+		for cut > 0 && minutes[cut-1].T >= recent[0].T {
+			cut--
+		}
+		minutes = minutes[:cut]
+	}
+	return append(minutes, recent...)
 }
 
 // Usage is one container's current CPU (cores) and memory (bytes).

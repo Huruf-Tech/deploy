@@ -1127,7 +1127,7 @@ Each phase ends with a **review checkpoint** (demo + code review + approval). Ph
   5. A certificate within 30 days of expiry renews automatically, with no restarts.
   6. A domain verified by another tenant can't be added.
 
-### Phase 12 — AI template assistant (built, pending review, D45)
+### Phase 12 — AI template assistant (done, D45)
 - **Built with the Vercel AI SDK** (`generateText` with structured output). Checked with scripted models in tests and against a fake OpenAI-compatible model in the browser; not yet against a real provider.
 - **Entitlement:**
   - A plan feature `aiAssistant` and a limit `aiRequestsPerMonth`, set in the plan form; a monthly usage counter per tenant.
@@ -1159,7 +1159,7 @@ Each phase ends with a **review checkpoint** (demo + code review + approval). Ph
   3. A build broken on purpose (wrong start command) is fixed by "Fix with AI" in one proposal.
   4. A tenant over its monthly limit, or on a plan without the feature, is refused before any provider call.
 
-### Phase 13 — Long polling (built, pending review, D44)
+### Phase 13 — Long polling (done, D44)
 - **Built:** agents that send `wait` (from this agent version on) are held up to `AGENT_LONG_POLL_MS` (25 s; 0 turns it off). A held poll answers on a new command, desired state or terminal input; after an empty hold `nextPollMs` is 0, after a delivery it's the safety minimum (100 ms), since the next poll waits anyway. Browser stream reads take `wait=true` (held up to 15 s), and the dashboard reads on as soon as one returns.
 - **Wakes:** same-instance writes wake directly, after the document is written; one change stream per instance (commands, specs, terminal input, stream output — the documents, not the lease counters bumped before them) wakes polls held on other instances. Without change streams, only cross-instance wakes fall back to the timeout.
 - **Trade-off:** a held poll extends the lease by the hold, so a dead long-polling server is flagged offline after up to ~35 s instead of ~10 s. Traefik's health checks still take it out of routing within seconds.
@@ -1194,6 +1194,7 @@ Found while using the platform; each is in the section it belongs to, and listed
   - Project tabs scroll on narrow screens.
 - **Long polling:** wakes fire after the command or spec document is written, never on the lease counters bumped before it (a poll woken early would have waited out the full hold).
 - **Operations:** every deploy that changes access control or indexes needs `deno task setup:prod` afterwards.
+- **Server metrics:** besides the 24-hour history at 1-minute resolution, the agent keeps the last 15 minutes at 5-second resolution (180 samples) and sends both when a metrics stream opens, so the server chart starts with recent detail instead of empty. Needs the updated agent ("Update agent"); older agents still send the minute history only. Both buffers live in agent memory, so an agent restart starts them over.
 
 ### Phase 14 — Backlog (after MVP)
 - Ability to upgrade already installed agent along with its deps — **done (pending review):**

@@ -37,4 +37,30 @@ func TestRecorderRingIsBoundedAndOrdered(t *testing.T) {
 	}
 }
 
+func TestHistoryEndsWithTheRecentBuffer(t *testing.T) {
+	var r Recorder
+	for _, at := range []int64{0, 60, 120, 180} {
+		r.add(sample(at))
+	}
+	for at := int64(125); at <= 200; at += 5 {
+		r.addRecent(sample(at))
+	}
+	for i := range recentSize + 3 { // overflow the recent ring too
+		r.addRecent(sample(int64(1000 + i)))
+	}
+	history := r.History()
+	// Minute samples before the recent buffer's first sample, then the buffer.
+	if len(history) != 4+recentSize {
+		t.Fatalf("len = %d, want %d", len(history), 4+recentSize)
+	}
+	for i := 1; i < len(history); i++ {
+		if history[i].T <= history[i-1].T {
+			t.Fatalf("not strictly ascending at %d: %d after %d", i, history[i].T, history[i-1].T)
+		}
+	}
+	if last := history[len(history)-1].T; last != int64(1000+recentSize+2) {
+		t.Fatalf("last = %d", last)
+	}
+}
+
 func sample(t int64) protocol.MetricsSample { return protocol.MetricsSample{T: t} }

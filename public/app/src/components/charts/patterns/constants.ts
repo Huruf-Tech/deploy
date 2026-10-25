@@ -3,7 +3,7 @@ export const PatternOrientation = {
   vertical: "vertical",
   diagonal: "diagonal",
   diagonalRightToLeft: "diagonalRightToLeft",
-} as const;
+} as const
 
 export type PatternOrientationType =
-  (typeof PatternOrientation)[keyof typeof PatternOrientation];
+  (typeof PatternOrientation)[keyof typeof PatternOrientation]

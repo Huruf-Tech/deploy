@@ -1,15 +1,15 @@
-"use client";
+"use client"
 
-import { cn } from "@/lib/utils";
-import { useLegendItem } from "./legend-context";
+import { cn } from "@/lib/utils"
+import { useLegendItem } from "./legend-context"
 
 export interface LegendMarkerProps {
   /** Marker size class. Default: "h-2.5 w-2.5" */
-  className?: string;
+  className?: string
 }
 
 export function LegendMarker({ className = "h-2.5 w-2.5" }: LegendMarkerProps) {
-  const { item } = useLegendItem();
+  const { item } = useLegendItem()
 
   // Note: backgroundColor must remain inline style as item.color is dynamic data
   return (
@@ -17,7 +17,7 @@ export function LegendMarker({ className = "h-2.5 w-2.5" }: LegendMarkerProps) {
       className={cn("shrink-0 rounded-full", className)}
       style={{ backgroundColor: item.color }}
     />
-  );
+  )
 }
 
-LegendMarker.displayName = "LegendMarker";
+LegendMarker.displayName = "LegendMarker"

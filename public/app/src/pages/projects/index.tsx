@@ -2,6 +2,7 @@ import React from "react"
 import { ThunderSDK } from "thunder-sdk"
 import { Link, useNavigate, useSearchParams } from "react-router"
 import { useTranslation } from "react-i18next"
+import { toast } from "sonner"
 import {
   IconArrowLeft,
   IconFolderPlus,
@@ -39,6 +40,7 @@ import {
   FolderCard,
   FolderDialog,
   MoveMenu,
+  moveProjects,
   useFolders,
   type TFolder,
 } from "./folders"
@@ -61,6 +63,12 @@ export default function ProjectsPage() {
   const [params, setParams] = useSearchParams()
   const open = folders.find((f) => f._id === params.get("folder"))
   const [editing, setEditing] = React.useState<TFolder | "new" | null>(null)
+  // Projects to move into the folder being created from a "Move" menu.
+  const [toMove, setToMove] = React.useState<string[]>([])
+  const newFolderFor = (ids: string[]) => {
+    setToMove(ids)
+    setEditing("new")
+  }
   const openFolder = (id: string | null) => {
     selection.clear()
     setParams(id ? { folder: id } : {})
@@ -242,6 +250,7 @@ export default function ProjectsPage() {
           folders={folders}
           current={folderOf(p)}
           onMoved={refresh}
+          onNewFolder={newFolderFor}
         />
       ),
     },
@@ -345,6 +354,7 @@ export default function ProjectsPage() {
                     selection.clear()
                     refresh()
                   }}
+                  onNewFolder={newFolderFor}
                   trigger={
                     <Button size="sm" variant="outline">
                       <IconFolderSymlink aria-hidden />
@@ -408,9 +418,24 @@ export default function ProjectsPage() {
       <FolderDialog
         open={!!editing}
         folder={editing === "new" ? undefined : (editing ?? undefined)}
-        onOpenChange={(o) => !o && setEditing(null)}
-        onSaved={(id) => {
-          foldersRequest.invalidate()
+        onOpenChange={(o) => {
+          if (o) return
+          setEditing(null)
+          setToMove([])
+        }}
+        onSaved={async (id) => {
+          if (toMove.length) {
+            const failed = await moveProjects(toMove, id)
+            if (failed)
+              toast.error(
+                t("Failed to move {{count}} of {{total}} project(s).", {
+                  count: failed,
+                  total: toMove.length,
+                })
+              )
+            selection.clear()
+          }
+          refresh()
           if (editing === "new") openFolder(id)
         }}
       />

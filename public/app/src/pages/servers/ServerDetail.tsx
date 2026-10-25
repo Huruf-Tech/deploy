@@ -15,6 +15,7 @@ import { Page } from "@/components/page"
 import { use } from "@/core/hooks/use"
 import { useBreadcrumbTitle } from "@/core/layouts/shared/breadcrumb"
 import { Button } from "@/components/ui/button"
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Panel } from "@/components/console/panel"
 import { Stat, StatStrip } from "@/components/console/stat"
@@ -114,14 +115,19 @@ function LiveMetrics({
   const containers = [...samples]
     .reverse()
     .find((s) => s.containers)?.containers
+  const [range, setRange] = React.useState<"15m" | "24h">("15m")
   const series = React.useMemo(
     () =>
-      thin(samples).map((s) => ({
+      thin(
+        range === "24h"
+          ? samples
+          : samples.filter((s) => s.t >= (samples.at(-1)?.t ?? 0) - 15 * 60_000)
+      ).map((s) => ({
         date: new Date(s.t),
         cpu: s.cpu,
         mem: s.memTotal ? s.memUsed / s.memTotal : 0,
       })),
-    [samples]
+    [samples, range]
   )
 
   if (status === "error")
@@ -170,7 +176,25 @@ function LiveMetrics({
 
       <Panel
         title={t("CPU and memory")}
-        description={t("The last 24 hours, then live every 2 seconds")}
+        description={
+          range === "15m"
+            ? t("The last 15 minutes, then live every 2 seconds")
+            : t("The last 24 hours, then live every 2 seconds")
+        }
+        actions={
+          <ToggleGroup
+            value={range}
+            onValueChange={(v) => setRange(v as "15m" | "24h")}
+            aria-label={t("Range")}
+          >
+            <ToggleGroupItem value="15m" className="px-2 py-0.5 text-xs">
+              {t("15 min")}
+            </ToggleGroupItem>
+            <ToggleGroupItem value="24h" className="px-2 py-0.5 text-xs">
+              {t("24 h")}
+            </ToggleGroupItem>
+          </ToggleGroup>
+        }
       >
         {series.length < 2 ? (
           <Skeleton className="h-48 rounded-lg" />

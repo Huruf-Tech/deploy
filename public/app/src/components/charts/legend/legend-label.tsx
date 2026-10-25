@@ -1,23 +1,23 @@
-"use client";
+"use client"
 
-import { cn } from "@/lib/utils";
-import { useLegendItem } from "./legend-context";
+import { cn } from "@/lib/utils"
+import { useLegendItem } from "./legend-context"
 
 export interface LegendLabelProps {
   /** Label class name. Default: "text-sm font-medium" */
-  className?: string;
+  className?: string
 }
 
 export function LegendLabel({
   className = "text-sm font-medium",
 }: LegendLabelProps) {
-  const { item } = useLegendItem();
+  const { item } = useLegendItem()
 
   return (
     <span className={cn("text-legend-foreground", className)}>
       {item.label}
     </span>
-  );
+  )
 }
 
-LegendLabel.displayName = "LegendLabel";
+LegendLabel.displayName = "LegendLabel"

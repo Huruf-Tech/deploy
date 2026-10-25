@@ -1,19 +1,19 @@
-"use client";
+"use client"
 
-import type { ReactNode } from "react";
-import { cn } from "@/lib/utils";
-import { useLegend, useLegendItem } from "./legend-context";
+import type { ReactNode } from "react"
+import { cn } from "@/lib/utils"
+import { useLegend, useLegendItem } from "./legend-context"
 
 export interface LegendItemProps {
   /** Container class name */
-  className?: string;
+  className?: string
   /** Children components (LegendMarker, LegendLabel, LegendValue, LegendProgress) */
-  children: ReactNode;
+  children: ReactNode
 }
 
 export function LegendItem({ className = "", children }: LegendItemProps) {
-  const { setHoveredIndex } = useLegend();
-  const { index, isHovered } = useLegendItem();
+  const { setHoveredIndex } = useLegend()
+  const { index, isHovered } = useLegendItem()
 
   return (
     // biome-ignore lint/a11y/noNoninteractiveElementInteractions: Legend item hover interaction
@@ -30,7 +30,7 @@ export function LegendItem({ className = "", children }: LegendItemProps) {
     >
       {children}
     </div>
-  );
+  )
 }
 
-LegendItem.displayName = "LegendItem";
+LegendItem.displayName = "LegendItem"

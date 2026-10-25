@@ -14,13 +14,17 @@ import { AreaSparkline } from "./sparkline"
  * Pages use these, not the bklit components directly.
  */
 
-/** Series colors in ramp order; past five, neutral greys (never status hues). */
+/**
+ * Series colours: Huruf orange first, then hues far apart from it and from
+ * each other (an orange ramp was too close to tell lines apart). Defined in
+ * index.css per theme; never the status colours.
+ */
 export const SERIES = [
-  "var(--chart-2)",
-  "var(--chart-4)",
-  "var(--chart-1)",
-  "var(--chart-5)",
-  "var(--chart-3)",
+  "var(--series-1)",
+  "var(--series-2)",
+  "var(--series-3)",
+  "var(--series-4)",
+  "var(--series-5)",
   "var(--muted-foreground)",
 ]
 
@@ -28,17 +32,21 @@ export type TSeries = { key: string; label: string; color?: string }
 
 const DAY = 24 * 60 * 60 * 1000
 
-/** Times for ranges up to two days, dates beyond, in the viewer's locale. */
-function timeLabels(data: Record<string, unknown>[]) {
-  const dates = data.map((d) => d.date as Date)
-  const span = (dates.at(-1)?.getTime() ?? 0) - (dates[0]?.getTime() ?? 0)
+/**
+ * Ticks evenly spaced in time (sparse or uneven samples can't bunch them):
+ * times for ranges up to two days, dates beyond, in the viewer's locale.
+ * The first tick sits under the y axis' bottom label, so it stays blank.
+ */
+function tickFormatter(data: Record<string, unknown>[]) {
+  const first = (data[0]?.date as Date | undefined)?.getTime() ?? 0
+  const last = (data.at(-1)?.date as Date | undefined)?.getTime() ?? 0
   const format = new Intl.DateTimeFormat(
     undefined,
-    span <= 2 * DAY
-      ? { hour: "2-digit", minute: "2-digit" }
+    last - first <= 2 * DAY
+      ? { hour: "2-digit", minute: "2-digit", hourCycle: "h23" }
       : { month: "short", day: "numeric" }
   )
-  return dates.map((d) => format.format(d))
+  return (date: Date, index: number) => (index === 0 ? "" : format.format(date))
 }
 
 export function TimeSeries({
@@ -78,7 +86,7 @@ export function TimeSeries({
         />
       ))}
       <YAxis numTicks={4} formatValue={format} />
-      <XAxis numTicks={5} labels={timeLabels(data)} />
+      <XAxis numTicks={5} tickMode="domain" formatTick={tickFormatter(data)} />
       <ChartTooltip
         rows={(point) =>
           series.map((s, i) => ({

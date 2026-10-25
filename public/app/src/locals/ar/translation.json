@@ -1041,5 +1041,11 @@
   "This folder is empty. Move projects here from their menu, or create one.": "هذا المجلد فارغ. انقل المشاريع إليه من قائمتها، أو أنشئ مشروعًا.",
   "e.g. Shop": "مثل: المتجر",
   "No projects yet.": "لا مشاريع بعد.",
-  "1 project": "مشروع واحد"
+  "1 project": "مشروع واحد",
+  "15 min": "15 دقيقة",
+  "24 h": "24 ساعة",
+  "New folder…": "مجلد جديد…",
+  "Range": "المدى",
+  "Take out of the folder": "إخراج من المجلد",
+  "The last 15 minutes, then live every 2 seconds": "آخر 15 دقيقة، ثم مباشرة كل ثانيتين"
 }

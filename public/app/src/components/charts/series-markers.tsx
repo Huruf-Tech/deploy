@@ -1,27 +1,27 @@
-"use client";
+"use client"
 
-import { type ReactNode, useCallback, useMemo } from "react";
-import { clipRevealTransition } from "./animation";
+import { type ReactNode, useCallback, useMemo } from "react"
+import { clipRevealTransition } from "./animation"
 import {
   defaultScatterColors,
   useChartHover,
   useChartStable,
   useYScale,
-} from "./chart-context";
-import { useChartLegendHover } from "./chart-legend-hover";
+} from "./chart-context"
+import { useChartLegendHover } from "./chart-legend-hover"
 import {
   getSeriesMarkerVisualExtent,
   SeriesPointMarker,
   type SeriesPointMarkerStyle,
   StaticSeriesPointMarker,
-} from "./series-point-marker";
+} from "./series-point-marker"
 
 export interface SeriesMarkersProps extends SeriesPointMarkerStyle {
-  dataKey: string;
+  dataKey: string
   /** Marker fill color. Defaults to series stroke or chart palette color. */
-  fill?: string;
+  fill?: string
   /** Whether to animate markers with clip reveal. Default: true */
-  animate?: boolean;
+  animate?: boolean
   /**
    * Optional per-point pixel offset (e.g. scatter jitter). Must be
    * deterministic for a given `(index, seriesIndex)` pair.
@@ -29,24 +29,24 @@ export interface SeriesMarkersProps extends SeriesPointMarkerStyle {
   getPointOffset?: (
     index: number,
     seriesIndex: number
-  ) => { x: number; y: number };
+  ) => { x: number; y: number }
 }
 
 interface PointAt {
-  index: number;
-  cx: number;
-  cy: number;
-  revealDelay: number;
+  index: number
+  cx: number
+  cy: number
+  revealDelay: number
 }
 
 interface MarkerStyle {
-  fill: string;
-  stroke: string;
-  strokeWidth: number;
-  ringGap: number;
-  outlineWidth: number;
-  outlineColor?: string;
-  radius: number;
+  fill: string
+  stroke: string
+  strokeWidth: number
+  ringGap: number
+  outlineWidth: number
+  outlineColor?: string
+  radius: number
 }
 
 export function SeriesMarkers({
@@ -79,21 +79,21 @@ export function SeriesMarkers({
     isLoaded,
     xAccessor,
     lines,
-  } = useChartStable();
+  } = useChartStable()
 
   const seriesIndex = useMemo(() => {
-    const index = lines.findIndex((line) => line.dataKey === dataKey);
-    return index >= 0 ? index : 0;
-  }, [lines, dataKey]);
+    const index = lines.findIndex((line) => line.dataKey === dataKey)
+    return index >= 0 ? index : 0
+  }, [lines, dataKey])
 
-  const seriesConfig = lines[seriesIndex];
-  const yScale = useYScale(seriesConfig?.yAxisId);
+  const seriesConfig = lines[seriesIndex]
+  const yScale = useYScale(seriesConfig?.yAxisId)
   const seriesColor =
     defaultScatterColors[seriesIndex % defaultScatterColors.length] ??
-    defaultScatterColors[0];
+    defaultScatterColors[0]
 
-  const resolvedFill = fill ?? seriesConfig?.stroke ?? seriesColor;
-  const resolvedStroke = stroke ?? resolvedFill;
+  const resolvedFill = fill ?? seriesConfig?.stroke ?? seriesColor
+  const resolvedStroke = stroke ?? resolvedFill
 
   const visualExtent = useMemo(
     () =>
@@ -105,37 +105,37 @@ export function SeriesMarkers({
         showActiveHighlight,
       }),
     [radius, strokeWidth, ringGap, outlineWidth, showActiveHighlight]
-  );
+  )
 
   const revealDurationSec =
-    clipRevealTransition(enterTransition).duration ?? animationDuration / 1000;
-  const enterDuration = 0.5;
-  const isRevealing = animate && !isLoaded;
+    clipRevealTransition(enterTransition).duration ?? animationDuration / 1000
+  const enterDuration = 0.5
+  const isRevealing = animate && !isLoaded
 
   const getY = useCallback(
     (d: Record<string, unknown>) => {
-      const value = d[dataKey];
-      return typeof value === "number" ? (yScale(value) ?? 0) : null;
+      const value = d[dataKey]
+      return typeof value === "number" ? (yScale(value) ?? 0) : null
     },
     [dataKey, yScale]
-  );
+  )
 
   const points = useMemo<PointAt[]>(
     () =>
       data.flatMap((d, index) => {
-        const cy = getY(d);
+        const cy = getY(d)
         if (cy === null) {
-          return [];
+          return []
         }
-        const offset = getPointOffset?.(index, seriesIndex);
-        const cx = (xScale(xAccessor(d)) ?? 0) + (offset?.x ?? 0);
-        const leadingEdge = Math.max(0, cx - visualExtent);
+        const offset = getPointOffset?.(index, seriesIndex)
+        const cx = (xScale(xAccessor(d)) ?? 0) + (offset?.x ?? 0)
+        const leadingEdge = Math.max(0, cx - visualExtent)
         const revealDelay =
           innerWidth > 0 && isRevealing
             ? (leadingEdge / innerWidth) * revealDurationSec
-            : 0;
+            : 0
 
-        return [{ index, cx, cy: cy + (offset?.y ?? 0), revealDelay }];
+        return [{ index, cx, cy: cy + (offset?.y ?? 0), revealDelay }]
       }),
     [
       data,
@@ -149,7 +149,7 @@ export function SeriesMarkers({
       getPointOffset,
       seriesIndex,
     ]
-  );
+  )
 
   // Memo so the inner <SeriesMarkersActiveHighlight> sees a stable prop and
   // can be cheaply re-rendered on hover without re-creating the spread.
@@ -172,7 +172,7 @@ export function SeriesMarkers({
       outlineColor,
       radius,
     ]
-  );
+  )
 
   if (isRevealing) {
     return (
@@ -192,7 +192,7 @@ export function SeriesMarkers({
           />
         ))}
       </g>
-    );
+    )
   }
 
   // Stable base layer — its children come from the parent and stay
@@ -204,8 +204,8 @@ export function SeriesMarkers({
       key={`${dataKey}-${point.index}`}
       {...markerStyle}
     />
-  ));
-  const activeScale = showActiveHighlight ? 1.35 : 1;
+  ))
+  const activeScale = showActiveHighlight ? 1.35 : 1
 
   return (
     <g>
@@ -225,17 +225,17 @@ export function SeriesMarkers({
         points={points}
       />
     </g>
-  );
+  )
 }
 
-SeriesMarkers.displayName = "SeriesMarkers";
+SeriesMarkers.displayName = "SeriesMarkers"
 
 interface SeriesMarkersDimWrapperProps {
-  enabled: boolean;
-  inactiveOpacity: number;
-  inactiveBlur: number;
-  seriesIndex: number;
-  children: ReactNode;
+  enabled: boolean
+  inactiveOpacity: number
+  inactiveBlur: number
+  seriesIndex: number
+  children: ReactNode
 }
 
 /**
@@ -250,11 +250,11 @@ function SeriesMarkersDimWrapper({
   seriesIndex,
   children,
 }: SeriesMarkersDimWrapperProps) {
-  const { tooltipData } = useChartHover();
-  const { hoveredIndex: legendHoveredIndex } = useChartLegendHover();
+  const { tooltipData } = useChartHover()
+  const { hoveredIndex: legendHoveredIndex } = useChartLegendHover()
   const isLegendDimmed =
-    legendHoveredIndex !== null && legendHoveredIndex !== seriesIndex;
-  const dimBase = enabled && (tooltipData !== null || isLegendDimmed);
+    legendHoveredIndex !== null && legendHoveredIndex !== seriesIndex
+  const dimBase = enabled && (tooltipData !== null || isLegendDimmed)
   return (
     <g
       opacity={dimBase ? inactiveOpacity : 1}
@@ -266,15 +266,15 @@ function SeriesMarkersDimWrapper({
     >
       {children}
     </g>
-  );
+  )
 }
 
 interface SeriesMarkersActiveHighlightProps {
-  dataKey: string;
-  enabled: boolean;
-  points: PointAt[];
-  markerStyle: MarkerStyle;
-  activeScale: number;
+  dataKey: string
+  enabled: boolean
+  points: PointAt[]
+  markerStyle: MarkerStyle
+  activeScale: number
 }
 
 /**
@@ -288,20 +288,20 @@ function SeriesMarkersActiveHighlight({
   markerStyle,
   activeScale,
 }: SeriesMarkersActiveHighlightProps) {
-  const { tooltipData } = useChartHover();
+  const { tooltipData } = useChartHover()
   if (!enabled || tooltipData === null) {
-    return null;
+    return null
   }
   // Nearest-point hover (jittered scatter): only the hovered series' point.
   if (
     tooltipData.activeDataKey !== undefined &&
     tooltipData.activeDataKey !== dataKey
   ) {
-    return null;
+    return null
   }
-  const activePoint = points.find((point) => point.index === tooltipData.index);
+  const activePoint = points.find((point) => point.index === tooltipData.index)
   if (!activePoint) {
-    return null;
+    return null
   }
   return (
     <StaticSeriesPointMarker
@@ -310,7 +310,7 @@ function SeriesMarkersActiveHighlight({
       scale={activeScale}
       {...markerStyle}
     />
-  );
+  )
 }
 
-export default SeriesMarkers;
+export default SeriesMarkers

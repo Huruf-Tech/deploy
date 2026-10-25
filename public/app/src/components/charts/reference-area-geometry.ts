@@ -1,26 +1,26 @@
-export type ReferenceAreaIfOverflow = "hidden" | "visible" | "discard";
+export type ReferenceAreaIfOverflow = "hidden" | "visible" | "discard"
 
 export interface ReferenceAreaRect {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
+  x: number
+  y: number
+  width: number
+  height: number
 }
 
 export interface ComputeReferenceAreaRectOptions {
-  innerWidth: number;
-  innerHeight: number;
-  x1?: Date | number;
-  x2?: Date | number;
-  y1?: number;
-  y2?: number;
-  ifOverflow?: ReferenceAreaIfOverflow;
-  xScale: (value: Date) => number;
-  yScale: (value: number) => number;
+  innerWidth: number
+  innerHeight: number
+  x1?: Date | number
+  x2?: Date | number
+  y1?: number
+  y2?: number
+  ifOverflow?: ReferenceAreaIfOverflow
+  xScale: (value: Date) => number
+  yScale: (value: number) => number
 }
 
 function toDate(value: Date | number): Date {
-  return value instanceof Date ? value : new Date(value);
+  return value instanceof Date ? value : new Date(value)
 }
 
 function resolveXPixel(
@@ -29,9 +29,9 @@ function resolveXPixel(
   fallback: number
 ): number {
   if (value == null) {
-    return fallback;
+    return fallback
   }
-  return xScale(toDate(value));
+  return xScale(toDate(value))
 }
 
 function resolveYPixel(
@@ -40,9 +40,9 @@ function resolveYPixel(
   fallback: number
 ): number {
   if (value == null) {
-    return fallback;
+    return fallback
   }
-  return yScale(value);
+  return yScale(value)
 }
 
 function clampRectToPlot(
@@ -50,16 +50,16 @@ function clampRectToPlot(
   innerWidth: number,
   innerHeight: number
 ): ReferenceAreaRect | null {
-  const x1 = Math.max(0, rect.x);
-  const y1 = Math.max(0, rect.y);
-  const x2 = Math.min(innerWidth, rect.x + rect.width);
-  const y2 = Math.min(innerHeight, rect.y + rect.height);
-  const width = x2 - x1;
-  const height = y2 - y1;
+  const x1 = Math.max(0, rect.x)
+  const y1 = Math.max(0, rect.y)
+  const x2 = Math.min(innerWidth, rect.x + rect.width)
+  const y2 = Math.min(innerHeight, rect.y + rect.height)
+  const width = x2 - x1
+  const height = y2 - y1
   if (width <= 0 || height <= 0) {
-    return null;
+    return null
   }
-  return { x: x1, y: y1, width, height };
+  return { x: x1, y: y1, width, height }
 }
 
 function isFullyInsidePlot(
@@ -72,7 +72,7 @@ function isFullyInsidePlot(
     rect.y >= 0 &&
     rect.x + rect.width <= innerWidth &&
     rect.y + rect.height <= innerHeight
-  );
+  )
 }
 
 /** Map data bounds to plot pixels for a reference rectangle. */
@@ -89,37 +89,37 @@ export function computeReferenceAreaRect(
     ifOverflow = "hidden",
     xScale,
     yScale,
-  } = options;
+  } = options
 
   if (innerWidth <= 0 || innerHeight <= 0) {
-    return null;
+    return null
   }
 
-  const left = resolveXPixel(xScale, x1, 0);
-  const right = resolveXPixel(xScale, x2, innerWidth);
-  const top = resolveYPixel(yScale, y1, 0);
-  const bottom = resolveYPixel(yScale, y2, innerHeight);
+  const left = resolveXPixel(xScale, x1, 0)
+  const right = resolveXPixel(xScale, x2, innerWidth)
+  const top = resolveYPixel(yScale, y1, 0)
+  const bottom = resolveYPixel(yScale, y2, innerHeight)
 
-  const x = Math.min(left, right);
-  const y = Math.min(top, bottom);
-  const width = Math.abs(right - left);
-  const height = Math.abs(bottom - top);
+  const x = Math.min(left, right)
+  const y = Math.min(top, bottom)
+  const width = Math.abs(right - left)
+  const height = Math.abs(bottom - top)
 
   if (width <= 0 || height <= 0) {
-    return null;
+    return null
   }
 
-  const rect: ReferenceAreaRect = { x, y, width, height };
+  const rect: ReferenceAreaRect = { x, y, width, height }
 
   if (ifOverflow === "visible") {
-    return rect;
+    return rect
   }
 
   if (ifOverflow === "discard") {
-    return isFullyInsidePlot(rect, innerWidth, innerHeight) ? rect : null;
+    return isFullyInsidePlot(rect, innerWidth, innerHeight) ? rect : null
   }
 
-  return clampRectToPlot(rect, innerWidth, innerHeight);
+  return clampRectToPlot(rect, innerWidth, innerHeight)
 }
 
 /** Inclusive data range for axis label highlighting. */
@@ -128,9 +128,9 @@ export function resolveReferenceDataRange(
   y2: number | undefined,
   domain: [number, number]
 ): [number, number] {
-  const dMin = Math.min(domain[0], domain[1]);
-  const dMax = Math.max(domain[0], domain[1]);
-  const low = y1 ?? dMin;
-  const high = y2 ?? dMax;
-  return [Math.min(low, high), Math.max(low, high)];
+  const dMin = Math.min(domain[0], domain[1])
+  const dMax = Math.max(domain[0], domain[1])
+  const low = y1 ?? dMin
+  const high = y2 ?? dMax
+  return [Math.min(low, high), Math.max(low, high)]
 }

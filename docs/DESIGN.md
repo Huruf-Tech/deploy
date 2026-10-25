@@ -51,7 +51,7 @@ The dashboard wears Huruf's own theme, taken from the site's stylesheet. These v
 
 - **Neutrals are achromatic** (zero chroma): no blue-grey tints anywhere.
 - **Fonts:** Geist for UI and headings, Geist Mono for code, ids and numbers, Noto Sans Arabic for Arabic, Instrument Serif only for rare display accents (e.g. an empty state's headline), never in data UI. Geist Mono and Noto Sans Arabic are added as `@fontsource-variable` packages (bundled, offline-safe like core's fonts).
-- **Charts** use the orange ramp first; when a chart needs more distinct series than a ramp can separate, the extra series use the neutral greys, never the status colors.
+- **Chart series** use `--series-1…5`: Huruf orange first, then blue, violet, teal and pink, far apart so lines can be told apart (the orange ramp was too close). Past five, neutral grey; never the status colors. The `--chart-1…5` ramp is for single-series fills and scales.
 - **Status colors** (success green, warning amber, info blue, plus the destructive red above) are the only other hues. Warning amber is kept clearly yellower than the brand orange so the two never read as the same thing.
 - The dashboard's current darker orange (`oklch(55.3% …)`, chart 4 of the ramp) was a drift from the brand. It's only used where contrast requires it (see the primary-button note under §8).
 
@@ -158,7 +158,7 @@ Rules: pages compose these; new patterns get added here first, then used. The ki
 
 - Installed through the CLI into `src/components/charts/` (registry `@bklit`: `https://bklit.com/r/{name}.json`; the old `ui.bklit.com` redirects). The CLI overwrites `src/lib/utils.ts`: restore ours after any `shadcn add @bklit/...`. It also appends `--chart-*` / `--legend*` variables to `src/index.css`; ours map them onto Huruf's neutrals. Its dependencies (`@visx/*`, `d3-*`, `@number-flow/react`; `motion` we have) are justified: they replace `recharts` once every chart is migrated, and `recharts` is then removed.
 - `recharts` and `ui/chart.tsx` are gone; bklit's d3 types come from `@types/d3-shape` and `@types/d3-array`. bklit's vendored files are excluded from eslint (presets are linted).
-- `TimeSeries` draws monotone curves (no overshoot), labels the time axis with times up to two days and dates beyond, and expects rows with `date: Date`; thin long series to about 240 points first. A null bucket is carried forward by the caller (the control plane does this).
+- `TimeSeries` draws monotone curves (no overshoot); its time axis is evenly spaced in time (`tickMode="domain"` with our `formatTick`, a small marked addition to the vendored `x-axis.tsx`: keep it when updating bklit), shows 24-hour times up to two days and dates beyond, and leaves the first tick blank so it never sits on the y axis' bottom label; and expects rows with `date: Date`; thin long series to about 240 points first. A null bucket is carried forward by the caller (the control plane does this).
 - Presets live in `src/components/charts/presets.tsx` (`TimeSeries`, `Spark`, `SERIES` colors); gauge, ring, bar and live-line presets are added there when a page first needs them. Defaults: compact margins, no entry animation on refresh (only on first draw, and none under reduced motion), tooltips with units, `--chart-*` colors, and time axes in the viewer's locale.
 
 ---
@@ -234,6 +234,8 @@ Each of these shipped, was caught after the redesign, and was fixed. Check new U
 
 - **Menu labels live inside a group.** `DropdownMenuLabel` outside `DropdownMenuGroup` throws Base UI error #31 and takes the whole route down ("Unexpected Application Error"). Same for `SelectGroupLabel` / `CommandGroup` headings: use the parent the primitive expects.
 - **`CommandDialog` needs a `<Command>` inside it** (this shadcn version doesn't add one); without it cmdk crashes on open.
+- **Clicks inside a portal bubble through React, not the DOM.** A menu opened from a table cell is portalled to `body`, yet its item clicks reached the row's `onClick` and opened the project (a 404 at `/projects/p1/p1`). `DataTable` rows now ignore events whose target isn't inside the row; any other clickable container holding a menu, dialog or popover needs the same `currentTarget.contains(target)` check.
+- **Menus must offer a way forward.** "Move to folder" with no folders showed a dead end; it now has "New folder…", which creates the folder and moves the projects into it. Hide actions that do nothing in the current state ("Take out of the folder" only inside a folder).
 - **Size overrides must match the primitive's selector.** `SelectTrigger` sets its height with `data-[size=sm]:h-8`, which beats a plain `h-7`; override with `data-[size=sm]:h-7` (same for radius and padding). In a 32–36 px bar, controls are 28 px (`h-7`) with `rounded-md`, never the default pill.
 - **Rounded containers clip their children** (`overflow-hidden`), or a sticky/colored header paints square corners over the border (it happened on every `DataTable`).
 - **Don't duplicate a control core already renders.** Core's list toolbar has its own cards/table toggle; a second toggle in our card override confused the page. Check what the core screen already shows before adding to it.
@@ -261,7 +263,8 @@ Each of these shipped, was caught after the redesign, and was fixed. Check new U
 
 - **Every command, config or template is a `CodeBlock` with `lang`** (shell, yaml, dockerfile): highlighted, copyable, `dir="ltr"`. No bare `<pre>`/`<code>` for anything a user copies.
 - **Deep links say where they go:** links into the auth app carry the exact tab (`/account?tab=personal` for email verification).
-- **Charts:** monotone curves (no overshoot), time ticks for short ranges, enough left margin for unit labels, at most ~240 points.
+- **Charts:** monotone curves (no overshoot), time-spaced ticks with 24-hour times for short ranges, a blank first tick, enough left margin for unit labels, at most ~240 points, and series hues far apart.
+- **Live data needs history on open.** A chart that starts empty every visit hides what just happened: the agent keeps the last 15 minutes at 5-second resolution (beside the 24-hour minute history), and the server chart opens on that window with a 15 min / 24 h toggle.
 - **Contrast:** muted text on muted surfaces needs the darker `--muted-foreground` (52%); verify with axe, don't eyeball.
 
 ### How we check

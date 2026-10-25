@@ -1,13 +1,13 @@
-"use client";
+"use client"
 
-import { useParentSize } from "@visx/responsive";
-import type { CSSProperties, ReactNode } from "react";
+import { useParentSize } from "@visx/responsive"
+import type { CSSProperties, ReactNode } from "react"
 
 export interface ChartParentSizeProps {
-  children: (size: { width: number; height: number }) => ReactNode;
-  className?: string;
-  debounceTime?: number;
-  style?: CSSProperties;
+  children: (size: { width: number; height: number }) => ReactNode
+  className?: string
+  debounceTime?: number
+  style?: CSSProperties
 }
 
 /**
@@ -20,7 +20,7 @@ export function ParentSize({
   debounceTime,
   style,
 }: ChartParentSizeProps) {
-  const { parentRef, width, height } = useParentSize({ debounceTime });
+  const { parentRef, width, height } = useParentSize({ debounceTime })
   return (
     <div
       className={className}
@@ -30,5 +30,5 @@ export function ParentSize({
         {children({ width, height })}
       </div>
     </div>
-  );
+  )
 }

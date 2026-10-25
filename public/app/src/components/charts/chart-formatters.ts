@@ -1,29 +1,29 @@
 export const shortDateFmt = new Intl.DateTimeFormat("en-US", {
   month: "short",
   day: "numeric",
-});
+})
 
 export const weekdayDateFmt = new Intl.DateTimeFormat("en-US", {
   weekday: "short",
   month: "short",
   day: "numeric",
-});
+})
 
 export const hmsTimeFmt = new Intl.DateTimeFormat("en-US", {
   hour: "2-digit",
   minute: "2-digit",
   second: "2-digit",
   hour12: false,
-});
+})
 
 // `Intl.NumberFormat.prototype.format` is a bound getter — safe to extract.
-export const intFmt = new Intl.NumberFormat("en-US").format;
+export const intFmt = new Intl.NumberFormat("en-US").format
 export const valueLabelFmt = new Intl.NumberFormat("en-US", {
   maximumFractionDigits: 0,
-}).format;
+}).format
 
 function isFiniteNumber(value: unknown): value is number {
-  return typeof value === "number" && Number.isFinite(value);
+  return typeof value === "number" && Number.isFinite(value)
 }
 
 /**
@@ -37,13 +37,13 @@ export function formatBandRange(
   lowerKey: string,
   format: (value: number) => string = intFmt
 ): string | number | null {
-  const upper = point[upperKey];
-  const lower = point[lowerKey];
+  const upper = point[upperKey]
+  const lower = point[lowerKey]
   if (!(isFiniteNumber(upper) && isFiniteNumber(lower))) {
-    return null;
+    return null
   }
   if (upperKey === lowerKey) {
-    return upper;
+    return upper
   }
-  return `${format(Math.min(lower, upper))} – ${format(Math.max(lower, upper))}`;
+  return `${format(Math.min(lower, upper))} – ${format(Math.max(lower, upper))}`
 }

@@ -1,33 +1,33 @@
-"use client";
+"use client"
 
 import {
   cloneElement,
   isValidElement,
   type ReactElement,
   useState,
-} from "react";
-import { cn } from "@/lib/utils";
+} from "react"
+import { cn } from "@/lib/utils"
 import {
   type LegendItemData,
   LegendItemProvider,
   LegendProvider,
-} from "./legend-context";
+} from "./legend-context"
 
 export interface LegendProps {
   /** Legend items data */
-  items: LegendItemData[];
+  items: LegendItemData[]
   /** Controlled hover state */
-  hoveredIndex?: number | null;
+  hoveredIndex?: number | null
   /** Hover state change callback */
-  onHoverChange?: (index: number | null) => void;
+  onHoverChange?: (index: number | null) => void
   /** Title shown above the legend */
-  title?: string;
+  title?: string
   /** Title class name */
-  titleClassName?: string;
+  titleClassName?: string
   /** Container class name */
-  className?: string;
+  className?: string
   /** Children - should contain a single LegendItem that will be mapped for each item */
-  children: ReactElement;
+  children: ReactElement
 }
 
 export function Legend({
@@ -41,26 +41,26 @@ export function Legend({
 }: LegendProps) {
   const [internalHoveredIndex, setInternalHoveredIndex] = useState<
     number | null
-  >(null);
+  >(null)
 
   // Controlled or uncontrolled hover state
-  const isControlled = controlledHoveredIndex !== undefined;
+  const isControlled = controlledHoveredIndex !== undefined
   const hoveredIndex = isControlled
     ? controlledHoveredIndex
-    : internalHoveredIndex;
+    : internalHoveredIndex
   const setHoveredIndex = (index: number | null) => {
     if (isControlled) {
-      onHoverChange?.(index);
+      onHoverChange?.(index)
     } else {
-      setInternalHoveredIndex(index);
+      setInternalHoveredIndex(index)
     }
-  };
+  }
 
   const contextValue = {
     items,
     hoveredIndex,
     setHoveredIndex,
-  };
+  }
 
   return (
     <LegendProvider value={contextValue}>
@@ -71,11 +71,11 @@ export function Legend({
           </h3>
         )}
         {items.map((item, index) => {
-          const isHovered = hoveredIndex === index;
-          const isFaded = hoveredIndex !== null && hoveredIndex !== index;
+          const isHovered = hoveredIndex === index
+          const isFaded = hoveredIndex !== null && hoveredIndex !== index
           const percentage = item.maxValue
             ? (item.value / item.maxValue) * 100
-            : 0;
+            : 0
 
           const itemContext = {
             item,
@@ -83,7 +83,7 @@ export function Legend({
             isHovered,
             isFaded,
             percentage,
-          };
+          }
 
           // Clone the child element for each item
           if (isValidElement(children)) {
@@ -91,14 +91,14 @@ export function Legend({
               <LegendItemProvider key={item.label} value={itemContext}>
                 {cloneElement(children)}
               </LegendItemProvider>
-            );
+            )
           }
 
-          return null;
+          return null
         })}
       </div>
     </LegendProvider>
-  );
+  )
 }
 
-Legend.displayName = "Legend";
+Legend.displayName = "Legend"

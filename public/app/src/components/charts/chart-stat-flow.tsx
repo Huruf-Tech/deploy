@@ -1,29 +1,29 @@
-"use client";
+"use client"
 
-import NumberFlow from "@number-flow/react";
-import { type ReactNode, useEffect, useMemo, useState } from "react";
-import { cn } from "@/lib/utils";
+import NumberFlow from "@number-flow/react"
+import { type ReactNode, useEffect, useMemo, useState } from "react"
+import { cn } from "@/lib/utils"
 
 /** Subset of `Intl.NumberFormatOptions` supported by NumberFlow */
 export interface ChartStatFlowFormat {
-  notation?: "standard" | "compact";
-  compactDisplay?: "short" | "long";
-  minimumFractionDigits?: number;
-  maximumFractionDigits?: number;
-  minimumIntegerDigits?: number;
-  minimumSignificantDigits?: number;
-  maximumSignificantDigits?: number;
-  style?: "decimal" | "percent" | "currency";
-  currency?: string;
-  currencyDisplay?: "symbol" | "narrowSymbol" | "code" | "name";
-  unit?: string;
-  unitDisplay?: "short" | "long" | "narrow";
+  notation?: "standard" | "compact"
+  compactDisplay?: "short" | "long"
+  minimumFractionDigits?: number
+  maximumFractionDigits?: number
+  minimumIntegerDigits?: number
+  minimumSignificantDigits?: number
+  maximumSignificantDigits?: number
+  style?: "decimal" | "percent" | "currency"
+  currency?: string
+  currencyDisplay?: "symbol" | "narrowSymbol" | "code" | "name"
+  unit?: string
+  unitDisplay?: "short" | "long" | "narrow"
 }
 
 export const defaultChartStatFlowFormat: ChartStatFlowFormat = {
   notation: "standard",
   maximumFractionDigits: 0,
-};
+}
 
 function formatStatValue(
   value: number,
@@ -33,8 +33,8 @@ function formatStatValue(
 ): string {
   const formatted = new Intl.NumberFormat(undefined, formatOptions).format(
     value
-  );
-  return `${prefix ?? ""}${formatted}${suffix ?? ""}`;
+  )
+  return `${prefix ?? ""}${formatted}${suffix ?? ""}`
 }
 
 function useNumberFlowElementReady(): boolean {
@@ -42,35 +42,35 @@ function useNumberFlowElementReady(): boolean {
     () =>
       typeof customElements !== "undefined" &&
       Boolean(customElements.get("number-flow-react"))
-  );
+  )
 
   useEffect(() => {
     if (ready) {
-      return;
+      return
     }
-    let cancelled = false;
+    let cancelled = false
     customElements.whenDefined("number-flow-react").then(() => {
       if (!cancelled) {
-        setReady(true);
+        setReady(true)
       }
-    });
+    })
     return () => {
-      cancelled = true;
-    };
-  }, [ready]);
+      cancelled = true
+    }
+  }, [ready])
 
-  return ready;
+  return ready
 }
 
 export interface ChartStatFlowProps {
-  value: number;
-  label: string;
-  formatOptions?: ChartStatFlowFormat;
-  prefix?: string;
-  suffix?: string;
-  valueClassName?: string;
-  labelClassName?: string;
-  icon?: ReactNode;
+  value: number
+  label: string
+  formatOptions?: ChartStatFlowFormat
+  prefix?: string
+  suffix?: string
+  valueClassName?: string
+  labelClassName?: string
+  icon?: ReactNode
 }
 
 /**
@@ -87,11 +87,11 @@ export function ChartStatFlow({
   labelClassName = "text-xs",
   icon,
 }: ChartStatFlowProps) {
-  const numberFlowReady = useNumberFlowElementReady();
+  const numberFlowReady = useNumberFlowElementReady()
   const staticValue = useMemo(
     () => formatStatValue(value, formatOptions, prefix, suffix),
     [value, formatOptions, prefix, suffix]
-  );
+  )
 
   return (
     <>
@@ -118,7 +118,7 @@ export function ChartStatFlow({
         {label}
       </span>
     </>
-  );
+  )
 }
 
-ChartStatFlow.displayName = "ChartStatFlow";
+ChartStatFlow.displayName = "ChartStatFlow"

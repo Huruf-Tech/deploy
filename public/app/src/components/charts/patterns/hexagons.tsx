@@ -1,29 +1,29 @@
-import { cn } from "@/lib/utils";
-import { Path } from "./path";
+import { cn } from "@/lib/utils"
+import { Path } from "./path"
 
 export interface PatternHexagonsProps {
   /** Unique id for the pattern. */
-  id: string;
+  id: string
   /** Height of the pattern element. */
-  height: number;
+  height: number
   /** Size of the hexagon shape. */
-  size?: number;
+  size?: number
   /** Fill applied to hexagons. */
-  fill?: string;
+  fill?: string
   /** className applied to hexagon path element. */
-  className?: string;
+  className?: string
   /** Background color applied behind hexagons. */
-  background?: string;
+  background?: string
   /** Stroke color applied to hexagon paths. */
-  stroke?: string;
+  stroke?: string
   /** strokeWidth applied to hexagon paths. */
-  strokeWidth?: number | string;
+  strokeWidth?: number | string
   /** strokeDasharray applied to hexagon paths. */
-  strokeDasharray?: string | number;
+  strokeDasharray?: string | number
   /** strokeLinecap applied to hexagon paths. */
-  strokeLinecap?: "square" | "butt" | "round" | "inherit";
+  strokeLinecap?: "square" | "butt" | "round" | "inherit"
   /** shapeRendering applied to hexagon paths. */
-  shapeRendering?: string | number;
+  shapeRendering?: string | number
 }
 
 export function Hexagons({
@@ -39,7 +39,7 @@ export function Hexagons({
   className,
   size = 3,
 }: PatternHexagonsProps) {
-  const sqrtSize = Math.sqrt(size);
+  const sqrtSize = Math.sqrt(size)
   return (
     <Path
       background={background}
@@ -55,5 +55,5 @@ export function Hexagons({
       strokeWidth={strokeWidth}
       width={size}
     />
-  );
+  )
 }

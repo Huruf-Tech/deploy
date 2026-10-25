@@ -1041,5 +1041,11 @@
   "This folder is empty. Move projects here from their menu, or create one.": "This folder is empty. Move projects here from their menu, or create one.",
   "e.g. Shop": "e.g. Shop",
   "No projects yet.": "No projects yet.",
-  "1 project": "1 project"
+  "1 project": "1 project",
+  "15 min": "15 min",
+  "24 h": "24 h",
+  "New folder…": "New folder…",
+  "Range": "Range",
+  "Take out of the folder": "Take out of the folder",
+  "The last 15 minutes, then live every 2 seconds": "The last 15 minutes, then live every 2 seconds"
 }

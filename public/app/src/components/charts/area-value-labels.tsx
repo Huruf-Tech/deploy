@@ -1,20 +1,20 @@
-"use client";
+"use client"
 
-import { useId, useLayoutEffect, useMemo, useRef } from "react";
-import type { AreaProps } from "./area";
+import { useId, useLayoutEffect, useMemo, useRef } from "react"
+import type { AreaProps } from "./area"
 import {
   evenlySpacedLabelIndices,
   layoutAreaValueLabels,
   resolveAreaValueLabelCount,
   resolveSharedAreaValueLabelCount,
-} from "./area-value-label-layout";
-import { chartCssVars, useChartStable } from "./chart-context";
-import { valueLabelFmt } from "./chart-formatters";
+} from "./area-value-label-layout"
+import { chartCssVars, useChartStable } from "./chart-context"
+import { valueLabelFmt } from "./chart-formatters"
 import {
   fadeGradientStops,
   resolveFadeSides,
   viewportFadeGradientAttrs,
-} from "./fade-edges";
+} from "./fade-edges"
 
 /** One final layer keeps later area fills from painting over earlier labels. */
 export function AreaValueLabels({ series }: { series: AreaProps[] }) {
@@ -27,16 +27,16 @@ export function AreaValueLabels({ series }: { series: AreaProps[] }) {
     innerWidth,
     innerHeight,
     chartPhase,
-  } = useChartStable();
-  const layerRef = useRef<SVGGElement>(null);
-  const id = useId();
+  } = useChartStable()
+  const layerRef = useRef<SVGGElement>(null)
+  const id = useId()
   const labels = useMemo(() => {
     if (!["revealing", "ready", "exitingReady"].includes(chartPhase)) {
-      return [];
+      return []
     }
     const visible = data
       .map((datum, index) => ({ datum, index, x: xScale(xAccessor(datum)) }))
-      .filter(({ x }) => Number.isFinite(x) && x >= 0 && x <= innerWidth);
+      .filter(({ x }) => Number.isFinite(x) && x >= 0 && x <= innerWidth)
     const visibleSeries = series
       .map((area, seriesIndex) => ({
         area,
@@ -47,7 +47,7 @@ export function AreaValueLabels({ series }: { series: AreaProps[] }) {
             Number.isFinite(datum[area.dataKey])
         ),
       }))
-      .filter(({ area }) => area.showValue);
+      .filter(({ area }) => area.showValue)
     const counts = visibleSeries.map(({ area, points }) =>
       resolveAreaValueLabelCount(
         points.length,
@@ -55,27 +55,27 @@ export function AreaValueLabels({ series }: { series: AreaProps[] }) {
         area.valueLabelMinCount,
         area.valueLabelMaxCount
       )
-    );
-    const sharedCount = resolveSharedAreaValueLabelCount(counts);
+    )
+    const sharedCount = resolveSharedAreaValueLabelCount(counts)
     return visibleSeries.flatMap(({ area, seriesIndex, points }, i) => {
       // Series that resolve to 0 (e.g. `valueLabelMaxCount={0}`) stay hidden;
       // the rest share the smallest non-zero count so labels line up.
-      const count = Math.min(sharedCount, counts[i] ?? 0);
+      const count = Math.min(sharedCount, counts[i] ?? 0)
       if (count === 0) {
-        return [];
+        return []
       }
-      const indices = evenlySpacedLabelIndices(points.length, count);
+      const indices = evenlySpacedLabelIndices(points.length, count)
       return indices.flatMap((position) => {
-        const point = position == null ? undefined : points[position];
+        const point = position == null ? undefined : points[position]
         if (!point) {
-          return [];
+          return []
         }
-        const { datum, index, x } = point;
-        const value = datum[area.dataKey] as number;
-        const scale = yScales[String(area.yAxisId ?? "left")] ?? yScale;
-        const y = scale(value);
+        const { datum, index, x } = point
+        const value = datum[area.dataKey] as number
+        const scale = yScales[String(area.yAxisId ?? "left")] ?? yScale
+        const y = scale(value)
         if (!Number.isFinite(y)) {
-          return [];
+          return []
         }
         return [
           {
@@ -85,69 +85,60 @@ export function AreaValueLabels({ series }: { series: AreaProps[] }) {
             y,
             text: area.valueLabelFormatter?.(value) ?? valueLabelFmt(value),
           },
-        ];
-      });
-    });
-  }, [
-    data,
-    series,
-    xScale,
-    xAccessor,
-    yScale,
-    yScales,
-    innerWidth,
-    chartPhase,
-  ]);
+        ]
+      })
+    })
+  }, [data, series, xScale, xAccessor, yScale, yScales, innerWidth, chartPhase])
 
   useLayoutEffect(() => {
-    const layer = layerRef.current;
+    const layer = layerRef.current
     if (!layer) {
-      return;
+      return
     }
-    let active = true;
+    let active = true
     const arrange = () => {
       if (!active) {
-        return;
+        return
       }
-      const elements = Array.from(layer.querySelectorAll("text"));
+      const elements = Array.from(layer.querySelectorAll("text"))
       const boxes = labels.map((label, index) => {
-        const bounds = elements[index]?.getBBox();
+        const bounds = elements[index]?.getBBox()
         return {
           ...label,
           width: bounds?.width ?? 0,
           height: bounds?.height ?? 0,
-        };
-      });
+        }
+      })
       for (const element of elements) {
-        element.style.visibility = "hidden";
+        element.style.visibility = "hidden"
       }
       for (const box of layoutAreaValueLabels(boxes, innerWidth, innerHeight)) {
-        const element = elements[box.source];
+        const element = elements[box.source]
         if (!element) {
-          continue;
+          continue
         }
         // Measure at the origin so font ascent, Persian digits and custom formats are respected.
-        const bounds = element.getBBox();
+        const bounds = element.getBBox()
         element.setAttribute(
           "transform",
           `translate(${box.x - bounds.x - bounds.width / 2}, ${box.y - bounds.y - bounds.height / 2})`
-        );
-        element.style.visibility = "visible";
+        )
+        element.style.visibility = "visible"
       }
-    };
-    arrange();
+    }
+    arrange()
     // Font loading changes Persian glyph widths; remeasure before deciding collisions.
-    document.fonts.ready.then(arrange);
-    document.fonts.addEventListener("loadingdone", arrange);
+    document.fonts.ready.then(arrange)
+    document.fonts.addEventListener("loadingdone", arrange)
     return () => {
-      active = false;
-      document.fonts.removeEventListener("loadingdone", arrange);
-    };
-  }, [labels, innerWidth, innerHeight]);
+      active = false
+      document.fonts.removeEventListener("loadingdone", arrange)
+    }
+  }, [labels, innerWidth, innerHeight])
 
   // Labels are opt-in: charts without `showValue` render no extra layer.
   if (!series.some((area) => area.showValue)) {
-    return null;
+    return null
   }
 
   return (
@@ -191,9 +182,9 @@ export function AreaValueLabels({ series }: { series: AreaProps[] }) {
         )}
       </defs>
       {labels.map((label) => {
-        const area = series[label.seriesIndex];
+        const area = series[label.seriesIndex]
         if (!area) {
-          return null;
+          return null
         }
         return (
           <g
@@ -205,7 +196,7 @@ export function AreaValueLabels({ series }: { series: AreaProps[] }) {
             }
           >
             <text
-              className="font-medium text-[10px]"
+              className="text-[10px] font-medium"
               fill={
                 area.valueLabelColor ??
                 area.stroke ??
@@ -224,8 +215,8 @@ export function AreaValueLabels({ series }: { series: AreaProps[] }) {
               {label.text}
             </text>
           </g>
-        );
+        )
       })}
     </g>
-  );
+  )
 }

@@ -57,6 +57,12 @@
   --chart-3: oklch(0.646 0.222 41.116);
   --chart-4: oklch(0.553 0.195 38.402);
   --chart-5: oklch(0.47 0.157 37.304);
+  /* Line/series colours: orange, blue, violet, teal, pink (DESIGN §6). */
+  --series-1: oklch(0.68 0.2 45);
+  --series-2: oklch(0.58 0.18 250);
+  --series-3: oklch(0.56 0.22 300);
+  --series-4: oklch(0.6 0.12 185);
+  --series-5: oklch(0.62 0.21 355);
   --radius: 0.625rem;
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
@@ -143,6 +149,11 @@
   --chart-3: oklch(0.646 0.222 41.116);
   --chart-4: oklch(0.553 0.195 38.402);
   --chart-5: oklch(0.47 0.157 37.304);
+  --series-1: oklch(0.72 0.19 45);
+  --series-2: oklch(0.7 0.15 250);
+  --series-3: oklch(0.7 0.18 300);
+  --series-4: oklch(0.75 0.12 185);
+  --series-5: oklch(0.72 0.18 355);
   --sidebar: oklch(0.1 0 0);
   --sidebar-foreground: oklch(0.985 0 0);
   --sidebar-primary: oklch(0.705 0.213 47.604);

@@ -3,23 +3,23 @@ import {
   fadeGradientStops,
   resolveFadeSides,
   viewportFadeGradientAttrs,
-} from "./fade-edges";
+} from "./fade-edges"
 
 interface AreaGradientDefsProps {
-  gradientId: string;
-  strokeGradientId: string;
-  edgeMaskId: string;
-  edgeGradientId: string;
-  fill: string;
-  fillOpacity: number;
-  gradientToOpacity: number;
+  gradientId: string
+  strokeGradientId: string
+  edgeMaskId: string
+  edgeGradientId: string
+  fill: string
+  fillOpacity: number
+  gradientToOpacity: number
   /** 0–1: where the bottom stop sits (1 = full-height gradient). */
-  gradientSpan?: number;
-  resolvedStroke: string;
-  isPatternFill: boolean;
-  fadeEdges: FadeEdges;
-  innerWidth: number;
-  innerHeight: number;
+  gradientSpan?: number
+  resolvedStroke: string
+  isPatternFill: boolean
+  fadeEdges: FadeEdges
+  innerWidth: number
+  innerHeight: number
 }
 
 export function AreaGradientDefs({
@@ -37,15 +37,15 @@ export function AreaGradientDefs({
   innerWidth,
   innerHeight,
 }: AreaGradientDefsProps) {
-  const sides = resolveFadeSides(fadeEdges);
+  const sides = resolveFadeSides(fadeEdges)
   // Stroke gradient mirrors the area's edge fade so the line doesn't pop in
   // past the faded fill. Skip emitting it when neither edge fades — the line
   // can then paint a solid stroke instead of an unnecessary url(#...) ref.
-  const strokeStops = sides.any ? fadeGradientStops(sides) : null;
-  const showEdgeMask = sides.any && !isPatternFill;
-  const edgeStops = showEdgeMask ? fadeGradientStops(sides) : null;
-  const span = Math.min(1, Math.max(0.01, gradientSpan));
-  const midOffset = `${span * 100}%`;
+  const strokeStops = sides.any ? fadeGradientStops(sides) : null
+  const showEdgeMask = sides.any && !isPatternFill
+  const edgeStops = showEdgeMask ? fadeGradientStops(sides) : null
+  const span = Math.min(1, Math.max(0.01, gradientSpan))
+  const midOffset = `${span * 100}%`
 
   return (
     <defs>
@@ -109,5 +109,5 @@ export function AreaGradientDefs({
         </>
       ) : null}
     </defs>
-  );
+  )
 }

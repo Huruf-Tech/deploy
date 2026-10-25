@@ -1,16 +1,16 @@
-"use client";
+"use client"
 
-import { Progress } from "@base-ui/react/progress";
-import { cn } from "@/lib/utils";
-import { useLegendItem } from "./legend-context";
+import { Progress } from "@base-ui/react/progress"
+import { cn } from "@/lib/utils"
+import { useLegendItem } from "./legend-context"
 
 export interface LegendProgressProps {
   /** Track class name */
-  trackClassName?: string;
+  trackClassName?: string
   /** Indicator class name */
-  indicatorClassName?: string;
+  indicatorClassName?: string
   /** Track height. Default: "h-1.5" */
-  height?: string;
+  height?: string
 }
 
 export function LegendProgress({
@@ -18,10 +18,10 @@ export function LegendProgress({
   indicatorClassName = "",
   height = "h-1.5",
 }: LegendProgressProps) {
-  const { item } = useLegendItem();
+  const { item } = useLegendItem()
 
   if (!item.maxValue) {
-    return null;
+    return null
   }
 
   // Note: item.color must remain inline style as it's dynamic data
@@ -43,7 +43,7 @@ export function LegendProgress({
         />
       </Progress.Track>
     </Progress.Root>
-  );
+  )
 }
 
-LegendProgress.displayName = "LegendProgress";
+LegendProgress.displayName = "LegendProgress"

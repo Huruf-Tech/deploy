@@ -1,95 +1,95 @@
-"use client";
+"use client"
 
-import { GridColumns, GridRows } from "@visx/grid";
-import { motion } from "motion/react";
-import { useId } from "react";
-import { chartCssVars, useChartStable, useYScale } from "./chart-context";
-import { useGridShimmer } from "./use-grid-shimmer";
+import { GridColumns, GridRows } from "@visx/grid"
+import { motion } from "motion/react"
+import { useId } from "react"
+import { chartCssVars, useChartStable, useYScale } from "./chart-context"
+import { useGridShimmer } from "./use-grid-shimmer"
 import {
   isLoadingChromePhase,
   isLoadingGridChromePhase,
-} from "./y-domain-utils";
+} from "./y-domain-utils"
 
-const DEFAULT_SHIMMER_LENGTH_PX = 140;
-const DEFAULT_SHIMMER_SPEED = 1;
+const DEFAULT_SHIMMER_LENGTH_PX = 140
+const DEFAULT_SHIMMER_SPEED = 1
 const DEFAULT_SHIMMER_STROKE =
-  "color-mix(in oklch, var(--foreground) 68%, transparent)";
+  "color-mix(in oklch, var(--foreground) 68%, transparent)"
 
 export interface GridProps {
   /** Show horizontal grid lines. Default: true */
-  horizontal?: boolean;
+  horizontal?: boolean
   /** Show vertical grid lines. Default: false */
-  vertical?: boolean;
+  vertical?: boolean
   /** Number of horizontal grid lines. Default: 5 */
-  numTicksRows?: number;
+  numTicksRows?: number
   /** Number of vertical grid lines. Default: 10 */
-  numTicksColumns?: number;
+  numTicksColumns?: number
   /** Explicit tick values for horizontal grid lines. Overrides numTicksRows. */
-  rowTickValues?: number[];
+  rowTickValues?: number[]
   /** Grid line stroke color. Default: var(--chart-grid) */
-  stroke?: string;
+  stroke?: string
   /** Grid stroke while loading chrome is active. Falls back to `stroke`. */
-  loadingStroke?: string;
+  loadingStroke?: string
   /** Grid line stroke opacity. Default: 1 */
-  strokeOpacity?: number;
+  strokeOpacity?: number
   /** Grid line stroke width. Default: 1 */
-  strokeWidth?: number;
+  strokeWidth?: number
   /** Grid line dash array. Default: "4,4" for dashed lines */
-  strokeDasharray?: string;
+  strokeDasharray?: string
   /** Horizontal row values rendered with alternate styling (e.g. zero baseline). */
-  highlightRowValues?: number[];
+  highlightRowValues?: number[]
   /** Stroke for highlighted rows. Default: var(--chart-foreground-muted) */
-  highlightRowStroke?: string;
+  highlightRowStroke?: string
   /** Stroke opacity for highlighted rows. Default: 1 */
-  highlightRowStrokeOpacity?: number;
+  highlightRowStrokeOpacity?: number
   /** Stroke width for highlighted rows. Default: 1 */
-  highlightRowStrokeWidth?: number;
+  highlightRowStrokeWidth?: number
   /** Dash array for highlighted rows. Default: solid line */
-  highlightRowStrokeDasharray?: string;
+  highlightRowStrokeDasharray?: string
   /** Enable horizontal fade effect on grid rows (fades at left/right). Default: true */
-  fadeHorizontal?: boolean;
+  fadeHorizontal?: boolean
   /** Enable vertical fade effect on grid columns (fades at top/bottom). Default: false */
-  fadeVertical?: boolean;
+  fadeVertical?: boolean
   /** Omit the first and last horizontal grid lines. Default: false */
-  hideHorizontalEdgeLines?: boolean;
+  hideHorizontalEdgeLines?: boolean
   /** Omit the first and last vertical grid lines. Default: false */
-  hideVerticalEdgeLines?: boolean;
+  hideVerticalEdgeLines?: boolean
   /** Y-scale for horizontal grid lines. Default: primary (`"left"`) axis. */
-  yAxisId?: string | number;
+  yAxisId?: string | number
   /** Animate a shimmer band across horizontal grid lines. Default: false */
-  shimmer?: boolean;
+  shimmer?: boolean
   /** Shimmer band stroke (color and opacity via color-mix or oklch alpha). */
-  shimmerStroke?: string;
+  shimmerStroke?: string
   /** Shimmer band width in pixels. Default: 140 */
-  shimmerLength?: number;
+  shimmerLength?: number
   /** Shimmer speed multiplier (higher = faster). Default: 1 */
-  shimmerSpeed?: number;
+  shimmerSpeed?: number
   /** Match loop timing to the loading line pulse (cycle + inter-loop pause). */
-  shimmerSync?: boolean;
+  shimmerSync?: boolean
 }
 
 function hideEdgeTicks<T>(ticks: T[], hideEdgeLines: boolean): T[] {
   if (!hideEdgeLines || ticks.length <= 2) {
-    return ticks;
+    return ticks
   }
-  return ticks.slice(1, -1);
+  return ticks.slice(1, -1)
 }
 
 function resolveRowTickValues(options: {
-  hideHorizontalEdgeLines: boolean;
-  numTicksRows: number;
-  rowTickValues?: number[];
-  yScale: { ticks?: (count: number) => number[] };
+  hideHorizontalEdgeLines: boolean
+  numTicksRows: number
+  rowTickValues?: number[]
+  yScale: { ticks?: (count: number) => number[] }
 }): number[] | undefined {
   const { hideHorizontalEdgeLines, numTicksRows, rowTickValues, yScale } =
-    options;
+    options
   const ticks =
-    rowTickValues ?? (yScale.ticks ? yScale.ticks(numTicksRows) : []);
-  const filtered = hideEdgeTicks(ticks, hideHorizontalEdgeLines);
+    rowTickValues ?? (yScale.ticks ? yScale.ticks(numTicksRows) : [])
+  const filtered = hideEdgeTicks(ticks, hideHorizontalEdgeLines)
   if (filtered === ticks && !rowTickValues && !hideHorizontalEdgeLines) {
-    return undefined;
+    return undefined
   }
-  return filtered.length > 0 ? filtered : undefined;
+  return filtered.length > 0 ? filtered : undefined
 }
 
 // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: grid fade masks and shimmer share one layer tree
@@ -121,13 +121,13 @@ export function Grid({
   shimmerSync = false,
 }: GridProps) {
   const { xScale, innerWidth, innerHeight, orientation, barScale, chartPhase } =
-    useChartStable();
-  const yScale = useYScale(yAxisId);
-  const shimmerActive = shimmer && isLoadingChromePhase(chartPhase);
+    useChartStable()
+  const yScale = useYScale(yAxisId)
+  const shimmerActive = shimmer && isLoadingChromePhase(chartPhase)
   const gridStroke =
     isLoadingGridChromePhase(chartPhase) && loadingStroke != null
       ? loadingStroke
-      : stroke;
+      : stroke
   const { shimmerEnabled, shimmerTransform } = useGridShimmer({
     innerWidth,
     shimmer,
@@ -135,44 +135,44 @@ export function Grid({
     shimmerSpeed,
     shimmerSync,
     active: shimmerActive,
-  });
+  })
 
   // For bar charts, determine which scale to use for grid lines
   // Horizontal bar charts: vertical grid should use yScale (value scale)
   // Vertical bar charts: horizontal grid uses yScale (value scale)
-  const isHorizontalBarChart = orientation === "horizontal" && barScale;
+  const isHorizontalBarChart = orientation === "horizontal" && barScale
 
   // For vertical grid lines in horizontal bar charts, use yScale (the value scale)
   // For time-based charts, use xScale
-  const columnScale = isHorizontalBarChart ? yScale : xScale;
+  const columnScale = isHorizontalBarChart ? yScale : xScale
   const rowTickValuesResolved = resolveRowTickValues({
     hideHorizontalEdgeLines,
     numTicksRows,
     rowTickValues,
     yScale,
-  });
+  })
   const columnTickValuesResolved =
     vertical &&
     columnScale &&
     typeof columnScale === "function" &&
     hideVerticalEdgeLines
       ? (() => {
-          const ticks = columnScale.ticks?.(numTicksColumns) ?? [];
-          const filtered = hideEdgeTicks<number | Date>(ticks, true);
-          return filtered.length > 0 ? filtered : undefined;
+          const ticks = columnScale.ticks?.(numTicksColumns) ?? []
+          const filtered = hideEdgeTicks<number | Date>(ticks, true)
+          return filtered.length > 0 ? filtered : undefined
         })()
-      : undefined;
-  const uniqueId = useId();
+      : undefined
+  const uniqueId = useId()
 
   // Horizontal fade mask (for grid rows - fades left/right)
-  const hMaskId = `grid-rows-fade-${uniqueId}`;
-  const hGradientId = `${hMaskId}-gradient`;
-  const shimmerGradientId = `grid-shimmer-${uniqueId}`;
+  const hMaskId = `grid-rows-fade-${uniqueId}`
+  const hGradientId = `${hMaskId}-gradient`
+  const shimmerGradientId = `grid-shimmer-${uniqueId}`
 
   // Vertical fade mask (for grid columns - fades top/bottom)
-  const vMaskId = `grid-cols-fade-${uniqueId}`;
-  const vGradientId = `${vMaskId}-gradient`;
-  const horizontalFadeMask = fadeHorizontal ? `url(#${hMaskId})` : undefined;
+  const vMaskId = `grid-cols-fade-${uniqueId}`
+  const vGradientId = `${vMaskId}-gradient`
+  const horizontalFadeMask = fadeHorizontal ? `url(#${hMaskId})` : undefined
 
   return (
     <g className="chart-grid">
@@ -273,9 +273,9 @@ export function Grid({
       {horizontal && highlightRowValues && highlightRowValues.length > 0 ? (
         <g className="chart-grid-highlight-rows">
           {highlightRowValues.map((value) => {
-            const y = yScale(value);
+            const y = yScale(value)
             if (y == null || !Number.isFinite(y)) {
-              return null;
+              return null
             }
 
             return (
@@ -290,7 +290,7 @@ export function Grid({
                 y1={y}
                 y2={y}
               />
-            );
+            )
           })}
         </g>
       ) : null}
@@ -309,9 +309,9 @@ export function Grid({
         </g>
       )}
     </g>
-  );
+  )
 }
 
-Grid.displayName = "Grid";
+Grid.displayName = "Grid"
 
-export default Grid;
+export default Grid

@@ -1,14 +1,14 @@
-import type { ReactNode } from "react";
+import type { ReactNode } from "react"
 
 export interface PatternProps {
   /** Unique id of the pattern element. */
-  id: string;
+  id: string
   /** Width of the pattern. */
-  width: number;
+  width: number
   /** Height of the pattern. */
-  height: number;
+  height: number
   /** Children of pattern element to render. */
-  children: ReactNode;
+  children: ReactNode
 }
 
 export function Pattern({ id, width, height, children }: PatternProps) {
@@ -23,5 +23,5 @@ export function Pattern({ id, width, height, children }: PatternProps) {
         {children}
       </pattern>
     </defs>
-  );
+  )
 }

@@ -1,38 +1,38 @@
-"use client";
+"use client"
 
-import { memo, useMemo } from "react";
-import { createPortal } from "react-dom";
+import { memo, useMemo } from "react"
+import { createPortal } from "react-dom"
 import {
   useChartPortalContainer,
   useChartStable,
   useYScale,
-} from "./chart-context";
-import { DEFAULT_Y_DOMAIN_TWEEN_MS } from "./chart-phase";
-import { LINE_LOADING_PULSE_EASE } from "./line-loading-timing";
-import { resolveReferenceDataRange } from "./reference-area-geometry";
-import type { YAxisOrientation } from "./y-axis-scales";
-import { normalizeYAxisId } from "./y-axis-scales";
+} from "./chart-context"
+import { DEFAULT_Y_DOMAIN_TWEEN_MS } from "./chart-phase"
+import { LINE_LOADING_PULSE_EASE } from "./line-loading-timing"
+import { resolveReferenceDataRange } from "./reference-area-geometry"
+import type { YAxisOrientation } from "./y-axis-scales"
+import { normalizeYAxisId } from "./y-axis-scales"
 import {
   resolveYAxisTickCount,
   Y_AXIS_DEFAULT_TICK_COUNT,
-} from "./y-axis-ticks";
+} from "./y-axis-ticks"
 
-const Y_AXIS_POSITION_TWEEN_MS = DEFAULT_Y_DOMAIN_TWEEN_MS;
+const Y_AXIS_POSITION_TWEEN_MS = DEFAULT_Y_DOMAIN_TWEEN_MS
 
 export interface YAxisProps {
   /** Scale group id (Recharts `yAxisId`). Default: `"left"`. */
-  yAxisId?: string | number;
+  yAxisId?: string | number
   /** Which side of the chart to render labels. Default: `"left"`. */
-  orientation?: YAxisOrientation;
+  orientation?: YAxisOrientation
   /**
    * Approximate tick count hint for `scale.ticks()` (d3). Actual label count may differ.
    * Clamped to {@link Y_AXIS_MIN_TICK_COUNT}–{@link Y_AXIS_MAX_TICK_COUNT}. Default: 5.
    */
-  numTicks?: number;
+  numTicks?: number
   /** Format large numbers (e.g. 1000 as "1k"). Default: true */
-  formatLargeNumbers?: boolean;
+  formatLargeNumbers?: boolean
   /** Custom formatter for tick labels (e.g. USD). Overrides formatLargeNumbers when set. */
-  formatValue?: (value: number) => string;
+  formatValue?: (value: number) => string
 }
 
 function formatLabel(
@@ -41,12 +41,12 @@ function formatLabel(
   formatValue?: (value: number) => string
 ): string {
   if (formatValue) {
-    return formatValue(value);
+    return formatValue(value)
   }
   if (formatLargeNumbers && value >= 1000) {
-    return `${(value / 1000).toFixed(0)}k`;
+    return `${(value / 1000).toFixed(0)}k`
   }
-  return String(value);
+  return String(value)
 }
 
 function resolveTickLabelColor(
@@ -57,36 +57,36 @@ function resolveTickLabelColor(
 ): string | undefined {
   for (const area of referenceAreas) {
     if (!area.axisLabelColor) {
-      continue;
+      continue
     }
     if (normalizeYAxisId(area.yAxisId) !== axisId) {
-      continue;
+      continue
     }
     const [low, high] = resolveReferenceDataRange(
       area.y1,
       area.y2,
       yScale.domain() as [number, number]
-    );
-    const topPixel = yScale(high) ?? 0;
-    const bottomPixel = yScale(low) ?? 0;
-    const bandTop = Math.min(topPixel, bottomPixel);
-    const bandBottom = Math.max(topPixel, bottomPixel);
+    )
+    const topPixel = yScale(high) ?? 0
+    const bottomPixel = yScale(low) ?? 0
+    const bandTop = Math.min(topPixel, bottomPixel)
+    const bandBottom = Math.max(topPixel, bottomPixel)
     if (tickY >= bandTop && tickY <= bandBottom) {
-      return area.axisLabelColor;
+      return area.axisLabelColor
     }
   }
-  return undefined;
+  return undefined
 }
 
 export function YAxis(props: YAxisProps) {
-  const { containerRef } = useChartStable();
+  const { containerRef } = useChartStable()
 
-  const container = useChartPortalContainer(containerRef);
+  const container = useChartPortalContainer(containerRef)
   if (!container) {
-    return null;
+    return null
   }
 
-  return <YAxisInner {...props} container={container} />;
+  return <YAxisInner {...props} container={container} />
 }
 
 const YAxisInner = memo(function YAxisInner({
@@ -97,15 +97,15 @@ const YAxisInner = memo(function YAxisInner({
   formatValue,
   container,
 }: YAxisProps & { container: HTMLDivElement }) {
-  const { margin, referenceAreas } = useChartStable();
-  const yScale = useYScale(yAxisId);
-  const isLeft = orientation === "left";
-  const axisId = normalizeYAxisId(yAxisId);
+  const { margin, referenceAreas } = useChartStable()
+  const yScale = useYScale(yAxisId)
+  const isLeft = orientation === "left"
+  const axisId = normalizeYAxisId(yAxisId)
 
   const ticks = useMemo(() => {
-    const tickValues = yScale.ticks(resolveYAxisTickCount(numTicks));
+    const tickValues = yScale.ticks(resolveYAxisTickCount(numTicks))
     return tickValues.map((value) => {
-      const y = (yScale(value) ?? 0) + margin.top;
+      const y = (yScale(value) ?? 0) + margin.top
       return {
         value,
         y,
@@ -116,8 +116,8 @@ const YAxisInner = memo(function YAxisInner({
           yScale,
           referenceAreas
         ),
-      };
-    });
+      }
+    })
   }, [
     yScale,
     margin.top,
@@ -126,7 +126,7 @@ const YAxisInner = memo(function YAxisInner({
     formatValue,
     axisId,
     referenceAreas,
-  ]);
+  ])
 
   return createPortal(
     <div className="pointer-events-none absolute inset-0">
@@ -152,7 +152,7 @@ const YAxisInner = memo(function YAxisInner({
             }}
           >
             <span
-              className="text-chart-label text-xs"
+              className="text-xs text-chart-label"
               style={tick.labelColor ? { color: tick.labelColor } : undefined}
             >
               {tick.label}
@@ -162,9 +162,9 @@ const YAxisInner = memo(function YAxisInner({
       </div>
     </div>,
     container
-  );
-});
+  )
+})
 
-YAxis.displayName = "YAxis";
+YAxis.displayName = "YAxis"
 
-export default YAxis;
+export default YAxis

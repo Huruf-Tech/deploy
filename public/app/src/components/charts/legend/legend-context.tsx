@@ -1,6 +1,6 @@
-"use client";
+"use client"
 
-import { createContext, useContext } from "react";
+import { createContext, useContext } from "react"
 
 // CSS variable references for legend theming
 export const legendCssVars = {
@@ -9,84 +9,84 @@ export const legendCssVars = {
   muted: "var(--legend-muted)",
   mutedForeground: "var(--legend-muted-foreground)",
   track: "var(--legend-track)",
-};
+}
 
 export interface LegendItemData {
   /** Display label */
-  label: string;
+  label: string
   /** Current value */
-  value: number;
+  value: number
   /** Maximum value (for progress/percentage calculation) */
-  maxValue?: number;
+  maxValue?: number
   /** Item color */
-  color: string;
+  color: string
 }
 
 export interface LegendContextValue {
   /** All legend items */
-  items: LegendItemData[];
+  items: LegendItemData[]
   /** Currently hovered index */
-  hoveredIndex: number | null;
+  hoveredIndex: number | null
   /** Set hovered index */
-  setHoveredIndex: (index: number | null) => void;
+  setHoveredIndex: (index: number | null) => void
 }
 
 export interface LegendItemContextValue {
   /** The current item data */
-  item: LegendItemData;
+  item: LegendItemData
   /** Index of this item */
-  index: number;
+  index: number
   /** Whether this item is hovered */
-  isHovered: boolean;
+  isHovered: boolean
   /** Whether this item is faded (another item is hovered) */
-  isFaded: boolean;
+  isFaded: boolean
   /** Percentage value (value / maxValue * 100) */
-  percentage: number;
+  percentage: number
 }
 
-const LegendContext = createContext<LegendContextValue | null>(null);
-const LegendItemContext = createContext<LegendItemContextValue | null>(null);
+const LegendContext = createContext<LegendContextValue | null>(null)
+const LegendItemContext = createContext<LegendItemContextValue | null>(null)
 
 export function LegendProvider({
   children,
   value,
 }: {
-  children: React.ReactNode;
-  value: LegendContextValue;
+  children: React.ReactNode
+  value: LegendContextValue
 }) {
   return (
     <LegendContext.Provider value={value}>{children}</LegendContext.Provider>
-  );
+  )
 }
 
 export function LegendItemProvider({
   children,
   value,
 }: {
-  children: React.ReactNode;
-  value: LegendItemContextValue;
+  children: React.ReactNode
+  value: LegendItemContextValue
 }) {
   return (
     <LegendItemContext.Provider value={value}>
       {children}
     </LegendItemContext.Provider>
-  );
+  )
 }
 
 export function useLegend(): LegendContextValue {
-  const context = useContext(LegendContext);
+  const context = useContext(LegendContext)
   if (!context) {
-    throw new Error("useLegend must be used within a <Legend> component.");
+    throw new Error("useLegend must be used within a <Legend> component.")
   }
-  return context;
+  return context
 }
 
 export function useLegendItem(): LegendItemContextValue {
-  const context = useContext(LegendItemContext);
+  const context = useContext(LegendItemContext)
   if (!context) {
     throw new Error(
       "useLegendItem must be used within a <LegendItem> component."
-    );
+    )
   }
-  return context;
+  return context
 }

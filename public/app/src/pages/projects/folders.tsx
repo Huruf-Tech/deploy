@@ -5,6 +5,7 @@ import { toast } from "sonner"
 import {
   IconCheck,
   IconFolder,
+  IconFolderPlus,
   IconFolderSymlink,
   IconPencil,
   IconTrash,
@@ -231,10 +232,13 @@ export function MoveMenu({
   folders,
   current,
   onMoved,
+  onNewFolder,
   trigger,
 }: {
   ids: string[]
   folders: TFolder[]
+  /** Creates a folder and moves these into it. */
+  onNewFolder?: (ids: string[]) => void
   /** The folder these are in, if they share one. */
   current?: string
   onMoved: () => void
@@ -279,7 +283,7 @@ export function MoveMenu({
           )
         }
       />
-      <DropdownMenuContent align="end" className="min-w-48">
+      <DropdownMenuContent align="end" className="min-w-52">
         {/* Base UI needs a label inside its group (error #31 otherwise). */}
         <DropdownMenuGroup>
           <DropdownMenuLabel>{t("Move to folder")}</DropdownMenuLabel>
@@ -294,16 +298,22 @@ export function MoveMenu({
               {f._id === current && <IconCheck />}
             </DropdownMenuItem>
           ))}
-          {!folders.length && (
-            <p className="px-2 py-1.5 text-xs text-muted-foreground">
-              {t("No folders yet.")}
-            </p>
+          {onNewFolder && ThunderSDK.isPermitted("projectGroups", "create") && (
+            <DropdownMenuItem onClick={() => onNewFolder(ids)}>
+              <IconFolderPlus />
+              {t("New folder…")}
+            </DropdownMenuItem>
           )}
         </DropdownMenuGroup>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={() => move(null)}>
-          {t("Not in a folder")}
-        </DropdownMenuItem>
+        {/* Only offered when there's a folder to leave. */}
+        {current && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={() => move(null)}>
+              {t("Take out of the folder")}
+            </DropdownMenuItem>
+          </>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   )

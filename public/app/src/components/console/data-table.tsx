@@ -175,7 +175,15 @@ export function DataTable<T>({
                 key={rowId(row)}
                 tabIndex={onRowClick ? 0 : undefined}
                 data-state={isSelected?.(row) ? "selected" : undefined}
-                onClick={onRowClick && (() => onRowClick(row))}
+                onClick={
+                  onRowClick &&
+                  ((e) => {
+                    // A menu opened from a cell is portalled out of the row,
+                    // but React still bubbles its clicks here.
+                    if (e.currentTarget.contains(e.target as Node))
+                      onRowClick(row)
+                  })
+                }
                 onKeyDown={
                   onRowClick &&
                   ((e) => {
