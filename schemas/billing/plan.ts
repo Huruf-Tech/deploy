@@ -18,6 +18,8 @@ export const $planLimits = z.object({
   gitIntegrations: z.number().int().min(0).default(10),
   registries: z.number().int().min(0).default(10),
   domains: z.number().int().min(0).default(3),
+  /** AI template assistant calls per calendar month (UTC), with `aiAssistant`. */
+  aiRequestsPerMonth: z.number().int().min(0).default(50),
   managedServers: z.number().int().min(0).default(0),
 });
 
@@ -27,6 +29,8 @@ export const $planFeatures = z.object({
   privateNetwork: z.boolean().default(true),
   backups: z.boolean().default(true),
   managedServers: z.boolean().default(false),
+  /** The AI template assistant (Phase 12): off unless a plan turns it on. */
+  aiAssistant: z.boolean().default(false),
 });
 
 export const $planInput = z.object({

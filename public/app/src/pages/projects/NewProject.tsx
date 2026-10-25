@@ -115,7 +115,7 @@ function Section({
 }
 
 /** Picks a GitHub installation, repository and branch. */
-function GitHubPicker({
+export function GitHubPicker({
   value,
   onChange,
 }: {

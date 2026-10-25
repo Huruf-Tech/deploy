@@ -14,6 +14,7 @@ const projects_js_1 = require("./modules/projects.js");
 const billing_js_1 = require("./modules/billing.js");
 const billingAdmin_js_1 = require("./modules/billingAdmin.js");
 const plans_js_1 = require("./modules/plans.js");
+const ai_js_1 = require("./modules/ai.js");
 const gitIntegrations_js_1 = require("./modules/gitIntegrations.js");
 const githubHooks_js_1 = require("./modules/githubHooks.js");
 const templates_js_1 = require("./modules/templates.js");
@@ -130,6 +131,7 @@ Object.defineProperty(ThunderSDK, "_moduleNames", {
         "billing",
         "billingAdmin",
         "plans",
+        "ai",
         "gitIntegrations",
         "githubHooks",
         "templates",
@@ -200,6 +202,12 @@ Object.defineProperty(ThunderSDK, "plans", {
     configurable: true,
     writable: true,
     value: (0, plans_js_1.plansModule)(_a)
+});
+Object.defineProperty(ThunderSDK, "ai", {
+    enumerable: true,
+    configurable: true,
+    writable: true,
+    value: (0, ai_js_1.aiModule)(_a)
 });
 Object.defineProperty(ThunderSDK, "gitIntegrations", {
     enumerable: true,

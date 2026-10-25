@@ -290,6 +290,7 @@ export type update$body = {
     registry?: (string | null) | undefined;
     branch?: string | undefined;
     templateVersion?: number | undefined;
+    template?: string | undefined;
     inputs?: {
         [K in string]: string | number | boolean;
     } | undefined;

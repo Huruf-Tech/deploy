@@ -2,7 +2,7 @@ import * as React from "react"
 import { ThunderSDK } from "thunder-sdk"
 import { Link, useNavigate } from "react-router"
 import { useTranslation } from "react-i18next"
-import { IconCopy } from "@tabler/icons-react"
+import { IconCopy, IconSparkles } from "@tabler/icons-react"
 
 import { Page } from "@/components/page"
 import { use } from "@/core/hooks/use"
@@ -19,6 +19,8 @@ import {
 import { cn } from "@/lib/utils"
 import { CloneDialog, TemplateIcon, type TTemplate } from "./shared"
 import { useFresh } from "@/hooks/use-fresh"
+import { useAiStatus } from "@/hooks/use-ai"
+import { AiDraftDialog } from "./AiDraft"
 
 function TemplateCard({
   template,
@@ -147,6 +149,8 @@ export default function TemplatesPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const [cloning, setCloning] = React.useState<TTemplate | null>(null)
+  const [drafting, setDrafting] = React.useState(false)
+  const { status: ai } = useAiStatus()
 
   const request = ThunderSDK.useCaching(
     ["templates"],
@@ -161,13 +165,20 @@ export default function TemplatesPage() {
 
   return (
     <Page className="flex flex-col gap-8 py-4">
-      <div>
-        <h1 className="text-xl font-semibold">{t("Templates")}</h1>
-        <p className="text-sm text-muted-foreground">
-          {t(
-            "Recipes that turn a repository into an image, or set up a ready-made service."
-          )}
-        </p>
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h1 className="text-xl font-semibold">{t("Templates")}</h1>
+          <p className="text-sm text-muted-foreground">
+            {t(
+              "Recipes that turn a repository into an image, or set up a ready-made service."
+            )}
+          </p>
+        </div>
+        {ai?.enabled && (
+          <Button onClick={() => setDrafting(true)}>
+            <IconSparkles aria-hidden /> {t("Create with AI")}
+          </Button>
+        )}
       </div>
 
       {isLoading && !data ? (
@@ -208,6 +219,15 @@ export default function TemplatesPage() {
         remove={(id) => ThunderSDK.templates.del({ params: { id } })}
         onDone={() => request.invalidate()}
         canDelete={ThunderSDK.isPermitted("templates", "del")}
+      />
+
+      <AiDraftDialog
+        open={drafting}
+        onOpenChange={setDrafting}
+        onCreated={(id) => {
+          request.invalidate()
+          navigate(`./${id}`)
+        }}
       />
 
       <CloneDialog

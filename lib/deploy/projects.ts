@@ -555,9 +555,18 @@ export async function updateProject(opts: {
   ) {
     $set.source = { ...project.source, branch: patch.branch };
   }
-  if (patch.templateVersion && project.template) {
-    await getTemplate(project.template.template, tenant, patch.templateVersion);
-    $set.template = { ...project.template, version: patch.templateVersion };
+  if ((patch.template || patch.templateVersion) && project.template) {
+    const { template, content } = await getTemplate(
+      patch.template ?? project.template.template,
+      tenant,
+      patch.templateVersion,
+    );
+    const current = await getTemplate(project.template.template, tenant)
+      .catch(() => undefined);
+    if (current && current.template.kind !== template.kind) {
+      throw Response.badRequest("The template must be of the same kind");
+    }
+    $set.template = { template: template._id, version: content.version };
   }
   if (patch.inputs) {
     $set.templateInputs = { ...project.templateInputs, ...patch.inputs };

@@ -21,6 +21,7 @@ export type get$return = {
         gitIntegrations: number;
         registries: number;
         domains: number;
+        aiRequestsPerMonth: number;
         managedServers: number;
     };
     features: {
@@ -29,6 +30,7 @@ export type get$return = {
         privateNetwork: boolean;
         backups: boolean;
         managedServers: boolean;
+        aiAssistant: boolean;
     };
     period?: {
         periodStart: Date;
@@ -81,6 +83,7 @@ export type plans$return = {
         gitIntegrations: number;
         registries: number;
         domains: number;
+        aiRequestsPerMonth: number;
         managedServers: number;
     };
     features: {
@@ -89,6 +92,7 @@ export type plans$return = {
         privateNetwork: boolean;
         backups: boolean;
         managedServers: boolean;
+        aiAssistant: boolean;
     };
     isFree: boolean;
     active: boolean;

@@ -1114,6 +1114,7 @@ export default function ProjectDetail() {
         deployment={open}
         onOpenChange={(o) => !o && setOpen(null)}
         onChanged={refresh}
+        onRedeployed={deployed}
       />
       <LogsSheet
         server={logs?.server ?? ""}

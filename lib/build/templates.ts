@@ -4,9 +4,11 @@ import { isDuplicateKeyError, mongodb } from "@/database.ts";
 import { entitlements, quotaGuard } from "@/lib/services.ts";
 import {
   assertValidSource,
+  OUTPUT_FILE,
   renderContent,
   TemplateError,
 } from "@/lib/build/render.ts";
+import { parseCompose } from "@/lib/deploy/compose.ts";
 import {
   templateModel,
   templateVersionModel,
@@ -37,23 +39,58 @@ const asBadRequest = <T>(fn: () => T) => {
 };
 
 /** A version must carry the source its kind renders, and it must parse. */
+const checkContent = (kind: TKind, content: TTemplateContent) => {
+  const source = kind === "app" ? content.dockerfile : content.compose;
+  if (!source) {
+    throw new TemplateError(
+      kind === "app"
+        ? "An app template needs a Dockerfile"
+        : "A service template needs a compose file",
+    );
+  }
+  assertValidSource(source);
+  const keys = content.inputs.map((i) => i.key);
+  const duplicate = keys.find((k, i) => keys.indexOf(k) !== i);
+  if (duplicate) {
+    throw new TemplateError(`Input ${duplicate} is declared twice`);
+  }
+};
+
 const assertContent = (kind: TKind, content: TTemplateContent) =>
-  asBadRequest(() => {
-    const source = kind === "app" ? content.dockerfile : content.compose;
-    if (!source) {
-      throw new TemplateError(
-        kind === "app"
-          ? "An app template needs a Dockerfile"
-          : "A service template needs a compose file",
-      );
-    }
-    assertValidSource(source);
-    const keys = content.inputs.map((i) => i.key);
-    const duplicate = keys.find((k, i) => keys.indexOf(k) !== i);
-    if (duplicate) {
-      throw new TemplateError(`Input ${duplicate} is declared twice`);
-    }
-  });
+  asBadRequest(() => checkContent(kind, content));
+
+/**
+ * Whether a version would deploy: valid content that renders with its
+ * defaults, and for services, a compose file the platform supports. Returns
+ * the problem instead of throwing, so the AI assistant can try again.
+ */
+export function contentProblem(kind: TKind, content: TTemplateContent) {
+  // What a user would type for required inputs without a default.
+  const sample = Object.fromEntries(
+    content.inputs.filter((i) => i.required && i.default === undefined).map(
+      (i) => [
+        i.key,
+        i.type === "number"
+          ? 1
+          : i.type === "boolean"
+          ? true
+          : i.type === "select"
+          ? i.options?.[0] ?? ""
+          : "example",
+      ],
+    ),
+  );
+  try {
+    checkContent(kind, content);
+    const { files } = renderContent(kind, content, sample, {
+      cacheKey: "check",
+    });
+    if (kind === "service") parseCompose(files[OUTPUT_FILE.service], "check-");
+    return undefined;
+  } catch (error) {
+    return (error as Error).message;
+  }
+}
 
 const slugTaken = (slug: string) =>
   Response.badRequest(`A template with the slug ${slug} already exists`);

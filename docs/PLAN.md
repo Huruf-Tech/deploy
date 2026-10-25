@@ -1121,10 +1121,15 @@ Each phase ends with a **review checkpoint** (demo + code review + approval). Ph
   5. A certificate within 30 days of expiry renews automatically, with no restarts.
   6. A domain verified by another tenant can't be added.
 
-### Phase 12 — AI template assistant (planned, D45)
+### Phase 12 — AI template assistant (built, pending review, D45)
+- **Built with the Vercel AI SDK** (`generateText` with structured output). Checked with scripted models in tests and against a fake OpenAI-compatible model in the browser; not yet against a real provider.
 - **Entitlement:**
   - A plan feature `aiAssistant` and a limit `aiRequestsPerMonth`, set in the plan form; a monthly usage counter per tenant.
-  - Platform settings `ANTHROPIC_API_KEY` and `AI_MODEL` (default Claude Sonnet 5.5; admin-switchable).
+  - Platform settings:
+    - `AI_MODEL`: `provider/model`, e.g. `anthropic/claude-sonnet-5-5` (the default) or `openai/<model>`.
+    - `AI_SECRET`: that provider's API key.
+    - `AI_BASE_URL` (optional): makes `openai/<model>` use any OpenAI-compatible endpoint (OpenRouter, Groq, Ollama…).
+  - Counted per calendar month (UTC) before each call, and refunded when the provider fails.
 - **Create a template with AI:**
   - **From a GitHub repo:** through the GitHub App, the assistant reads the file list and a bounded set of key files (`package.json`, `go.mod`, `requirements.txt`, an existing `Dockerfile` or compose file…), and writes an **app** template.
   - **From a description**, with no repo (e.g. "Redis with a password, 512 MB, AOF persistence"): a **service** template (compose).
@@ -1132,7 +1137,9 @@ Each phase ends with a **review checkpoint** (demo + code review + approval). Ph
   - The assistant explains what replicas mean here: identical copies behind the edge proxy. Stateful software that needs roles (e.g. Redis replication with Sentinel) is offered as a different setup, never faked with replicas.
 - **Fix with AI** on a failed build or rollout:
   - It sends the build log, or the failing container's last logs and the health check error, with the template version.
-  - It proposes a corrected version as a diff, with the reason. Accepting it saves a new version and can redeploy.
+  - It proposes a corrected version as a diff, with the reason. Accepting it saves a new version of the project's template (or, for a built-in one, a copy in the tenant that the project switches to) and redeploys.
+  - The dashboard sends the build log it shows, because the control plane doesn't keep build logs.
+- **Validation:** every draft and fix is checked before the user sees it: schema, Handlebars, rendering with defaults, and the platform's compose parser for services. A failing answer goes back to the model with the problem, at most twice.
 - **Privacy:** the dialog says the description, repo files and logs go to the AI provider. Only the resulting template and the usage counter are stored.
 - **Acceptance:**
   1. A Node, a Go and a Python sample repo each get a template that builds and passes its health check without edits.

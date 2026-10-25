@@ -26,6 +26,7 @@ export type create$body = {
         gitIntegrations?: number;
         registries?: number;
         domains?: number;
+        aiRequestsPerMonth?: number;
         managedServers?: number;
     };
     features?: {
@@ -34,6 +35,7 @@ export type create$body = {
         privateNetwork?: boolean;
         backups?: boolean;
         managedServers?: boolean;
+        aiAssistant?: boolean;
     };
     isFree?: boolean;
     active?: boolean;
@@ -82,6 +84,7 @@ export type get$return = {
             gitIntegrations: number;
             registries: number;
             domains: number;
+            aiRequestsPerMonth: number;
             managedServers: number;
         };
         features: {
@@ -90,6 +93,7 @@ export type get$return = {
             privateNetwork: boolean;
             backups: boolean;
             managedServers: boolean;
+            aiAssistant: boolean;
         };
         isFree: boolean;
         active: boolean;
@@ -128,6 +132,7 @@ export type update$body = {
         gitIntegrations?: number;
         registries?: number;
         domains?: number;
+        aiRequestsPerMonth?: number;
         managedServers?: number;
     } | undefined) | undefined;
     features?: ({
@@ -136,6 +141,7 @@ export type update$body = {
         privateNetwork?: boolean;
         backups?: boolean;
         managedServers?: boolean;
+        aiAssistant?: boolean;
     } | undefined) | undefined;
     isFree?: (boolean | undefined) | undefined;
     active?: (boolean | undefined) | undefined;

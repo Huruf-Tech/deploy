@@ -20,6 +20,8 @@ export const syncDeployAccessControl = async () => {
     "variables",
     "gitIntegrations",
     "templates",
+    // The AI assistant; the plan decides whether it answers.
+    "ai",
     "streams.openLogs",
     "streams.openMetrics",
     "streams.input",

@@ -12,6 +12,7 @@ import { projectsModule } from "./modules/projects.js";
 import { billingModule } from "./modules/billing.js";
 import { billingAdminModule } from "./modules/billingAdmin.js";
 import { plansModule } from "./modules/plans.js";
+import { aiModule } from "./modules/ai.js";
 import { gitIntegrationsModule } from "./modules/gitIntegrations.js";
 import { githubHooksModule } from "./modules/githubHooks.js";
 import { templatesModule } from "./modules/templates.js";
@@ -57,6 +58,7 @@ export class ThunderSDK extends BaseSDK {
         "billing",
         "billingAdmin",
         "plans",
+        "ai",
         "gitIntegrations",
         "githubHooks",
         "templates",
@@ -98,6 +100,7 @@ export class ThunderSDK extends BaseSDK {
     static billing: ReturnType<typeof billingModule> = billingModule(this);
     static billingAdmin: ReturnType<typeof billingAdminModule> = billingAdminModule(this);
     static plans: ReturnType<typeof plansModule> = plansModule(this);
+    static ai: ReturnType<typeof aiModule> = aiModule(this);
     static gitIntegrations: ReturnType<typeof gitIntegrationsModule> = gitIntegrationsModule(this);
     static githubHooks: ReturnType<typeof githubHooksModule> = githubHooksModule(this);
     static templates: ReturnType<typeof templatesModule> = templatesModule(this);

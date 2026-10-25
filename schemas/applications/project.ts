@@ -216,6 +216,8 @@ export const $projectUpdate = z.object({
   registry: $objectId.nullable(),
   branch: z.string().min(1).max(255),
   templateVersion: z.number().int().min(1),
+  /** Another visible template of the same kind (e.g. a tenant copy with a fix). */
+  template: $objectId,
   inputs: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])),
   compose: z.string().min(1).max(100_000),
   volumes: z.array($projectVolume).max(10),

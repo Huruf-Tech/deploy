@@ -24,6 +24,7 @@ import { usePolling } from "@/hooks/use-polling"
 import { useStream, type TStreamChunk } from "@/hooks/use-stream"
 import { errorMessage } from "@/lib/utils"
 import { ago, DeploymentStatus, duration, isLive, shortSha } from "./shared"
+import { AiFixButton } from "./AiFix"
 
 type TDeployment = Awaited<ReturnType<typeof ThunderSDK.projects.deployment>>
 type TStep = "pending" | "applying" | "healthy" | "failed" | "running" | "done"
@@ -49,9 +50,11 @@ function StepIcon({ state }: { state?: TStep }) {
 function BuildLog({
   server,
   deployment,
+  onText,
 }: {
   server: string
   deployment: string
+  onText?: (text: string) => void
 }) {
   const { t } = useTranslation()
   const [text, setText] = React.useState("")
@@ -75,7 +78,8 @@ function BuildLog({
   React.useEffect(() => {
     if (follow.current && box.current)
       box.current.scrollTop = box.current.scrollHeight
-  }, [text])
+    onText?.(text)
+  }, [text, onText])
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-2">
@@ -112,12 +116,20 @@ export function DeploymentSheet({
   deployment,
   onOpenChange,
   onChanged,
+  onRedeployed,
 }: {
   deployment: string | null
   onOpenChange: (open: boolean) => void
   onChanged?: () => void
+  /** A fix was applied and a new deployment started. */
+  onRedeployed?: (deployment: string) => void
 }) {
   const { t } = useTranslation()
+  // The build log shown, for "Fix with AI" (the control plane doesn't keep it).
+  const logText = React.useRef("")
+  const setLogText = React.useCallback((text: string) => {
+    logText.current = text
+  }, [])
   const [data, setData] = React.useState<TDeployment>()
   const [logServer, setLogServer] = React.useState<string>()
 
@@ -199,6 +211,18 @@ export function DeploymentSheet({
                   {data.errorSummary}
                 </p>
               )}
+              {data.status === "failed" && deployment && (
+                <div>
+                  <AiFixButton
+                    deployment={deployment}
+                    log={() => logText.current}
+                    onRedeployed={(next) => {
+                      onChanged?.()
+                      onRedeployed?.(next)
+                    }}
+                  />
+                </div>
+              )}
 
               <ol className="flex flex-col gap-1 rounded-2xl border p-2">
                 {data.servers.map((s) => (
@@ -254,6 +278,7 @@ export function DeploymentSheet({
                     key={logServer}
                     server={logServer}
                     deployment={deployment}
+                    onText={setLogText}
                   />
                 </div>
               )}

@@ -45,6 +45,7 @@ const LIMITS = [
   ["gitIntegrations", "GitHub connections", 10],
   ["registries", "Registries", 10],
   ["domains", "Custom domains", 3],
+  ["aiRequestsPerMonth", "AI requests per month", 50],
   ["managedServers", "Managed servers", 0],
 ] as const
 
@@ -54,6 +55,7 @@ const FEATURES = [
   ["privateNetwork", "Private network", true],
   ["backups", "Backups", true],
   ["managedServers", "Managed servers", false],
+  ["aiAssistant", "AI assistant", false],
 ] as const
 
 type TLimitKey = (typeof LIMITS)[number][0]

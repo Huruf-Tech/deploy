@@ -598,5 +598,21 @@ export async function readRepoFile(
   );
 }
 
+/** The repo's file paths at a ref (GitHub caps very large trees). */
+export async function readRepoTree(
+  doc: TIntegrationRef & Pick<TGitIntegration, "installations">,
+  installation: number,
+  repo: string,
+  ref: string,
+) {
+  assertInstallation(doc, installation);
+  const { data } = await githubApi.call<{
+    tree: { path: string; type: string; size?: number }[];
+  }>(`/repos/${repo}/git/trees/${encodeURIComponent(ref)}?recursive=1`, {
+    auth: await installationToken(doc, installation),
+  });
+  return data.tree.filter((e) => e.type === "blob");
+}
+
 export const cloneUrl = (repo: string) =>
   `${githubApi.cloneBaseUrl}/${repo}.git`;
