@@ -4,7 +4,7 @@
     "version": {
       "major": 0,
       "minor": 2,
-      "patch": 7
+      "patch": 8
     },
     "dockerOrganization": "oridune",
     "dockerImage": "huruf-deploy",
@@ -14,7 +14,7 @@
       "./.env"
     ],
     "agentUrls": [
-      "http://ec2-3-74-42-148.eu-central-1.compute.amazonaws.com:3740/"
+      "http://deploy.huruftech.com:3740/"
     ]
   }
 }
