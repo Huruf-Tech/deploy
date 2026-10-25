@@ -98,7 +98,7 @@ A free-to-use SaaS that deploys and operates apps on **the user's own machines**
 | D25 | One-click services are built-in service templates. Alerts are user-configurable. |
 | D26 | Variable manager scopes: **global (the user, across all their tenants)**, tenant, project. Encrypted, and reachable externally via API/SDK. |
 | D27 | Agent language: **Go**. |
-| D28 | Domains and public load balancing are **deferred** to a Cloudflare-based phase. The deploy app never hosts a load balancer. MVP access is `server-ip:port`. |
+| D28 | ~~Domains and public load balancing are deferred to a Cloudflare-based phase; the deploy app never hosts a load balancer.~~ **Superseded by D43.** MVP access is `server-ip:port`. |
 | D29 | Built and reviewed phase by phase (§16). |
 | D30 | **Backend performance is the top non-functional priority.** Every hot path has a budget, enforced by load tests (§20). |
 | D31 | Backend follows the Thunder `llms.txt` and thunder-core conventions. Frontend follows the thunder-ui `llms.txt` (§15, §20). |
@@ -112,6 +112,7 @@ A free-to-use SaaS that deploys and operates apps on **the user's own machines**
 | D39 | **Usage plans** (admin CRUD, public or **private**). Every tenant is on **Free** by default. Paid plans are charged from the tenant's thunder-core wallet, and each paid period is logged in `subscriptionPeriods`. **No current paid period → automatic fallback to Free** (§22). |
 | D40 | **Every in-memory cache is size-capped** (max entries + TTL + LRU), with a per-instance memory budget. Correctness never depends on a cache (§20.4). |
 | D41 | **Code quality:** no duplication. Composable modules and classes in layers (routes → services → building blocks), strategy interfaces for variants, schemas as the single source of truth. Enforced in CI (§23). |
+| D43 | **Built-in ingress (Phase 11):** Traefik ships in the control plane package (one per instance) and balances each project's custom domains evenly across its healthy servers. Routes come from the control plane (Traefik HTTP provider, no redeploys); certificates are Let's Encrypt via HTTP-01, issued once by the control plane, stored encrypted in MongoDB and synced to every instance. No AWS or Cloudflare dependency; instances are stateless, so more can be added behind any TCP load balancer. Custom domains only: user apps are never served under the platform's own domain (§14). |
 | D42 | **Managed servers (optional, needs owner consent):** provision EC2 instances on the platform's AWS account and bill plan + metered usage from the wallet. The MVP only prepares the seams (§24). |
 
 ---
@@ -619,14 +620,59 @@ The **control plane orchestrates rollouts across servers**. There is no backgrou
 - A project can set a `publicPort`. The edge proxy (Caddy, configured by the agent through its admin API) on each of its servers listens on that port and forwards to the local routed replicas, so access is `http://<server-ip>:<port>`.
 - Zero-downtime switches happen behind the proxy, so the port never moves.
 
-**Deferred phase: Cloudflare integration** (the deploy app never hosts a load balancer). The user connects Cloudflare with a scoped API token (stored encrypted).
+**Phase 11: built-in ingress with custom domains** (D43, replaces the Cloudflare plan).
 
-| Mode | How | Cost | Notes |
-|---|---|---|---|
-| **Cloudflare Tunnel** | The agent runs `cloudflared` on each project server; hostnames route to the local edge proxy | Free | No open ports or public IP needed (works behind NAT). Cloudflare handles TLS and DNS. Multiple servers act as failover connectors. |
-| **Cloudflare Load Balancer** | Origin pool = the project's servers (IP:port), with health checks | Paid add-on | True health-checked balancing and steering. |
+```
+visitor ─► (later: any TCP load balancer) ─► control plane instance(s): API + Traefik + frps
+                                                │ Host → project; even, weighted, health-aware
+                                                ├─► tunnel to server A ◄══ opened by A's agent ══ A's Caddy ─► A's replicas
+                                                ├─► tunnel to server B ◄══ opened by B's agent ══ B's Caddy ─► B's replicas
+                                                └─► tunnel to server C ◄══ opened by C's agent ══ C's Caddy ─► C's replicas
+```
 
-Both require the user's domain to be on Cloudflare. Other providers can be added later behind an "ingress provider" interface.
+- **Traefik in the control plane package.**
+  - The Docker image (or Compose file) runs Traefik next to the control plane on each instance. Traefik listens on 80/443: the control plane's own hostname routes to the API and dashboard, and custom domains route to projects.
+  - Instances are stateless, so more EC2s can be added behind any TCP load balancer.
+  - Rejected alternatives:
+    - **A proxy written in Deno:** it would mean rebuilding TLS, HTTP/2, WebSockets and retries ourselves.
+    - **Cloudflare Tunnel:** it sends all traffic to the connector nearest the visitor, so one server proxies everything.
+    - **AWS ALB with ACM certificates:** an AWS dependency and a monthly cost.
+- **Routes without redeploys.**
+  - Traefik's HTTP provider polls `GET /ingress/api/traefik` every 5 s. That internal endpoint, authenticated with a token, returns routers and services computed from MongoDB.
+  - Adding, removing or changing a domain is a database write; every instance applies it on its next poll.
+  - Deploys, rollbacks, scaling and servers going offline only change which upstreams are eligible.
+  - Traefik itself is never restarted.
+- **Even load balancing.**
+  - Each project is a weighted service with one entry per server running its live release. An entry's weight is that server's healthy replicas, so every replica gets an equal share. Its URL is that server's tunnel on the control plane (`127.0.0.1:<server's tunnel port>`). That's one tunnel per server for all its projects: Traefik passes the original `Host`, and Caddy routes by host name to the right project's replicas.
+  - The server's edge proxy then spreads requests across its local replicas, as today; zero-downtime switches stay there.
+  - Per project:
+    - **weighted round robin** (the default);
+    - **sticky sessions**, a cookie naming the server, which works across instances.
+- **Health.**
+  - A server is eligible only while its lease is alive and it has at least one healthy replica of the live release, both already known from polls and `workload.status` events. Offline servers drop out within the lease time.
+  - Traefik retries a request on another server when it couldn't connect.
+- **Network path: reverse tunnels.** Servers can be anywhere (any cloud, behind NAT), so the control plane never connects to them.
+  - Each agent opens an **outbound** tunnel to the control plane with frp (`frpc` on the server, `frps` next to Traefik), just as it opens outbound polls. No port is opened on servers.
+  - frps asks the control plane to approve each login (frp server plugin). The agent signs it with its identity key, and only active servers get a tunnel. Each server's tunnel listens on `127.0.0.1` of the control plane, at a port stored on the server, so only the local Traefik can use it.
+  - On the server, the tunnel ends at Caddy's ingress listener on `127.0.0.1`, which routes by host name to the projects' live replicas.
+  - Several control plane instances: the agent opens one tunnel to each, from the list in its desired state, so every instance's Traefik reaches every server.
+  - TLS ends at Traefik. The tunnel itself is TLS-encrypted by frp. Agents never receive certificates and have no database access.
+  - Cost: app traffic passes through the control plane, so the host's outbound bandwidth applies (AWS: about $0.09/GB after the first 100 GB a month). Ingress instances can move to a host with bundled traffic later without design changes.
+- **Certificates: Let's Encrypt with the HTTP challenge.**
+  - The control plane is the ACME client (npm `acme-client`). The account key and every certificate key are stored encrypted with the platform keyring.
+  - Traefik routes `/.well-known/acme-challenge/*` on port 80 for any host to the control plane. Tokens live in MongoDB, so whichever instance receives the challenge can answer it.
+  - A certificate is issued once and shared by all instances. Traefik on HTTPS can't take certificates from the HTTP provider, only from files: each instance's control plane keeps a local directory in sync through MongoDB change streams, and Traefik's file provider watches it. Each version gets a new file name, because Traefik may miss a file replaced in place.
+  - Renewal starts 30 days before expiry, through the piggyback scheduler, with one claim so only one instance renews.
+- **Domain lifecycle**, shown step by step in the dashboard:
+  1. **Ownership:** `_huruf.<domain> TXT <token>`, unique per tenant, checked with an ordinary DNS lookup (no third-party integration). Without it, a tenant could claim a domain that another customer later points at the platform.
+  2. **Waiting for DNS:** the domain must resolve to the ingress, either as a CNAME to `INGRESS_HOSTNAME` (subdomains) or as an A record to `INGRESS_IPV4` (apex). The user clicks **Check now** once the records are in place. The control plane then checks the ownership record and DNS right away, and every minute for up to 30 minutes while records propagate, then stops until the next click. It never checks unprompted, and it orders a certificate only after both pass, so a wrong record never spends Let's Encrypt attempts. A domain behind Cloudflare's proxy gets a specific explanation.
+  3. **Issuing:** at most 3 orders per domain per hour (Let's Encrypt allows 5 failed validations per hour), with exponential backoff and the ACME error shown verbatim.
+  4. **Live:** the route is added. The control plane then connects with the domain's name, checks the certificate it gets and that the project answers, rather than Traefik's "no route".
+  5. **Renewing / error:** each with its reason and what to do.
+- **Not in this phase:**
+  - platform subdomains: user apps are never served under the platform's domain, because of cookie scope and reputation;
+  - DNS-01 or CNAME validation, ZeroSSL, and the private-network path;
+  - per-domain rate limiting.
 
 ---
 
@@ -1049,8 +1095,22 @@ Each phase ends with a **review checkpoint** (demo + code review + approval). Ph
   - **Past due:** a banner on the Plan page, plus one email to the workspace owner when the renewal first fails (hourly retries stay quiet).
   - **Not done:** wallet top-up (decided separately).
 
-### Phase 11 — Domains and public ingress (deferred, starts when you decide)
-- Cloudflare integration: Tunnel and/or Load Balancer modes, hostnames per project, health-check alignment.
+### Phase 11 — Custom domains and built-in ingress (planned, D43, §14)
+- **Package:** Traefik and frps in the Compose file. The control plane serves `GET /ingress/api/traefik` (routes) and `/.well-known/acme-challenge/*`, and keeps the certificate directory in sync for Traefik's file provider.
+- **Domains:**
+  - A `domains` collection: domain unique across the platform, tenant, project, ownership token, status, certificate metadata, and the last error.
+  - Project → Domains in the dashboard: add a domain, the exact DNS records to create, a step-by-step status, and remove.
+  - A `domains` plan limit (Free: 3).
+- **Agent:** an ingress listener on Caddy at `127.0.0.1`, routing by host name to each project's live replicas, and `frpc` keeping one outbound tunnel to each control plane instance. No port is opened on the server.
+- **ACME:** Let's Encrypt HTTP-01 with checks before ordering, backoff, renewal through the piggyback scheduler, keys encrypted with the keyring.
+- **Settings:** `INGRESS_HOSTNAME`, `INGRESS_IPV4`, `ACME_EMAIL`, `ACME_DIRECTORY` (staging for tests), `INGRESS_CONFIG_TOKEN`, `TRAEFIK_CERTS_DIR`.
+- **Acceptance:**
+  1. A domain added to a running project serves traffic without a redeploy, within 10 s of its certificate being issued.
+  2. A wrong DNS record shows "waiting for DNS" and spends no Let's Encrypt attempts. Every failure names its step and the fix.
+  3. With 2 instances, a certificate is issued once, both serve it, and either one answers the challenge.
+  4. 3 servers with equal replicas each get 33% ± 5% of 3,000 requests. A server that goes offline gets none within the lease time.
+  5. A certificate within 30 days of expiry renews automatically, with no restarts.
+  6. A domain verified by another tenant can't be added.
 
 ### Phase 12 — Backlog (after MVP)
 - Ability to upgrade already installed agent along with its deps — **done (pending review):**
@@ -1444,7 +1504,7 @@ Each axis of variation is an interface with one class per variant. Adding a vari
 | `SourceProvider` | `GitHubSource`, `GitSource`, `DockerfileSource`, `ComposeSource` |
 | `AlertChannel` | `EmailChannel`, `WebhookChannel`, `SlackChannel` |
 | `ServerProvisioner` | `ManualProvisioner`, `SshProvisioner` (later `AwsManagedProvisioner`, §24) |
-| `IngressProvider` (Phase 11) | `PortIngress`, `CloudflareTunnelIngress`, `CloudflareLbIngress` |
+| `IngressProvider` (Phase 11) | `PortIngress` (MVP), `TraefikIngress` (D43). Later, perhaps `CloudflareTunnelIngress` |
 | `AgentCommand` | One definition per command type: zod payload/result schema (→ protocol generation) + control-plane issuer + agent handler |
 
 ### 23.4 Agent (Go)
