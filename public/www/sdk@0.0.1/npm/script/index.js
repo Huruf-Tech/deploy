@@ -26,6 +26,7 @@ const registries_js_1 = require("./modules/registries.js");
 const servers_js_1 = require("./modules/servers.js");
 const storages_js_1 = require("./modules/storages.js");
 const streams_js_1 = require("./modules/streams.js");
+const ingress_js_1 = require("./modules/ingress.js");
 const alertEvents_js_1 = require("./modules/alertEvents.js");
 const alertRules_js_1 = require("./modules/alertRules.js");
 const controlPlane_js_1 = require("./modules/controlPlane.js");
@@ -141,6 +142,7 @@ Object.defineProperty(ThunderSDK, "_moduleNames", {
         "servers",
         "storages",
         "streams",
+        "ingress",
         "alertEvents",
         "alertRules",
         "controlPlane",
@@ -270,6 +272,12 @@ Object.defineProperty(ThunderSDK, "streams", {
     configurable: true,
     writable: true,
     value: (0, streams_js_1.streamsModule)(_a)
+});
+Object.defineProperty(ThunderSDK, "ingress", {
+    enumerable: true,
+    configurable: true,
+    writable: true,
+    value: (0, ingress_js_1.ingressModule)(_a)
 });
 Object.defineProperty(ThunderSDK, "alertEvents", {
     enumerable: true,

@@ -31,6 +31,7 @@ import {
 } from "@/schemas/applications/deployment.ts";
 import { registryModel } from "@/schemas/infrastructure/serverSpec.ts";
 import {
+  acmeChallengeModel,
   domainJobSlotModel,
   domainModel,
 } from "@/schemas/applications/domain.ts";
@@ -235,6 +236,14 @@ export const syncDeployIndexes = async () => {
       partialFilterExpression: { verifiedAt: { $exists: true } },
     }),
     domainModel.createIndex({ project: 1 }, { name: "project" }),
+    domainModel.createIndex({ issueAt: 1 }, {
+      name: "dueIssues",
+      partialFilterExpression: { issueAt: { $exists: true } },
+    }),
+    acmeChallengeModel.createIndex({ expiresAt: 1 }, {
+      name: "ttl",
+      expireAfterSeconds: 0,
+    }),
     domainModel.createIndex({ nextCheckAt: 1 }, {
       name: "dueChecks",
       partialFilterExpression: { status: "checking" },

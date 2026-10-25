@@ -22,6 +22,10 @@ export type list$return = {
     checkUntil?: string | undefined;
     verifiedAt?: string | undefined;
     error?: string | undefined;
+    certificate?: {
+        notAfter: string;
+        issuedAt: string;
+    } | undefined;
     records: {
         ownership: {
             type: "TXT";

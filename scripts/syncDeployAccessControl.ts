@@ -12,6 +12,8 @@ export const syncDeployAccessControl = async () => {
   await ACManager.resolvePolicy("public", ["agents"]);
   // GitHub's redirects and webhooks: authorized by signed state / HMAC inside the handlers.
   await ACManager.resolvePolicy("public", ["githubHooks"]);
+  // Let's Encrypt and Traefik: challenges are public, the config needs a token.
+  await ACManager.resolvePolicy("public", ["ingress"]);
 
   const deploy = await ACManager.resolvePolicy("deploy", [
     "servers",

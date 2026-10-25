@@ -22,6 +22,7 @@ import { registriesModule } from "./modules/registries.js";
 import { serversModule } from "./modules/servers.js";
 import { storagesModule } from "./modules/storages.js";
 import { streamsModule } from "./modules/streams.js";
+import { ingressModule } from "./modules/ingress.js";
 import { alertEventsModule } from "./modules/alertEvents.js";
 import { alertRulesModule } from "./modules/alertRules.js";
 import { controlPlaneModule } from "./modules/controlPlane.js";
@@ -64,6 +65,7 @@ export declare class ThunderSDK extends BaseSDK {
     static servers: ReturnType<typeof serversModule>;
     static storages: ReturnType<typeof storagesModule>;
     static streams: ReturnType<typeof streamsModule>;
+    static ingress: ReturnType<typeof ingressModule>;
     static alertEvents: ReturnType<typeof alertEventsModule>;
     static alertRules: ReturnType<typeof alertRulesModule>;
     static controlPlane: ReturnType<typeof controlPlaneModule>;

@@ -10,6 +10,7 @@ import {
   OWNERSHIP_PREFIX,
   ownershipName,
 } from "@/lib/domains/dns.ts";
+import { orderCertificate } from "@/lib/domains/acme.ts";
 import {
   domainJobSlotModel,
   domainModel,
@@ -20,6 +21,21 @@ import {
 export const CHECK_WINDOW_MS = 30 * 60_000;
 export const CHECK_EVERY_MS = 60_000;
 const CHECK_BATCH = 20;
+
+/** Let's Encrypt allows 5 failed validations per hour: stay under it. */
+export const ORDERS_PER_HOUR = 3;
+const GIVE_UP_AFTER = 5;
+const ISSUE_BATCH = 5;
+const RENEW_BEFORE_MS = 30 * 24 * 60 * 60_000;
+
+/** 30 days before expiry, or a third of the lifetime for short-lived ones. */
+export const renewAt = ({ issuedAt, notAfter }: TCertificateDates) =>
+  new Date(
+    notAfter.getTime() -
+      Math.min(RENEW_BEFORE_MS, (notAfter.getTime() - issuedAt.getTime()) / 3),
+  );
+type TCertificateDates = { issuedAt: Date; notAfter: Date };
+const HOUR = 60 * 60_000;
 
 const LABEL = /^(?!-)[a-z0-9-]{1,63}(?<!-)$/;
 
@@ -125,7 +141,14 @@ export async function checkOnce(domain: WithId<TDomain>, now = new Date()) {
   if (result.ownership && result.dns) {
     try {
       await domainModel.updateOne(filter, {
-        $set: { status: "issuing", verifiedAt: now, checks, updatedAt: now },
+        $set: {
+          status: "issuing",
+          verifiedAt: now,
+          checks,
+          issueAt: now,
+          issueFailures: 0,
+          updatedAt: now,
+        },
         $unset: { nextCheckAt: "", checkUntil: "", error: "" },
       });
     } catch (error) {
@@ -217,8 +240,89 @@ export async function checkDue(now = new Date()) {
   await Promise.all(due.map((d) => checkOnce(d, now)));
 }
 
+/**
+ * One order for a verified domain: its first certificate, or a renewal.
+ * Claimed first, so only one instance orders. A failed first order backs
+ * off and gives up after 5; a failed renewal keeps the current certificate.
+ */
+export async function issueOnce(id: ObjectId, now = new Date()) {
+  const domain = await domainModel.findOneAndUpdate(
+    {
+      _id: id,
+      status: { $in: ["issuing", "active"] },
+      issueAt: { $lte: now },
+      $or: [
+        { issueLockedUntil: { $exists: false } },
+        { issueLockedUntil: { $lte: now } },
+      ],
+    },
+    { $set: { issueLockedUntil: new Date(now.getTime() + 5 * 60_000) } },
+    { returnDocument: "after" },
+  );
+  if (!domain) return;
+
+  const recent = (domain.issueOrders ?? []).filter((at) =>
+    now.getTime() - at.getTime() < HOUR
+  );
+  if (recent.length >= ORDERS_PER_HOUR) {
+    await domainModel.updateOne({ _id: id }, {
+      $set: { issueAt: new Date(recent[0].getTime() + HOUR) },
+      $unset: { issueLockedUntil: "" },
+    });
+    return;
+  }
+
+  const orders = [...recent, now];
+  try {
+    const certificate = await orderCertificate(domain.hostname, domain.tenant);
+    await domainModel.updateOne({ _id: id }, {
+      $set: {
+        status: "active",
+        certificate,
+        issueAt: renewAt(certificate),
+        issueFailures: 0,
+        issueOrders: orders,
+        updatedAt: new Date(),
+      },
+      $unset: { issueLockedUntil: "", error: "" },
+    });
+  } catch (error) {
+    const failures = (domain.issueFailures ?? 0) + 1;
+    const message = String((error as Error)?.message ?? error).slice(0, 450);
+    const renewing = domain.status === "active";
+    const giveUp = !renewing && failures >= GIVE_UP_AFTER;
+    await domainModel.updateOne({ _id: id }, {
+      $set: {
+        ...(giveUp ? { status: "failed" as const } : {}),
+        error: renewing ? `Renewal failed: ${message}` : message,
+        issueFailures: failures,
+        issueOrders: orders,
+        updatedAt: new Date(),
+        ...(giveUp ? {} : {
+          issueAt: new Date(
+            now.getTime() + Math.min(2 ** failures * 60_000, HOUR),
+          ),
+        }),
+      },
+      $unset: { issueLockedUntil: "", ...(giveUp ? { issueAt: "" } : {}) },
+    });
+  }
+}
+
+/** Orders for the domains that are due, a few per run: each takes seconds. */
+export async function issueDue(now = new Date()) {
+  const due = await domainModel.find(
+    { status: { $in: ["issuing", "active"] }, issueAt: { $lte: now } },
+    { projection: { _id: 1 }, limit: ISSUE_BATCH, sort: { issueAt: 1 } },
+  ).toArray();
+  await Promise.all(due.map((d) => issueOnce(d._id, now)));
+}
+
 export const domainChecks = new PiggybackScheduler(
   domainJobSlotModel,
   { slotCount: 1, intervalMs: 15_000 },
-  () => checkDue(),
+  async () => {
+    await checkDue();
+    await issueDue();
+  },
 );

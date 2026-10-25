@@ -23,6 +23,7 @@ import { registriesModule } from "./modules/registries.js";
 import { serversModule } from "./modules/servers.js";
 import { storagesModule } from "./modules/storages.js";
 import { streamsModule } from "./modules/streams.js";
+import { ingressModule } from "./modules/ingress.js";
 import { alertEventsModule } from "./modules/alertEvents.js";
 import { alertRulesModule } from "./modules/alertRules.js";
 import { controlPlaneModule } from "./modules/controlPlane.js";
@@ -137,6 +138,7 @@ Object.defineProperty(ThunderSDK, "_moduleNames", {
         "servers",
         "storages",
         "streams",
+        "ingress",
         "alertEvents",
         "alertRules",
         "controlPlane",
@@ -266,6 +268,12 @@ Object.defineProperty(ThunderSDK, "streams", {
     configurable: true,
     writable: true,
     value: streamsModule(_a)
+});
+Object.defineProperty(ThunderSDK, "ingress", {
+    enumerable: true,
+    configurable: true,
+    writable: true,
+    value: ingressModule(_a)
 });
 Object.defineProperty(ThunderSDK, "alertEvents", {
     enumerable: true,

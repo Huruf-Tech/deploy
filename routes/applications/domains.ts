@@ -32,6 +32,8 @@ export default new Router("/api", function domains(router) {
     checkUntil: z.string().optional(),
     verifiedAt: z.string().optional(),
     error: z.string().optional(),
+    certificate: z.object({ notAfter: z.string(), issuedAt: z.string() })
+      .optional(),
     records: z.object({
       ownership: z.object({
         type: z.literal("TXT"),
@@ -55,7 +57,17 @@ export default new Router("/api", function domains(router) {
         const domains = await domainModel.find(
           { tenant: tenant._id, project },
           {
-            projection: { tenant: 0, createdBy: 0, nextCheckAt: 0 },
+            projection: {
+              tenant: 0,
+              createdBy: 0,
+              nextCheckAt: 0,
+              "certificate.pem": 0,
+              "certificate.keyEnc": 0,
+              issueAt: 0,
+              issueLockedUntil: 0,
+              issueFailures: 0,
+              issueOrders: 0,
+            },
             sort: { hostname: 1 },
             limit: 100,
           },
