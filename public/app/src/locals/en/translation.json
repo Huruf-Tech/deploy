@@ -854,5 +854,12 @@
   "Could not apply the fix": "Could not apply the fix",
   "Close": "Close",
   "AI assistant": "AI assistant",
-  "AI requests per month": "AI requests per month"
+  "AI requests per month": "AI requests per month",
+  "What do you want to deploy?": "What do you want to deploy?",
+  "From a repository": "From a repository",
+  "Discard": "Discard",
+  "This builds your code: pick a repository above, then generate again.": "This builds your code: pick a repository above, then generate again.",
+  "No server is online.": "No server is online.",
+  "Show the template": "Show the template",
+  "e.g. Postgres 17 with 2 GB of memory": "e.g. Postgres 17 with 2 GB of memory"
 }

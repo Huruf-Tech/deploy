@@ -854,5 +854,12 @@
   "Could not apply the fix": "تعذّر تطبيق الإصلاح",
   "Close": "إغلاق",
   "AI assistant": "مساعد الذكاء الاصطناعي",
-  "AI requests per month": "طلبات الذكاء الاصطناعي شهريًا"
+  "AI requests per month": "طلبات الذكاء الاصطناعي شهريًا",
+  "What do you want to deploy?": "ماذا تريد أن تنشر؟",
+  "From a repository": "من مستودع",
+  "Discard": "تجاهل",
+  "This builds your code: pick a repository above, then generate again.": "هذا يبني شيفرتك: اختر مستودعًا أعلاه، ثم أعد الإنشاء.",
+  "No server is online.": "لا يوجد خادم متصل.",
+  "Show the template": "عرض القالب",
+  "e.g. Postgres 17 with 2 GB of memory": "مثلًا: Postgres 17 بذاكرة 2 غيغابايت"
 }

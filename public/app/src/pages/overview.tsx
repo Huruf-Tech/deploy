@@ -65,6 +65,7 @@ import {
 } from "@/lib/capacity"
 import { cn } from "@/lib/utils"
 import { ControlPlaneSummary } from "@/pages/admin/ControlPlaneSummary"
+import { AiPrompt } from "@/pages/projects/AiPrompt"
 
 const MiB = 1024 * 1024
 
@@ -600,6 +601,8 @@ export default function Overview() {
   return (
     <Page className="flex flex-col gap-6 py-4">
       {verify}
+
+      <AiPrompt servers={servers ?? []} />
 
       <section
         aria-labelledby="pool-title"
