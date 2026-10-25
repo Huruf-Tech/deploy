@@ -79,6 +79,7 @@ export type get$return = {
             error?: string | undefined;
             reportedAt?: Date | undefined;
         } | undefined;
+        tunnelPort?: number | undefined;
         acceptedBy?: string | undefined;
         acceptedAt?: Date | undefined;
         createdAt: Date;

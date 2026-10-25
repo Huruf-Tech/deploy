@@ -3,11 +3,18 @@ import { Router } from "@/core/http/router.ts";
 import { paramsAsJson } from "@/core/http/utils.ts";
 import { Response } from "@/core/http/response.ts";
 import { challengeAnswer } from "@/lib/domains/acme.ts";
+import {
+  INGRESS_TOKEN_HEADER,
+  isIngressToken,
+  syncCertificates,
+  traefikConfig,
+} from "@/lib/domains/ingress.ts";
 
 /**
  * What the ingress (Traefik) calls (PLAN §14). Open to guests: Let's Encrypt
  * fetches challenges anonymously, rewritten here from
- * `/.well-known/acme-challenge/*` on port 80.
+ * `/.well-known/acme-challenge/*` on port 80; Traefik's config poll carries
+ * the ingress token.
  */
 export default new Router("/api", function ingress(router) {
   router.get("/acme-challenge/:token", function acmeChallenge() {
@@ -21,6 +28,20 @@ export default new Router("/api", function ingress(router) {
         return Response.ok(answer, {
           headers: { "content-type": "text/plain" },
         });
+      },
+    };
+  });
+
+  // Traefik's HTTP provider, from this instance's own Traefik.
+  router.get("/traefik", function traefik() {
+    return {
+      shape: () => ({ return: z.record(z.string(), z.unknown()) }),
+      handler: async (req) => {
+        if (!await isIngressToken(req.headers.get(INGRESS_TOKEN_HEADER))) {
+          throw Response.unauthorized("Invalid ingress token");
+        }
+        await syncCertificates();
+        return Response.json(await traefikConfig());
       },
     };
   });

@@ -62,6 +62,8 @@ export const $server = $serverUpdate.extend({
     error: z.string().optional(),
     reportedAt: z.date().optional(),
   }).optional(),
+  /** Its reverse tunnel's port on every control plane instance (PLAN §14). */
+  tunnelPort: z.number().int().min(1).max(65_535).optional(),
   acceptedBy: $objectId.meta({ ref: "users" }).optional(),
   acceptedAt: z.date().optional(),
   createdAt: z.date().meta({ canFilter: true }),
