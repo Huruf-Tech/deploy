@@ -1,57 +1,22 @@
 import * as React from "react"
-import { Link } from "react-router"
+import { Link, useNavigate } from "react-router"
 import { ThunderSDK } from "thunder-sdk"
 import { useTranslation } from "react-i18next"
 import {
   IconAlertTriangle,
-  IconBell,
-  IconBellPlus,
-  IconBraces,
-  IconBulb,
-  IconCpu,
-  IconDatabase,
   IconMailExclamation,
-  IconNetwork,
   IconPlus,
   IconRefresh,
   IconRocket,
   IconServer2,
-  IconServerBolt,
-  IconStack2,
-  IconTemplate,
-  IconTrendingUp,
 } from "@tabler/icons-react"
 
 import { use } from "@/core/hooks/use"
 import { usePolling } from "@/hooks/use-polling"
 import { getAuthUrl, getLocalPath } from "@/core/lib/utils"
 import { Page } from "@/components/page"
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
-import {
-  Empty,
-  EmptyContent,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyMedia,
-  EmptyTitle,
-} from "@/components/ui/empty"
 import { Skeleton } from "@/components/ui/skeleton"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
 import { useCapacity } from "@/hooks/use-capacity"
 import {
   classFootprints,
@@ -64,10 +29,16 @@ import {
   type TClassFootprint,
 } from "@/lib/capacity"
 import { cn } from "@/lib/utils"
-import { Bar, IconChip } from "@/components/meter"
-import { HUES, type THue } from "@/lib/hues"
+import { PageHeader } from "@/components/console/page-header"
+import { Panel } from "@/components/console/panel"
+import { Stat, StatStrip } from "@/components/console/stat"
+import { Meter } from "@/components/console/meter"
+import { StatusBadge, StatusDot } from "@/components/console/status"
+import { DataTable, type TColumn } from "@/components/console/data-table"
+import { EmptyState } from "@/components/console/empty-state"
 import { ControlPlaneSummary } from "@/pages/admin/ControlPlaneSummary"
 import { AiPrompt } from "@/pages/projects/AiPrompt"
+import { DeploymentStatus, ago } from "@/pages/projects/shared"
 
 const MiB = 1024 * 1024
 
@@ -81,9 +52,9 @@ const formatDays = (days: number) =>
       ? `~${Math.round(days / 7)} weeks`
       : `~${Math.round(days / 30)} months`
 
-function Meter({
+/** Reserved and used against the pool's total, for one resource. */
+function Capacity({
   label,
-  icon,
   hue,
   total,
   reserved,
@@ -91,8 +62,7 @@ function Meter({
   format,
 }: {
   label: string
-  icon: React.ComponentType<{ className?: string }>
-  hue: THue
+  hue: "sky" | "violet" | "emerald"
   total: number
   reserved?: number
   used?: number
@@ -100,168 +70,32 @@ function Meter({
 }) {
   const { t } = useTranslation()
   return (
-    <Card size="sm">
-      <CardHeader className="flex flex-row items-center gap-3">
-        <IconChip hue={hue} icon={icon} />
-        <div>
-          <CardDescription>{label}</CardDescription>
-          <CardTitle className="text-2xl tabular-nums">
-            {format(total)}
-          </CardTitle>
-        </div>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-3">
-        {reserved !== undefined && (
-          <Bar
-            label={t("{{label}} reserved", { label })}
-            value={reserved}
-            total={total}
-            text={format(reserved)}
-            fill={HUES[hue].soft}
-          />
-        )}
-        <Bar
-          label={t("{{label}} used (p95, 24 h)", { label })}
-          value={used ?? 0}
+    <div className="flex min-w-0 flex-col gap-2">
+      <div className="flex items-baseline justify-between gap-2">
+        <span className="text-[13px] font-medium">{label}</span>
+        <span className="font-mono text-xs text-muted-foreground tabular-nums">
+          {format(total)}
+        </span>
+      </div>
+      {reserved !== undefined && (
+        <Meter
+          hue={hue}
+          label={t("Reserved")}
+          value={reserved}
           total={total}
-          text={used === undefined ? t("unknown") : format(used)}
-          fill={HUES[hue].bar}
+          text={format(reserved)}
+          warnAt={0.85}
+          critAt={1}
         />
-      </CardContent>
-    </Card>
-  )
-}
-
-function Stat({
-  hue,
-  icon,
-  label,
-  value,
-  to,
-}: {
-  hue: THue
-  icon: React.ComponentType<{ className?: string }>
-  label: string
-  value: React.ReactNode
-  to?: string
-}) {
-  const body = (
-    <>
-      <IconChip hue={hue} icon={icon} />
-      <span className="min-w-0">
-        <span className="block text-xl leading-tight font-semibold tabular-nums">
-          {value}
-        </span>
-        <span className="block text-xs leading-snug text-muted-foreground">
-          {label}
-        </span>
-      </span>
-    </>
-  )
-  const className =
-    "flex items-center gap-3 rounded-2xl border bg-background/70 p-3 backdrop-blur"
-  return to ? (
-    <Link
-      to={to}
-      className={cn(
-        className,
-        "transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
-        HUES[hue].ring
       )}
-    >
-      {body}
-    </Link>
-  ) : (
-    <div className={className}>{body}</div>
-  )
-}
-
-/** Shortcuts to what people do most; each shown only with the permission for it. */
-function QuickActions() {
-  const { t } = useTranslation()
-  const actions: {
-    hue: THue
-    icon: React.ComponentType<{ className?: string }>
-    label: string
-    hint: string
-    to: string
-    allowed: boolean
-  }[] = [
-    {
-      hue: "orange",
-      icon: IconRocket,
-      label: t("New project"),
-      hint: t("Deploy from GitHub, an image or a template"),
-      to: "applications/projects/new",
-      allowed: ThunderSDK.isPermitted("projects", "create"),
-    },
-    {
-      hue: "sky",
-      icon: IconServerBolt,
-      label: t("Add a server"),
-      hint: t("Install the agent over SSH"),
-      to: "infrastructure/servers",
-      allowed: ThunderSDK.isPermitted("servers", "create"),
-    },
-    {
-      hue: "rose",
-      icon: IconBellPlus,
-      label: t("Alert rules"),
-      hint: t("Email, Slack or webhook"),
-      to: "monitoring/alertRules",
-      allowed: ThunderSDK.isPermitted("alertRules", "list"),
-    },
-    {
-      hue: "violet",
-      icon: IconBraces,
-      label: t("Variables"),
-      hint: t("Secrets and settings"),
-      to: "configuration/variables",
-      allowed: ThunderSDK.isPermitted("variables", "list"),
-    },
-    {
-      hue: "emerald",
-      icon: IconNetwork,
-      label: t("Private network"),
-      hint: t("Servers reaching each other"),
-      to: "infrastructure/network",
-      allowed: ThunderSDK.isPermitted("networks", "get"),
-    },
-    {
-      hue: "amber",
-      icon: IconTemplate,
-      label: t("Templates"),
-      hint: t("One-click services and builds"),
-      to: "build/templates",
-      allowed: ThunderSDK.isPermitted("templates", "list"),
-    },
-  ]
-  const shown = actions.filter((a) => a.allowed)
-  if (!shown.length) return null
-
-  return (
-    <nav aria-label={t("Quick actions")}>
-      <h2 className="mb-2 text-sm font-medium text-muted-foreground">
-        {t("Quick actions")}
-      </h2>
-      <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-        {shown.map((a) => (
-          <li key={a.to}>
-            <Link
-              to={getLocalPath(a.to)}
-              className={cn(
-                "flex h-full flex-col gap-2 rounded-2xl border bg-card p-3 transition-colors hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
-                HUES[a.hue].ring
-              )}
-            >
-              <IconChip hue={a.hue} icon={a.icon} />
-              <span className="text-sm font-medium">{a.label}</span>
-              <span className="text-xs text-muted-foreground">{a.hint}</span>
-            </Link>
-          </li>
-        ))}
-      </ul>
-    </nav>
+      <Meter
+        hue={hue}
+        label={t("Used (p95, 24 h)")}
+        value={used ?? 0}
+        total={total}
+        text={used === undefined ? t("unknown") : format(used)}
+      />
+    </div>
   )
 }
 
@@ -272,33 +106,35 @@ function QuickActions() {
 function VerifyEmailAlert({ email }: { email: string }) {
   const { t } = useTranslation()
   return (
-    <Alert className="border-amber-500/40 bg-amber-500/10 text-amber-900 dark:text-amber-100">
-      <IconMailExclamation className="text-amber-600 dark:text-amber-400" />
-      <AlertTitle>{t("Verify your email address")}</AlertTitle>
-      <AlertDescription className="text-amber-900/80 dark:text-amber-100/80">
-        <p>
-          {t(
-            "{{email}} isn't verified yet. Until it is you can't add servers, and alert emails may not reach you.",
-            { email }
-          )}
-        </p>
-        <Button
-          size="sm"
-          variant="outline"
-          className="mt-2"
-          render={<a href={getAuthUrl("/account").toString()} />}
-          nativeButton={false}
-        >
-          {t("Verify in your account")}
-        </Button>
-      </AlertDescription>
-    </Alert>
+    <div
+      role="status"
+      className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-[10px] border border-warning/40 bg-warning-soft px-3 py-2 text-[13px] text-warning-foreground"
+    >
+      <IconMailExclamation className="size-4 shrink-0" aria-hidden />
+      <p className="min-w-0 flex-1">
+        <span className="font-medium">{t("Verify your email address")}</span>
+        {" · "}
+        {t(
+          "{{email}} isn't verified yet. Until it is you can't add servers, and alert emails may not reach you.",
+          { email }
+        )}
+      </p>
+      <Button
+        size="sm"
+        variant="outline"
+        render={<a href={getAuthUrl("/account").toString()} />}
+        nativeButton={false}
+      >
+        {t("Verify in your account")}
+      </Button>
+    </div>
   )
 }
 
 /** Pool overview (PLAN §7.1, §15.6): combined capacity, fit, trends and advice. */
 export default function Overview() {
   const { t } = useTranslation()
+  const navigate = useNavigate()
   const meRequest = ThunderSDK.useCaching(
     ["me"],
     async ({ signal }) => await ThunderSDK.me.get({ signal })
@@ -348,33 +184,83 @@ export default function Overview() {
     <VerifyEmailAlert email={me.email} />
   )
 
-  if (servers && !servers.length) {
-    return (
-      <Page className="flex flex-col gap-6 py-4">
-        {verify}
-        <Empty>
-          <EmptyHeader>
-            <EmptyMedia variant="icon" className={HUES.sky.chip}>
-              <IconServer2 />
-            </EmptyMedia>
-            <EmptyTitle>{t("Your server pool is empty")}</EmptyTitle>
-            <EmptyDescription>
-              {t(
-                "Add a server to start deploying. Capacity and alerts appear here."
-              )}
-            </EmptyDescription>
-          </EmptyHeader>
-          <EmptyContent>
+  const canAddServer = ThunderSDK.isPermitted("servers", "create")
+  const canCreateProject = ThunderSDK.isPermitted("projects", "create")
+  const refresh = () => {
+    placementRequest.invalidate()
+    projectsRequest.invalidate()
+    alertsRequest.invalidate()
+    capacity.request.invalidate()
+  }
+  const header = (status?: React.ReactNode) => (
+    <PageHeader
+      title={t("Overview")}
+      status={status}
+      description={t(
+        "Your servers as one budget. Usage comes from each server when you open this page and stays in your browser."
+      )}
+      actions={
+        <>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={refresh}
+            disabled={capacity.isLoading}
+            aria-label={t("Refresh")}
+          >
+            <IconRefresh className={cn(capacity.isLoading && "animate-spin")} />
+            <span className="max-sm:hidden">{t("Refresh")}</span>
+          </Button>
+          {canAddServer && (
             <Button
+              size="sm"
+              variant="outline"
               render={<Link to={getLocalPath("infrastructure/servers")} />}
               nativeButton={false}
             >
-              <IconPlus data-icon="inline-start" />
+              <IconServer2 data-icon="inline-start" />
               {t("Add a server")}
             </Button>
-          </EmptyContent>
-        </Empty>
-        <QuickActions />
+          )}
+          {canCreateProject && (
+            <Button
+              size="sm"
+              render={<Link to={getLocalPath("applications/projects/new")} />}
+              nativeButton={false}
+            >
+              <IconPlus data-icon="inline-start" />
+              {t("New project")}
+            </Button>
+          )}
+        </>
+      }
+    />
+  )
+
+  if (servers && !servers.length) {
+    return (
+      <Page className="flex flex-col gap-4 py-5">
+        {header()}
+        {verify}
+        <EmptyState
+          icon={IconServer2}
+          title={t("Your server pool is empty")}
+          description={t(
+            "Add a server to start deploying. Capacity and alerts appear here."
+          )}
+          action={
+            canAddServer && (
+              <Button
+                size="sm"
+                render={<Link to={getLocalPath("infrastructure/servers")} />}
+                nativeButton={false}
+              >
+                <IconPlus data-icon="inline-start" />
+                {t("Add a server")}
+              </Button>
+            )
+          }
+        />
         {ThunderSDK.isPermitted("controlPlane", "overview") && (
           <ControlPlaneSummary />
         )}
@@ -426,9 +312,6 @@ export default function Overview() {
       cpuFits: perServer.reduce((s, f) => s + Math.min(f.cpuFits, 10_000), 0),
     }
   })
-  // Classes keep a hue by position in this fixed order (sky, violet, emerald).
-  const classHue = (i: number): THue =>
-    (["sky", "violet", "emerald"] as const)[i]
 
   // Forecast: pool memory and disk peaks per day, against what can be used.
   const daily = poolDaily(reports)
@@ -495,394 +378,413 @@ export default function Overview() {
   }
 
   const running = (projects ?? []).filter((p) => p.status === "running").length
+  const failing = (projects ?? []).filter((p) => p.status === "failed").length
   const alertCount = openAlerts?.length ?? 0
+  const offline = (servers?.length ?? 0) - online.length
+  const recent = [...(projects ?? [])]
+    .filter((p) => p.lastDeployment)
+    .sort((a, b) =>
+      b.lastDeployment!.createdAt.localeCompare(a.lastDeployment!.createdAt)
+    )
+    .slice(0, 6)
+
+  const problems = [
+    alertCount && t("{{count}} open alert(s)", { count: alertCount }),
+    offline && t("{{n}} server(s) offline", { n: offline }),
+    failing && t("{{n}} project(s) failing", { n: failing }),
+  ].filter(Boolean)
+  const status = !servers ? undefined : problems.length ? (
+    <StatusBadge
+      tone={alertCount || failing ? "danger" : "warning"}
+      label={problems.join(" · ")}
+    />
+  ) : (
+    <StatusBadge tone="success" label={t("All systems normal")} />
+  )
+
+  type TServer = NonNullable<typeof servers>[number]
+  const serverColumns: TColumn<TServer>[] = [
+    {
+      id: "name",
+      header: t("Server"),
+      sortValue: (s) => s.name,
+      cell: (s) => (
+        <span className="flex items-center gap-2 font-medium">
+          <StatusDot state={s.online ? "online" : "offline"} />
+          {s.name}
+          <span className="sr-only">
+            {s.online ? t("online") : t("offline")}
+          </span>
+        </span>
+      ),
+    },
+    {
+      id: "memory",
+      header: t("Memory used / reserved / total"),
+      className: "min-w-56",
+      cell: (s) => {
+        const r = reportOf(s.server)
+        if (!r) {
+          const failed = results.find(
+            (x) => x.server === s.server && "error" in x
+          )
+          return (
+            <span className="text-muted-foreground">
+              {!s.online
+                ? t(
+                    "Offline: capacity unavailable ({{mem}} reserved of {{total}})",
+                    {
+                      mem: formatMb(s.memReservedMb),
+                      total: formatMb(s.memoryMb),
+                    }
+                  )
+                : failed
+                  ? t("Capacity unavailable")
+                  : t("Asking the server…")}
+            </span>
+          )
+        }
+        const memUsed = (r.host.day?.memP95 ?? 0) / MiB
+        return (
+          <Meter
+            hue="violet"
+            label={t("Memory used on {{name}}", { name: s.name })}
+            value={memUsed}
+            total={s.memoryMb}
+            text={`${formatMb(memUsed)} / ${formatMb(
+              s.memReservedMb
+            )} / ${formatMb(s.memoryMb)}`}
+          />
+        )
+      },
+    },
+    {
+      id: "room",
+      header: t("Room"),
+      align: "end",
+      sortValue: (s) => {
+        const r = reportOf(s.server)
+        return r ? roomOf(r).memMb : -1
+      },
+      cell: (s) => {
+        const r = reportOf(s.server)
+        return r ? (
+          <span className="font-mono text-xs">
+            {formatMb(Math.max(0, roomOf(r).memMb))}
+          </span>
+        ) : (
+          "—"
+        )
+      },
+    },
+    ...classes.map((c): TColumn<TServer> => ({
+      id: c.key,
+      header: t("Fits more {{name}}", { name: c.name }),
+      align: "end",
+      cell: (s) => {
+        const r = reportOf(s.server)
+        return r ? (
+          <span className="font-mono text-xs">
+            ≈ {fitsIn(roomOf(r), c).fits}
+          </span>
+        ) : (
+          "—"
+        )
+      },
+    })),
+  ]
 
   return (
-    <Page className="flex flex-col gap-6 py-4">
+    <Page className="flex flex-col gap-4 py-5">
+      {header(status)}
       {verify}
+
+      <StatStrip>
+        <Stat
+          label={t("Servers online")}
+          value={servers ? `${online.length}/${servers.length}` : "…"}
+          hint={
+            offline ? t("{{n}} server(s) offline", { n: offline }) : undefined
+          }
+          to={getLocalPath("infrastructure/servers")}
+        />
+        <Stat
+          label={t("Projects running")}
+          value={projects ? running : "…"}
+          hint={
+            failing ? t("{{n}} project(s) failing", { n: failing }) : undefined
+          }
+          to={getLocalPath("applications/projects")}
+        />
+        <Stat
+          label={alertCount ? t("Open alerts") : t("No open alerts")}
+          value={openAlerts ? alertCount : "…"}
+          to={getLocalPath("monitoring/alertEvents")}
+          className={cn(alertCount > 0 && "border-destructive/40")}
+        />
+        <Stat
+          label={
+            top
+              ? t("More apps like {{name}} fit", { name: top.c.name })
+              : t("Room for more apps")
+          }
+          value={top ? `≈ ${top.pool}` : "—"}
+        />
+      </StatStrip>
+
+      {!!alertCount && (
+        <Panel
+          title={t("{{count}} open alert(s)", { count: alertCount })}
+          actions={
+            <Button
+              size="sm"
+              variant="ghost"
+              render={<Link to={getLocalPath("monitoring/alertEvents")} />}
+              nativeButton={false}
+            >
+              {t("Alert history")}
+            </Button>
+          }
+          className="border-destructive/40"
+          bodyClassName="p-0"
+        >
+          <ul className="divide-y text-[13px]">
+            {openAlerts!.slice(0, 5).map((a) => (
+              <li key={a._id} className="flex items-center gap-2 px-4 py-2">
+                <StatusDot tone="danger" />
+                <span className="font-medium">{a.ruleName}</span>
+                <span className="truncate text-muted-foreground">
+                  {[a.serverName, a.projectName].filter(Boolean).join(" · ")}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </Panel>
+      )}
 
       <AiPrompt servers={servers ?? []} />
 
-      <section
-        aria-labelledby="pool-title"
-        className="relative overflow-hidden rounded-3xl border bg-linear-to-br from-orange-500/15 via-rose-500/10 to-violet-500/15 p-5 sm:p-6"
-      >
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h1 id="pool-title" className="text-2xl font-semibold">
-              {t("Server pool")}
-            </h1>
-            <p className="max-w-2xl text-sm text-muted-foreground">
-              {t(
-                "Your servers as one budget. Usage comes from each server when you open this page and stays in your browser."
-              )}
-            </p>
-          </div>
-          <Button
-            variant="outline"
-            className="bg-background/70"
-            onClick={() => {
-              placementRequest.invalidate()
-              projectsRequest.invalidate()
-              alertsRequest.invalidate()
-              capacity.request.invalidate()
-            }}
-            disabled={capacity.isLoading}
+      <div className="grid gap-4 xl:grid-cols-3">
+        <div className="flex min-w-0 flex-col gap-4 xl:col-span-2">
+          <Panel title={t("Capacity")} description={t("The whole pool")}>
+            {!servers ? (
+              <Skeleton className="h-24 rounded-lg" />
+            ) : (
+              <div className="grid gap-6 sm:grid-cols-3">
+                <Capacity
+                  label={t("CPU")}
+                  hue="sky"
+                  total={totals.cpu}
+                  reserved={totals.cpuReserved}
+                  used={used?.cpu}
+                  format={(n) => t("{{n}} cores", { n: n.toFixed(1) })}
+                />
+                <Capacity
+                  label={t("Memory")}
+                  hue="violet"
+                  total={totals.memMb}
+                  reserved={totals.memReserved}
+                  used={used?.memMb}
+                  format={formatMb}
+                />
+                <Capacity
+                  label={t("Disk")}
+                  hue="emerald"
+                  total={totals.diskMb}
+                  used={used?.diskMb}
+                  format={formatMb}
+                />
+              </div>
+            )}
+          </Panel>
+
+          <section
+            aria-labelledby="servers-title"
+            className="flex flex-col gap-2"
           >
-            <IconRefresh
-              data-icon="inline-start"
-              className={cn(capacity.isLoading && "animate-spin")}
+            <div className="flex items-center justify-between">
+              <h2 id="servers-title" className="text-sm font-semibold">
+                {t("Servers")}
+              </h2>
+              <Link
+                to={getLocalPath("infrastructure/servers")}
+                className="text-xs text-brand-text hover:underline"
+              >
+                {t("View all")}
+              </Link>
+            </div>
+            <DataTable
+              label={t("Servers")}
+              columns={serverColumns}
+              rows={servers}
+              rowId={(s) => s.server}
+              loading={!servers}
+              onRowClick={(s) =>
+                navigate(getLocalPath(`infrastructure/servers/${s.server}`))
+              }
             />
-            {t("Refresh")}
-          </Button>
+          </section>
         </div>
-        <div className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
-          <Stat
-            hue="sky"
-            icon={IconServer2}
-            value={servers ? `${online.length}/${servers.length}` : "…"}
-            label={t("Servers online")}
-            to={getLocalPath("infrastructure/servers")}
-          />
-          <Stat
-            hue="orange"
-            icon={IconRocket}
-            value={projects ? running : "…"}
-            label={t("Projects running")}
-            to={getLocalPath("applications/projects")}
-          />
-          <Stat
-            hue={alertCount ? "rose" : "emerald"}
-            icon={IconBell}
-            value={openAlerts ? alertCount : "…"}
-            label={alertCount ? t("Open alerts") : t("No open alerts")}
-            to={getLocalPath("monitoring/alertEvents")}
-          />
-          <Stat
-            hue="violet"
-            icon={IconStack2}
-            value={top ? `≈ ${top.pool}` : "—"}
-            label={
-              top
-                ? t("More apps like {{name}} fit", { name: top.c.name })
-                : t("Room for more apps")
+
+        <div className="flex min-w-0 flex-col gap-4">
+          <Panel
+            title={t("Recent deployments")}
+            actions={
+              <Link
+                to={getLocalPath("applications/projects")}
+                className="text-xs text-brand-text hover:underline"
+              >
+                {t("View all")}
+              </Link>
             }
-          />
+            bodyClassName="p-0"
+          >
+            {!projects ? (
+              <Skeleton className="m-4 h-20 rounded-lg" />
+            ) : !recent.length ? (
+              <p className="px-4 py-6 text-center text-[13px] text-muted-foreground">
+                {t("No deployments yet.")}
+              </p>
+            ) : (
+              <ul className="divide-y">
+                {recent.map((p) => (
+                  <li key={p._id}>
+                    <Link
+                      to={getLocalPath(`applications/projects/${p._id}`)}
+                      className="flex items-center gap-3 px-4 py-2 text-[13px] hover:bg-accent focus-visible:bg-accent focus-visible:outline-none"
+                    >
+                      <IconRocket
+                        className="size-4 shrink-0 text-muted-foreground"
+                        aria-hidden
+                      />
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate font-medium">
+                          {p.name}
+                        </span>
+                        <span className="block truncate text-xs text-muted-foreground">
+                          {ago(p.lastDeployment!.createdAt)}
+                          {p.lastDeployment!.commit?.message &&
+                            ` · ${p.lastDeployment!.commit.message}`}
+                        </span>
+                      </span>
+                      <DeploymentStatus status={p.lastDeployment!.status} />
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Panel>
+
+          <Panel
+            title={t("Room for more")}
+            description={t(
+              "Per app class, after {{pct}}% headroom. Memory and disk are hard limits; CPU can be overcommitted.",
+              { pct: Math.round((1 - keep) * 100) }
+            )}
+          >
+            {capacity.isLoading && !capacity.data ? (
+              <Skeleton className="h-16 rounded-lg" />
+            ) : !fitTable.length ? (
+              <p className="text-[13px] text-muted-foreground">
+                {t("Deploy a project to see how many more fit.")}
+              </p>
+            ) : (
+              <ul className="flex flex-col gap-3">
+                {fitTable.map(({ c, pool, largest, cpuFits }) => (
+                  <li key={c.key} className="flex items-start gap-3">
+                    <span className="w-12 shrink-0 font-mono text-base font-semibold tabular-nums">
+                      ≈ {pool}
+                    </span>
+                    <span className="min-w-0 text-[13px]">
+                      {t("more apps like {{name}}", { name: c.name })}
+                      <span className="block text-xs text-muted-foreground">
+                        {formatMb(c.memMb)} · {c.cpu.toFixed(2)} CPU ·{" "}
+                        {c.samples ? t("measured") : t("declared")} ·{" "}
+                        {t("largest server fits {{n}}", { n: largest })}
+                        {cpuFits < pool &&
+                          ` · ${t("CPU alone allows ≈ {{n}}; more overcommits it.", { n: cpuFits })}`}
+                      </span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Panel>
         </div>
-      </section>
+      </div>
 
-      {!!alertCount && (
-        <Alert variant="destructive">
-          <IconBell />
-          <AlertTitle>
-            {t("{{count}} open alert(s)", { count: alertCount })}
-          </AlertTitle>
-          <AlertDescription>
-            <ul className="list-disc ps-4">
-              {openAlerts!.slice(0, 5).map((a) => (
-                <li key={a._id}>
-                  {a.ruleName}
-                  {a.serverName && ` · ${a.serverName}`}
-                  {a.projectName && ` · ${a.projectName}`}
-                </li>
-              ))}
-            </ul>
-            <Link
-              to={getLocalPath("monitoring/alertEvents")}
-              className="font-medium underline"
-            >
-              {t("Alert history")}
-            </Link>
-          </AlertDescription>
-        </Alert>
-      )}
-
-      <QuickActions />
-
-      {/* Platform admins: the control plane's health at a glance. */}
       {ThunderSDK.isPermitted("controlPlane", "overview") && (
         <ControlPlaneSummary />
       )}
 
-      {!servers ? (
-        <Skeleton className="h-40 rounded-3xl" />
-      ) : (
-        <div className="grid gap-4 md:grid-cols-3">
-          <Meter
-            label={t("CPU")}
-            icon={IconCpu}
-            hue="sky"
-            total={totals.cpu}
-            reserved={totals.cpuReserved}
-            used={used?.cpu}
-            format={(n) => t("{{n}} cores", { n: n.toFixed(1) })}
-          />
-          <Meter
-            label={t("Memory")}
-            icon={IconStack2}
-            hue="violet"
-            total={totals.memMb}
-            reserved={totals.memReserved}
-            used={used?.memMb}
-            format={formatMb}
-          />
-          <Meter
-            label={t("Disk")}
-            icon={IconDatabase}
-            hue="emerald"
-            total={totals.diskMb}
-            used={used?.diskMb}
-            format={formatMb}
-          />
-        </div>
-      )}
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">{t("Room for more")}</CardTitle>
-          <CardDescription>
-            {t(
-              "Per app class, from what its projects use at p95 over the last week (never below their reservation), after {{pct}}% headroom. Memory and disk are hard limits; CPU can be overcommitted.",
-              { pct: Math.round((1 - keep) * 100) }
-            )}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {capacity.isLoading && !capacity.data ? (
-            <Skeleton className="h-20 rounded-2xl" />
-          ) : !fitTable.length ? (
-            <p className="text-sm text-muted-foreground">
-              {t("Deploy a project to see how many more fit.")}
+      <div className="grid gap-4 md:grid-cols-2">
+        <Panel
+          title={t("Growth forecast")}
+          description={t(
+            "A linear trend over daily peaks ({{n}} days so far).",
+            { n: daily.length }
+          )}
+          bodyClassName="flex flex-col gap-2 text-[13px]"
+        >
+          {daily.length < 3 ? (
+            <p className="text-muted-foreground">
+              {t("Forecasts start after three days of history.")}
             </p>
           ) : (
-            <ul className="grid gap-3 md:grid-cols-3">
-              {fitTable.map(({ c, pool, largest, cpuFits }, i) => (
-                <li
-                  key={c.key}
-                  className="flex flex-col gap-2 rounded-2xl border p-4"
-                >
-                  <div className="flex items-center gap-3">
-                    <span
-                      className={cn(
-                        "rounded-xl px-3 py-1 text-2xl font-semibold tabular-nums",
-                        HUES[classHue(i)].chip
-                      )}
-                    >
-                      ≈ {pool}
-                    </span>
-                    <span className="text-sm">
-                      {t("more apps like {{name}}", { name: c.name })}
-                    </span>
-                  </div>
-                  <span className="text-xs text-muted-foreground">
-                    {formatMb(c.memMb)} · {c.cpu.toFixed(2)} CPU ·{" "}
-                    {c.samples ? t("measured") : t("declared")} ·{" "}
-                    {t("largest server fits {{n}}", { n: largest })}
-                  </span>
-                  {cpuFits < pool && (
-                    <span className="text-xs text-muted-foreground">
-                      {t("CPU alone allows ≈ {{n}}; more overcommits it.", {
-                        n: cpuFits,
-                      })}
-                    </span>
-                  )}
-                </li>
+            <>
+              <p>
+                {memFull === null
+                  ? t("Pool memory isn't growing.")
+                  : t("Pool memory full in {{when}}.", {
+                      when: formatDays(memFull),
+                    })}
+              </p>
+              <p>
+                {diskFull === null
+                  ? t("Pool disk isn't growing.")
+                  : t("Pool disk full in {{when}}.", {
+                      when: formatDays(diskFull),
+                    })}
+              </p>
+            </>
+          )}
+          {growing.map((g) => (
+            <p
+              key={g.workload}
+              className="flex items-start gap-2 rounded-lg bg-destructive-soft px-3 py-2 text-destructive-foreground"
+            >
+              <IconAlertTriangle
+                className="mt-0.5 size-4 shrink-0"
+                aria-hidden
+              />
+              {t(
+                "{{name}}'s memory grows ~{{mb}} MB a day over {{days}} days: a leak or a growing cache?",
+                {
+                  name: projectName(g.project) ?? g.workload,
+                  mb: g.mbPerDay.toFixed(0),
+                  days: g.days,
+                }
+              )}
+            </p>
+          ))}
+        </Panel>
+
+        <Panel
+          title={t("Recommendations")}
+          description={t("Advice only; nothing changes on its own.")}
+        >
+          {!advice.length ? (
+            <p className="text-[13px] text-muted-foreground">
+              {t("Nothing to suggest right now.")}
+            </p>
+          ) : (
+            <ul className="flex list-disc flex-col gap-1 ps-4 text-[13px]">
+              {advice.map((a) => (
+                <li key={a}>{a}</li>
               ))}
             </ul>
           )}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">{t("Servers")}</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto rounded-2xl border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>{t("Server")}</TableHead>
-                  <TableHead>{t("Memory used / reserved / total")}</TableHead>
-                  <TableHead>{t("Room")}</TableHead>
-                  {classes.map((c) => (
-                    <TableHead key={c.key}>
-                      {t("Fits more {{name}}", { name: c.name })}
-                    </TableHead>
-                  ))}
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {(servers ?? []).map((s) => {
-                  const r = reportOf(s.server)
-                  const failed = results.find(
-                    (x) => x.server === s.server && "error" in x
-                  )
-                  const room = r && roomOf(r)
-                  const memUsed = (r?.host.day?.memP95 ?? 0) / MiB
-                  return (
-                    <TableRow key={s.server}>
-                      <TableCell className="font-medium">
-                        <span className="flex items-center gap-2">
-                          <span
-                            aria-hidden
-                            className={cn(
-                              "size-2 rounded-full",
-                              s.online
-                                ? "bg-emerald-500"
-                                : "bg-muted-foreground/40"
-                            )}
-                          />
-                          {s.name}
-                          <span className="sr-only">
-                            {s.online ? t("online") : t("offline")}
-                          </span>
-                        </span>
-                      </TableCell>
-                      {!r ? (
-                        <TableCell
-                          colSpan={2 + classes.length}
-                          className="text-muted-foreground"
-                        >
-                          {!s.online
-                            ? t(
-                                "Offline: capacity unavailable ({{mem}} reserved of {{total}})",
-                                {
-                                  mem: formatMb(s.memReservedMb),
-                                  total: formatMb(s.memoryMb),
-                                }
-                              )
-                            : failed
-                              ? t("Capacity unavailable")
-                              : t("Asking the server…")}
-                        </TableCell>
-                      ) : (
-                        <>
-                          <TableCell className="min-w-56">
-                            <Bar
-                              label={t("Memory used on {{name}}", {
-                                name: s.name,
-                              })}
-                              value={memUsed}
-                              total={s.memoryMb}
-                              text={`${formatMb(memUsed)} / ${formatMb(
-                                s.memReservedMb
-                              )} / ${formatMb(s.memoryMb)}`}
-                              fill={HUES.violet.bar}
-                            />
-                          </TableCell>
-                          <TableCell className="tabular-nums">
-                            {formatMb(Math.max(0, room!.memMb))}
-                          </TableCell>
-                          {classes.map((c, i) => (
-                            <TableCell key={c.key}>
-                              <span
-                                className={cn(
-                                  "rounded-lg px-2 py-0.5 text-sm font-medium tabular-nums",
-                                  HUES[classHue(i)].chip
-                                )}
-                              >
-                                ≈ {fitsIn(room!, c).fits}
-                              </span>
-                            </TableCell>
-                          ))}
-                        </>
-                      )}
-                    </TableRow>
-                  )
-                })}
-              </TableBody>
-            </Table>
-          </div>
-        </CardContent>
-      </Card>
-
-      <div className="grid gap-4 md:grid-cols-2">
-        <Card>
-          <CardHeader className="flex flex-row items-center gap-3">
-            <IconChip hue="amber" icon={IconTrendingUp} />
-            <div>
-              <CardTitle className="text-base">
-                {t("Growth forecast")}
-              </CardTitle>
-              <CardDescription>
-                {t("A linear trend over daily peaks ({{n}} days so far).", {
-                  n: daily.length,
-                })}
-              </CardDescription>
-            </div>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-2 text-sm">
-            {daily.length < 3 ? (
-              <p className="text-muted-foreground">
-                {t("Forecasts start after three days of history.")}
-              </p>
-            ) : (
-              <>
-                <p>
-                  {memFull === null
-                    ? t("Pool memory isn't growing.")
-                    : t("Pool memory full in {{when}}.", {
-                        when: formatDays(memFull),
-                      })}
-                </p>
-                <p>
-                  {diskFull === null
-                    ? t("Pool disk isn't growing.")
-                    : t("Pool disk full in {{when}}.", {
-                        when: formatDays(diskFull),
-                      })}
-                </p>
-              </>
-            )}
-            {growing.map((g) => (
-              <p
-                key={g.workload}
-                className="flex items-start gap-2 rounded-xl bg-rose-500/10 p-2 text-rose-800 dark:text-rose-200"
-              >
-                <IconAlertTriangle
-                  className="mt-0.5 size-4 shrink-0"
-                  aria-hidden
-                />
-                {t(
-                  "{{name}}'s memory grows ~{{mb}} MB a day over {{days}} days: a leak or a growing cache?",
-                  {
-                    name: projectName(g.project) ?? g.workload,
-                    mb: g.mbPerDay.toFixed(0),
-                    days: g.days,
-                  }
-                )}
-              </p>
-            ))}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center gap-3">
-            <IconChip hue="sky" icon={IconBulb} />
-            <div>
-              <CardTitle className="text-base">
-                {t("Recommendations")}
-              </CardTitle>
-              <CardDescription>
-                {t("Advice only; nothing changes on its own.")}
-              </CardDescription>
-            </div>
-          </CardHeader>
-          <CardContent>
-            {!advice.length ? (
-              <p className="text-sm text-muted-foreground">
-                {t("Nothing to suggest right now.")}
-              </p>
-            ) : (
-              <ul className="flex list-disc flex-col gap-1 ps-4 text-sm">
-                {advice.map((a) => (
-                  <li key={a}>{a}</li>
-                ))}
-              </ul>
-            )}
-          </CardContent>
-        </Card>
+        </Panel>
       </div>
     </Page>
   )

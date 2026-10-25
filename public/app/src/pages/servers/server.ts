@@ -55,29 +55,3 @@ export const stateOf = (server: TServer, live?: TLiveness): TServerState =>
       ? "online"
       : "offline"
     : server.status
-
-export const STATE_STYLE: Record<
-  TServerState,
-  { dot: string; pill: string; tile: string }
-> = {
-  online: {
-    dot: "bg-success",
-    pill: "bg-success/10 text-success",
-    tile: "bg-primary/10 text-primary",
-  },
-  offline: {
-    dot: "bg-muted-foreground",
-    pill: "bg-muted text-muted-foreground",
-    tile: "bg-muted text-muted-foreground",
-  },
-  pending: {
-    dot: "bg-warning",
-    pill: "bg-warning/15 text-foreground",
-    tile: "bg-warning/15 text-foreground",
-  },
-  rejected: {
-    dot: "bg-destructive",
-    pill: "bg-destructive/10 text-destructive",
-    tile: "bg-destructive/10 text-destructive",
-  },
-}

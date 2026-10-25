@@ -24,23 +24,8 @@ import { Container } from "@/core/custom/Container"
 import { zodToMongoProjection } from "@/core/lib/zodToMongoProjection"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
-import {
-  Card,
-  CardAction,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
-import {
-  Empty,
-  EmptyContent,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyMedia,
-  EmptyTitle,
-} from "@/components/ui/empty"
+import { EmptyState } from "@/components/console/empty-state"
+import { DataTable, type TColumn } from "@/components/console/data-table"
 import { Skeleton } from "@/components/ui/skeleton"
 import { ResourceBar } from "@/components/resource-bar"
 import { usePolling } from "@/hooks/use-polling"
@@ -56,7 +41,6 @@ import {
   gib,
   serverSchema,
   stateOf,
-  STATE_STYLE,
   type TLiveness,
   type TServer,
 } from "./server"
@@ -69,7 +53,7 @@ function Chip({
   children: React.ReactNode
 }) {
   return (
-    <span className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+    <span className="inline-flex items-center gap-1 rounded-md bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">
       {Icon && <Icon className="size-3.5" aria-hidden />}
       {children}
     </span>
@@ -107,7 +91,7 @@ function SetupChips({
         // Opens the server page's Host setup section, which lists them.
         <Link
           to={`./${server}#host-setup`}
-          className="inline-flex items-center gap-1 rounded-md bg-warning/15 px-2 py-0.5 text-xs text-foreground underline-offset-2 hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+          className="inline-flex items-center gap-1 rounded-md bg-warning-soft px-1.5 py-0.5 text-[11px] text-warning-foreground underline-offset-2 hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
           title={warnings.map((w) => `${w.name}: ${w.detail}`).join("\n")}
         >
           <IconAlertTriangle className="size-3.5" aria-hidden />
@@ -118,6 +102,115 @@ function SetupChips({
       )}
     </>
   )
+}
+
+function PendingNote({ server }: { server: TServer }) {
+  const { t } = useTranslation()
+  return (
+    <div className="flex gap-2 rounded-lg bg-warning-soft px-3 py-2 text-xs text-warning-foreground">
+      <IconKey className="size-4 shrink-0" aria-hidden />
+      <p>
+        {t(
+          "Check the pairing code printed by the agent on this machine, then accept it."
+        )}
+        {server.pairingExpiresAt && (
+          <span className="mt-0.5 block font-medium">
+            {t("Code expires {{when}}", {
+              when: formatDistanceToNow(server.pairingExpiresAt, {
+                addSuffix: true,
+              }),
+            })}
+          </span>
+        )}
+      </p>
+    </div>
+  )
+}
+
+function SetupFailed({
+  server,
+  canRetry,
+  onPrepare,
+}: {
+  server: TServer
+  canRetry: boolean
+  onPrepare: () => void
+}) {
+  const { t } = useTranslation()
+  return (
+    <div className="flex flex-wrap items-center gap-2 rounded-lg bg-destructive-soft px-3 py-2 text-xs text-destructive-foreground">
+      <p className="min-w-0 flex-1">
+        <span className="font-medium">{t("Host setup failed")}:</span>{" "}
+        {server.setup?.error}
+      </p>
+      <Button
+        size="xs"
+        variant="outline"
+        disabled={!canRetry}
+        onClick={onPrepare}
+      >
+        <IconRefresh aria-hidden /> {t("Retry setup")}
+      </Button>
+    </div>
+  )
+}
+
+function LastSeen({
+  state,
+  server,
+  live,
+}: {
+  state: ReturnType<typeof stateOf>
+  server: TServer
+  live?: TLiveness
+}) {
+  const { t } = useTranslation()
+  return (
+    <span
+      className="truncate text-xs text-muted-foreground"
+      title={live ? new Date(live.lastSeenAt).toLocaleString() : undefined}
+    >
+      {state === "offline" && live
+        ? t("Last seen {{when}}", {
+            when: formatDistanceToNow(new Date(live.lastSeenAt), {
+              addSuffix: true,
+            }),
+          })
+        : t("Agent {{version}}", { version: server.inventory.agentVersion })}
+    </span>
+  )
+}
+
+function RowActions({
+  state,
+  onAccept,
+  onReject,
+  onPing,
+}: {
+  state: ReturnType<typeof stateOf>
+  onAccept: () => void
+  onReject: () => void
+  onPing: () => void
+}) {
+  const { t } = useTranslation()
+  if (state === "pending")
+    return (
+      <div className="flex shrink-0 justify-end gap-1.5">
+        <Button size="sm" variant="ghost" onClick={onReject}>
+          {t("Reject")}
+        </Button>
+        <Button size="sm" onClick={onAccept}>
+          {t("Accept")}
+        </Button>
+      </div>
+    )
+  if (state === "online")
+    return (
+      <Button size="sm" variant="ghost" onClick={onPing}>
+        <IconActivityHeartbeat aria-hidden /> {t("Ping")}
+      </Button>
+    )
+  return null
 }
 
 function ServerCard({
@@ -146,85 +239,61 @@ function ServerCard({
   const { inventory, resources } = server
 
   return (
-    <Card
-      size="sm"
+    <article
       className={cn(
-        "transition-shadow duration-200 hover:shadow-lg",
-        state === "pending" && "ring-2 ring-warning/40",
-        state === "offline" && "opacity-80",
+        "flex flex-col rounded-[10px] border bg-card",
+        state === "pending" && "border-warning/60",
         selected && "ring-2 ring-primary"
       )}
     >
-      <CardHeader>
-        <div className="flex min-w-0 items-center gap-3">
-          <div
-            className={cn(
-              "flex size-10 shrink-0 items-center justify-center rounded-2xl",
-              STATE_STYLE[state].tile
-            )}
+      <header className="flex items-center gap-3 border-b px-3 py-2.5">
+        <div className="min-w-0 flex-1">
+          <h3 className="truncate text-sm font-semibold">
+            <Link
+              to={`./${server._id}`}
+              state={{ name: server.name }}
+              className="hover:underline focus-visible:underline focus-visible:outline-none"
+            >
+              {server.name}
+            </Link>
+          </h3>
+          <p
+            dir="ltr"
+            className="truncate font-mono text-xs text-muted-foreground"
           >
-            <IconServer2 className="size-5" aria-hidden />
-          </div>
-          <div className="min-w-0">
-            <CardTitle className="truncate">
-              <Link
-                to={`./${server._id}`}
-                state={{ name: server.name }}
-                className="hover:underline focus-visible:underline"
-              >
-                {server.name}
-              </Link>
-            </CardTitle>
-            <CardDescription className="truncate font-mono text-xs">
-              {inventory.hostname}
-            </CardDescription>
-          </div>
+            {inventory.hostname}
+          </p>
         </div>
-        <CardAction className="flex items-center gap-2">
-          <StatusPill state={state} />
-          <Checkbox
-            aria-label={t("Select {{name}}", { name: server.name })}
-            checked={selected}
-            onCheckedChange={onSelect}
-          />
-        </CardAction>
-      </CardHeader>
+        <StatusPill state={state} />
+        <Checkbox
+          aria-label={t("Select {{name}}", { name: server.name })}
+          checked={selected}
+          onCheckedChange={onSelect}
+        />
+      </header>
 
-      <CardContent className="flex flex-col gap-2.5">
+      <div className="flex flex-1 flex-col gap-2 px-3 py-2.5">
         {state === "pending" ? (
-          <div className="flex gap-3 rounded-2xl bg-muted/60 p-3 text-xs text-muted-foreground">
-            <IconKey className="size-4 shrink-0 text-foreground" aria-hidden />
-            <p>
-              {t(
-                "Check the pairing code printed by the agent on this machine, then accept it."
-              )}
-              {server.pairingExpiresAt && (
-                <span className="mt-1 block text-foreground">
-                  {t("Code expires {{when}}", {
-                    when: formatDistanceToNow(server.pairingExpiresAt, {
-                      addSuffix: true,
-                    }),
-                  })}
-                </span>
-              )}
-            </p>
-          </div>
+          <PendingNote server={server} />
         ) : resources ? (
           <>
             <ResourceBar
               label={t("CPU")}
+              hue="sky"
               used={resources.cpu}
               total={1}
               detail={`${Math.round(resources.cpu * 100)}%`}
             />
             <ResourceBar
               label={t("Memory")}
+              hue="violet"
               used={inventory.memory - resources.memFree}
               total={inventory.memory}
               detail={`${gib(inventory.memory - resources.memFree)} / ${gib(inventory.memory)}`}
             />
             <ResourceBar
               label={t("Disk")}
+              hue="emerald"
               used={inventory.disk - resources.diskFree}
               total={inventory.disk}
               detail={`${gib(inventory.disk - resources.diskFree)} / ${gib(inventory.disk)}`}
@@ -236,7 +305,7 @@ function ServerCard({
           </p>
         )}
 
-        <div className="flex flex-wrap gap-1.5 pt-1">
+        <div className="flex flex-wrap gap-1 pt-0.5">
           <Chip icon={IconBrandUbuntu}>{inventory.os}</Chip>
           <Chip icon={IconCpu}>
             {t("{{cores}} CPU", { cores: inventory.cpuCores })} ·{" "}
@@ -250,55 +319,225 @@ function ServerCard({
         <LabelChips labels={server.labels} onPick={onLabel} />
 
         {server.setup?.status === "failed" && (
-          <div className="flex flex-col gap-2 rounded-2xl bg-destructive/10 p-3 text-xs text-destructive">
-            <p>
-              <span className="font-medium">{t("Host setup failed")}:</span>{" "}
-              {server.setup.error}
-            </p>
-            <Button
-              size="sm"
-              variant="outline"
-              className="self-start"
-              disabled={state !== "online"}
-              onClick={onPrepare}
-            >
-              <IconRefresh aria-hidden /> {t("Retry setup")}
-            </Button>
-          </div>
+          <SetupFailed
+            server={server}
+            canRetry={state === "online"}
+            onPrepare={onPrepare}
+          />
         )}
-      </CardContent>
+      </div>
 
-      <CardFooter className="justify-between gap-2 border-t">
-        <span
-          className="truncate text-xs text-muted-foreground"
-          title={live ? new Date(live.lastSeenAt).toLocaleString() : undefined}
-        >
-          {state === "offline" && live
-            ? t("Last seen {{when}}", {
-                when: formatDistanceToNow(new Date(live.lastSeenAt), {
-                  addSuffix: true,
-                }),
-              })
-            : t("Agent {{version}}", { version: inventory.agentVersion })}
-        </span>
+      <footer className="flex min-h-11 items-center justify-between gap-2 border-t px-3 py-1.5">
+        <LastSeen state={state} server={server} live={live} />
+        <RowActions
+          state={state}
+          onAccept={onAccept}
+          onReject={onReject}
+          onPing={onPing}
+        />
+      </footer>
+    </article>
+  )
+}
 
-        {state === "pending" && (
-          <div className="flex shrink-0 gap-2">
-            <Button size="sm" variant="ghost" onClick={onReject}>
-              {t("Reject")}
-            </Button>
-            <Button size="sm" onClick={onAccept}>
-              {t("Accept")}
-            </Button>
+const pct = (used: number, total: number) =>
+  total > 0 ? `${Math.round((used / total) * 100)}%` : "—"
+
+/** The default view: one dense row per server. */
+function ServerTable({
+  servers,
+  liveness,
+  selectedIds,
+  toggleSelect,
+  onAccept,
+  onReject,
+  onPing,
+  onPrepare,
+  onLabel,
+}: {
+  servers: TServer[]
+  liveness: Map<string, TLiveness>
+  selectedIds: string[]
+  toggleSelect: (id: string) => void
+  onAccept: (s: TServer) => void
+  onReject: (s: TServer) => void
+  onPing: (s: TServer) => void
+  onPrepare: (s: TServer) => void
+  onLabel: (key: string, value: string) => void
+}) {
+  const { t } = useTranslation()
+  const state = (s: TServer) => stateOf(s, liveness.get(s._id))
+  const ORDER = { pending: 0, offline: 1, online: 2, rejected: 3 }
+
+  const columns: TColumn<TServer>[] = [
+    {
+      id: "select",
+      header: <span className="sr-only">{t("Select")}</span>,
+      className: "w-8 pe-0",
+      cell: (s) => (
+        <Checkbox
+          aria-label={t("Select {{name}}", { name: s.name })}
+          checked={selectedIds.includes(s._id)}
+          onCheckedChange={() => toggleSelect(s._id)}
+        />
+      ),
+    },
+    {
+      id: "name",
+      header: t("Server"),
+      sortValue: (s) => s.name,
+      cell: (s) => (
+        <div className="min-w-40">
+          <Link
+            to={`./${s._id}`}
+            state={{ name: s.name }}
+            className="font-medium hover:underline focus-visible:underline focus-visible:outline-none"
+          >
+            {s.name}
+          </Link>
+          <div
+            dir="ltr"
+            className="truncate font-mono text-[11px] text-muted-foreground"
+          >
+            {s.inventory.hostname}
           </div>
-        )}
-        {state === "online" && (
-          <Button size="sm" variant="outline" onClick={onPing}>
-            <IconActivityHeartbeat aria-hidden /> {t("Ping")}
+        </div>
+      ),
+    },
+    {
+      id: "status",
+      header: t("Status"),
+      sortValue: (s) => ORDER[state(s)],
+      cell: (s) => (
+        <div className="flex flex-col items-start gap-1">
+          <StatusPill state={state(s)} />
+          {s.status === "active" && (
+            <SetupChips server={s._id} setup={s.setup} />
+          )}
+        </div>
+      ),
+    },
+    {
+      id: "cpu",
+      header: t("CPU"),
+      className: "w-36",
+      sortValue: (s) => s.resources?.cpu ?? -1,
+      cell: (s) =>
+        s.resources ? (
+          <ResourceBar
+            compact
+            label={t("CPU on {{name}}", { name: s.name })}
+            hue="sky"
+            used={s.resources.cpu}
+            total={1}
+            detail={`${Math.round(s.resources.cpu * 100)}%`}
+          />
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        ),
+    },
+    {
+      id: "memory",
+      header: t("Memory"),
+      className: "w-36",
+      sortValue: (s) =>
+        s.resources ? 1 - s.resources.memFree / s.inventory.memory : -1,
+      cell: (s) =>
+        s.resources ? (
+          <ResourceBar
+            compact
+            label={
+              t("Memory on {{name}}", { name: s.name }) +
+              `: ${gib(s.inventory.memory - s.resources.memFree)} / ${gib(s.inventory.memory)}`
+            }
+            hue="violet"
+            used={s.inventory.memory - s.resources.memFree}
+            total={s.inventory.memory}
+            detail={pct(s.inventory.memory - s.resources.memFree, s.inventory.memory)}
+          />
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        ),
+    },
+    {
+      id: "disk",
+      header: t("Disk"),
+      className: "w-36",
+      sortValue: (s) =>
+        s.resources ? 1 - s.resources.diskFree / s.inventory.disk : -1,
+      cell: (s) =>
+        s.resources ? (
+          <ResourceBar
+            compact
+            label={
+              t("Disk on {{name}}", { name: s.name }) +
+              `: ${gib(s.inventory.disk - s.resources.diskFree)} / ${gib(s.inventory.disk)}`
+            }
+            hue="emerald"
+            used={s.inventory.disk - s.resources.diskFree}
+            total={s.inventory.disk}
+            detail={pct(s.inventory.disk - s.resources.diskFree, s.inventory.disk)}
+          />
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        ),
+    },
+    {
+      id: "specs",
+      header: t("Machine"),
+      className: "max-xl:hidden",
+      cell: (s) => (
+        <div className="flex flex-col gap-1">
+          <span className="text-xs text-muted-foreground">
+            {s.inventory.os} · {s.inventory.cpuCores} CPU · {s.inventory.arch}
+          </span>
+          <LabelChips labels={s.labels} onPick={onLabel} />
+        </div>
+      ),
+    },
+    {
+      id: "seen",
+      header: t("Agent"),
+      className: "max-lg:hidden",
+      cell: (s) => (
+        <LastSeen state={state(s)} server={s} live={liveness.get(s._id)} />
+      ),
+    },
+    {
+      id: "actions",
+      header: <span className="sr-only">{t("Actions")}</span>,
+      align: "end",
+      cell: (s) =>
+        s.setup?.status === "failed" ? (
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={state(s) !== "online"}
+            onClick={() => onPrepare(s)}
+            title={s.setup.error ?? undefined}
+          >
+            <IconRefresh aria-hidden /> {t("Retry setup")}
           </Button>
-        )}
-      </CardFooter>
-    </Card>
+        ) : (
+          <RowActions
+            state={state(s)}
+            onAccept={() => onAccept(s)}
+            onReject={() => onReject(s)}
+            onPing={() => onPing(s)}
+          />
+        ),
+    },
+  ]
+
+  return (
+    <div aria-live="polite">
+      <DataTable
+        label={t("Servers")}
+        columns={columns}
+        rows={servers}
+        rowId={(s) => s._id}
+      />
+    </div>
   )
 }
 
@@ -356,7 +595,7 @@ function BulkAgentUpdate({
   }
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border bg-muted/40 p-3 text-sm">
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-[10px] border bg-muted/40 px-3 py-2 text-[13px]">
       <span className="text-muted-foreground">
         {!outdated.length &&
           t("The selected servers run the latest agent (or are offline).")}
@@ -382,22 +621,14 @@ function AddServerHint() {
   const { t } = useTranslation()
 
   return (
-    <Empty>
-      <EmptyHeader>
-        <EmptyMedia variant="icon">
-          <IconServer2 />
-        </EmptyMedia>
-        <EmptyTitle>{t("Add your first server")}</EmptyTitle>
-        <EmptyDescription>
-          {t(
-            "Connect a machine over SSH, or run a one-line install on it. Your projects will run there."
-          )}
-        </EmptyDescription>
-      </EmptyHeader>
-      <EmptyContent>
-        <AddServerButton />
-      </EmptyContent>
-    </Empty>
+    <EmptyState
+      icon={IconServer2}
+      title={t("Add your first server")}
+      description={t(
+        "Connect a machine over SSH, or run a one-line install on it. Your projects will run there."
+      )}
+      action={<AddServerButton />}
+    />
   )
 }
 
@@ -492,7 +723,7 @@ export default function ServerCards({
   }
 
   return (
-    <Container className="flex flex-col gap-4 py-4">
+    <Container className="flex flex-col gap-3 py-3">
       {label && (
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           {t("Servers labeled")}
@@ -516,33 +747,45 @@ export default function ServerCards({
         liveness={liveness}
       />
       {isLoading ? (
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {[0, 1, 2].map((i) => (
-            <Skeleton key={i} className="h-56 rounded-4xl" />
-          ))}
-        </div>
+        <Skeleton className="h-40 rounded-[10px]" />
       ) : !servers.length && !label ? (
         <AddServerHint />
       ) : (
-        <div
-          className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3"
-          aria-live="polite"
-        >
-          {servers.map((server) => (
-            <ServerCard
-              key={server._id}
-              server={server}
-              live={liveness.get(server._id)}
-              onAccept={() => setAccepting(server)}
-              onReject={() => reject(server)}
-              onPing={() => ping(server)}
-              onPrepare={() => prepare(server)}
+        <>
+          {/* Desktop: the dense table; phones: cards. */}
+          <div className="max-md:hidden">
+            <ServerTable
+              servers={servers}
+              liveness={liveness}
+              selectedIds={selectedIds}
+              toggleSelect={toggleSelect}
+              onAccept={setAccepting}
+              onReject={reject}
+              onPing={ping}
+              onPrepare={prepare}
               onLabel={(key, value) => filterByLabel([key, value])}
-              selected={selectedIds.includes(server._id)}
-              onSelect={() => toggleSelect(server._id)}
             />
-          ))}
-        </div>
+          </div>
+          <div
+            className="grid gap-3 sm:grid-cols-2 md:hidden"
+            aria-live="polite"
+          >
+            {servers.map((server) => (
+              <ServerCard
+                key={server._id}
+                server={server}
+                live={liveness.get(server._id)}
+                onAccept={() => setAccepting(server)}
+                onReject={() => reject(server)}
+                onPing={() => ping(server)}
+                onPrepare={() => prepare(server)}
+                onLabel={(key, value) => filterByLabel([key, value])}
+                selected={selectedIds.includes(server._id)}
+                onSelect={() => toggleSelect(server._id)}
+              />
+            ))}
+          </div>
+        </>
       )}
 
       {accepting && (

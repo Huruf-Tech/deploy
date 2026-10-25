@@ -213,20 +213,20 @@ export function AiPrompt({ servers }: { servers: TPlacement[] }) {
   return (
     <section
       aria-labelledby="ai-prompt-title"
-      className="flex flex-col gap-4 rounded-3xl border bg-linear-to-br from-violet-500/10 via-background to-orange-500/10 p-5 sm:p-6"
+      className="flex flex-col gap-3 rounded-[10px] border bg-card p-3"
     >
       <h2
         id="ai-prompt-title"
-        className="flex items-center gap-2 text-lg font-semibold"
+        className="flex items-center gap-2 px-1 text-sm font-semibold"
       >
-        <IconSparkles className="size-5 text-primary" aria-hidden />
+        <IconSparkles className="size-4 text-brand-text" aria-hidden />
         {t("What do you want to deploy?")}
       </h2>
 
-      <div className="rounded-3xl border bg-background shadow-sm focus-within:ring-2 focus-within:ring-ring/40">
+      <div className="rounded-lg border bg-background focus-within:ring-2 focus-within:ring-ring/40">
         <Textarea
           aria-labelledby="ai-prompt-title"
-          rows={3}
+          rows={2}
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
           onKeyDown={(e) => {
@@ -234,10 +234,10 @@ export function AiPrompt({ servers }: { servers: TPlacement[] }) {
               ask()
           }}
           placeholder={t("e.g. Postgres 17 with 2 GB of memory")}
-          className="min-h-24 resize-none border-0 bg-transparent shadow-none focus-visible:ring-0"
+          className="min-h-14 resize-none border-0 bg-transparent text-[13px] shadow-none focus-visible:ring-0"
           disabled={!!busy}
         />
-        <div className="flex flex-wrap items-center gap-2 px-3 pb-3">
+        <div className="flex flex-wrap items-center gap-2 px-2 pb-2">
           <Button
             type="button"
             size="sm"
@@ -256,8 +256,7 @@ export function AiPrompt({ servers }: { servers: TPlacement[] }) {
           </span>
           <Button
             type="button"
-            size="icon"
-            className="rounded-full"
+            size="icon-sm"
             aria-label={t("Generate")}
             onClick={ask}
             disabled={
@@ -285,7 +284,7 @@ export function AiPrompt({ servers }: { servers: TPlacement[] }) {
       )}
 
       {draft && (
-        <div className="flex min-w-0 flex-col gap-4 rounded-3xl border bg-background p-4">
+        <div className="flex min-w-0 flex-col gap-4 rounded-lg border bg-background p-3">
           <div className="flex flex-wrap items-start gap-2">
             <p className="min-w-0 flex-1 text-sm">{draft.explanation}</p>
             <Button
@@ -299,7 +298,7 @@ export function AiPrompt({ servers }: { servers: TPlacement[] }) {
           </div>
 
           {appWithoutRepo && (
-            <p className="rounded-2xl bg-amber-500/10 p-3 text-sm text-amber-800 dark:text-amber-200">
+            <p className="rounded-lg bg-warning-soft p-3 text-[13px] text-warning-foreground">
               {t(
                 "This builds your code: pick a repository above, then generate again."
               )}
@@ -421,7 +420,7 @@ export function AiPrompt({ servers }: { servers: TPlacement[] }) {
             {draft.template && (
               <pre
                 dir="ltr"
-                className="mt-2 max-h-72 overflow-auto rounded-2xl bg-muted/50 p-3 font-mono text-xs leading-relaxed"
+                className="mt-2 max-h-72 overflow-auto rounded-lg border bg-muted/50 p-3 font-mono text-xs leading-relaxed"
               >
                 {draft.template.content.dockerfile ??
                   draft.template.content.compose}

@@ -41,7 +41,7 @@ export function DataTable<T>({
   /** Accessible name of the table. */
   label: string
   columns: TColumn<T>[]
-  rows?: T[]
+  rows?: T[] | null
   rowId: (row: T) => string
   loading?: boolean
   empty?: React.ReactNode

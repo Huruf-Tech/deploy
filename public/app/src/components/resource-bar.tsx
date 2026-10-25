@@ -6,34 +6,47 @@ import {
   ProgressTrack,
   ProgressValue,
 } from "@/components/ui/progress"
+import { HUES, type THue } from "@/lib/hues"
 import { cn } from "@/lib/utils"
 
 /**
  * One usage row: label, slim bar, and the value as text, so the level is
- * never conveyed by colour alone (PLAN §15.4). Turns warning/destructive near full.
+ * never conveyed by colour alone (PLAN §15.4). The bar wears the resource's
+ * hue and turns warning/destructive near full (DESIGN §3).
  */
 export function ResourceBar({
   label,
   used,
   total,
   detail,
+  hue = "sky",
+  compact,
 }: {
   label: string
   used: number
   total: number
   detail: string
+  hue?: THue
+  /** Table cells: no label column (the column header says it), narrower value. */
+  compact?: boolean
 }) {
   const percent = total > 0 ? Math.min(100, (used / total) * 100) : 0
 
   return (
     <ProgressPrimitive.Root
       value={percent}
-      className="grid grid-cols-[4rem_1fr_auto] items-center gap-3"
+      aria-label={label}
+      className={cn(
+        "grid items-center gap-2",
+        compact ? "grid-cols-[1fr_auto]" : "grid-cols-[4rem_1fr_auto] gap-3"
+      )}
     >
-      <ProgressLabel className="text-xs font-normal text-muted-foreground">
-        {label}
-      </ProgressLabel>
-      <ProgressTrack className="h-1.5">
+      {!compact && (
+        <ProgressLabel className="text-xs font-normal text-muted-foreground">
+          {label}
+        </ProgressLabel>
+      )}
+      <ProgressTrack className="h-1.5 min-w-12">
         <ProgressIndicator
           className={cn(
             "rounded-full",
@@ -41,11 +54,16 @@ export function ResourceBar({
               ? "bg-destructive"
               : percent >= 75
                 ? "bg-warning"
-                : "bg-primary"
+                : HUES[hue].bar
           )}
         />
       </ProgressTrack>
-      <ProgressValue className="ms-0 min-w-24 text-end text-xs text-foreground">
+      <ProgressValue
+        className={cn(
+          "ms-0 text-end font-mono text-xs text-foreground tabular-nums",
+          compact ? "min-w-10" : "min-w-24"
+        )}
+      >
         {() => detail}
       </ProgressValue>
     </ProgressPrimitive.Root>

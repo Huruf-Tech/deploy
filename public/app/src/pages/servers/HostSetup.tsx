@@ -11,14 +11,7 @@ import {
 } from "@tabler/icons-react"
 
 import { Button } from "@/components/ui/button"
-import {
-  Card,
-  CardAction,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
+import { Panel } from "@/components/console/panel"
 import { errorMessage } from "@/lib/utils"
 import type { TServer } from "./server"
 
@@ -75,112 +68,110 @@ export function HostSetup({
   if (server.status !== "active") return null
 
   return (
-    <Card ref={section} id="host-setup" className="scroll-mt-4">
-      <CardHeader>
-        <CardTitle className="text-base">{t("Host setup")}</CardTitle>
-        <CardDescription>
-          {!setup || setup.status === "pending"
-            ? t("Preparing the host: Docker, its settings and the edge proxy…")
-            : setup.status === "failed"
-              ? t("Host setup failed.")
-              : warnings.length
-                ? warnings.length === 1
-                  ? t("Ready, with 1 warning to look at.")
-                  : t("Ready, with {{count}} warnings to look at.", {
-                      count: warnings.length,
-                    })
-                : t("Ready.")}
-        </CardDescription>
-        <CardAction>
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={!online || busy || setup?.status === "pending"}
-            onClick={rerun}
-          >
-            {busy || setup?.status === "pending" ? (
-              <IconLoader2 className="animate-spin" aria-hidden />
-            ) : (
-              <IconRefresh aria-hidden />
-            )}
-            {t("Run setup again")}
-          </Button>
-        </CardAction>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-3 text-sm">
-        {setup?.status === "pending" && slow && (
-          <p className="rounded-xl bg-warning/10 p-3">
-            {t(
-              "Still running after {{n}} minutes. On the server, this shows what it's doing:",
-              { n: slow }
-            )}
-            <code className="mt-1 block font-mono text-xs break-all">
-              sudo journalctl -u huruf-deploy-agent -n 50 --no-pager
-            </code>
-          </p>
-        )}
-        {setup?.error && (
-          <p className="rounded-xl bg-destructive/10 p-3 text-destructive">
-            {setup.error}
-          </p>
-        )}
-        {!!warnings.length && (
-          <ul className="flex flex-col gap-2" aria-label={t("Warnings")}>
-            {warnings.map((w) => (
-              <li
-                key={w.name}
-                className="flex gap-2 rounded-xl bg-warning/10 p-3"
-              >
-                <IconAlertTriangle
-                  className="mt-0.5 size-4 shrink-0 text-warning"
+    <Panel
+      ref={section}
+      id="host-setup"
+      className="scroll-mt-4"
+      title={t("Host setup")}
+      description={
+        !setup || setup.status === "pending"
+          ? t("Preparing the host: Docker, its settings and the edge proxy…")
+          : setup.status === "failed"
+            ? t("Host setup failed.")
+            : warnings.length
+              ? warnings.length === 1
+                ? t("Ready, with 1 warning to look at.")
+                : t("Ready, with {{count}} warnings to look at.", {
+                    count: warnings.length,
+                  })
+              : t("Ready.")
+      }
+      actions={
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={!online || busy || setup?.status === "pending"}
+          onClick={rerun}
+        >
+          {busy || setup?.status === "pending" ? (
+            <IconLoader2 className="animate-spin" aria-hidden />
+          ) : (
+            <IconRefresh aria-hidden />
+          )}
+          {t("Run again")}
+        </Button>
+      }
+      bodyClassName="flex flex-col gap-3 text-[13px]"
+    >
+      {setup?.status === "pending" && slow && (
+        <p className="rounded-lg bg-warning-soft px-3 py-2 text-warning-foreground">
+          {t(
+            "Still running after {{n}} minutes. On the server, this shows what it's doing:",
+            { n: slow }
+          )}
+          <code className="mt-1 block font-mono text-xs break-all">
+            sudo journalctl -u huruf-deploy-agent -n 50 --no-pager
+          </code>
+        </p>
+      )}
+      {setup?.error && (
+        <p className="rounded-lg bg-destructive-soft px-3 py-2 text-destructive-foreground">
+          {setup.error}
+        </p>
+      )}
+      {!!warnings.length && (
+        <ul className="flex flex-col gap-2" aria-label={t("Warnings")}>
+          {warnings.map((w) => (
+            <li
+              key={w.name}
+              className="flex gap-2 rounded-lg bg-warning-soft px-3 py-2"
+            >
+              <IconAlertTriangle
+                className="mt-0.5 size-4 shrink-0 text-warning-foreground"
+                aria-hidden
+              />
+              <span className="min-w-0">
+                <span className="block font-medium">{w.name}</span>
+                <span className="block break-words text-muted-foreground">
+                  {w.detail}
+                </span>
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {!!setup?.notes?.length && (
+        <ul className="flex flex-col gap-1.5" aria-label={t("Notes")}>
+          {setup.notes.map((note) => (
+            <li key={note} className="flex gap-2 text-muted-foreground">
+              <IconInfoCircle className="mt-0.5 size-4 shrink-0" aria-hidden />
+              <span className="min-w-0 break-words">{note}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {!!passed.length && (
+        <details className="text-muted-foreground">
+          <summary className="cursor-pointer">
+            {passed.length === 1
+              ? t("1 check passed")
+              : t("{{count}} checks passed", { count: passed.length })}
+          </summary>
+          <ul className="mt-2 flex flex-col gap-1">
+            {passed.map((c) => (
+              <li key={c.name} className="flex gap-2">
+                <IconCircleCheck
+                  className="mt-0.5 size-4 shrink-0 text-success-foreground"
                   aria-hidden
                 />
-                <span className="min-w-0">
-                  <span className="block font-medium">{w.name}</span>
-                  <span className="block break-words text-muted-foreground">
-                    {w.detail}
-                  </span>
+                <span className="min-w-0 break-words">
+                  {c.name}: {c.detail}
                 </span>
               </li>
             ))}
           </ul>
-        )}
-        {!!setup?.notes?.length && (
-          <ul className="flex flex-col gap-1.5" aria-label={t("Notes")}>
-            {setup.notes.map((note) => (
-              <li key={note} className="flex gap-2 text-muted-foreground">
-                <IconInfoCircle
-                  className="mt-0.5 size-4 shrink-0"
-                  aria-hidden
-                />
-                <span className="min-w-0 break-words">{note}</span>
-              </li>
-            ))}
-          </ul>
-        )}
-        {!!passed.length && (
-          <details className="text-muted-foreground">
-            <summary className="cursor-pointer">
-              {passed.length === 1
-                ? t("1 check passed")
-                : t("{{count}} checks passed", { count: passed.length })}
-            </summary>
-            <ul className="mt-2 flex flex-col gap-1">
-              {passed.map((c) => (
-                <li key={c.name} className="flex gap-2">
-                  <IconCircleCheck
-                    className="mt-0.5 size-4 shrink-0 text-success"
-                    aria-hidden
-                  />
-                  <span className="min-w-0 break-words">
-                    {c.name}: {c.detail}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </details>
-        )}
-      </CardContent>
-    </Card>
+        </details>
+      )}
+    </Panel>
   )
 }

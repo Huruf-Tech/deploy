@@ -10,6 +10,7 @@ import {
 import { ThunderSDK } from "thunder-sdk"
 
 import { cn } from "@/lib/utils"
+import { StatusBadge } from "@/components/console/status"
 
 export type TProject = Awaited<ReturnType<typeof ThunderSDK.projects.get>>
 export type TProjectSummary = Awaited<
@@ -20,36 +21,12 @@ export type TDeploymentSummary = Awaited<
 >[number]
 export type TDeploymentStatus = TDeploymentSummary["status"]
 
-const DEPLOYMENT_STYLE: Record<
-  TDeploymentStatus,
-  { dot: string; pill: string; live?: boolean }
-> = {
-  queued: {
-    dot: "bg-muted-foreground",
-    pill: "bg-muted text-muted-foreground",
-  },
-  building: {
-    dot: "bg-amber-500",
-    pill: "bg-amber-500/10 text-amber-700 dark:text-amber-400",
-    live: true,
-  },
-  deploying: {
-    dot: "bg-sky-500",
-    pill: "bg-sky-500/10 text-sky-700 dark:text-sky-400",
-    live: true,
-  },
-  healthy: { dot: "bg-success", pill: "bg-success/10 text-success" },
-  failed: { dot: "bg-destructive", pill: "bg-destructive/10 text-destructive" },
-  cancelled: {
-    dot: "bg-muted-foreground",
-    pill: "bg-muted text-muted-foreground",
-  },
-}
+const LIVE: TDeploymentStatus[] = ["building", "deploying"]
 
 export const isLive = (status?: TDeploymentStatus) =>
-  !!status && !!DEPLOYMENT_STYLE[status].live
+  !!status && LIVE.includes(status)
 
-/** Status as dot + text, never colour alone (PLAN §15.4). */
+/** Status as dot + text, never colour alone (PLAN §15.4, DESIGN §5). */
 export function DeploymentStatus({
   status,
   className,
@@ -66,31 +43,8 @@ export function DeploymentStatus({
     failed: t("Failed"),
     cancelled: t("Cancelled"),
   }
-  const style = DEPLOYMENT_STYLE[status]
-
   return (
-    <span
-      className={cn(
-        "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium whitespace-nowrap",
-        style.pill,
-        className
-      )}
-    >
-      <span className="relative flex size-2">
-        {style.live && (
-          <span
-            className={cn(
-              "absolute inline-flex size-full rounded-full opacity-60 motion-safe:animate-ping",
-              style.dot
-            )}
-          />
-        )}
-        <span
-          className={cn("relative inline-flex size-2 rounded-full", style.dot)}
-        />
-      </span>
-      {label[status]}
-    </span>
+    <StatusBadge state={status} label={label[status]} className={className} />
   )
 }
 

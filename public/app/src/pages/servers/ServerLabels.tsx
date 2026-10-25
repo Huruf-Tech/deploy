@@ -211,7 +211,9 @@ export function ServerName({
   if (draft === null)
     return (
       <div className="flex min-w-0 items-center gap-1">
-        <h1 className="truncate font-heading text-xl">{name}</h1>
+        <h1 className="truncate font-heading text-xl font-semibold tracking-tight">
+          {name}
+        </h1>
         <Button
           variant="ghost"
           size="icon-sm"

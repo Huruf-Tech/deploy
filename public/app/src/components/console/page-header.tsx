@@ -1,6 +1,10 @@
 import { cn } from "@/lib/utils"
 
-/** Every page starts with this: one h1, status, description, actions, tabs. */
+/**
+ * Every page starts with this: one h1, status, description, actions, tabs.
+ * A string title becomes the h1; anything else (an inline rename, say) must
+ * render its own h1.
+ */
 export function PageHeader({
   title,
   status,
@@ -21,9 +25,13 @@ export function PageHeader({
       <div className="flex flex-wrap items-start gap-x-4 gap-y-2">
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <h1 className="truncate font-heading text-xl font-semibold tracking-tight">
-              {title}
-            </h1>
+            {typeof title === "string" ? (
+              <h1 className="truncate font-heading text-xl font-semibold tracking-tight">
+                {title}
+              </h1>
+            ) : (
+              title
+            )}
             {status}
           </div>
           {description && (

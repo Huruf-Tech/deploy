@@ -8,7 +8,16 @@ import { defineConfig, globalIgnores } from "eslint/config"
 export default defineConfig([
   // `dist` was the only entry, but vite builds to `www` (see vite.config.ts),
   // so the committed build output was being linted as source.
-  globalIgnores(["dist", "www", "android", "ios", "**/*.test.{ts,tsx}"]),
+  // bklit's charts are vendored from its registry (DESIGN §6); our presets are linted.
+  globalIgnores([
+    "dist",
+    "www",
+    "android",
+    "ios",
+    "**/*.test.{ts,tsx}",
+    "src/components/charts/**",
+    "!src/components/charts/presets.tsx",
+  ]),
   {
     files: ["**/*.{ts,tsx}"],
     extends: [
