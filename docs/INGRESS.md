@@ -22,7 +22,8 @@ Traefik then also serves the dashboard, with its own Let's Encrypt certificate (
 1. Check that nginx serves nothing else on this host: `sudo nginx -T | grep -E 'server_name|listen'`.
 2. Set `INGRESS_SERVE_PLATFORM=true`.
 3. `sudo systemctl disable --now nginx`, then redeploy with the `ingress` profile. The dashboard is unreachable for the few seconds between the two.
-4. Check `https://deploy.huruftech.com`.
+4. Run `deno task setup:prod`: it makes the `ingress` routes public. Until then Traefik's config poll gets 403, and every site shows Traefik's default certificate and a 404.
+5. Check `https://deploy.huruftech.com`.
 
 To undo it: remove the profile, then run `sudo systemctl enable --now nginx`.
 

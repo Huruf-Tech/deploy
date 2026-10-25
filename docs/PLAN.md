@@ -471,10 +471,14 @@ Decided per deployment, in this order:
 | Mode | When | How |
 |---|---|---|
 | **External registry** | The user connected a registry: **Docker Hub**, or a **generic** registry (URL + username + password/token, e.g. GHCR, GitLab, Harbor, self-hosted). Registries whose tokens expire, such as AWS ECR (12 h tokens), need provider-specific refresh and are backlog. | One auto-selected server builds and pushes; the others pull. |
-| **Built-in registry** | No external registry, a primary server exists, and all target servers are mesh-reachable to it | One auto-selected server builds and pushes to the registry on the primary server (mesh-only, htpasswd); the others pull. |
+| **Built-in registry** | No external registry, a primary server exists, and all target servers are mesh-reachable to it | The registry's own server builds and pushes locally (mesh-only, htpasswd); the others pull. |
 | **Build on every server** (fallback) | Neither of the above, or the user prefers it | Each target server builds the same commit SHA itself. No registry needed. |
 
-- The single builder is the least loaded online target server, preferring servers labeled `builder=true`.
+- The single builder: a target labeled `builder=true` if there is one; otherwise, with the built-in registry, the registry's server (its push stays local, and builds no longer move between servers); with an external registry, the least loaded online target.
+- **Built-in registry upkeep:**
+  - Its htpasswd uses bcrypt cost 10, not Caddy's default 14, which took seconds per request on small servers and stalled pulls.
+  - Garbage collection runs with the registry stopped, in a one-off container on its volume, then starts it again: collecting while it serves raced pushes and left images whose layers failed to pull.
+  - A failed pull is retried twice (after 3 s and 10 s), resuming from the layers already downloaded, before the rollout fails.
 - With one target server, it just builds and runs locally, with no distribution step.
 - Build-on-every-server costs N× build time, and images can differ slightly if base images or unpinned dependencies change between builds. Mitigations:
   - All servers build the **same commit**.
@@ -549,7 +553,7 @@ sequenceDiagram
 
 Rules:
 - One active deployment per project. A newer push supersedes a queued one.
-- Image tags: `<project-slug>:<release>-<shortsha>`. The images of the last N releases are kept on the servers/registry; older ones are garbage-collected.
+- Image tags: `huruf/<project-slug>-<6 hex of the project id>:<release>-<shortsha>`. The id part keeps a project deleted and created again with the same slug from sharing names (and registry cleanup) with the old one. The images of the last N releases are kept on the servers/registry; older ones are garbage-collected.
 - Image-only sources skip the build.
 - Private GitHub repos use an installation token (1 h) minted by the control plane and sealed to the builder(s). Generic Git uses a per-project deploy key.
 
@@ -590,6 +594,7 @@ The **control plane orchestrates rollouts across servers**. There is no backgrou
 ## 12. Variables manager
 
 - **Scopes:** `global` (owned by the user, usable in all their tenants), `tenant`, `project`. Precedence: **project > tenant > global**.
+- A key is unique per scope owner: each user (global), each tenant, and **each project**. The first index left the project out, so two projects of one tenant couldn't share a name (e.g. two Redis with a generated `PASSWORD`); it's `uniqueKeyPerScopeOwner` now, and `setup:prod` drops the old one.
 - **References:** e.g. `DATABASE_URL=${{tenant.MONGO_URL}}` or `${{shop-db.PASSWORD}}`, with cycle checks.
 - **Encryption (envelope):**
   - Master key in env `DEPLOY_MASTER_KEY` (separate from `SECRET_KEY`).
@@ -1102,7 +1107,7 @@ Each phase ends with a **review checkpoint** (demo + code review + approval). Ph
 - **Package:** Traefik and frps in `deploy.docker-compose.yml`, behind the `ingress` profile (`COMPOSE_PROFILES=ingress`), so a host is unchanged until it opts in. Traefik is configured by flags; on each of its polls the control plane writes Traefik's certificate file (PEMs inline) and frps' config, certificate and key into shared volumes. The control plane serves `GET /ingress/api/traefik` (routes, with the `X-Ingress-Token` header), `/ingress/api/acme-challenge/*` (Traefik rewrites `/.well-known/acme-challenge/*` there) and `POST /ingress/api/frp` (frps' login plugin). The platform's own hostname gets its certificate from Traefik's `platform` resolver (TLS-ALPN, so it never competes with the HTTP challenges on port 80).
 - **Domains:**
   - A `domains` collection: domain unique across the platform, tenant, project, ownership token, status, certificate metadata, and the last error.
-  - Project → Domains in the dashboard: add a domain, the exact DNS records to create, a step-by-step status, and remove.
+  - Project → Domains in the dashboard: add a domain, the exact DNS records to create, a step-by-step status, and remove. The project's "Reach it" card lists its domains (live ones as `https://` links).
   - A `domains` plan limit (Free: 3).
 - **Agent:** an ingress listener on Caddy at `127.0.0.1:7480`, routing on `X-Huruf-Project` (set by Traefik, so domain changes never touch agents) to each project's live replicas, and one `frpc` container per control plane instance keeping an outbound tunnel. frps' TLS is checked against a self-signed certificate the control plane makes once and shares through MongoDB. Each server logs in with a token derived from its id (HMAC with `INGRESS_CONFIG_TOKEN`) and may open only its own tunnel port. No port is opened on the server.
 - **ACME:** Let's Encrypt HTTP-01 with checks before ordering, backoff, renewal through the piggyback scheduler, keys encrypted with the keyring.
@@ -1110,7 +1115,8 @@ Each phase ends with a **review checkpoint** (demo + code review + approval). Ph
   - `INGRESS_HOSTNAME` (CNAME target) and `INGRESS_IPV4` (A records, comma-separated): what users point their domains at.
   - `ACME_EMAIL`, and `ACME_DIRECTORY` (Let's Encrypt production by default; staging or Pebble for tests).
   - `INGRESS_CONFIG_TOKEN`: authorizes Traefik's polls and keys the tunnel logins.
-  - `INGRESS_TUNNEL_ADDRS`: each instance's frps address for agents, e.g. `3.74.42.148:7000,…`. Agents get no tunnels until it's set.
+  - `INGRESS_TUNNEL_ADDRS`: each instance's frps address for agents, e.g. `ingress.huruftech.com:7000,…` (a hostname works). Agents get no tunnels until it's set; a server picks up a change on its next desired state (e.g. a deploy).
+  - `INGRESS_TUNNEL_PORT` (Compose): publishes frps on another host port than 7000; it must match the port in `INGRESS_TUNNEL_ADDRS`, and the security group must allow it from anywhere.
   - `INGRESS_SERVE_PLATFORM`: Traefik also serves the dashboard's own hostname (off by default, so a proxy already in front, like nginx, keeps it). `INGRESS_HTTP_PORT` / `INGRESS_HTTPS_PORT` (Compose) move Traefik behind such a proxy; setup steps in [INGRESS.md](INGRESS.md).
   - Set by the Compose file: `TRAEFIK_CERTS_DIR`, `FRPS_DIR`. Defaults that fit it: `INGRESS_PLATFORM_URL` (`http://web:8000`), `INGRESS_TUNNEL_HOST` (`frps`).
 - **Acceptance:**
@@ -1144,6 +1150,7 @@ Each phase ends with a **review checkpoint** (demo + code review + approval). Ph
   - It sends the build log, or the failing container's last logs and the health check error, with the template version.
   - It proposes a corrected version as a diff, with the reason. Accepting it saves a new version of the project's template (or, for a built-in one, a copy in the tenant that the project switches to) and redeploys.
   - The dashboard sends the build log it shows, because the control plane doesn't keep build logs.
+  - A project can switch to another visible template of the same kind (`template` on project update); applying a fix to a built-in template uses this.
 - **Validation:** every draft and fix is checked before the user sees it: schema, Handlebars, rendering with defaults, and the platform's compose parser for services. A failing answer goes back to the model with the problem, at most twice.
 - **Privacy:** the dialog says the description, repo files and logs go to the AI provider. Only the resulting template and the usage counter are stored.
 - **Acceptance:**
@@ -1171,10 +1178,27 @@ Each phase ends with a **review checkpoint** (demo + code review + approval). Ph
   4. With 2 instances, a command written on one wakes a poll held by the other.
   5. An agent from before this phase keeps working.
 
+### Fixes after going live (October 2026)
+Found while using the platform; each is in the section it belongs to, and listed here so none is lost:
+- **Deploys:** the single build of a multi-server deploy moved between servers; it now runs on the built-in registry's server (§8.4). Image names carry the project id (§9). Pulls retry before a rollout fails; the registry's password hash is cheaper (bcrypt 10) and its garbage collection runs with it stopped (§8.4).
+- **Variables:** projects of one tenant can share a variable name (§12). **Needs `deno task setup:prod`.**
+- **Ingress:**
+  - Traefik's config poll is authorized by `X-Ingress-Token`, because the auth layer takes any `Authorization: Bearer` for an API key.
+  - The `ingress` routes are public in access control: until `setup:prod` ran after the deploy, Traefik got 403 and served only its default certificate and 404s.
+  - Certificates reach Traefik inline (one file), so paths don't depend on where volumes are mounted; frps reads its files relative to its working directory.
+  - Running beside or instead of nginx: `INGRESS_SERVE_PLATFORM`, `INGRESS_HTTP_PORT`/`INGRESS_HTTPS_PORT`, `INGRESS_TUNNEL_PORT` ([INGRESS.md](INGRESS.md)).
+- **Domains:** the TXT record is derived from tenant and domain, so re-adding a domain needs no DNS change; "Reach it" lists domains.
+- **Dashboard:**
+  - Admin cards (plans, roles, policies) and the plan form led to `/app/app/…` 404s through core's `<id>` redirect; cards now open `form/<id>` directly, and the plan form returns to its list.
+  - Server selection updates agents with one "Update selected servers" button, without counts.
+  - Project tabs scroll on narrow screens.
+- **Long polling:** wakes fire after the command or spec document is written, never on the lease counters bumped before it (a poll woken early would have waited out the full hold).
+- **Operations:** every deploy that changes access control or indexes needs `deno task setup:prod` afterwards.
+
 ### Phase 14 — Backlog (after MVP)
 - Ability to upgrade already installed agent along with its deps — **done (pending review):**
   - Agents report the SHA-256 of their binary. The control plane compares it with the `SHA256SUMS` the installer uses (`AGENT_DOWNLOAD_BASE`; optional `AGENT_CHECKSUMS_BASE` when the control plane reaches that host under another address), cached 5 minutes.
-  - "Update agent" on the server page sends `agent.update`. The agent downloads the binary, verifies the checksum and renames it into place, then exits after its result is sent, and systemd starts the new one.
+  - "Update agent" on the server page sends `agent.update`; selecting servers in the list offers "Update selected servers", which updates those online with an older binary. The agent downloads the binary, verifies the checksum and renames it into place, then exits after its result is sent, and systemd starts the new one.
   - A `hello` with a changed binary re-runs host setup, so dependencies (Docker settings, WireGuard tools…) come from the new agent.
   - **Verified on a VM:** two consecutive updates, each restarting as the new version, with host setup after the restart.
 - **Standby servers and auto-placement** (owner likes it; plan as its own phase): the control plane picks servers by free capacity and labels, and spare servers take over a dead server's projects. Projects with local volumes can't move.

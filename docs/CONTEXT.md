@@ -76,7 +76,7 @@ Background from the planning conversation that is **not** in [PLAN.md](PLAN.md).
 
 - **Phases 0–10 are built.** Each has a status note in PLAN.md §16 (verified behavior, deviations, known limits); they await the owner's review.
 - **Phase 11 (custom domains, built-in ingress)** is built and live since 2026-10-25 (Traefik and frps replaced nginx on the control plane's EC2).
-- **Planned, awaiting the owner's go:** Phase 12 (AI template assistant) and Phase 13 (long polling, chosen over WebSockets).
+- **Phase 12 (AI template assistant)** and **Phase 13 (long polling, chosen over WebSockets)** are built and await review; each has a status note in PLAN.md §16, and "Fixes after going live" there lists what changed after deployment.
 - **Phase 14 backlog:**
   - Done: agent self-update.
   - Done: uninstall ("Remove server", `huruf-deploy-agent uninstall`). The agent records its host changes in `<state-dir>/ledger.jsonl`, and the installer marks fresh installs. Cleanup undoes only ledger entries and objects matched by label or exact name, never by a `huruf-` prefix, because Dokploy apps can be named `huruf-tech-*`. Servers installed before the ledger existed get conservative rules. Docker and project data volumes are kept unless asked.
@@ -89,6 +89,10 @@ Background from the planning conversation that is **not** in [PLAN.md](PLAN.md).
   - S3 credentials live in storage connections.
   - Managed servers are not built without explicit consent.
 - **Open items for the owner:**
+  - Framework (thunder-ui core, not editable here):
+    - `src/core/crud/ViewPage.tsx` redirects `<id>` to `form/<id>` with a path that already contains the base, so the router adds `/app` twice. Our cards avoid it by opening `form/<id>`; core's own users or links through `<id>` still hit it.
+    - Core's axios interceptor toasts "Request failed with status code …" whenever an error body is plain text (`Response.badRequest("…")`), next to the page's own message.
+  - Framework test `tests/router.test.ts` ("500 details are hidden in production") fails under `ENV_TYPE=test`; it belongs to the framework.
   - Verification emails: thunder-core doesn't configure Better Auth's `emailVerification`, so no verification email is sent. The fix belongs in the plugin.
   - Alert channels: confirm that email (needs real SMTP settings) and Slack (needs a workspace webhook) arrive.
   - Capacity: the "fits N more" ±1 check needs a week of real use.
