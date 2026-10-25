@@ -358,12 +358,8 @@ function BulkAgentUpdate({
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border bg-muted/40 p-3 text-sm">
       <span className="text-muted-foreground">
-        {outdated.length
-          ? t("{{n}} of {{total}} selected can update their agent.", {
-              n: outdated.length,
-              total: selected.length,
-            })
-          : t("The selected servers run the latest agent (or are offline).")}
+        {!outdated.length &&
+          t("The selected servers run the latest agent (or are offline).")}
       </span>
       <Button
         size="sm"
@@ -376,7 +372,7 @@ function BulkAgentUpdate({
         ) : (
           <IconCloudDownload aria-hidden />
         )}
-        {t("Update agent on {{n}}", { n: outdated.length })}
+        {t("Update selected servers")}
       </Button>
     </div>
   )

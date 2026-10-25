@@ -810,9 +810,7 @@
   "Still running after {{n}} minutes. On the server, this shows what it's doing:": "Still running after {{n}} minutes. On the server, this shows what it's doing:",
   "Updating {{n}} agent(s): each restarts in a few seconds, then host setup runs.": "Updating {{n}} agent(s): each restarts in a few seconds, then host setup runs.",
   "{{n}} update(s) couldn't start.": "{{n}} update(s) couldn't start.",
-  "{{n}} of {{total}} selected can update their agent.": "{{n}} of {{total}} selected can update their agent.",
   "The selected servers run the latest agent (or are offline).": "The selected servers run the latest agent (or are offline).",
-  "Update agent on {{n}}": "Update agent on {{n}}",
   "Domains": "Domains",
   "Domain": "Domain",
   "Add domain": "Add domain",
@@ -831,5 +829,6 @@
   "Create these records at your DNS provider, then click Check now. Checking continues for 30 minutes while they propagate.": "Create these records at your DNS provider, then click Check now. Checking continues for 30 minutes while they propagate.",
   "Type": "Type",
   "If your DNS is on Cloudflare, set the record to DNS only (grey cloud).": "If your DNS is on Cloudflare, set the record to DNS only (grey cloud).",
-  "Custom domains": "Custom domains"
+  "Custom domains": "Custom domains",
+  "Update selected servers": "Update selected servers"
 }
