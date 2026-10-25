@@ -122,7 +122,7 @@ function VerifyEmailAlert({ email }: { email: string }) {
       <Button
         size="sm"
         variant="outline"
-        render={<a href={getAuthUrl("/account").toString()} />}
+        render={<a href={getAuthUrl("/account?tab=personal").toString()} />}
         nativeButton={false}
       >
         {t("Verify in your account")}

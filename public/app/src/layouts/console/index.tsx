@@ -282,14 +282,15 @@ function NavGroup({
   if (!items.length) return null
 
   return (
-    <SidebarGroup className="py-1">
+    <SidebarGroup className="py-1 group-data-[collapsible=icon]:py-1.5">
       {label && (
         <SidebarGroupLabel className="h-6 text-[11px] font-medium text-muted-foreground ltr:tracking-wide ltr:uppercase">
           {label}
         </SidebarGroupLabel>
       )}
       <SidebarGroupContent>
-        <SidebarMenu className="gap-px">
+        {/* The icon rail needs room between targets (WCAG 2.5.8). */}
+        <SidebarMenu className="gap-px group-data-[collapsible=icon]:gap-1.5">
           {items.map((item) => {
             const Icon = item.icon ?? IconAlertCircle
             const active = isActive(item.path)

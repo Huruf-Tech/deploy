@@ -58,9 +58,11 @@ export const routes: TRoutesOverride = {
     name: "Roles",
     icon: IconShieldCheck,
   }),
+  // Members get policies.get for utility reads; only admins manage them.
   accessControlPolicies: regroup("accessControlPolicies", "Admin", {
     name: "Policies",
     icon: IconLock,
+    display: () => ThunderSDK.isPermitted("accessControlPolicies", "create"),
   }),
 
   // CRUD modules (users, roles, policies, plans) show only with their own
