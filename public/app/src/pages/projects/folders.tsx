@@ -23,6 +23,7 @@ import {
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -277,23 +278,26 @@ export function MoveMenu({
         }
       />
       <DropdownMenuContent align="end" className="min-w-48">
-        <DropdownMenuLabel>{t("Move to folder")}</DropdownMenuLabel>
-        {folders.map((f) => (
-          <DropdownMenuItem
-            key={f._id}
-            disabled={f._id === current}
-            onClick={() => move(f._id)}
-          >
-            <IconFolder />
-            <span className="flex-1 truncate">{f.name}</span>
-            {f._id === current && <IconCheck />}
-          </DropdownMenuItem>
-        ))}
-        {!folders.length && (
-          <p className="px-2 py-1.5 text-xs text-muted-foreground">
-            {t("No folders yet.")}
-          </p>
-        )}
+        {/* Base UI needs a label inside its group (error #31 otherwise). */}
+        <DropdownMenuGroup>
+          <DropdownMenuLabel>{t("Move to folder")}</DropdownMenuLabel>
+          {folders.map((f) => (
+            <DropdownMenuItem
+              key={f._id}
+              disabled={f._id === current}
+              onClick={() => move(f._id)}
+            >
+              <IconFolder />
+              <span className="flex-1 truncate">{f.name}</span>
+              {f._id === current && <IconCheck />}
+            </DropdownMenuItem>
+          ))}
+          {!folders.length && (
+            <p className="px-2 py-1.5 text-xs text-muted-foreground">
+              {t("No folders yet.")}
+            </p>
+          )}
+        </DropdownMenuGroup>
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={() => move(null)}>
           {t("Not in a folder")}

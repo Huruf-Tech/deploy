@@ -55,11 +55,11 @@ export function ShellDock({
       aria-label={t("Shell")}
       className="shrink-0 border-t bg-background"
     >
-      <div className="flex h-8 items-center gap-2 px-2 md:px-3">
+      <div className="flex h-9 items-center gap-2 px-2 md:px-3">
         <Button
           size="sm"
           variant="ghost"
-          className="h-7 gap-1.5 text-xs text-muted-foreground"
+          className="h-7 gap-1.5 rounded-md px-2 text-xs text-muted-foreground"
           aria-expanded={open}
           aria-keyshortcuts={mac ? "Meta+`" : "Control+`"}
           onClick={() => onOpenChange(!open)}
@@ -140,12 +140,12 @@ function ServerPicker({
     >
       <SelectTrigger
         size="sm"
-        className="h-7 w-48 text-xs"
+        className="w-48 rounded-md py-0 text-xs data-[size=sm]:h-7"
         aria-label={t("Server")}
       >
         <SelectValue placeholder={t("Select a server")} />
       </SelectTrigger>
-      <SelectContent>
+      <SelectContent className="text-xs">
         {servers.map((s) => (
           <SelectItem key={s.server} value={s.server} disabled={!s.online}>
             <StatusDot state={s.online ? "online" : "offline"} />
