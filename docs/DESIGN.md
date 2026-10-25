@@ -2,7 +2,7 @@
 
 The dashboard (`public/app`, thunder-ui) is a DevOps console: people scan it to see what's running, what's wrong and what changed, then act. This document is the plan for the redesign **and** the reference for every UI change after it. Read it before touching UI; update it when a rule changes.
 
-Status: **plan, awaiting the owner's go.** Phases are in §9.
+Status: **D1 (foundations) built; D2 next, after the owner's review.** Phases are in §9.
 
 ---
 
@@ -44,7 +44,7 @@ The dashboard wears Huruf's own theme, taken from the site's stylesheet. These v
 | Border / input | `oklch(92.2% 0 0)` | `oklch(100% 0 0 / .1)` / `/ .15` |
 | Sidebar | `oklch(98.5% 0 0)` | `oklch(10% 0 0)` |
 | **Primary (Huruf orange)** | `oklch(70.5% .213 47.604)` (≈ #FF6900) | same |
-| Primary foreground | `oklch(98% .016 73.684)` | same |
+| Primary foreground | `oklch(14.5% 0 0)` (near-black, owner's decision §8; the site uses `oklch(98% .016 73.684)`) | same |
 | Destructive | `oklch(58% .22 27)` | `oklch(70.4% .191 22.216)` |
 | Charts 1–5 | `oklch(83.7% .128 66.29)`, `oklch(70.5% .213 47.604)`, `oklch(64.6% .222 41.116)`, `oklch(55.3% .195 38.402)`, `oklch(47% .157 37.304)` (the orange ramp) | same |
 | Radius | `.625rem` | |
@@ -67,6 +67,8 @@ The dashboard wears Huruf's own theme, taken from the site's stylesheet. These v
 | `--primary` | Huruf orange: primary buttons, links, focus ring, selection, active nav. Never used for status. |
 | `--success`, `--warning`, `--danger`, `--info` (+ `-soft`, `-foreground`) | Status only: dots, badges, meter fills, banners. One hue each, tuned for both themes and AA contrast. |
 | `--chart-1…5` | Huruf's orange ramp for chart series. |
+| `--brand-text` | Orange as text (links, active nav icon): the ramp's darker step in light, a lighter one in dark, so it stays AA. |
+| `--ring` | Focus ring: Huruf orange. |
 
 Hues identify kinds of resources only where the kit says so: CPU, memory and disk meters have fixed hues (sky, violet, emerald), as today. Everything else is neutral.
 
@@ -109,7 +111,8 @@ Flat by default: canvas → card (hairline border) → popover (border + soft sh
   232 px, collapses to a 56 px icon rail (remembered), a sheet on mobile
 ```
 
-- **Sidebar:** the tenant switcher on top, nav grouped by route group (Applications, Infrastructure, Build, Configuration, Monitoring, Administration) with small group labels, active state as a filled pill, and counts or status dots where useful (e.g. servers offline, open alerts). Account and theme sit at the bottom.
+- Built in `src/layouts/console/` (`index.tsx`, `command-menu.tsx`). Sidebar 232 px / 56 px rail, state remembered in the `sidebar_state` cookie, ⌘B toggles it.
+- **Sidebar:** the logo on top (switch tenant from the account menu), nav grouped by route group (Applications, Infrastructure, Build, Configuration, Monitoring, Administration) with small group labels, active state as a filled pill, and counts or status dots where useful (e.g. servers offline, open alerts). Account and theme sit at the bottom.
 - **Top bar:** the breadcrumb (core's `useBreadcrumbTitle` keeps working), the **command palette** (⌘K / Ctrl K: jump to any page, project or server, and run quick actions), notifications and the theme toggle.
 - **Mobile:** the sidebar becomes a sheet, and the top bar keeps the breadcrumb's last item and the menu button. Safe-area utilities come from core.
 
@@ -131,7 +134,9 @@ Flat by default: canvas → card (hairline border) → popover (border + soft sh
 | `CodeBlock` | Mono, copy button, wraps or scrolls. For DNS records, commands and logs. |
 | `Timeline` | Deployment and event history: dot, label, time, details on expand. |
 
-Rules: pages compose these; new patterns get added here first, then used. The kit lives in our own folder, so core syncs never touch it.
+Files: `page-header`, `status` (`StatusDot`, `StatusBadge`, `toneOf`), `stat` (`Stat`, `StatStrip`), `meter`, `panel`, `data-table` (`DataTable`, `TColumn`), `key-value`, `toolbar`, `empty-state`, `code-block`, `timeline`, `kbd`. Status tokens come as a fill (`bg-success`), text (`text-success-foreground`) and soft background (`bg-success-soft`), likewise `warning`, `info` and `destructive`.
+
+Rules: pages compose these; new patterns get added here first, then used. The kit lives in our own folder, so core syncs never touch it. `DataTable` selection and row menus are columns for now; they become built-in when a second page needs them.
 
 ---
 
@@ -147,8 +152,8 @@ Rules: pages compose these; new patterns get added here first, then used. The ki
 | Usage of a whole (disk, quota) | `gauge-chart`, `ring-chart` |
 | Comparisons (busiest routes, per-server load) | `bar-chart` |
 
-- Install through the CLI into `src/components/charts/` (registry entry added to `components.json`). Its dependencies (`@visx/*`, `d3-*`, `@number-flow/react`; `motion` we have) are justified: they replace `recharts` once every chart is migrated, and `recharts` is then removed.
-- Wrap them in `src/components/charts/` presets with our defaults: compact margins, no entry animation on refresh (only on first draw, and none under reduced motion), tooltips with units, `--chart-*` colors, and time axes in the viewer's locale.
+- Installed through the CLI into `src/components/charts/` (registry `@bklit`: `https://bklit.com/r/{name}.json`; the old `ui.bklit.com` redirects). The CLI overwrites `src/lib/utils.ts`: restore ours after any `shadcn add @bklit/...`. It also appends `--chart-*` / `--legend*` variables to `src/index.css`; ours map them onto Huruf's neutrals. Its dependencies (`@visx/*`, `d3-*`, `@number-flow/react`; `motion` we have) are justified: they replace `recharts` once every chart is migrated, and `recharts` is then removed.
+- Presets live in `src/components/charts/presets.tsx` (`TimeSeries`, `Spark`, `SERIES` colors); gauge, ring, bar and live-line presets are added there when a page first needs them. Defaults: compact margins, no entry animation on refresh (only on first draw, and none under reduced motion), tooltips with units, `--chart-*` colors, and time axes in the viewer's locale.
 
 ---
 
