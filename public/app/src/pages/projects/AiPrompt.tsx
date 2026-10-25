@@ -35,6 +35,10 @@ type TRepo = {
   branch?: string
 }
 
+/** The inputs the chosen template asks for. */
+const inputsOf = (draft: TDraft) =>
+  draft.existing?.inputs ?? draft.template?.content.inputs ?? []
+
 /** A free slug next to the tenant's projects: `redis`, then `redis-2`… */
 const freeSlug = (name: string, taken: Set<string>) => {
   const base = slugify(name).slice(0, 34) || "app"
@@ -59,6 +63,8 @@ export function AiPrompt({ servers }: { servers: TPlacement[] }) {
   const [inputs, setInputs] = React.useState<Record<string, unknown>>({})
   const [picked, setPicked] = React.useState<string[]>([])
   const [name, setName] = React.useState("")
+  const [replicas, setReplicas] = React.useState(1)
+  const [domains, setDomains] = React.useState<string[]>([])
   const [busy, setBusy] = React.useState<"draft" | "deploy" | null>(null)
 
   const online = servers.filter((s) => s.online)
@@ -92,13 +98,16 @@ export function AiPrompt({ servers }: { servers: TPlacement[] }) {
       })
       setDraft(result)
       setName(result.name)
-      setInputs(
-        Object.fromEntries(
-          result.content.inputs.flatMap((i) =>
+      setReplicas(result.replicas ?? 1)
+      setDomains(result.domains)
+      setInputs({
+        ...Object.fromEntries(
+          inputsOf(result).flatMap((i) =>
             i.default === undefined ? [] : [[i.key, i.default]]
           )
-        )
-      )
+        ),
+        ...result.existing?.values,
+      })
       // The online server with the most CPU to spare.
       const best = [...online].sort((a, b) => b.cpuFree - a.cpuFree)[0]
       setPicked(best ? [best.server] : [])
@@ -116,16 +125,21 @@ export function AiPrompt({ servers }: { servers: TPlacement[] }) {
     try {
       const projects = await ThunderSDK.projects.list({})
       const slug = freeSlug(name, new Set(projects.map((p) => p.slug)))
-      const { _id: template } = await ThunderSDK.templates.create({
-        body: {
-          kind: draft.kind,
-          name: name.slice(0, 80),
-          slug: `${slug}-${Date.now().toString(36).slice(-4)}`,
-          description: draft.description,
-          ...(draft.kind === "service" ? { icon: "stack-2" } : {}),
-          content: draft.content,
-        },
-      })
+      // An existing template is used as it is; a new one is saved first.
+      const template =
+        draft.existing?.template ??
+        (
+          await ThunderSDK.templates.create({
+            body: {
+              kind: draft.kind,
+              name: draft.template!.name,
+              slug: `${slug}-${Date.now().toString(36).slice(-4)}`,
+              description: draft.template!.description,
+              ...(draft.kind === "service" ? { icon: "stack-2" } : {}),
+              content: draft.template!.content,
+            },
+          })
+        )._id
       const fromRepo = draft.kind === "app" && withRepo && repoReady
       const { _id } = await ThunderSDK.projects.create({
         body: {
@@ -153,16 +167,8 @@ export function AiPrompt({ servers }: { servers: TPlacement[] }) {
           inputs: Object.fromEntries(
             Object.entries(inputs).filter(([, v]) => v !== "")
           ) as Record<string, string | number | boolean>,
-          runtime: {
-            ...(draft.content.defaults.port
-              ? { port: draft.content.defaults.port }
-              : {}),
-            ...(draft.content.defaults.healthcheckPath
-              ? { healthcheckPath: draft.content.defaults.healthcheckPath }
-              : {}),
-          },
           servers: picked,
-          replicasPerServer: 1,
+          replicasPerServer: replicas,
           volumes: [],
           variables: [],
           autoDeploy: true,
@@ -172,6 +178,19 @@ export function AiPrompt({ servers }: { servers: TPlacement[] }) {
       await ThunderSDK.projects
         .deployProject({ params: { id: _id }, body: { noCache: false } })
         .catch(() => {})
+      // Domains wait for their DNS records: the project's Domains tab says which.
+      for (const hostname of domains) {
+        await ThunderSDK.domains
+          .create({ body: { project: _id, hostname } })
+          .catch((e) =>
+            toast.error(
+              t("{{domain}}: {{error}}", {
+                domain: hostname,
+                error: errorMessage(e) ?? t("Could not add the domain"),
+              })
+            )
+          )
+      }
       toast.success(t("Project created; the first deploy has started"))
       navigate(getLocalPath(`applications/projects/${_id}`))
     } catch (e) {
@@ -181,7 +200,8 @@ export function AiPrompt({ servers }: { servers: TPlacement[] }) {
     }
   }
 
-  const missing = (draft?.content.inputs ?? []).some(
+  const fields = draft ? inputsOf(draft) : []
+  const missing = fields.some(
     (i) =>
       i.required &&
       !i.generate &&
@@ -294,7 +314,7 @@ export function AiPrompt({ servers }: { servers: TPlacement[] }) {
                 onChange={(e) => setName(e.target.value)}
               />
             </Field>
-            {draft.content.inputs.map((input) => (
+            {fields.map((input) => (
               <InputField
                 key={input.key}
                 input={input}
@@ -338,19 +358,74 @@ export function AiPrompt({ servers }: { servers: TPlacement[] }) {
             </div>
           </div>
 
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field>
+              <FieldLabel htmlFor="ai-replicas">
+                {t("Replicas per server")}
+              </FieldLabel>
+              <Input
+                id="ai-replicas"
+                type="number"
+                min={1}
+                max={20}
+                value={replicas}
+                onChange={(e) =>
+                  setReplicas(Math.max(1, Math.min(20, Number(e.target.value))))
+                }
+              />
+            </Field>
+            {domains.length > 0 && (
+              <div className="flex flex-col gap-2">
+                <span className="text-sm font-medium">{t("Domains")}</span>
+                <div className="flex flex-wrap gap-2">
+                  {domains.map((d) => (
+                    <Badge
+                      key={d}
+                      variant="outline"
+                      className="gap-1 font-mono"
+                    >
+                      {d}
+                      <button
+                        type="button"
+                        aria-label={t("Remove {{name}}", { name: d })}
+                        onClick={() =>
+                          setDomains((all) => all.filter((x) => x !== d))
+                        }
+                      >
+                        <IconX className="size-3" />
+                      </button>
+                    </Badge>
+                  ))}
+                </div>
+                <span className="text-xs text-muted-foreground">
+                  {t(
+                    "Added to the project; its Domains tab shows the DNS records to create."
+                  )}
+                </span>
+              </div>
+            )}
+          </div>
+
           <details className="text-sm">
             <summary className="cursor-pointer text-muted-foreground">
               <Badge variant="secondary" className="me-2">
                 {draft.kind === "app" ? t("App") : t("Service")}
               </Badge>
-              {t("Show the template")}
+              {draft.existing
+                ? t("Uses the template {{name}}", {
+                    name: draft.existing.name,
+                  })
+                : t("Show the new template")}
             </summary>
-            <pre
-              dir="ltr"
-              className="mt-2 max-h-72 overflow-auto rounded-2xl bg-muted/50 p-3 font-mono text-xs leading-relaxed"
-            >
-              {draft.content.dockerfile ?? draft.content.compose}
-            </pre>
+            {draft.template && (
+              <pre
+                dir="ltr"
+                className="mt-2 max-h-72 overflow-auto rounded-2xl bg-muted/50 p-3 font-mono text-xs leading-relaxed"
+              >
+                {draft.template.content.dockerfile ??
+                  draft.template.content.compose}
+              </pre>
+            )}
           </details>
 
           <div className="flex justify-end">

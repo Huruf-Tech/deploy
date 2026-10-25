@@ -15,13 +15,14 @@ export type draft$body = {
     } | undefined;
 };
 export type draft$return = {
-    kind: "app" | "service";
-    name: string;
-    description: string;
     explanation: string;
-    content: {
-        dockerfile?: string | undefined;
-        compose?: string | undefined;
+    name: string;
+    kind: "app" | "service";
+    replicas?: number | undefined;
+    domains: string[];
+    existing?: {
+        template: string;
+        name: string;
         inputs: {
             key: string;
             label: string;
@@ -32,17 +33,38 @@ export type draft$return = {
             options?: string[] | undefined;
             generate?: ("password") | undefined;
         }[];
-        defaults: {
-            port?: number | undefined;
-            healthcheckPath?: string | undefined;
-            startCommand?: string | undefined;
-            buildCommand?: string | undefined;
-            cpuLimit?: number | undefined;
-            memLimitMb?: number | undefined;
+        values: {
+            [K in string]: string;
         };
-        cachePaths: string[];
-        changelog?: string | undefined;
-    };
+    } | undefined;
+    template?: {
+        name: string;
+        description: string;
+        content: {
+            dockerfile?: string | undefined;
+            compose?: string | undefined;
+            inputs: {
+                key: string;
+                label: string;
+                description?: string | undefined;
+                type: "string" | "number" | "boolean" | "select" | "secret";
+                default?: (string | number | boolean) | undefined;
+                required: boolean;
+                options?: string[] | undefined;
+                generate?: ("password") | undefined;
+            }[];
+            defaults: {
+                port?: number | undefined;
+                healthcheckPath?: string | undefined;
+                startCommand?: string | undefined;
+                buildCommand?: string | undefined;
+                cpuLimit?: number | undefined;
+                memLimitMb?: number | undefined;
+            };
+            cachePaths: string[];
+            changelog?: string | undefined;
+        };
+    } | undefined;
 };
 export type fix$body = {
     deployment?: string;

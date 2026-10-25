@@ -42,11 +42,20 @@ function script(answers: Array<object | (() => object)>) {
   return prompts;
 }
 
+/** A plan that writes a new Redis template. */
 const redis = (source: string) => ({
+  explanation: "One Redis with AOF persistence.",
+  existingTemplate: null,
+  inputs: [],
+  template: redisTemplate(source),
+  projectName: "Cache",
+  replicas: null,
+  domains: [],
+});
+const redisTemplate = (source: string) => ({
   kind: "service",
   name: "Redis",
   description: "Redis with a password",
-  explanation: "One Redis with AOF persistence.",
   source,
   inputs: [{
     key: "password",
@@ -121,12 +130,77 @@ Deno.test({
         });
         assertEquals(res.status, 200, JSON.stringify(res.json));
         assertEquals(res.json.kind, "service");
-        assertMatch(res.json.content.compose, /requirepass/);
-        assertEquals(res.json.content.inputs[0].generate, "password");
-        assertEquals(res.json.content.defaults, { port: 6379 });
+        assertEquals(res.json.name, "Cache");
+        assertEquals(res.json.existing, undefined);
+        const { content } = res.json.template;
+        assertMatch(content.compose, /requirepass/);
+        assertEquals(content.inputs[0].generate, "password");
+        assertEquals(content.defaults, { port: 6379 });
         assertEquals(prompts.length, 2);
         assertMatch(prompts[1], /doesn't validate/);
         assertEquals((await call("GET", "/ai/api/status")).json.used, 1);
+      });
+
+      await t.step("an existing template wins, with its inputs", async () => {
+        const slug = `own-redis-${Date.now()}`;
+        await createTemplate({
+          tenant: tenantId,
+          user,
+          kind: "service",
+          slug,
+          name: "Our Redis",
+          content: {
+            compose: REDIS.replace("redis:8", "redis:{{inputs.version}}"),
+            inputs: [
+              {
+                key: "version",
+                label: "Version",
+                type: "select",
+                options: ["8", "7"],
+                default: "8",
+                required: true,
+              },
+              {
+                key: "password",
+                label: "Password",
+                type: "secret",
+                generate: "password",
+                required: false,
+              },
+            ],
+            defaults: {},
+            cachePaths: [],
+          },
+        });
+        const answer = (version: string) => ({
+          explanation: "Your own Redis template fits.",
+          existingTemplate: slug,
+          inputs: [{ key: "version", value: version }],
+          template: null,
+          projectName: "Sessions",
+          replicas: 1,
+          domains: ["Cache.Example.test.", "not a domain"],
+        });
+        const prompts = script([answer("9"), answer("7")]);
+        const res = await call("POST", "/ai/api/draft", {
+          description:
+            "Redis 7 for sessions at cache.example.test, single instance",
+        });
+        assertEquals(res.status, 200, JSON.stringify(res.json));
+        assertMatch(prompts[0], new RegExp(slug));
+        assertMatch(prompts[1], /must be one of the listed options/);
+        assertEquals(res.json.template, undefined);
+        assertEquals(res.json.existing.name, "Our Redis");
+        assertEquals(res.json.existing.values, { version: "7" });
+        assertEquals(res.json.existing.inputs.length, 2);
+        assertEquals(res.json.replicas, 1);
+        assertEquals(res.json.domains, ["cache.example.test"]);
+        // The quota steps below count from one request.
+        await db.collection("rateCounters").updateOne({
+          _id: `ai:${tenantId}:${
+            new Date().toISOString().slice(0, 7)
+          }` as never,
+        }, { $inc: { count: -1 } });
       });
 
       await t.step("a provider failure doesn't use the quota", async () => {

@@ -861,5 +861,10 @@
   "This builds your code: pick a repository above, then generate again.": "This builds your code: pick a repository above, then generate again.",
   "No server is online.": "No server is online.",
   "Show the template": "Show the template",
-  "e.g. Postgres 17 with 2 GB of memory": "e.g. Postgres 17 with 2 GB of memory"
+  "e.g. Postgres 17 with 2 GB of memory": "e.g. Postgres 17 with 2 GB of memory",
+  "Added to the project; its Domains tab shows the DNS records to create.": "Added to the project; its Domains tab shows the DNS records to create.",
+  "No new template needed: {{name}} already does this. Open it to deploy with it.": "No new template needed: {{name}} already does this. Open it to deploy with it.",
+  "Show the new template": "Show the new template",
+  "Uses the template {{name}}": "Uses the template {{name}}",
+  "{{domain}}: {{error}}": "{{domain}}: {{error}}"
 }

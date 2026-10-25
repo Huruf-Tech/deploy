@@ -7,8 +7,10 @@ import {
   contentProblem,
   createTemplate,
   getTemplate,
+  listTemplates,
   saveVersion,
 } from "@/lib/build/templates.ts";
+import { resolveInputs } from "@/lib/build/render.ts";
 import { getProject, updateProject } from "@/lib/deploy/projects.ts";
 import {
   readRepoFile,
@@ -19,6 +21,7 @@ import { deploymentModel } from "@/schemas/applications/deployment.ts";
 import {
   $templateContent,
   templateModel,
+  templateVersionModel,
   type TTemplate,
   type TTemplateContent,
 } from "@/schemas/build/template.ts";
@@ -54,14 +57,32 @@ const $aiTemplate = z.object({
   cachePaths: z.array(z.string()),
 });
 
-const $aiDraft = $aiTemplate.extend({
-  kind: z.enum(["app", "service"]),
-  name: z.string(),
-  description: z.string(),
+/** What to deploy: an existing template when one fits, else a new one. */
+const $aiPlan = z.object({
   explanation: z.string().describe(
-    "For the user, in a few sentences: what it does, and any choice or limit they should know",
+    "For the user, in a few sentences: what will run, which template and why, and any choice or limit they should know",
+  ),
+  existingTemplate: z.string().nullable().describe(
+    "The slug of a listed template that fits, or null to write a new one",
+  ),
+  inputs: z.array(z.object({ key: z.string(), value: z.string() })).describe(
+    "Values for the chosen existing template's inputs, where the request or repository says what they should be; leave out passwords the platform generates",
+  ),
+  template: $aiTemplate.extend({
+    kind: z.enum(["app", "service"]),
+    name: z.string(),
+    description: z.string(),
+  }).nullable().describe("A new template, only when no listed one fits"),
+  projectName: z.string(),
+  replicas: z.number().int().nullable().describe(
+    'Replicas per server, when the request says ("single instance" = 1)',
+  ),
+  domains: z.array(z.string()).describe(
+    "Custom domains the request asks to serve the project at, e.g. app.example.com",
   ),
 });
+
+type TAiPlan = z.output<typeof $aiPlan>;
 
 const $aiFix = z.object({
   explanation: z.string().describe(
@@ -210,7 +231,33 @@ const templateProblem = (kind: TKind, template: TAiTemplate | null) => {
   return problem ?? contentProblem(kind, content!);
 };
 
-/** A template draft from a description and, optionally, a GitHub repo. */
+const HOSTNAME =
+  /^(?=.{1,253}$)(?!-)[a-z0-9-]{1,63}(?<!-)(\.(?!-)[a-z0-9-]{1,63}(?<!-))+$/;
+
+/** The tenant's and the published built-in templates, with their inputs. */
+async function templateCatalog(tenant: ObjectId) {
+  const templates = (await listTemplates(tenant)).slice(0, 80);
+  const versions = templates.length
+    ? await templateVersionModel.find({
+      $or: templates.map((t) => ({
+        template: t._id,
+        version: t.latestVersion,
+      })),
+    }, { projection: { template: 1, inputs: 1 } }).toArray()
+    : [];
+  return templates.map((t) => ({
+    ...t,
+    inputs: versions.find((v) => v.template.equals(t._id))?.inputs ?? [],
+  }))
+    // The tenant's own first: they win when a slug is in both.
+    .sort((a, b) => (a.scope === b.scope ? 0 : a.scope === "tenant" ? -1 : 1));
+}
+
+/**
+ * A deployment plan from a request and, optionally, a GitHub repo: an
+ * existing template when one fits (with its input values), or a new one;
+ * plus the project's name, replicas and the domains the request names.
+ */
 export async function draftTemplate(opts: {
   tenant: ObjectId;
   user: ObjectId;
@@ -219,19 +266,114 @@ export async function draftTemplate(opts: {
 }) {
   const context = opts.repo
     ? await repoContext(opts.tenant, opts.user, opts.repo)
-    : "No repository: this is ready-made software, so write a service template unless the description says otherwise.";
-  return await withAiQuota(opts.tenant, async () => {
-    const draft = await generateValid(
-      $aiDraft,
-      `Write a template for this request.\n\nRequest: ${opts.description}\n\n${context}`,
-      (d) => templateProblem(d.kind, d),
+    : "No repository: this is ready-made software, so use or write a service template unless the description says otherwise.";
+  const catalog = await templateCatalog(opts.tenant);
+  const listing = JSON.stringify(catalog.map((t) => ({
+    slug: t.slug,
+    name: t.name,
+    kind: t.kind,
+    ...(t.scope === "tenant" ? { own: true } : {}),
+    description: t.description,
+    inputs: t.inputs.map((i) =>
+      nonNull({
+        key: i.key,
+        label: i.label,
+        type: i.type,
+        default: i.default ?? null,
+        options: i.options ?? null,
+        required: i.required || null,
+        generated: i.generate ? true : null,
+      })
+    ),
+  })));
+
+  const find = (slug: string) => catalog.find((t) => t.slug === slug);
+  /** The chosen template and the values given for its inputs. */
+  const chosen = (plan: TAiPlan) => {
+    const template = find(plan.existingTemplate!)!;
+    const values = Object.fromEntries(
+      plan.inputs.filter((i) => template.inputs.some((d) => d.key === i.key))
+        .map((i) => [i.key, i.value]),
     );
+    // Checks types and options; passwords left empty are generated at deploy.
+    resolveInputs(template.inputs, values);
+    return { template, values };
+  };
+  const planProblem = (plan: TAiPlan) => {
+    if (!plan.existingTemplate) {
+      return plan.template
+        ? templateProblem(plan.template.kind, plan.template)
+        : "Pick a listed template or write a new one.";
+    }
+    const template = find(plan.existingTemplate);
+    if (!template) {
+      return `There's no listed template with the slug "${plan.existingTemplate}": pick a listed slug, or null to write a new one.`;
+    }
+    const unknown = plan.inputs.filter((i) =>
+      !template.inputs.some((d) => d.key === i.key)
+    );
+    if (unknown.length) {
+      return `The template has no input ${
+        unknown.map((i) => i.key).join(", ")
+      }.`;
+    }
+    try {
+      chosen(plan);
+      return undefined;
+    } catch (error) {
+      return (error as Error).message;
+    }
+  };
+
+  return await withAiQuota(opts.tenant, async () => {
+    const plan = await generateValid(
+      $aiPlan,
+      `Plan a deployment for this request. Prefer a listed template when one fits the software or stack (the user's own templates first): only write a new template when none does, or when what's needed can't be reached through a listed template's inputs.
+
+Request: ${opts.description}
+
+Templates available:
+${listing}
+
+${context}`,
+      planProblem,
+    );
+
+    const shared = {
+      explanation: plan.explanation,
+      name: plan.projectName.slice(0, 80),
+      ...(plan.replicas && plan.replicas > 0
+        ? { replicas: Math.min(plan.replicas, 20) }
+        : {}),
+      domains: [
+        ...new Set(
+          plan.domains.map((d) => d.trim().toLowerCase().replace(/\.$/, ""))
+            .filter((d) => HOSTNAME.test(d)),
+        ),
+      ],
+    };
+    if (plan.existingTemplate) {
+      const { template, values } = chosen(plan);
+      return {
+        ...shared,
+        kind: template.kind,
+        existing: {
+          template: String(template._id),
+          name: template.name,
+          inputs: template.inputs,
+          values,
+        },
+      };
+    }
+    const draft = plan.template!;
     return {
+      ...shared,
       kind: draft.kind,
-      name: draft.name.slice(0, 80),
-      description: draft.description.slice(0, 500),
-      explanation: draft.explanation,
-      content: toContent(draft).content!,
+      template: {
+        name: draft.name.slice(0, 80),
+        description: draft.description.slice(0, 500),
+        content: toContent(draft).content!,
+      },
     };
   });
 }

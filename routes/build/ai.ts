@@ -6,7 +6,11 @@ import { Response } from "@/core/http/response.ts";
 import { withTenant } from "@/plugins/Huruf-Tech/thunder-core/utils/withTenant.ts";
 import { aiAllowance } from "@/lib/ai/model.ts";
 import { applyFix, draftTemplate, fixDeployment } from "@/lib/ai/templates.ts";
-import { $templateContent, $templateKind } from "@/schemas/build/template.ts";
+import {
+  $templateContent,
+  $templateInput,
+  $templateKind,
+} from "@/schemas/build/template.ts";
 
 /**
  * The AI template assistant (PLAN Phase 12): drafts templates and proposes
@@ -42,11 +46,25 @@ export default new Router("/api", function ai(router) {
       shape: () => ({
         body: $body,
         return: z.object({
-          kind: $templateKind,
-          name: z.string(),
-          description: z.string(),
           explanation: z.string(),
-          content: $templateContent,
+          /** The project's name. */
+          name: z.string(),
+          kind: $templateKind,
+          replicas: z.number().int().optional(),
+          domains: z.array(z.string()),
+          /** A listed template that fits, with the values the AI chose. */
+          existing: z.object({
+            template: z.string(),
+            name: z.string(),
+            inputs: z.array($templateInput),
+            values: z.record(z.string(), z.string()),
+          }).optional(),
+          /** Otherwise, a new template to save. */
+          template: z.object({
+            name: z.string(),
+            description: z.string(),
+            content: $templateContent,
+          }).optional(),
         }),
       }),
       handler: async (req) => {

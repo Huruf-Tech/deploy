@@ -84,7 +84,7 @@ export function AiDraftDialog({
         },
       })
       setDraft(result)
-      setName(result.name)
+      setName(result.template?.name ?? result.name)
     } catch (e) {
       toast.error(errorMessage(e) ?? t("The AI couldn't write a template"))
     } finally {
@@ -95,6 +95,12 @@ export function AiDraftDialog({
 
   const save = async () => {
     if (!draft) return
+    // An existing template fits: open it rather than saving a copy.
+    if (draft.existing) {
+      onCreated(draft.existing.template)
+      close()
+      return
+    }
     setBusy(true)
     try {
       const { _id } = await ThunderSDK.templates.create({
@@ -102,9 +108,9 @@ export function AiDraftDialog({
           kind: draft.kind,
           name,
           slug: uniqueSlug(name),
-          description: draft.description,
+          description: draft.template!.description,
           ...(draft.kind === "service" ? { icon: "stack-2" } : {}),
-          content: draft.content,
+          content: draft.template!.content,
         },
       })
       onCreated(_id)
@@ -124,7 +130,8 @@ export function AiDraftDialog({
     setRepo({})
   }
 
-  const source = draft?.content.dockerfile ?? draft?.content.compose ?? ""
+  const content = draft?.template?.content
+  const source = content?.dockerfile ?? content?.compose ?? ""
 
   return (
     <Dialog open={open} onOpenChange={(o) => (o ? onOpenChange(o) : close())}>
@@ -174,35 +181,46 @@ export function AiDraftDialog({
             <p className="rounded-2xl bg-muted/50 p-3 text-sm">
               {draft.explanation}
             </p>
-            <Field>
-              <FieldLabel htmlFor="ai-name">{t("Name")}</FieldLabel>
-              <Input
-                id="ai-name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-              />
-            </Field>
-            <div className="flex flex-wrap items-center gap-2 text-sm">
-              <Badge variant="secondary">
-                {draft.kind === "app" ? t("App") : t("Service")}
-              </Badge>
-              {draft.content.inputs.map((i) => (
-                <Badge key={i.key} variant="outline" className="font-mono">
-                  {i.key}
-                </Badge>
-              ))}
-            </div>
-            <pre
-              dir="ltr"
-              className="max-h-80 overflow-auto rounded-2xl bg-muted/50 p-3 font-mono text-xs leading-relaxed"
-            >
-              {source}
-            </pre>
-            <FieldDescription>
-              {t(
-                "Saving creates a template you can still edit and preview before deploying."
-              )}
-            </FieldDescription>
+            {draft.existing ? (
+              <p className="text-sm">
+                {t(
+                  "No new template needed: {{name}} already does this. Open it to deploy with it.",
+                  { name: draft.existing.name }
+                )}
+              </p>
+            ) : (
+              <>
+                <Field>
+                  <FieldLabel htmlFor="ai-name">{t("Name")}</FieldLabel>
+                  <Input
+                    id="ai-name"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                  />
+                </Field>
+                <div className="flex flex-wrap items-center gap-2 text-sm">
+                  <Badge variant="secondary">
+                    {draft.kind === "app" ? t("App") : t("Service")}
+                  </Badge>
+                  {content?.inputs.map((i) => (
+                    <Badge key={i.key} variant="outline" className="font-mono">
+                      {i.key}
+                    </Badge>
+                  ))}
+                </div>
+                <pre
+                  dir="ltr"
+                  className="max-h-80 overflow-auto rounded-2xl bg-muted/50 p-3 font-mono text-xs leading-relaxed"
+                >
+                  {source}
+                </pre>
+                <FieldDescription>
+                  {t(
+                    "Saving creates a template you can still edit and preview before deploying."
+                  )}
+                </FieldDescription>
+              </>
+            )}
           </div>
         )}
 
@@ -218,7 +236,9 @@ export function AiDraftDialog({
               </Button>
               <Button onClick={save} disabled={busy || !name.trim()}>
                 {busy && <IconLoader2 className="animate-spin" aria-hidden />}
-                {t("Save template")}
+                {draft.existing
+                  ? t("Open {{name}}", { name: draft.existing.name })
+                  : t("Save template")}
               </Button>
             </>
           ) : (

@@ -1133,7 +1133,10 @@ Each phase ends with a **review checkpoint** (demo + code review + approval). Ph
 - **Create a template with AI:**
   - **From a GitHub repo:** through the GitHub App, the assistant reads the file list and a bounded set of key files (`package.json`, `go.mod`, `requirements.txt`, an existing `Dockerfile` or compose file…), and writes an **app** template.
   - **From a description**, with no repo (e.g. "Redis with a password, 512 MB, AOF persistence"): a **service** template (compose).
-  - The output is validated against the template schema (Dockerfile or compose, inputs, port, health check, cache paths) and shown as a **draft** with a short explanation. The user edits and saves it as a normal template version; nothing deploys by itself.
+  - **Existing templates first:** the model sees the tenant's and the built-in templates with their inputs. It picks one when it fits (filling its inputs from the request and repository) and writes a new template only when none does.
+  - The answer is a small deployment plan: the template (existing or new), the project name, replicas ("single instance" = 1) and any custom domains the request names.
+  - The output is validated against the template schema (Dockerfile or compose, inputs, port, health check, cache paths), or for an existing template against its inputs, and shown with a short explanation. Nothing deploys without the user.
+  - **Overview prompt:** "What do you want to deploy?" turns the plan into a project in one step: inputs, servers (the online one with the most free CPU preselected), replicas and domains to review, then Deploy saves a new template if there is one, creates the project, deploys it and adds the domains.
   - The assistant explains what replicas mean here: identical copies behind the edge proxy. Stateful software that needs roles (e.g. Redis replication with Sentinel) is offered as a different setup, never faked with replicas.
 - **Fix with AI** on a failed build or rollout:
   - It sends the build log, or the failing container's last logs and the health check error, with the template version.

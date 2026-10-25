@@ -861,5 +861,10 @@
   "This builds your code: pick a repository above, then generate again.": "هذا يبني شيفرتك: اختر مستودعًا أعلاه، ثم أعد الإنشاء.",
   "No server is online.": "لا يوجد خادم متصل.",
   "Show the template": "عرض القالب",
-  "e.g. Postgres 17 with 2 GB of memory": "مثلًا: Postgres 17 بذاكرة 2 غيغابايت"
+  "e.g. Postgres 17 with 2 GB of memory": "مثلًا: Postgres 17 بذاكرة 2 غيغابايت",
+  "Added to the project; its Domains tab shows the DNS records to create.": "تُضاف إلى المشروع؛ ويعرض تبويب النطاقات فيه سجلات DNS المطلوب إنشاؤها.",
+  "No new template needed: {{name}} already does this. Open it to deploy with it.": "لا حاجة لقالب جديد: القالب {{name}} يؤدي ذلك بالفعل. افتحه للنشر به.",
+  "Show the new template": "عرض القالب الجديد",
+  "Uses the template {{name}}": "يستخدم القالب {{name}}",
+  "{{domain}}: {{error}}": "{{domain}}: {{error}}"
 }
