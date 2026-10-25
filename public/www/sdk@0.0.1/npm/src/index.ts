@@ -6,6 +6,7 @@
 
 import { BaseSDK } from "./base.js";
 
+import { domainsModule } from "./modules/domains.js";
 import { projectGroupsModule } from "./modules/projectGroups.js";
 import { projectsModule } from "./modules/projects.js";
 import { billingModule } from "./modules/billing.js";
@@ -49,6 +50,7 @@ import { essentialsEntry } from "./plugins/essentials/entry.js";
 export class ThunderSDK extends BaseSDK {
     protected static _actionsList?: string[];
     protected static _moduleNames = [
+        "domains",
         "projectGroups",
         "projects",
         "billing",
@@ -88,6 +90,7 @@ export class ThunderSDK extends BaseSDK {
         "wallets",
     ];
     
+    static domains: ReturnType<typeof domainsModule> = domainsModule(this);
     static projectGroups: ReturnType<typeof projectGroupsModule> = projectGroupsModule(this);
     static projects: ReturnType<typeof projectsModule> = projectsModule(this);
     static billing: ReturnType<typeof billingModule> = billingModule(this);

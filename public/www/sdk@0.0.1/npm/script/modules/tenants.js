@@ -113,7 +113,7 @@ const tenantsModule = (sdk) => {
     methods.del.__scope = "tenants";
     methods.create.__scope = "tenants";
     sdk["_moduleGroup"].set(methods, "IAM");
-    sdk["_moduleMetadata"].set(methods, { "crud": { "schema": { "$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object", "properties": { "name": { "type": "string" }, "logo": { "type": "string", "format": "uri" }, "createdBy": { "tsType": "string" }, "createdAt": { "default": "2026-10-24T11:45:22.588Z", "type": "string", "format": "date-time" } }, "required": ["name", "createdBy", "createdAt"], "additionalProperties": false }, "insertSchema": { "$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object", "properties": { "name": { "type": "string" }, "logo": { "type": "string", "format": "uri" } }, "required": ["name"] } } });
+    sdk["_moduleMetadata"].set(methods, { "crud": { "schema": { "$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object", "properties": { "name": { "type": "string" }, "logo": { "type": "string", "format": "uri" }, "createdBy": { "tsType": "string" }, "createdAt": { "default": "2026-10-25T11:09:03.502Z", "type": "string", "format": "date-time" } }, "required": ["name", "createdBy", "createdAt"], "additionalProperties": false }, "insertSchema": { "$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object", "properties": { "name": { "type": "string" }, "logo": { "type": "string", "format": "uri" } }, "required": ["name"] } } });
     return methods;
 };
 exports.tenantsModule = tenantsModule;

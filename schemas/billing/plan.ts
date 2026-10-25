@@ -17,6 +17,7 @@ export const $planLimits = z.object({
   alertRules: z.number().int().min(0).default(10),
   gitIntegrations: z.number().int().min(0).default(10),
   registries: z.number().int().min(0).default(10),
+  domains: z.number().int().min(0).default(3),
   managedServers: z.number().int().min(0).default(0),
 });
 

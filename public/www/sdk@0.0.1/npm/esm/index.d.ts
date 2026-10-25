@@ -4,6 +4,7 @@
  * This is a generated file. Do not edit the contents of this file!
  */
 import { BaseSDK } from "./base.js";
+import { domainsModule } from "./modules/domains.js";
 import { projectGroupsModule } from "./modules/projectGroups.js";
 import { projectsModule } from "./modules/projects.js";
 import { billingModule } from "./modules/billing.js";
@@ -45,6 +46,7 @@ import { essentialsEntry } from "./plugins/essentials/entry.js";
 export declare class ThunderSDK extends BaseSDK {
     protected static _actionsList?: string[];
     protected static _moduleNames: string[];
+    static domains: ReturnType<typeof domainsModule>;
     static projectGroups: ReturnType<typeof projectGroupsModule>;
     static projects: ReturnType<typeof projectsModule>;
     static billing: ReturnType<typeof billingModule>;

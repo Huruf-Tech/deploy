@@ -25,6 +25,7 @@ export type create$body = {
         alertRules?: number;
         gitIntegrations?: number;
         registries?: number;
+        domains?: number;
         managedServers?: number;
     };
     features?: {
@@ -80,6 +81,7 @@ export type get$return = {
             alertRules: number;
             gitIntegrations: number;
             registries: number;
+            domains: number;
             managedServers: number;
         };
         features: {
@@ -125,6 +127,7 @@ export type update$body = {
         alertRules?: number;
         gitIntegrations?: number;
         registries?: number;
+        domains?: number;
         managedServers?: number;
     } | undefined) | undefined;
     features?: ({

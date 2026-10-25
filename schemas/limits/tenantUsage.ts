@@ -12,6 +12,7 @@ export const $tenantUsage = z.object({
   alertRules: z.number().int().optional(),
   gitIntegrations: z.number().int().optional(),
   registries: z.number().int().optional(),
+  domains: z.number().int().optional(),
   managedServers: z.number().int().optional(),
   /** Since when the tenant has had more servers than its plan allows (PLAN §22.5). */
   overLimitSince: z.date().optional(),

@@ -8,6 +8,7 @@ var _a;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ThunderSDK = void 0;
 const base_js_1 = require("./base.js");
+const domains_js_1 = require("./modules/domains.js");
 const projectGroups_js_1 = require("./modules/projectGroups.js");
 const projects_js_1 = require("./modules/projects.js");
 const billing_js_1 = require("./modules/billing.js");
@@ -122,6 +123,7 @@ Object.defineProperty(ThunderSDK, "_moduleNames", {
     configurable: true,
     writable: true,
     value: [
+        "domains",
         "projectGroups",
         "projects",
         "billing",
@@ -160,6 +162,12 @@ Object.defineProperty(ThunderSDK, "_moduleNames", {
         "walletLedgers",
         "wallets",
     ]
+});
+Object.defineProperty(ThunderSDK, "domains", {
+    enumerable: true,
+    configurable: true,
+    writable: true,
+    value: (0, domains_js_1.domainsModule)(_a)
 });
 Object.defineProperty(ThunderSDK, "projectGroups", {
     enumerable: true,

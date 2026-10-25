@@ -5,6 +5,7 @@
  */
 var _a;
 import { BaseSDK } from "./base.js";
+import { domainsModule } from "./modules/domains.js";
 import { projectGroupsModule } from "./modules/projectGroups.js";
 import { projectsModule } from "./modules/projects.js";
 import { billingModule } from "./modules/billing.js";
@@ -118,6 +119,7 @@ Object.defineProperty(ThunderSDK, "_moduleNames", {
     configurable: true,
     writable: true,
     value: [
+        "domains",
         "projectGroups",
         "projects",
         "billing",
@@ -156,6 +158,12 @@ Object.defineProperty(ThunderSDK, "_moduleNames", {
         "walletLedgers",
         "wallets",
     ]
+});
+Object.defineProperty(ThunderSDK, "domains", {
+    enumerable: true,
+    configurable: true,
+    writable: true,
+    value: domainsModule(_a)
 });
 Object.defineProperty(ThunderSDK, "projectGroups", {
     enumerable: true,

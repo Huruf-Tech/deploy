@@ -20,6 +20,7 @@ export type get$return = {
         alertRules: number;
         gitIntegrations: number;
         registries: number;
+        domains: number;
         managedServers: number;
     };
     features: {
@@ -79,6 +80,7 @@ export type plans$return = {
         alertRules: number;
         gitIntegrations: number;
         registries: number;
+        domains: number;
         managedServers: number;
     };
     features: {

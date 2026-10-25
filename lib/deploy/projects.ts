@@ -2,6 +2,7 @@ import { ObjectId, type WithId } from "mongodb";
 import { Response } from "@/core/http/response.ts";
 import { isDuplicateKeyError } from "@/database.ts";
 import { entitlements, keyring, quotaGuard } from "@/lib/services.ts";
+import { removeProjectDomains } from "@/lib/domains/domains.ts";
 import { getTemplate } from "@/lib/build/templates.ts";
 import {
   renderContent,
@@ -657,6 +658,7 @@ export async function deleteProject(tenant: ObjectId, id: ObjectId) {
     releaseModel.deleteMany({ project: id }),
     deploymentModel.deleteMany({ project: id }),
     deleteProjectVariables(tenant, id),
+    removeProjectDomains(tenant, id),
   ]);
 }
 

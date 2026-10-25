@@ -30,6 +30,10 @@ import {
   releaseModel,
 } from "@/schemas/applications/deployment.ts";
 import { registryModel } from "@/schemas/infrastructure/serverSpec.ts";
+import {
+  domainJobSlotModel,
+  domainModel,
+} from "@/schemas/applications/domain.ts";
 import { networkModel } from "@/schemas/infrastructure/network.ts";
 import { bootstrapSessionModel } from "@/schemas/infrastructure/bootstrapSession.ts";
 import {
@@ -220,6 +224,21 @@ export const syncDeployIndexes = async () => {
     ),
     registryModel.createIndex({ tenant: 1, name: 1 }, { name: "tenantName" }),
     storageModel.createIndex({ tenant: 1, name: 1 }, { name: "tenantName" }),
+    domainModel.createIndex({ tenant: 1, hostname: 1 }, {
+      name: "tenantHostname",
+      unique: true,
+    }),
+    // A hostname is verified by one tenant only (PLAN §14).
+    domainModel.createIndex({ hostname: 1 }, {
+      name: "verifiedHostname",
+      unique: true,
+      partialFilterExpression: { verifiedAt: { $exists: true } },
+    }),
+    domainModel.createIndex({ project: 1 }, { name: "project" }),
+    domainModel.createIndex({ nextCheckAt: 1 }, {
+      name: "dueChecks",
+      partialFilterExpression: { status: "checking" },
+    }),
     // One subscription per tenant (PLAN §22.1).
     subscriptionModel.createIndex({ tenant: 1 }, {
       name: "uniqueTenant",
@@ -281,6 +300,9 @@ export const syncDeployIndexes = async () => {
       },
     })),
   );
+  await domainJobSlotModel.updateOne({ _id: 0 }, {
+    $setOnInsert: { nextRunAt: new Date(0) },
+  }, { upsert: true });
 };
 
 if (import.meta.main) {
