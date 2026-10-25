@@ -10,9 +10,10 @@ Settings for both (the `envs` collection, or `.env` next to the Compose file):
 | `INGRESS_CONFIG_TOKEN` | a long random string |
 | `ACME_EMAIL` | an address for Let's Encrypt notices |
 | `INGRESS_HOSTNAME` / `INGRESS_IPV4` | what users point their domains at (CNAME target / A record) |
-| `INGRESS_TUNNEL_ADDRS` | `<this host's public IP>:7000` |
+| `INGRESS_TUNNEL_ADDRS` | `<this host's name or IP>:7000` |
+| `INGRESS_TUNNEL_PORT` | only if agents should connect on another port than 7000; it must match the port in `INGRESS_TUNNEL_ADDRS` |
 
-Open port 7000 in the security group. Port 8000 no longer needs to be public once a proxy is in front.
+Open that port (7000 by default) to everyone in the security group: servers can be anywhere, and only servers with a valid login get a tunnel. Port 8000 no longer needs to be public once a proxy is in front.
 
 ## A. Traefik replaces nginx (the chosen setup)
 

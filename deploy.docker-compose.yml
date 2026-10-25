@@ -58,13 +58,14 @@ services:
         max-size: "10m"
         max-file: "5"
 
-  # Agents' tunnels arrive on 7000; their ports stay on this network, for Traefik.
+  # Agents' tunnels arrive on INGRESS_TUNNEL_PORT (7000 by default; the port in
+  # INGRESS_TUNNEL_ADDRS must match). Tunnel ports stay on this network, for Traefik.
   frps:
     image: fatedier/frps:v0.65.0
     profiles: ["ingress"]
     restart: unless-stopped
     ports:
-      - "7000:7000"
+      - "${INGRESS_TUNNEL_PORT:-7000}:7000"
     working_dir: /ingress/frps
     command: ["-c", "frps.toml"]
     volumes:
