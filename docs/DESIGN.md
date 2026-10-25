@@ -164,7 +164,7 @@ Rules: pages compose these; new patterns get added here first, then used. The ki
 ## 8. Accessibility checklist (every page)
 
 - Contrast AA (4.5:1 text, 3:1 large text and UI parts) in both themes; status always has text or an icon besides color.
-- **Text on Huruf orange:** light text on `oklch(70.5% …)` is about 2.6:1, below AA for normal-size text. Primary buttons keep the brand orange fill; their label weight and color follow the owner's decision recorded here (open: dark labels for AA, or the site's light labels for brand fidelity). Orange text on white uses the ramp's `55.3%` step so links stay readable.
+- **Text on Huruf orange (owner's decision):** primary buttons keep the brand orange fill with **near-black labels** (`--primary-foreground: oklch(14.5% 0 0)` or darker), about 8:1, passing AA. huruftech.com's light labels (about 2.6:1) aren't used. Orange *text* on white uses the ramp's `55.3%` step so links stay readable.
 - One `h1` per page (`PageHeader`), headings in order, landmarks (`nav`, `main`, `aside`).
 - Visible focus ring (2 px, accent) on every interactive element; logical tab order; Esc closes overlays; focus returns to the trigger.
 - Tables use real `table` markup with header cells and an accessible name; icon-only buttons have `aria-label`; live regions announce async results (deploy started, check finished).
