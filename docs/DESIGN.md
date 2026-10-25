@@ -223,3 +223,50 @@ Raise these upstream with thunder-ui rather than patching core.
 - Check light, dark, phone and Arabic before calling a UI change done; run axe on the page (both themes).
 - No palette colors (`text-amber-700`, `bg-sky-500/10`) on content: status tokens (`bg-warning-soft text-warning-foreground` …) and `text-brand-text` for orange text.
 - Panels `rounded-[10px]`, inner boxes `rounded-lg`; no gradients, glass or large icon tiles on content.
+
+---
+
+## 11. Lessons from the redesign (don't repeat these)
+
+Each of these shipped, was caught after the redesign, and was fixed. Check new UI against this list.
+
+### Base UI and shadcn primitives
+
+- **Menu labels live inside a group.** `DropdownMenuLabel` outside `DropdownMenuGroup` throws Base UI error #31 and takes the whole route down ("Unexpected Application Error"). Same for `SelectGroupLabel` / `CommandGroup` headings: use the parent the primitive expects.
+- **`CommandDialog` needs a `<Command>` inside it** (this shadcn version doesn't add one); without it cmdk crashes on open.
+- **Size overrides must match the primitive's selector.** `SelectTrigger` sets its height with `data-[size=sm]:h-8`, which beats a plain `h-7`; override with `data-[size=sm]:h-7` (same for radius and padding). In a 32–36 px bar, controls are 28 px (`h-7`) with `rounded-md`, never the default pill.
+- **Rounded containers clip their children** (`overflow-hidden`), or a sticky/colored header paints square corners over the border (it happened on every `DataTable`).
+- **Don't duplicate a control core already renders.** Core's list toolbar has its own cards/table toggle; a second toggle in our card override confused the page. Check what the core screen already shows before adding to it.
+- **`shadcn add` from another registry may overwrite our files** (`@bklit` replaced `src/lib/utils.ts`): dry-run first, then restore anything it overwrote.
+
+### Layout and navigation
+
+- **Persisted UI state uses our own key and a sensible default.** The sidebar read core's `sidebar_state` cookie, which held core navbar's closed default, so it started collapsed for everyone. Own `localStorage` key, open by default, every read/write in `try/catch`.
+- **No lonely sections.** A route group with one page renders that page unlabelled at the top, not as a labelled section of one; loose pages stay together at the top instead of landing between groups.
+- **Touch targets in the icon rail:** at least ~6 px between 32 px icons (WCAG 2.5.8). Density is for rows of text, not for icon-only targets.
+- **Things that organize a page belong on that page.** Project groups were a nav item; they're folders on the Projects page. Before adding a nav entry, ask whether it's a page of its own or a way to arrange another page.
+
+### Permissions
+
+- **`get` is not "manage".** Members hold `accessControlPolicies.get` for utility reads, which showed them the admin Policies page. Gate admin pages on a write permission (`create`/`update`) as well as the read one; check what a plain member's role actually holds before relying on a permission for visibility.
+
+### States and data
+
+- **An empty primary list must not hide the rest of the page.** With no projects, the "Deploy your first project" state hid the folders. Empty states replace only what's empty, and their text must match the situation ("No projects yet" vs "Every project is in a folder").
+- **Guard every ratio:** `total > 0 ? … : "—"`. Zero totals rendered "Infinity%".
+- **Long secondary lists get `limit`** ("Show N more"); a page shouldn't scroll for a minute past a table nobody asked to see in full.
+- **Count words:** don't render "1 projects"; use a singular key or i18next plurals.
+
+### Content
+
+- **Every command, config or template is a `CodeBlock` with `lang`** (shell, yaml, dockerfile): highlighted, copyable, `dir="ltr"`. No bare `<pre>`/`<code>` for anything a user copies.
+- **Deep links say where they go:** links into the auth app carry the exact tab (`/account?tab=personal` for email verification).
+- **Charts:** monotone curves (no overshoot), time ticks for short ranges, enough left margin for unit labels, at most ~240 points.
+- **Contrast:** muted text on muted surfaces needs the darker `--muted-foreground` (52%); verify with axe, don't eyeball.
+
+### How we check
+
+- **See it with data.** Pages were "verified" on an account with no projects, an offline server and no network, so menus, moves and graphs went untested. When the test account lacks data, mock the API in Playwright (`page.route`) and open every menu, dialog and row action, not just the page.
+- **Click every new control once** (menus, toggles, row actions) in the browser before calling it done; a page that renders can still crash on first click.
+- **Delegated work is reviewed like our own:** screenshots plus a click-through of each changed page, in light, dark, phone and Arabic, and axe.
+- **Local runs use `ENV_TYPE=test`**, including `deno task generate:sdk`.

@@ -1040,5 +1040,6 @@
   "The folder goes; its {{count}} projects stay, outside any folder.": "يُحذف المجلد؛ وتبقى مشاريعه الـ{{count}} خارج أي مجلد.",
   "This folder is empty. Move projects here from their menu, or create one.": "هذا المجلد فارغ. انقل المشاريع إليه من قائمتها، أو أنشئ مشروعًا.",
   "e.g. Shop": "مثل: المتجر",
-  "No projects yet.": "لا مشاريع بعد."
+  "No projects yet.": "لا مشاريع بعد.",
+  "1 project": "مشروع واحد"
 }

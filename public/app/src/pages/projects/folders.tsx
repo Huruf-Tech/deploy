@@ -199,7 +199,9 @@ export function FolderCard({
           {folder.name}
         </button>
         <p className="truncate text-xs text-muted-foreground">
-          {t("{{count}} projects", { count: projects.length })}
+          {projects.length === 1
+            ? t("1 project")
+            : t("{{count}} projects", { count: projects.length })}
           {folder.description && ` · ${folder.description}`}
         </p>
         {(!!failed || !!live) && (

@@ -264,7 +264,9 @@ export default function ProjectsPage() {
             title={open.name}
             status={
               <span className="text-xs text-muted-foreground tabular-nums">
-                {t("{{count}} projects", { count: rows?.length ?? 0 })}
+                {rows?.length === 1
+                  ? t("1 project")
+                  : t("{{count}} projects", { count: rows?.length ?? 0 })}
               </span>
             }
             description={open.description || t("A folder of projects.")}
@@ -290,7 +292,9 @@ export default function ProjectsPage() {
           status={
             !!data?.length && (
               <span className="flex items-center gap-2 text-xs text-muted-foreground tabular-nums">
-                {t("{{count}} projects", { count: data.length })}
+                {data.length === 1
+                  ? t("1 project")
+                  : t("{{count}} projects", { count: data.length })}
                 {!!live && (
                   <StatusBadge
                     state="building"

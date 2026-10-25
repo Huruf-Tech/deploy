@@ -1040,5 +1040,6 @@
   "The folder goes; its {{count}} projects stay, outside any folder.": "The folder goes; its {{count}} projects stay, outside any folder.",
   "This folder is empty. Move projects here from their menu, or create one.": "This folder is empty. Move projects here from their menu, or create one.",
   "e.g. Shop": "e.g. Shop",
-  "No projects yet.": "No projects yet."
+  "No projects yet.": "No projects yet.",
+  "1 project": "1 project"
 }
