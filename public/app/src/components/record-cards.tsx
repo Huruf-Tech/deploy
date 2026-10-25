@@ -62,10 +62,13 @@ export function RecordCards<T extends { _id: string }>({
   fetcher,
   selectedIds = [],
   toggleSelect,
+  opens = "form",
 }: TCardProps & {
   schema: z.ZodType<T>
   render: (record: T) => TRecordCard
   emptyTitle: string
+  /** Where a card leads: the module's form, or its detail view (a views override). */
+  opens?: "form" | "detail"
 }) {
   const { t } = useTranslation()
   const navigate = useNavigate()
@@ -105,7 +108,10 @@ export function RecordCards<T extends { _id: string }>({
             // Straight to the form, as core's list rows do: core's `<id>`
             // redirect doubles the app's base path (`/app/app/…`).
             const open = () =>
-              navigate(`./form/${record._id}`, { state: { name: card.name } })
+              navigate(
+                opens === "detail" ? `./${record._id}` : `./form/${record._id}`,
+                { state: { name: card.name } }
+              )
             return (
               <li key={record._id}>
                 <Card

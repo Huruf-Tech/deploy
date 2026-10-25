@@ -907,5 +907,14 @@
   "{{n}}% of a core": "{{n}}% من نواة",
   "The control plane's machine": "جهاز لوحة التحكم",
   "Agents, traffic and database": "الوكلاء والحركة وقاعدة البيانات",
-  "No instance has reported in the last 3 minutes. Instances report once a minute while they serve requests.": "لم تُرسل أي نسخة تقريرًا في آخر 3 دقائق. ترسل النسخ تقريرًا كل دقيقة أثناء خدمة الطلبات."
+  "No instance has reported in the last 3 minutes. Instances report once a minute while they serve requests.": "لم تُرسل أي نسخة تقريرًا في آخر 3 دقائق. ترسل النسخ تقريرًا كل دقيقة أثناء خدمة الطلبات.",
+  "1 policy attached": "سياسة واحدة مرتبطة",
+  "{{count}} policies attached": "{{count}} سياسات مرتبطة",
+  "Edit": "تعديل",
+  "Edit role": "تعديل الدور",
+  "Every permission": "كل الصلاحيات",
+  "It may have been deleted.": "ربما حُذفت.",
+  "Role not found": "الدور غير موجود",
+  "Unknown policy": "سياسة غير معروفة",
+  "everything (*)": "كل شيء (*)"
 }

@@ -907,5 +907,14 @@
   "{{n}}% of a core": "{{n}}% of a core",
   "The control plane's machine": "The control plane's machine",
   "Agents, traffic and database": "Agents, traffic and database",
-  "No instance has reported in the last 3 minutes. Instances report once a minute while they serve requests.": "No instance has reported in the last 3 minutes. Instances report once a minute while they serve requests."
+  "No instance has reported in the last 3 minutes. Instances report once a minute while they serve requests.": "No instance has reported in the last 3 minutes. Instances report once a minute while they serve requests.",
+  "1 policy attached": "1 policy attached",
+  "{{count}} policies attached": "{{count}} policies attached",
+  "Edit": "Edit",
+  "Edit role": "Edit role",
+  "Every permission": "Every permission",
+  "It may have been deleted.": "It may have been deleted.",
+  "Role not found": "Role not found",
+  "Unknown policy": "Unknown policy",
+  "everything (*)": "everything (*)"
 }

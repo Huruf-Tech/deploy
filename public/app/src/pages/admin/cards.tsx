@@ -119,6 +119,7 @@ export function RoleCards(props: TCardProps) {
       {...props}
       schema={roleSchema}
       emptyTitle={t("No roles yet")}
+      opens="detail"
       render={(role) => ({
         name: role.role,
         title: <span className="font-mono">{role.role}</span>,
@@ -127,19 +128,16 @@ export function RoleCards(props: TCardProps) {
         ),
         description:
           role.policies.length === 1
-            ? t("1 policy")
-            : t("{{count}} policies", { count: role.policies.length }),
-        body: (
-          <div className="flex flex-col gap-3">
-            <Chips items={role.policies} />
-            {!!role.subRoles?.length && (
-              <p className="text-xs text-muted-foreground">
-                {t("Can invite as: {{roles}}", {
-                  roles: role.subRoles.join(", "),
-                })}
-              </p>
-            )}
-          </div>
+            ? t("1 policy attached")
+            : t("{{count}} policies attached", {
+                count: role.policies.length,
+              }),
+        body: !!role.subRoles?.length && (
+          <p className="text-xs text-muted-foreground">
+            {t("Can invite as: {{roles}}", {
+              roles: role.subRoles.join(", "),
+            })}
+          </p>
         ),
       })}
     />
