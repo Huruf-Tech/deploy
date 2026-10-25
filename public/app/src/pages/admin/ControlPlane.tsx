@@ -3,11 +3,7 @@ import { ThunderSDK } from "thunder-sdk"
 import { useTranslation } from "react-i18next"
 import { format } from "date-fns"
 import { CartesianGrid, Line, LineChart, XAxis, YAxis } from "recharts"
-import {
-  IconAlertTriangle,
-  IconCircleCheck,
-  IconHeartbeat,
-} from "@tabler/icons-react"
+import { IconHeartbeat } from "@tabler/icons-react"
 
 import { Page } from "@/components/page"
 import { use } from "@/core/hooks/use"
@@ -31,40 +27,15 @@ import {
 } from "@/components/ui/table"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { usePolling } from "@/hooks/use-polling"
-import { cn } from "@/lib/utils"
 import { ControlPlaneRules } from "./ControlPlaneRules"
+import { ClusterMeters, HealthHero, InstanceMeters } from "./ControlPlaneHealth"
 import {
   findings,
-  ms,
   num,
-  POLL_BUDGET_MS,
-  uptime,
   type TOverview,
   type TPoint,
   type TRange,
 } from "./control-plane"
-
-function Stat({
-  label,
-  value,
-  detail,
-}: {
-  label: string
-  value: string
-  detail?: string
-}) {
-  return (
-    <Card size="sm">
-      <CardContent className="flex flex-col gap-1">
-        <span className="text-xs text-muted-foreground">{label}</span>
-        <span className="font-heading text-2xl tabular-nums">{value}</span>
-        {detail && (
-          <span className="text-xs text-muted-foreground">{detail}</span>
-        )}
-      </CardContent>
-    </Card>
-  )
-}
 
 function SeriesChart({
   title,
@@ -189,7 +160,6 @@ export default function ControlPlane() {
 
   const o = data
   const list = o ? findings(o, t) : []
-  const last = o?.series.at(-2) ?? o?.series.at(-1)
 
   return (
     <Page className="flex flex-col gap-6 py-4">
@@ -222,187 +192,19 @@ export default function ControlPlane() {
         </div>
       ) : !o ? null : (
         <>
-          <section aria-label={t("Health")} className="flex flex-col gap-2">
-            {list.length ? (
-              list.map((f) => (
-                <p
-                  key={f.text}
-                  className={cn(
-                    "flex gap-2 rounded-2xl p-3 text-sm",
-                    f.level === "critical"
-                      ? "bg-destructive/10 text-destructive"
-                      : "bg-warning/10"
-                  )}
-                >
-                  <IconAlertTriangle
-                    className={cn(
-                      "mt-0.5 size-4 shrink-0",
-                      f.level === "warning" && "text-warning"
-                    )}
-                    aria-hidden
-                  />
-                  <span>
-                    <span className="font-medium">
-                      {f.level === "critical" ? t("Critical") : t("Warning")}:
-                    </span>{" "}
-                    {f.text}
-                  </span>
-                </p>
-              ))
-            ) : (
-              <p className="flex items-center gap-2 rounded-2xl bg-success/10 p-3 text-sm">
-                <IconCircleCheck
-                  className="size-4 shrink-0 text-success"
-                  aria-hidden
-                />
-                {t(
-                  "Healthy: every instance has headroom and polls are within budget."
-                )}
-              </p>
-            )}
+          <HealthHero findings={list} />
+          <section className="flex flex-col gap-3">
+            <h2 className="text-base font-semibold">
+              {t("The control plane's machine")}
+            </h2>
+            <InstanceMeters o={o} />
           </section>
-
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <Stat
-              label={t("Agents online")}
-              value={num(o.cluster.onlineAgents)}
-              detail={t("of {{n}} active servers", {
-                n: num(o.cluster.activeServers),
-              })}
-            />
-            <Stat
-              label={t("Agent polls / min")}
-              value={last ? num(last.pollsPerMin) : "—"}
-              detail={t("about {{n}} expected (idle every {{s}} s)", {
-                n: num(o.cluster.expectedPollsPerMin),
-                s: num(o.cluster.idlePollMs / 1000),
-              })}
-            />
-            <Stat
-              label={t("Poll time, p95")}
-              value={ms(o.summary.pollP95Ms)}
-              detail={t("budget {{n}} ms, server side", { n: POLL_BUDGET_MS })}
-            />
-            <Stat
-              label={t("Requests / min")}
-              value={last ? num(last.requestsPerMin) : "—"}
-              detail={t("p95 {{ms}} · {{pct}}% errors", {
-                ms: ms(o.summary.p95Ms),
-                pct: o.summary.requests
-                  ? num((100 * o.summary.errors) / o.summary.requests)
-                  : 0,
-              })}
-            />
-            <Stat
-              label={t("Instances")}
-              value={num(o.instances.length)}
-              detail={t("reporting in the last 3 minutes")}
-            />
-            <Stat
-              label={t("Database ping")}
-              value={
-                o.cluster.db.pingMs == null
-                  ? "—"
-                  : `${num(o.cluster.db.pingMs)} ms`
-              }
-              detail={t("from this instance")}
-            />
-            <Stat
-              label={t("Database size")}
-              value={
-                o.cluster.db.storageMb == null
-                  ? "—"
-                  : `${num(o.cluster.db.storageMb)} MB`
-              }
-              detail={
-                o.cluster.db.dataMb == null
-                  ? undefined
-                  : t("{{data}} MB data · {{index}} MB indexes", {
-                      data: num(o.cluster.db.dataMb),
-                      index: num(o.cluster.db.indexMb ?? 0),
-                    })
-              }
-            />
-            <Stat
-              label={t("Commands waiting")}
-              value={num(o.cluster.pendingCommands)}
-              detail={t("for agents to pick up")}
-            />
-          </div>
-
-          <Card size="sm">
-            <CardHeader>
-              <CardTitle className="text-sm">{t("Instances")}</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>{t("Host")}</TableHead>
-                    <TableHead className="text-right">
-                      {t("CPU (process / host)")}
-                    </TableHead>
-                    <TableHead className="text-right">
-                      {t("Memory (process / host)")}
-                    </TableHead>
-                    <TableHead className="text-right">{t("Load")}</TableHead>
-                    <TableHead className="text-right">
-                      {t("Requests / min")}
-                    </TableHead>
-                    <TableHead className="text-right">
-                      {t("DB connections")}
-                    </TableHead>
-                    <TableHead className="text-right">{t("Up")}</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {o.instances.map((i) => (
-                    <TableRow key={i.instance}>
-                      <TableCell>
-                        <span className="font-medium">{i.host}</span>
-                        <span className="block font-mono text-xs text-muted-foreground">
-                          {i.instance}
-                        </span>
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {num(i.process.cpuPct)}%
-                        {i.system &&
-                          ` / ${num(i.system.cpuPct)}% of ${i.system.cpus}`}
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {num(i.process.rssMb)} MB
-                        {i.system &&
-                          ` / ${num(i.system.memTotalMb - i.system.memAvailableMb)} of ${num(i.system.memTotalMb)} MB`}
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {i.system
-                          ? `${num(i.system.load1)} · ${num(i.system.load5)} · ${num(i.system.load15)}`
-                          : "—"}
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {num(i.requestsPerMin)}
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {i.dbPoolSize}
-                        {i.dbPoolWaitMaxMs >= 1 &&
-                          ` · ${t("waited {{ms}} ms", { ms: Math.round(i.dbPoolWaitMaxMs) })}`}
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {uptime(i.process.uptimeS)}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-              {o.instances.some((i) => !i.system) && (
-                <p className="mt-2 text-xs text-muted-foreground">
-                  {t(
-                    "Host figures aren't available on serverless platforms; process figures are."
-                  )}
-                </p>
-              )}
-            </CardContent>
-          </Card>
+          <section className="flex flex-col gap-3">
+            <h2 className="text-base font-semibold">
+              {t("Agents, traffic and database")}
+            </h2>
+            <ClusterMeters o={o} />
+          </section>
 
           <div className="grid gap-4 lg:grid-cols-2">
             <SeriesChart

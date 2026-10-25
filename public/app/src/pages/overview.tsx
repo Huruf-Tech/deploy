@@ -64,6 +64,8 @@ import {
   type TClassFootprint,
 } from "@/lib/capacity"
 import { cn } from "@/lib/utils"
+import { Bar, IconChip } from "@/components/meter"
+import { HUES, type THue } from "@/lib/hues"
 import { ControlPlaneSummary } from "@/pages/admin/ControlPlaneSummary"
 import { AiPrompt } from "@/pages/projects/AiPrompt"
 
@@ -78,109 +80,6 @@ const formatDays = (days: number) =>
     : days < 90
       ? `~${Math.round(days / 7)} weeks`
       : `~${Math.round(days / 30)} months`
-
-/** One hue per thing it identifies (a resource, an action), never per rank. */
-const HUES = {
-  sky: {
-    chip: "bg-sky-500/15 text-sky-700 dark:text-sky-300",
-    bar: "bg-sky-500",
-    soft: "bg-sky-500/35",
-    ring: "hover:border-sky-500/50",
-  },
-  violet: {
-    chip: "bg-violet-500/15 text-violet-700 dark:text-violet-300",
-    bar: "bg-violet-500",
-    soft: "bg-violet-500/35",
-    ring: "hover:border-violet-500/50",
-  },
-  emerald: {
-    chip: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300",
-    bar: "bg-emerald-500",
-    soft: "bg-emerald-500/35",
-    ring: "hover:border-emerald-500/50",
-  },
-  amber: {
-    chip: "bg-amber-500/15 text-amber-700 dark:text-amber-300",
-    bar: "bg-amber-500",
-    soft: "bg-amber-500/35",
-    ring: "hover:border-amber-500/50",
-  },
-  rose: {
-    chip: "bg-rose-500/15 text-rose-700 dark:text-rose-300",
-    bar: "bg-rose-500",
-    soft: "bg-rose-500/35",
-    ring: "hover:border-rose-500/50",
-  },
-  orange: {
-    chip: "bg-orange-500/15 text-orange-700 dark:text-orange-300",
-    bar: "bg-orange-500",
-    soft: "bg-orange-500/35",
-    ring: "hover:border-orange-500/50",
-  },
-} as const
-type THue = keyof typeof HUES
-
-function IconChip({
-  hue,
-  icon: Icon,
-  className,
-}: {
-  hue: THue
-  icon: React.ComponentType<{ className?: string }>
-  className?: string
-}) {
-  return (
-    <span
-      aria-hidden
-      className={cn(
-        "flex size-9 shrink-0 items-center justify-center rounded-xl",
-        HUES[hue].chip,
-        className
-      )}
-    >
-      <Icon className="size-5" />
-    </span>
-  )
-}
-
-/** A labelled bar; its fill wears the resource's hue, the text stays in ink. */
-function Bar({
-  label,
-  value,
-  total,
-  text,
-  fill,
-}: {
-  label: string
-  value: number
-  total: number
-  text: string
-  fill: string
-}) {
-  const pct = total ? Math.min(100, (value / total) * 100) : 0
-  return (
-    <div className="flex flex-col gap-1">
-      <div className="flex justify-between text-xs text-muted-foreground">
-        <span>{label}</span>
-        <span className="tabular-nums">{text}</span>
-      </div>
-      <div
-        role="meter"
-        aria-label={label}
-        aria-valuemin={0}
-        aria-valuemax={Math.round(total * 100) / 100}
-        aria-valuenow={Math.round(value * 100) / 100}
-        aria-valuetext={text}
-        className="h-2 w-full overflow-hidden rounded-full bg-muted"
-      >
-        <div
-          className={cn("h-full rounded-full transition-[width]", fill)}
-          style={{ width: `${pct}%` }}
-        />
-      </div>
-    </div>
-  )
-}
 
 function Meter({
   label,
