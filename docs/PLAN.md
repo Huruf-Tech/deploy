@@ -1095,7 +1095,8 @@ Each phase ends with a **review checkpoint** (demo + code review + approval). Ph
   - **Past due:** a banner on the Plan page, plus one email to the workspace owner when the renewal first fails (hourly retries stay quiet).
   - **Not done:** wallet top-up (decided separately).
 
-### Phase 11 — Custom domains and built-in ingress (planned, D43, §14)
+### Phase 11 — Custom domains and built-in ingress (done, D43, §14)
+- **Live since 2026-10-25:** Traefik and frps replaced nginx on the control plane's EC2; custom domains get Let's Encrypt certificates and reach projects through agents' tunnels. Not yet run live: acceptance 3 (needs a second instance) and 4 (even split over 3 servers).
 - **Package:** Traefik and frps in `deploy.docker-compose.yml`, behind the `ingress` profile (`COMPOSE_PROFILES=ingress`), so a host is unchanged until it opts in. Traefik is configured by flags; on each of its polls the control plane writes Traefik's certificate file (PEMs inline) and frps' config, certificate and key into shared volumes. The control plane serves `GET /ingress/api/traefik` (routes, with the `X-Ingress-Token` header), `/ingress/api/acme-challenge/*` (Traefik rewrites `/.well-known/acme-challenge/*` there) and `POST /ingress/api/frp` (frps' login plugin). The platform's own hostname gets its certificate from Traefik's `platform` resolver (TLS-ALPN, so it never competes with the HTTP challenges on port 80).
 - **Domains:**
   - A `domains` collection: domain unique across the platform, tenant, project, ownership token, status, certificate metadata, and the last error.
