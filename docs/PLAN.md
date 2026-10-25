@@ -113,6 +113,8 @@ A free-to-use SaaS that deploys and operates apps on **the user's own machines**
 | D40 | **Every in-memory cache is size-capped** (max entries + TTL + LRU), with a per-instance memory budget. Correctness never depends on a cache (§20.4). |
 | D41 | **Code quality:** no duplication. Composable modules and classes in layers (routes → services → building blocks), strategy interfaces for variants, schemas as the single source of truth. Enforced in CI (§23). |
 | D43 | **Built-in ingress (Phase 11):** Traefik ships in the control plane package (one per instance) and balances each project's custom domains evenly across its healthy servers. Routes come from the control plane (Traefik HTTP provider, no redeploys); certificates are Let's Encrypt via HTTP-01, issued once by the control plane, stored encrypted in MongoDB and synced to every instance. No AWS or Cloudflare dependency; instances are stateless, so more can be added behind any TCP load balancer. Custom domains only: user apps are never served under the platform's own domain (§14). |
+| D44 | **Long polling, not WebSockets (Phase 13):** an agent's poll waits at the control plane until there's something for it (a command, a new spec, terminal input) or a time limit passes. This keeps the polling protocol, adds no dependency to the agent (Go's standard library has no WebSocket client) and keeps old agents working unchanged. WebSockets may come later between the browser and the control plane only, for terminals. |
+| D45 | **AI template assistant (Phase 12):** the platform's own Anthropic key, offered as a plan feature with a monthly limit. It drafts templates (from a GitHub repo or a description) and fixes failed builds and rollouts; a person always reviews and saves. |
 | D42 | **Managed servers (optional, needs owner consent):** provision EC2 instances on the platform's AWS account and bill plan + metered usage from the wallet. The MVP only prepares the seams (§24). |
 
 ---
@@ -278,7 +280,7 @@ Each event id is unique (index), so retries never double-apply.
 - Expected keystroke-to-echo time: ≈ 0.4–1 s. Fine for typing commands and reading output; full-screen tools (vim, top) work but feel laggy.
 - Optional **line mode**: local echo and line editing in the browser, sending on Enter. It feels instant for normal shell use.
 - Every session is audited (who, server/container, start, end). The content is never stored with us.
-- **Possible later optimization (spike):** long-polling or a streamed response on Deno Deploy, which would make streams near-instant within the same polling model.
+- **Long polling (Phase 13, D44)** replaces the fast terminal polls, for near-instant streams within the same model.
 
 ---
 
@@ -1119,24 +1121,56 @@ Each phase ends with a **review checkpoint** (demo + code review + approval). Ph
   5. A certificate within 30 days of expiry renews automatically, with no restarts.
   6. A domain verified by another tenant can't be added.
 
-### Phase 12 — Backlog (after MVP)
+### Phase 12 — AI template assistant (planned, D45)
+- **Entitlement:**
+  - A plan feature `aiAssistant` and a limit `aiRequestsPerMonth`, set in the plan form; a monthly usage counter per tenant.
+  - Platform settings `ANTHROPIC_API_KEY` and `AI_MODEL` (default Claude Sonnet 5.5; admin-switchable).
+- **Create a template with AI:**
+  - **From a GitHub repo:** through the GitHub App, the assistant reads the file list and a bounded set of key files (`package.json`, `go.mod`, `requirements.txt`, an existing `Dockerfile` or compose file…), and writes an **app** template.
+  - **From a description**, with no repo (e.g. "Redis with a password, 512 MB, AOF persistence"): a **service** template (compose).
+  - The output is validated against the template schema (Dockerfile or compose, inputs, port, health check, cache paths) and shown as a **draft** with a short explanation. The user edits and saves it as a normal template version; nothing deploys by itself.
+  - The assistant explains what replicas mean here: identical copies behind the edge proxy. Stateful software that needs roles (e.g. Redis replication with Sentinel) is offered as a different setup, never faked with replicas.
+- **Fix with AI** on a failed build or rollout:
+  - It sends the build log, or the failing container's last logs and the health check error, with the template version.
+  - It proposes a corrected version as a diff, with the reason. Accepting it saves a new version and can redeploy.
+- **Privacy:** the dialog says the description, repo files and logs go to the AI provider. Only the resulting template and the usage counter are stored.
+- **Acceptance:**
+  1. A Node, a Go and a Python sample repo each get a template that builds and passes its health check without edits.
+  2. "Redis with a password" gives a working service template; asking for 3 Redis replicas explains replication instead of silently making 3 copies.
+  3. A build broken on purpose (wrong start command) is fixed by "Fix with AI" in one proposal.
+  4. A tenant over its monthly limit, or on a plan without the feature, is refused before any provider call.
+
+### Phase 13 — Long polling (planned, D44)
+- **Agent polls:**
+  - A poll with nothing to deliver waits at the control plane, up to `AGENT_LONG_POLL_MS` (≈ 25 s, below the AWS load balancer's 60 s idle timeout). It answers the moment a command, a new desired spec or terminal input arrives for that server.
+  - **The lease covers the wait:** the poll renews `aliveUntil` for the wait plus the usual lease, so a waiting server is never flagged offline.
+  - Terminal mode's fast polls are no longer needed while a terminal is open. They stay as the fallback, together with plain short polling (a setting), and for older agents, which keep working unchanged.
+- **Waking across instances:** one MongoDB change stream per instance, on the hot collections (commands, leases' `desiredVersion`, terminal input), wakes the waiting polls it holds, whichever instance wrote. There's no per-poll database work while waiting.
+- **Browser reads:** stream output (logs, build, terminal) is read the same way: `GET /streams/api/:id?after=` waits until new chunks land.
+- **Budgets (§20):** a waiting poll holds no database cursor of its own. Deploys of the control plane end waiting polls early, and agents reconnect with jitter.
+- **Acceptance:**
+  1. Terminal echo ≤ 300 ms (p95) through a remote server; vim and htop are usable.
+  2. "Update agent" and deploy commands reach an idle server within 1 s.
+  3. An idle server's requests drop by at least 5× compared to 5 s polling.
+  4. With 2 instances, a command written on one wakes a poll held by the other.
+  5. An agent from before this phase keeps working.
+
+### Phase 14 — Backlog (after MVP)
 - Ability to upgrade already installed agent along with its deps — **done (pending review):**
   - Agents report the SHA-256 of their binary. The control plane compares it with the `SHA256SUMS` the installer uses (`AGENT_DOWNLOAD_BASE`; optional `AGENT_CHECKSUMS_BASE` when the control plane reaches that host under another address), cached 5 minutes.
   - "Update agent" on the server page sends `agent.update`. The agent downloads the binary, verifies the checksum and renames it into place, then exits after its result is sent, and systemd starts the new one.
   - A `hello` with a changed binary re-runs host setup, so dependencies (Docker settings, WireGuard tools…) come from the new agent.
   - **Verified on a VM:** two consecutive updates, each restarting as the new version, with host setup after the restart.
-- Long-poll/streamed responses for near-instant streams
-- Standby servers and auto-placement
+- **Standby servers and auto-placement** (owner likes it; plan as its own phase): the control plane picks servers by free capacity and labels, and spare servers take over a dead server's projects. Projects with local volumes can't move.
 - Mesh relay for NAT'd servers
-- AI template assistant
 - Wallet top-up (payment providers)
-- Proration on upgrade
+- **Proration on upgrade** (owner agrees, about a day): the unused part of the current period is credited against the new plan, as a wallet ledger entry shown in the confirm dialog. Open: on a downgrade, credit the wallet, or switch at the period's end.
 - AWS ECR registry (token refresh)
-- GitHub Actions as builder
+- **GitHub Actions as builder, including Android builds of Thunder apps** (the owner's next target after Phase 12): builds that don't run on the servers, with Android signing keys.
 - GitLab/Bitbucket (consent needed)
 - PR preview deployments (consent needed)
 - macOS agent (consent needed)
-- More roles
+- **More roles** (owner agrees): viewer (read-only), developer (projects and variables only), billing manager, and per-project access.
 - Managed servers on our AWS account (D42, §24), only with the owner's explicit consent
 
 ---
