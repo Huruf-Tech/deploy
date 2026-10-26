@@ -128,6 +128,10 @@ export default new Router("/api", function rentals(router) {
         ),
         rejectedReason: z.string().optional(),
         suspendedAt: z.date().optional(),
+        uptime: z.number().optional().describe("This period so far, percent"),
+        moving: z.boolean().optional().describe(
+          "Huruf moves it to another machine",
+        ),
       }),
     );
 
@@ -136,11 +140,14 @@ export default new Router("/api", function rentals(router) {
       handler: async (req) => {
         const { tenant } = await withTenant(req);
         const subs = await rentalService.list(tenant._id);
-        const plans = await planModel.find({
-          _id: { $in: subs.map((s) => s.plan) },
-        }, {
-          projection: { name: 1, resources: 1 },
-        }).toArray();
+        const [plans, uptimes] = await Promise.all([
+          planModel.find({
+            _id: { $in: subs.map((s) => s.plan) },
+          }, {
+            projection: { name: 1, resources: 1 },
+          }).toArray(),
+          rentalService.uptimes(subs),
+        ]);
         return Response.json(subs.map((s) => {
           const plan = plans.find((p) => p._id.equals(s.plan));
           return {
@@ -163,6 +170,8 @@ export default new Router("/api", function rentals(router) {
             pendingChange: s.rental!.pendingChange?.plan,
             rejectedReason: s.rental!.rejectedReason,
             suspendedAt: s.rental!.suspendedAt,
+            uptime: uptimes.get(String(s._id)),
+            ...(s.rental!.move ? { moving: true } : {}),
           };
         }));
       },

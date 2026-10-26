@@ -306,6 +306,14 @@ func setQuota(ctx context.Context, name string, size protocol.PartitionSize) err
 }
 
 func (Sysbox) Create(ctx context.Context, name string, size protocol.PartitionSize, weight int) error {
+	if err := prepareDir(ctx, name, size); err != nil {
+		return err
+	}
+	return runPartition(ctx, name, size, weight, image)
+}
+
+// prepareDir makes the partition's data directory, under its disk quota.
+func prepareDir(ctx context.Context, name string, size protocol.PartitionSize) error {
 	d := dir(name)
 	for _, sub := range []string{"docker", "containerd", "agent"} {
 		if err := os.MkdirAll(filepath.Join(d, sub), 0o755); err != nil {
@@ -315,9 +323,13 @@ func (Sysbox) Create(ctx context.Context, name string, size protocol.PartitionSi
 	if _, err := run(ctx, "xfs_quota", "-x", "-c", fmt.Sprintf("project -s -p %s %s", d, projectID(name)), Root); err != nil {
 		return err
 	}
-	if err := setQuota(ctx, name, size); err != nil {
-		return err
-	}
+	return setQuota(ctx, name, size)
+}
+
+// runPartition starts the partition's container from `img`: our image, or
+// the one a move brought its system files in.
+func runPartition(ctx context.Context, name string, size protocol.PartitionSize, weight int, img string) error {
+	d := dir(name)
 	if _, err := run(ctx, "docker", "network", "inspect", bridge(name)); err != nil {
 		if _, err := run(ctx, "docker", "network", "create", "--driver", "bridge",
 			"--opt", "com.docker.network.bridge.name="+bridge(name), bridge(name)); err != nil {
@@ -333,7 +345,7 @@ func (Sysbox) Create(ctx context.Context, name string, size protocol.PartitionSi
 		"--label", "huruf.partition=" + name}
 	args = append(args, cpuArgs(size.Cpus, weight)...)
 	args = append(args, memArgs(size.MemMb)...)
-	if _, err := run(ctx, "docker", append(args, image)...); err != nil {
+	if _, err := run(ctx, "docker", append(args, img)...); err != nil {
 		return err
 	}
 	return ensureCounters(ctx, name)
@@ -375,6 +387,10 @@ func (Sysbox) Remove(ctx context.Context, name string) error {
 	_, _ = run(ctx, "docker", "network", "rm", bridge(name))
 	delCounters(ctx, name)
 	_, _ = run(ctx, "xfs_quota", "-x", "-c", "limit -p bhard=0 "+projectID(name), Root)
+	// The system files a move brought in.
+	if ids, _ := run(ctx, "docker", "images", "-q", "--filter", "label="+movedLabel+"="+name); strings.TrimSpace(ids) != "" {
+		_, _ = run(ctx, "docker", append([]string{"rmi", "-f"}, strings.Fields(ids)...)...)
+	}
 	return os.RemoveAll(dir(name))
 }
 

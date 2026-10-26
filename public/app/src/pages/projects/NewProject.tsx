@@ -397,10 +397,6 @@ export default function NewProject() {
       async ({ signal }) => await ThunderSDK.projects.placementInfo({ signal })
     )
   )
-  // Partitions share their machine's ports: custom domains only (PLAN §26 D).
-  const rentedOn = placement.data?.find(
-    (p) => p.rented && servers.includes(p.server)
-  )
   const projects = use(
     ThunderSDK.useCaching(
       ["projects"],
@@ -417,6 +413,10 @@ export default function NewProject() {
   const onlineServers = React.useMemo(
     () => (placement.data ?? []).filter((s) => s.online).map((s) => s.server),
     [placement.data]
+  )
+  // Partitions share their machine's ports: custom domains only (PLAN §26 D).
+  const rentedOn = placement.data?.find(
+    (p) => p.rented && servers.includes(p.server)
   )
   // Observed footprints (PLAN §7.1): fit by what this kind of app uses here.
   const capacity = useCapacity(onlineServers)

@@ -233,3 +233,14 @@ func TestLongPollAsksToWaitAndComesStraightBack(t *testing.T) {
 		t.Fatalf("empty holds were followed by a %v pause", gap)
 	}
 }
+
+func TestCapErrorKeepsStartAndEnd(t *testing.T) {
+	long := "docker run --name partition-x " + strings.Repeat("-v a:b ", 200) + "failed: no sysbox-mgr"
+	got := capError(long)
+	if len(got) > maxError || !strings.HasPrefix(got, "docker run") || !strings.HasSuffix(got, "no sysbox-mgr") {
+		t.Fatalf("capError = %d bytes: %q", len(got), got)
+	}
+	if capError("short") != "short" {
+		t.Error("a short error stays as it is")
+	}
+}

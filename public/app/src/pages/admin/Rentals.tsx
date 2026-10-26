@@ -2,7 +2,7 @@ import * as React from "react"
 import { ThunderSDK } from "thunder-sdk"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
-import { IconServerBolt } from "@tabler/icons-react"
+import { IconServer2, IconServerBolt } from "@tabler/icons-react"
 
 import { use } from "@/core/hooks/use"
 import { Page } from "@/components/page"
@@ -22,7 +22,10 @@ import { DataTable } from "@/components/console/data-table"
 import { EmptyState } from "@/components/console/empty-state"
 import { StatusBadge } from "@/components/console/status"
 import { useFresh } from "@/hooks/use-fresh"
-import { cn, errorMessage } from "@/lib/utils"
+import { money } from "@/lib/plans"
+import { errorMessage } from "@/lib/utils"
+import { MachinePicker } from "@/pages/rentals/MachinePicker"
+import { usable } from "@/pages/rentals/rental"
 
 type TItem = Awaited<ReturnType<typeof ThunderSDK.rentalsAdmin.queue>>[number]
 
@@ -51,8 +54,7 @@ function ApproveDialog({
     )
   ).data
   const [host, setHost] = React.useState<string>()
-  const pick =
-    host ?? machines?.find((m) => m.fits && !m.remainderShort)?.server
+  const pick = host ?? machines?.find(usable)?.server
   const [busy, setBusy] = React.useState(false)
   const approve = async () => {
     if (!pick) return
@@ -96,51 +98,7 @@ function ApproveDialog({
             )}
           </p>
         ) : (
-          <div
-            role="radiogroup"
-            aria-label={t("Pool machine")}
-            className="flex flex-col gap-2"
-          >
-            {machines.map((m) => {
-              const usable = m.fits && !m.remainderShort
-              return (
-                <button
-                  key={m.server}
-                  type="button"
-                  role="radio"
-                  aria-checked={pick === m.server}
-                  disabled={!usable}
-                  onClick={() => setHost(m.server)}
-                  className={cn(
-                    "flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2 text-start text-[13px] outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60",
-                    pick === m.server && "border-primary bg-primary/5"
-                  )}
-                >
-                  <span className="font-medium">{m.name}</span>
-                  <span
-                    dir="ltr"
-                    className="text-xs text-muted-foreground tabular-nums"
-                  >
-                    {t("{{mem}} GB · {{disk}} GB · {{cpu}} vCPU free", {
-                      mem: Math.round((m.free.memMb / 1024) * 10) / 10,
-                      disk: m.free.diskGb,
-                      cpu: m.cpuRoom,
-                    })}
-                  </span>
-                  {!m.fits ? (
-                    <StatusBadge tone="neutral" label={t("No room")} />
-                  ) : m.remainderShort ? (
-                    <span className="basis-full text-xs text-warning-foreground">
-                      {t(
-                        "Huruf's partition there uses {{mb}} MB: free memory there first",
-                        { mb: m.remainderUsesMb }
-                      )}
-                    </span>
-                  ) : null}
-                </button>
-              )
-            })}
-          </div>
+          <MachinePicker machines={machines} pick={pick} onPick={setHost} />
         )}
         <DialogFooter>
           <Button onClick={approve} disabled={busy || !pick}>
@@ -221,6 +179,96 @@ function RejectDialog({
   )
 }
 
+const gbOfMb = (mb: number) => Math.round((mb / 1024) * 10) / 10
+
+/**
+ * Per class: what's rented of what the pool offers, the spare memory kept
+ * for moving rentals off a failed machine, and revenue against cost.
+ */
+function Capacity() {
+  const { t } = useTranslation()
+  const data = use(
+    ThunderSDK.useCaching(
+      ["rentalsAdmin", "capacity"],
+      async ({ signal }) => await ThunderSDK.rentalsAdmin.capacity({ signal })
+    )
+  ).data
+  if (!data?.classes.some((c) => c.machines)) return null
+  return (
+    <section aria-labelledby="capacity-title" className="flex flex-col gap-2">
+      <div>
+        <h2
+          id="capacity-title"
+          className="flex items-center gap-2 text-sm font-semibold"
+        >
+          <IconServer2 className="size-4" aria-hidden /> {t("Capacity")}
+        </h2>
+        <p className="text-xs text-muted-foreground">
+          {t(
+            "Spare memory is kept to move rentals off a failed machine: the target is {{n}}% per class.",
+            { n: data.sparePercent }
+          )}
+        </p>
+      </div>
+      <div className="overflow-x-auto">
+        <DataTable
+          label={t("Capacity")}
+          rows={data.classes.filter((c) => c.machines)}
+          rowId={(c) => c._id}
+          columns={[
+            {
+              id: "class",
+              header: t("Class"),
+              cell: (c) => (
+                <div className="min-w-0">
+                  <div className="font-medium">{c.name}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {t("{{n}} machines, {{open}} taking rentals", {
+                      n: c.machines,
+                      open: c.accepting,
+                    })}
+                  </div>
+                </div>
+              ),
+            },
+            {
+              id: "rented",
+              header: t("Rented memory"),
+              className: "whitespace-nowrap tabular-nums",
+              cell: (c) => (
+                <span dir="ltr">
+                  {gbOfMb(c.rented.memMb)} / {gbOfMb(c.allocatable.memMb)} GB
+                </span>
+              ),
+            },
+            {
+              id: "spare",
+              header: t("Spare"),
+              cell: (c) => (
+                <StatusBadge
+                  tone={c.spare < data.sparePercent ? "warning" : "success"}
+                  label={`${c.spare}%`}
+                />
+              ),
+            },
+            {
+              id: "money",
+              header: t("Earns / costs a month"),
+              align: "end",
+              className: "whitespace-nowrap tabular-nums",
+              cell: (c) => (
+                <span dir="ltr">
+                  {money(c.revenue, "usd")} / {money(c.cost, "usd")}
+                </span>
+              ),
+            },
+          ]}
+        />
+      </div>
+    </section>
+  )
+}
+
 /** Admin → Rentals (PLAN §26.8): requests and resizes waiting for approval. */
 export default function RentalsAdmin() {
   const { t } = useTranslation()
@@ -252,6 +300,7 @@ export default function RentalsAdmin() {
           "Servers customers asked to rent, and resizes. Approving places them on a pool machine and charges the first month."
         )}
       />
+      <Capacity />
       {data && !data.length ? (
         <EmptyState
           icon={IconServerBolt}

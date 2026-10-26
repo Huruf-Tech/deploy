@@ -30,6 +30,7 @@ import { StatusBadge, StatusDot } from "@/components/console/status"
 import { money } from "@/lib/plans"
 import { errorMessage } from "@/lib/utils"
 import type { TServer } from "@/pages/servers/server"
+import { MoveDialog } from "./MoveDialog"
 
 const gb = (bytes: number) => `${(bytes / 2 ** 30).toFixed(1)} GB`
 const gbOfMb = (mb: number) => `${Math.round((mb / 1024) * 10) / 10} GB`
@@ -93,6 +94,8 @@ function PoolDetails({
     )
   ).data?.results
   const [making, setMaking] = React.useState(false)
+  const [moving, setMoving] = React.useState<{ id: string; label: string }>()
+  const [canceling, setCanceling] = React.useState<string>()
   const [cost, setCost] = React.useState<string>()
   const pool = server.pool
   const partitions = server.resources?.partitions ?? []
@@ -111,6 +114,16 @@ function PoolDetails({
       onChanged()
     } catch (e) {
       toast.error(errorMessage(e) ?? t("Could not save"))
+    }
+  }
+  const cancelMove = async (id: string) => {
+    try {
+      await ThunderSDK.rentalsAdmin.cancelMove({ params: { id } })
+      toast.success(t("Move canceled: it starts again here"))
+      setCanceling(undefined)
+      onChanged()
+    } catch (e) {
+      toast.error(errorMessage(e) ?? t("Could not cancel"))
     }
   }
   const addRemainder = async () => {
@@ -251,7 +264,14 @@ function PoolDetails({
           />
         </div>
         <label className="flex items-center justify-between gap-3 rounded-lg border px-3 py-2 text-[13px] sm:col-span-2">
-          {t("Takes new rentals")}
+          <span>
+            {t("Takes new rentals")}
+            <span className="block text-xs text-muted-foreground">
+              {t(
+                "Off drains it: move its rentals to other machines, then it can be removed."
+              )}
+            </span>
+          </span>
           <Switch
             checked={pool.accepting !== false}
             onCheckedChange={(accepting) => update({ accepting })}
@@ -298,7 +318,50 @@ function PoolDetails({
                         {p.remainder
                           ? t("Uses whatever isn't rented")
                           : (r?.plan ?? p.name)}
+                        {r?.uptime !== undefined &&
+                          ` · ${t("{{n}}% up", { n: r.uptime.toFixed(2) })}`}
                       </div>
+                      {r?.moving ? (
+                        <div className="mt-1 flex flex-wrap items-center gap-x-2 text-xs text-info-foreground">
+                          {t("Moving to {{name}}", {
+                            name: r.moving.toName ?? r.moving.to,
+                          })}
+                          <button
+                            type="button"
+                            className="underline underline-offset-2"
+                            onClick={() => setCanceling(r._id)}
+                          >
+                            {t("Cancel move")}
+                          </button>
+                        </div>
+                      ) : (
+                        r && (
+                          <>
+                            {r.lastMove?.error &&
+                              r.lastMove.error !== "Canceled" && (
+                                <div className="mt-1 text-xs text-destructive-foreground">
+                                  {t("The last move failed: {{error}}", {
+                                    error: r.lastMove.error,
+                                  })}
+                                </div>
+                              )}
+                            {r.status !== "suspended" && (
+                              <button
+                                type="button"
+                                className="mt-1 text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
+                                onClick={() =>
+                                  setMoving({
+                                    id: r._id,
+                                    label: `${r.tenantName ?? p.name} · ${r.plan ?? ""}`,
+                                  })
+                                }
+                              >
+                                {t("Move to another machine")}
+                              </button>
+                            )}
+                          </>
+                        )
+                      )}
                     </div>
                   )
                 },
@@ -324,6 +387,37 @@ function PoolDetails({
           />
         </div>
       )}
+      {moving && (
+        <MoveDialog
+          rental={moving.id}
+          label={moving.label}
+          onOpenChange={(o) => !o && setMoving(undefined)}
+          onDone={onChanged}
+        />
+      )}
+      <Dialog
+        open={!!canceling}
+        onOpenChange={(o) => !o && setCanceling(undefined)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t("Cancel this move?")}</DialogTitle>
+            <DialogDescription>
+              {t(
+                "For a move that stopped reporting (an agent restarted during it). The partition starts again on this machine and the copy on the other one is removed."
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="destructive"
+              onClick={() => canceling && cancelMove(canceling)}
+            >
+              {t("Cancel move")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Panel>
   )
 }

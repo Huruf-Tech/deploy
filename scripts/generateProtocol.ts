@@ -51,6 +51,8 @@ const MESSAGES: Array<[string, z.ZodType, "input" | "output"]> = [
   ["PartitionCreatePayload", protocol.$partitionCreatePayload, "output"],
   ["PartitionResizePayload", protocol.$partitionResizePayload, "output"],
   ["PartitionNamePayload", protocol.$partitionNamePayload, "output"],
+  ["PartitionSendPayload", protocol.$partitionSendPayload, "output"],
+  ["PartitionReceivePayload", protocol.$partitionReceivePayload, "output"],
 ];
 
 const schemas = Object.fromEntries(

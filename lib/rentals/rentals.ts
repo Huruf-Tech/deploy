@@ -9,12 +9,14 @@ import { notifyOwner } from "@/lib/billing/notify.ts";
 import { releaseServer } from "@/lib/agents/servers.ts";
 import {
   createPartition,
+  movePartition,
   partitionName,
   removePartition,
   resizePartition,
   startPartition,
   stopPartition,
 } from "@/lib/pool/pool.ts";
+import { reachable } from "@/lib/network/mesh.ts";
 import { $plan, planModel, type TPlan } from "@/schemas/billing/plan.ts";
 import {
   serverClassModel,
@@ -26,10 +28,15 @@ import {
 } from "@/schemas/billing/subscription.ts";
 import { subscriptionPeriodModel } from "@/schemas/billing/subscriptionPeriod.ts";
 import { serverModel } from "@/schemas/infrastructure/server.ts";
+import { serverLeaseModel } from "@/schemas/infrastructure/serverLease.ts";
 import type { $partitionUsage } from "@/schemas/protocol/agent.ts";
 
 const DAY_MS = 24 * 60 * 60_000;
 const GB = 1e9;
+/** Rentals whose partition exists and is paid for. */
+const LIVE = ["active", "pastDue", "suspended"] as const;
+/** Rentals that run (a suspended one is stopped on purpose). */
+const RUNNING = ["active", "pastDue"] as const;
 
 const log = (text: string) => Logger.warn(`[rentals] ${text}`);
 
@@ -267,7 +274,7 @@ export class RentalService implements TRentalHooks {
     const subs = await subscriptionModel.find({
       kind: "server",
       "rental.host": { $in: hosts },
-      status: { $in: ["active", "pastDue", "suspended"] },
+      status: { $in: [...LIVE] },
     }, { projection: { "rental.host": 1, "rental.size": 1 } }).toArray();
     const used = new Map<
       string,
@@ -447,6 +454,11 @@ export class RentalService implements TRentalHooks {
     const sub = await this.rentalOf(id, { status: "active" });
     const change = sub.rental.pendingChange;
     if (!change) throw Response.badRequest("No resize waiting");
+    if (sub.rental.move) {
+      throw Response.badRequest(
+        "It's moving: approve the resize once it's done",
+      );
+    }
     const plan = await planModel.findOne({ _id: change.plan });
     if (!plan?.resources) throw Response.notFound("Plan not found");
     const size = partitionSize(plan.resources, await this.overheadMb());
@@ -460,7 +472,7 @@ export class RentalService implements TRentalHooks {
       });
       if (!spot?.fits || spot.remainderShort) {
         throw Response.badRequest(
-          "It doesn't fit on its machine: move the rental first (Phase 16f) or free room there",
+          "It doesn't fit on its machine: move the rental to one with room first, or free room there",
         );
       }
     }
@@ -614,6 +626,333 @@ export class RentalService implements TRentalHooks {
           "Your rented server stayed unpaid past the retention period, so it was deleted with its data.",
       }).catch((e) => log(`release notice: ${e}`));
     }
+  }
+
+  // --- Moving (PLAN §26.10) ---
+
+  /** Machines a rental can move to, and roughly how long it's down meanwhile. */
+  async moveTargets(id: ObjectId) {
+    const sub = await this.rentalOf(id, { status: { $in: [...RUNNING] } });
+    if (!sub.rental.host || !sub.rental.partition) {
+      throw Response.badRequest("The rental isn't placed yet");
+    }
+    const source = await serverModel.findOne({ _id: sub.rental.host }, {
+      projection: { name: 1, mesh: 1, "resources.partitions": 1 },
+    });
+    const spots = (await this.placement(id))
+      .filter((m) => m.server !== String(sub.rental.host));
+    const meshes = await serverModel.find({
+      _id: { $in: spots.map((m) => new ObjectId(m.server)) },
+    }, { projection: { mesh: 1 } }).toArray();
+    const used = source?.resources?.partitions
+      ?.find((p) => p.name === sub.rental.partition)?.diskUsed ??
+      sub.rental.size.diskGb * GB;
+    const mbps = await readNumberSetting("POOL_MOVE_MBPS", 50);
+    return {
+      from: source?.name,
+      moving: !!sub.rental.move,
+      // Stopping, committing and starting take about a minute; the rest is copying.
+      downtimeSec: Math.ceil(60 + used / (mbps * 1e6)),
+      targets: spots.map((m) => {
+        const target = meshes.find((t) => String(t._id) === m.server);
+        return {
+          ...m,
+          reachable: !!source && !!target && reachable(source, target),
+        };
+      }),
+    };
+  }
+
+  /**
+   * An admin moves a rental to another pool machine of its class: the
+   * partition stops, its data is copied over the private network, and it
+   * starts there with the same server, projects and domains.
+   */
+  async move(id: ObjectId, to: ObjectId, admin: ObjectId) {
+    const { targets } = await this.moveTargets(id);
+    const spot = targets.find((m) => m.server === String(to));
+    if (!spot?.fits) {
+      throw Response.badRequest("That machine has no room for this rental");
+    }
+    if (spot.remainderShort) {
+      throw Response.badRequest(
+        `Huruf's partition there uses ${spot.remainderUsesMb} MB: free memory there first, or pick another machine`,
+      );
+    }
+    if (!spot.reachable) {
+      throw Response.badRequest(
+        "The two machines don't reach each other over the private network",
+      );
+    }
+    // Claimed first, so two admins can't move it at once.
+    const placeholder = new ObjectId();
+    const claimed = await subscriptionModel.findOneAndUpdate(
+      {
+        _id: id,
+        status: { $in: [...RUNNING] },
+        "rental.move": { $exists: false },
+      },
+      {
+        $set: {
+          "rental.move": {
+            to,
+            command: placeholder,
+            startedAt: new Date(),
+            by: admin,
+          },
+          updatedAt: new Date(),
+        },
+      },
+    );
+    if (!claimed?.rental?.host || !claimed.rental.partition) {
+      throw Response.badRequest("It's moving already");
+    }
+    try {
+      const { command } = await movePartition({
+        from: claimed.rental.host,
+        to,
+        name: claimed.rental.partition,
+        size: claimed.rental.size,
+        createdBy: admin,
+      });
+      await subscriptionModel.updateOne(
+        { _id: id, "rental.move.command": placeholder },
+        { $set: { "rental.move.command": command } },
+      );
+    } catch (error) {
+      await subscriptionModel.updateOne(
+        { _id: id, "rental.move.command": placeholder },
+        { $unset: { "rental.move": "" } },
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * The target's `partition.receive` finished: the rental lives there now and
+   * the source's copy goes, or it failed and the source starts it again.
+   */
+  async moveFinished(
+    command: ObjectId,
+    outcome: { ok: boolean; error?: string },
+  ) {
+    const sub = await subscriptionModel.findOne({
+      "rental.move.command": command,
+    });
+    const move = sub?.rental?.move;
+    const partition = sub?.rental?.partition;
+    if (!sub?.rental?.host || !partition || !move) return;
+    const from = sub.rental.host;
+    const now = new Date();
+    const { modifiedCount } = await subscriptionModel.updateOne(
+      { _id: sub._id, "rental.move.command": command },
+      outcome.ok
+        ? {
+          $set: {
+            "rental.host": move.to,
+            "rental.lastMove": { from, to: move.to, at: now },
+            updatedAt: now,
+          },
+          // The new machine's traffic counters start over: its first reading is the baseline.
+          $unset: { "rental.move": "", "rental.counters": "" },
+        }
+        : {
+          $set: {
+            "rental.lastMove": {
+              from,
+              to: move.to,
+              at: now,
+              error: (outcome.error ?? "The move failed").slice(0, 1_000),
+            },
+            updatedAt: now,
+          },
+          $unset: { "rental.move": "" },
+        },
+    );
+    if (!modifiedCount) return; // another result or a cancel got there first
+    if (outcome.ok) {
+      if (sub.server) {
+        await serverModel.updateOne({ _id: sub.server }, {
+          $set: { "provider.host": move.to },
+        });
+      }
+      await removePartition(from, partition)
+        .catch((e) => log(`remove the moved ${partition}: ${e}`));
+    } else {
+      await startPartition(from, partition)
+        .catch((e) => log(`restart ${partition}: ${e}`));
+    }
+  }
+
+  /**
+   * Gives up on a move that never reports back (an agent restarted during
+   * it): the partition starts again where it was, the target's copy goes.
+   */
+  async cancelMove(id: ObjectId) {
+    const sub = await this.rentalOf(id);
+    const move = sub.rental.move;
+    const partition = sub.rental.partition;
+    if (!move || !sub.rental.host || !partition) {
+      throw Response.badRequest("It isn't moving");
+    }
+    const { modifiedCount } = await subscriptionModel.updateOne(
+      { _id: id, "rental.move.command": move.command },
+      {
+        $set: {
+          "rental.lastMove": {
+            from: sub.rental.host,
+            to: move.to,
+            at: new Date(),
+            error: "Canceled",
+          },
+          updatedAt: new Date(),
+        },
+        $unset: { "rental.move": "" },
+      },
+    );
+    if (!modifiedCount) return;
+    await removePartition(move.to, partition)
+      .catch((e) => log(`remove the moving ${partition}: ${e}`));
+    await startPartition(sub.rental.host, partition);
+  }
+
+  // --- Uptime (PLAN §26.11) ---
+
+  /**
+   * A rented server polled again after its lease ran out: the outage counts
+   * against its current period. Suspended rentals are stopped on purpose and
+   * don't count.
+   */
+  async recordDowntime(server: ObjectId, since: Date, now: Date) {
+    const sub = await subscriptionModel.findOne({
+      server,
+      kind: "server",
+      status: { $in: [...RUNNING] },
+    }, { projection: { _id: 1 } });
+    if (!sub) return;
+    // ponytail: an outage counts in the period it ends in; split it at period boundaries if credits need it exact.
+    await subscriptionPeriodModel.updateOne(
+      {
+        subscription: sub._id,
+        periodStart: { $lte: now },
+        periodEnd: { $gt: now },
+      },
+      { $inc: { "usage.downtimeMs": now.getTime() - since.getTime() } },
+    );
+  }
+
+  /** This period's uptime so far, in percent, per rental (an ongoing outage included). */
+  async uptimes(subs: { _id: ObjectId; server?: ObjectId }[]) {
+    const now = new Date();
+    const [periods, leases] = await Promise.all([
+      subscriptionPeriodModel.find({
+        subscription: { $in: subs.map((s) => s._id) },
+        periodStart: { $lte: now },
+        periodEnd: { $gt: now },
+      }, {
+        projection: { subscription: 1, periodStart: 1, "usage.downtimeMs": 1 },
+      }).toArray(),
+      // Past its lease: down since then (what `recordDowntime` adds once it's back).
+      serverLeaseModel.find({
+        _id: { $in: subs.flatMap((s) => s.server ? [s.server] : []) },
+        aliveUntil: { $lt: now },
+      }, { projection: { aliveUntil: 1 } }).toArray(),
+    ]);
+    const out = new Map<string, number>();
+    for (const sub of subs) {
+      const period = periods.find((p) => p.subscription.equals(sub._id));
+      if (!period || !sub.server) continue;
+      const lease = leases.find((l) => l._id.equals(sub.server!));
+      const ongoing = lease ? now.getTime() - lease.aliveUntil.getTime() : 0;
+      const elapsed = now.getTime() - period.periodStart.getTime();
+      const down = (period.usage?.downtimeMs ?? 0) + ongoing;
+      out.set(
+        String(sub._id),
+        elapsed > 0 ? Math.max(0, 100 * (1 - down / elapsed)) : 100,
+      );
+    }
+    return out;
+  }
+
+  // --- Capacity (PLAN §26.7, §26.11) ---
+
+  /**
+   * Per class: what the pool machines offer, what's rented, the spare share
+   * kept for moving partitions off a failed machine (`POOL_SPARE_PERCENT`),
+   * and revenue against cost.
+   */
+  async capacity() {
+    const [classes, machines, target] = await Promise.all([
+      serverClassModel.find({}, {
+        sort: { sortOrder: 1 },
+        projection: { name: 1 },
+      }).toArray(),
+      serverModel.find({
+        tenant: await this.platformTenant(),
+        status: "active",
+        "pool.status": "ready",
+      }, { projection: { pool: 1 }, limit: 500 }).toArray(),
+      readNumberSetting("POOL_SPARE_PERCENT", 20),
+    ]);
+    const subs = await subscriptionModel.find({
+      kind: "server",
+      "rental.host": { $in: machines.map((m) => m._id) },
+      status: { $in: [...LIVE] },
+    }, {
+      projection: { plan: 1, status: 1, "rental.host": 1, "rental.size": 1 },
+    }).toArray();
+    const plans = await planModel.find(
+      { _id: { $in: subs.map((s) => s.plan) } },
+      { projection: { price: 1 } },
+    ).toArray();
+    const zero = () => ({ cpus: 0, memMb: 0, diskGb: 0 });
+    type TMachine = (typeof machines)[number];
+    const offered = (list: TMachine[]) =>
+      list.reduce((a, m) => {
+        const all = m.pool?.allocatable ?? zero();
+        return {
+          cpus: a.cpus + all.cpus,
+          memMb: a.memMb + all.memMb,
+          diskGb: a.diskGb + all.diskGb,
+        };
+      }, zero());
+    const on = (list: TMachine[]) =>
+      subs.filter((s) => list.some((m) => m._id.equals(s.rental!.host!)));
+    const rented = (list: TMachine[]) =>
+      on(list).reduce((a, s) => ({
+        cpus: a.cpus + s.rental!.size.cpus,
+        memMb: a.memMb + s.rental!.size.memMb,
+        diskGb: a.diskGb + s.rental!.size.diskGb,
+      }), zero());
+
+    return {
+      sparePercent: target,
+      classes: classes.map((cls) => {
+        const mine = machines.filter((m) => m.pool?.class?.equals(cls._id));
+        const accepting = mine.filter((m) => m.pool?.accepting !== false);
+        const all = offered(mine);
+        // Draining machines take nothing new: only accepting ones have room.
+        const freeMemMb = offered(accepting).memMb - rented(accepting).memMb;
+        return {
+          _id: String(cls._id),
+          name: cls.name,
+          machines: mine.length,
+          accepting: accepting.length,
+          allocatable: all,
+          rented: rented(mine),
+          freeMemMb,
+          // Memory never overcommits, so it's what runs out.
+          spare: all.memMb ? Math.round(100 * freeMemMb / all.memMb) : 0,
+          revenue: on(mine).filter((s) => s.status !== "suspended").reduce(
+            (sum, s) =>
+              sum +
+              (plans.find((p) => p._id.equals(s.plan))?.price.amount ?? 0),
+            0,
+          ),
+          cost: mine.reduce((sum, m) => sum + (m.pool?.monthlyCost ?? 0), 0),
+        };
+      }),
+    };
   }
 
   // --- Traffic (PLAN §26.6) ---

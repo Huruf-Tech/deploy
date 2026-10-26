@@ -44,3 +44,19 @@ export function rentalStatus(
         : { tone: "success", label: t("Active") }
   }
 }
+
+/** A pool machine a rental could be placed on or moved to (PLAN §26.7). */
+export type TMachineSpot = {
+  server: string
+  name: string
+  free: { memMb: number; diskGb: number }
+  cpuRoom: number
+  fits: boolean
+  remainderShort: boolean
+  remainderUsesMb?: number
+  /** Moves only: over the private network. */
+  reachable?: boolean
+}
+
+export const usable = (m: TMachineSpot) =>
+  m.fits && !m.remainderShort && m.reachable !== false

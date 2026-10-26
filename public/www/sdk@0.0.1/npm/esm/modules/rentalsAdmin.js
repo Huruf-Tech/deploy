@@ -123,6 +123,86 @@ export const rentalsAdminModule = (sdk) => {
                 return res;
             }, data);
         },
+        moveTargets(data) {
+            return sdk.resolveAxiosResponse(async () => {
+                sdk.checkPermission("rentalsAdmin", "moveTargets");
+                const method = "get";
+                const toPath = compile("rentalsAdmin/api/:id/move");
+                const requestPayload = {
+                    method,
+                    url: toPath(sdk.resolvePathParams(data?.params)),
+                    params: data?.query,
+                    data: data?.body,
+                    signal: data?.signal,
+                    ...(data?.axiosConfig
+                        ? sdk.resolveAxiosConfig(data.axiosConfig)
+                        : undefined),
+                };
+                sdk.log("Sending Request:", requestPayload);
+                const res = await sdk._axios.request(requestPayload);
+                return res;
+            }, data);
+        },
+        move(data) {
+            return sdk.resolveAxiosResponse(async () => {
+                sdk.checkPermission("rentalsAdmin", "move");
+                const method = "post";
+                const toPath = compile("rentalsAdmin/api/:id/move");
+                const requestPayload = {
+                    method,
+                    url: toPath(sdk.resolvePathParams(data?.params)),
+                    params: data?.query,
+                    data: data?.body,
+                    signal: data?.signal,
+                    ...(data?.axiosConfig
+                        ? sdk.resolveAxiosConfig(data.axiosConfig)
+                        : undefined),
+                };
+                sdk.log("Sending Request:", requestPayload);
+                const res = await sdk._axios.request(requestPayload);
+                return res;
+            }, data);
+        },
+        cancelMove(data) {
+            return sdk.resolveAxiosResponse(async () => {
+                sdk.checkPermission("rentalsAdmin", "cancelMove");
+                const method = "post";
+                const toPath = compile("rentalsAdmin/api/:id/move/cancel");
+                const requestPayload = {
+                    method,
+                    url: toPath(sdk.resolvePathParams(data?.params)),
+                    params: data?.query,
+                    data: data?.body,
+                    signal: data?.signal,
+                    ...(data?.axiosConfig
+                        ? sdk.resolveAxiosConfig(data.axiosConfig)
+                        : undefined),
+                };
+                sdk.log("Sending Request:", requestPayload);
+                const res = await sdk._axios.request(requestPayload);
+                return res;
+            }, data);
+        },
+        capacity(data) {
+            return sdk.resolveAxiosResponse(async () => {
+                sdk.checkPermission("rentalsAdmin", "capacity");
+                const method = "get";
+                const toPath = compile("rentalsAdmin/api/capacity");
+                const requestPayload = {
+                    method,
+                    url: toPath(sdk.resolvePathParams(data?.params)),
+                    params: data?.query,
+                    data: data?.body,
+                    signal: data?.signal,
+                    ...(data?.axiosConfig
+                        ? sdk.resolveAxiosConfig(data.axiosConfig)
+                        : undefined),
+                };
+                sdk.log("Sending Request:", requestPayload);
+                const res = await sdk._axios.request(requestPayload);
+                return res;
+            }, data);
+        },
         recreatePartition(data) {
             return sdk.resolveAxiosResponse(async () => {
                 sdk.checkPermission("rentalsAdmin", "recreatePartition");
@@ -230,6 +310,10 @@ export const rentalsAdminModule = (sdk) => {
     methods.reject.__scope = "rentalsAdmin";
     methods.approveResize.__scope = "rentalsAdmin";
     methods.rejectResize.__scope = "rentalsAdmin";
+    methods.moveTargets.__scope = "rentalsAdmin";
+    methods.move.__scope = "rentalsAdmin";
+    methods.cancelMove.__scope = "rentalsAdmin";
+    methods.capacity.__scope = "rentalsAdmin";
     methods.recreatePartition.__scope = "rentalsAdmin";
     methods.pool.__scope = "rentalsAdmin";
     methods.updatePool.__scope = "rentalsAdmin";

@@ -1251,6 +1251,14 @@ Owner's decisions recorded (§25.10). 15a–15d built; the owner tested the paym
 
 ### Phase 16 — Shared resources: rent partitions of Huruf's machines (planned, D47, §26)
 Not started; the owner says go per stage. Each stage ends with a review. Built on the existing mechanisms, refactoring them where needed (§26.6).
+- **16f status: built (pending review).** Operations.
+  - **Moving a partition** between pool machines of its class (§26.10): from the pool machine's Partitions panel ("Move to another machine": targets with room on the private network, the expected downtime), with "Cancel move" for a move that stops reporting. A resize waiting for a move is refused until it's done.
+  - **Draining:** "Takes new rentals" off; a pool machine with live (or incoming) rentals can't be deleted or uninstalled.
+  - **Capacity** on Admin → Rentals: per class, machines and those taking rentals, rented memory, the spare share against `POOL_SPARE_PERCENT`, revenue against cost.
+  - **Uptime:** downtime per period from leases (§26.11); the customer's Rental panel and the admin's Partitions panel show this period's uptime.
+  - **Agent:** `partition.send` and `partition.receive`; command errors are capped at the protocol's 500 characters (keeping the start and the end), since a longer one was refused and held back every later event.
+  - **Verified locally** on two Sysbox pool machines over WireGuard: a rented partition moved there and back (14 s and 17 s down), its system files and Docker data intact, the same server with its agent and containers; a failed move and a canceled one each left it running on the source.
+  - **Needs the next agent release** on pool machines before moves work there.
 - **16e status: built (pending review).** The screens for 16d.
   - **Customer:**
     - "Rent a server" next to "Add server": class, then a size or custom amounts, a live price (traffic allowance, overage rate, the partition overhead noted), then the request funded in the dialog.
@@ -2207,13 +2215,16 @@ traffic beyond the size's allowance = extra GB × traffic rate   (charged at the
 
 ### 26.10 Moving a partition
 
-Needed for a resize that doesn't fit, or for draining a machine.
-1. The host agents stop the partition.
-2. They copy its disk host to host (over the private network or the control plane's relay).
-3. They start it on the new machine.
+Needed for a resize that doesn't fit, or for draining a machine. An admin action (Phase 16f):
+1. The control plane issues `partition.receive` to the target and `partition.send` to the source, both sealed: they carry a one-time token.
+2. The source stops the partition, commits its container (its system files: our agent, its unit, what the customer installed) to an image, and serves two parts on its mesh address (port 51830): the image (`docker save`) and its data directory (`tar` with owners, xattrs and sparse files: Docker's, containerd's and the agent's state).
+3. The target carves the size from its remainder, pulls both parts (`docker load`, `tar -x`) under the partition's disk quota, and starts it from the moved image.
+4. On the target's success the rental and its server point at the new machine and the source's copy is removed. On failure the source starts it again and the target gives its reservation back; the old copy is kept until a move succeeds.
 
+- **Transport:** the private network (WireGuard between the platform's servers, which every ready server joins). Moves need the two machines to reach each other there; the control plane never carries the data.
 - The partition's agent keeps its identity, so the customer's server, projects and domains stay the same.
-- The downtime is shown first. It's an admin action in Phase 16.
+- **Downtime is shown first:** about a minute plus the data at `POOL_MOVE_MBPS` (default 50 MB/s). Measured locally: a 1 GB partition was down 14–17 s.
+- **Stuck moves:** if an agent restarts mid-move, no result comes. "Cancel move" starts the partition on the source and removes the target's copy; a target whose reservation was removed during the copy doesn't start it.
 
 ### 26.11 Uptime and performance
 
@@ -2221,8 +2232,8 @@ Needed for a resize that doesn't fit, or for draining a machine.
   - Realistic on single machines: AWS's own commitment for a single EC2 instance is 99.5%, and our own failures are covered by the alerts and moves below.
   - Credits for a missed month are set with the terms of service.
   - Admins are alerted through the existing alert rules on pool machines.
-  - Each class keeps spare machines' worth of capacity (setting `POOL_SPARE_PERCENT`) to move partitions off a failed machine.
-  - Monthly uptime per rented server comes from its existing offline history.
+  - Each class keeps spare machines' worth of capacity (setting `POOL_SPARE_PERCENT`, default 20, as free memory on machines taking rentals) to move partitions off a failed machine. Admin → Rentals flags a class below it.
+  - Monthly uptime per rented server comes from its lease: a server that polls again after its lease ran out was down since then (one lease of grace), added to its period's `usage.downtimeMs`; an ongoing outage counts too. Not the offline sweep's flag, which can lag minutes in a small fleet.
 - **Performance (§20):**
   - Every partition polls like any server; a 2 vCPU machine with three partitions makes four agents' polls, already budgeted per server.
   - Traffic and usage ride on the host's existing `summary`.

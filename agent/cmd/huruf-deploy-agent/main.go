@@ -175,6 +175,8 @@ func main() {
 	a.Commands["partition.stop"] = commands.Typed(pools.Stop)
 	a.Commands["partition.start"] = commands.Typed(pools.Start)
 	a.Commands["partition.remove"] = commands.Typed(pools.Remove)
+	a.Commands["partition.send"] = commands.Sealed(id.Open, pools.Send)
+	a.Commands["partition.receive"] = commands.Sealed(id.Open, pools.Receive)
 	// The built-in registry lives with the mesh: it deletes images of releases that are gone.
 	a.Commands["registry.delete"] = commands.Typed(func(ctx context.Context, p protocol.RegistryDeletePayload) (map[string]any, error) {
 		return network.DeleteTags(ctx, p.Tags)

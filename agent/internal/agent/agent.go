@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"math/rand/v2"
 	"net/http"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -335,7 +336,7 @@ func (a *Agent) execute(ctx context.Context, command protocol.Command) {
 	result, runErr := a.Commands.Run(ctx, command.Type, command.Payload)
 	data := protocol.CommandResultEventData{Seq: command.Seq, Ok: runErr == nil, Result: result}
 	if runErr != nil {
-		data.Error = runErr.Error()
+		data.Error = capError(runErr.Error())
 	}
 	a.Log.Info("ran command", "seq", command.Seq, "type", command.Type, "ok", data.Ok, "error", data.Error)
 
@@ -343,6 +344,21 @@ func (a *Agent) execute(ctx context.Context, command protocol.Command) {
 	a.Enqueue(protocol.CommandResultEvent{
 		Id: fmt.Sprintf("cmd-%d", command.Seq), Type: "command.result", Data: data,
 	})
+}
+
+// maxError is the protocol's limit on a result's error: the control plane
+// refuses a longer one, and a refused event would hold back every later one.
+const maxError = 500
+
+// capError keeps an error within maxError bytes: its start says what ran,
+// its end why it failed.
+func capError(s string) string {
+	if len(s) <= maxError {
+		return s
+	}
+	const head, gap = 200, " … "
+	tail := maxError - head - len(gap)
+	return strings.ToValidUTF8(s[:head], "") + gap + strings.ToValidUTF8(s[len(s)-tail:], "")
 }
 
 // Enqueue adds an event for the next send; safe from any goroutine. The queue

@@ -26,10 +26,13 @@ import { serverLeaseModel } from "@/schemas/infrastructure/serverLease.ts";
 import { agentCommandModel } from "@/schemas/infrastructure/agentCommand.ts";
 import { tenantUsageModel } from "@/schemas/limits/tenantUsage.ts";
 import { seedKeys } from "./sealing_test.ts";
+import { meshIpOf } from "@/schemas/infrastructure/network.ts";
+import { MOVE_PORT } from "@/schemas/protocol/agent.ts";
 import { testSession } from "./_session.ts";
 
-// Rentals (PLAN §26, Phase 16d): requests, approval, the rented server,
-// traffic, renewal with overage, suspension and release, resize.
+// Rentals (PLAN §26, Phases 16d and 16f): requests, approval, the rented
+// server, traffic, renewal with overage, resize, moving between machines,
+// capacity and uptime, suspension and release.
 
 const DAY = 86_400_000;
 const shared = $serverClass.parse({
@@ -363,6 +366,182 @@ Deno.test({
       );
 
       await t.step(
+        "moving to another machine, capacity, draining and uptime",
+        async () => {
+          const host2 = new ObjectId();
+          await serverModel.insertOne({
+            _id: host2,
+            tenant: platform.tenantId,
+            name: "pool-2",
+            status: "active",
+            identity: {
+              signPublicKey: "x",
+              boxPublicKey: publicKey,
+              fingerprint: `pool-${host2}`,
+            },
+            mesh: { index: 2, enabled: true },
+            pool: {
+              status: "ready",
+              class: cls,
+              allocatable: { cpus: 2, memMb: 8192, diskGb: 100 },
+              updatedAt: new Date(),
+            },
+            // deno-lint-ignore no-explicit-any
+          } as any);
+          await serverLeaseModel.insertOne({
+            _id: host2,
+            tenant: platform.tenantId,
+            status: "active",
+            aliveUntil: new Date(),
+            offline: false,
+            shard: 0,
+            desiredVersion: 0,
+            commandSeq: 0,
+            deliveredSeq: 0,
+          });
+          const name = (await sub()).rental!.partition!;
+          const opened = async (server: ObjectId, type: string) => {
+            const [last] = await agentCommandModel.find(
+              { server, type: type as never },
+              { sort: { seq: -1 }, limit: 1 },
+            ).toArray();
+            return {
+              _id: last._id,
+              ...JSON.parse(
+                await openSealed(
+                  privateKey,
+                  publicKey,
+                  (last.payload as { sealed: string }).sealed,
+                ),
+              ),
+            };
+          };
+
+          // Not on a common private network yet: no move.
+          let targets = await rentals.moveTargets(rental);
+          assertEquals(targets.targets.map((m) => m.reachable), [false]);
+          assert(targets.downtimeSec >= 60);
+          await serverModel.updateOne({ _id: host }, {
+            $set: {
+              mesh: {
+                index: 1,
+                enabled: true,
+                peers: { [String(host2)]: true },
+              },
+            },
+          });
+          targets = await rentals.moveTargets(rental);
+          assertEquals(
+            targets.targets.map((m) => [m.name, m.fits, m.reachable]),
+            [["pool-2", true, true]],
+          );
+
+          // Capacity per class, and a pool machine with rentals can't go.
+          const { classes } = await rentals.capacity();
+          const row = classes.find((c) => c._id === String(cls))!;
+          assertEquals([row.machines, row.rented.memMb], [2, 4096 + 128]);
+          assertEquals(row.spare, Math.round(100 * (16384 - 4224) / 16384));
+          const del = await platform.call("DELETE", `/servers/api/${host}`);
+          assertEquals(del.status, 400, JSON.stringify(del.json));
+          assert(JSON.stringify(del.json).includes("move them"));
+
+          // Moved: the target pulls from the source's mesh address.
+          await rentals.move(rental, host2, platform.user);
+          assertEquals(
+            (await refused(() => rentals.move(rental, host2, platform.user)))
+              ?.status,
+            400,
+            "one move at a time",
+          );
+          const receive = await opened(host2, "partition.receive");
+          const send = await opened(host, "partition.send");
+          assertEquals(send.listen, `${meshIpOf(1)}:${MOVE_PORT}`);
+          assertEquals(
+            [receive.name, receive.from, receive.token, receive.size],
+            [name, send.listen, send.token, (await sub()).rental!.size],
+          );
+          const listed = await customer.call("GET", "/rentals/api");
+          assertEquals(listed.json[0].moving, true);
+          await rentals.moveFinished(receive._id, { ok: true });
+          const server = (await sub()).server!;
+          assert((await sub()).rental!.host!.equals(host2));
+          assertEquals((await sub()).rental!.move, undefined);
+          assert(
+            (await serverModel.findOne({ _id: server }))!.provider.host!.equals(
+              host2,
+            ),
+          );
+          assertEquals(
+            (await agentCommandModel.findOne({
+              server: host,
+              type: "partition.remove",
+            }))?.payload,
+            { name },
+          );
+
+          // A failed move starts it again where it was.
+          await rentals.move(rental, host, platform.user);
+          const failed = await opened(host, "partition.receive");
+          await rentals.moveFinished(failed._id, {
+            ok: false,
+            error: "connection reset",
+          });
+          assert((await sub()).rental!.host!.equals(host2));
+          assertEquals(
+            (await sub()).rental!.lastMove!.error,
+            "connection reset",
+          );
+          assertEquals(
+            (await agentCommandModel.findOne({
+              server: host2,
+              type: "partition.start",
+            }))?.payload,
+            { name },
+          );
+
+          // A canceled one too, and the target's copy goes; a late result changes nothing.
+          await rentals.move(rental, host, platform.user);
+          const stuck = await opened(host, "partition.receive");
+          await rentals.cancelMove(rental);
+          assertEquals((await sub()).rental!.lastMove!.error, "Canceled");
+          await rentals.moveFinished(stuck._id, { ok: true });
+          assert((await sub()).rental!.host!.equals(host2));
+
+          // And back, for the steps that follow.
+          await rentals.move(rental, host, platform.user);
+          await rentals.moveFinished(
+            (await opened(host, "partition.receive"))._id,
+            { ok: true },
+          );
+          assert((await sub()).rental!.host!.equals(host));
+
+          // Downtime counts against the period's uptime.
+          const now = new Date();
+          await rentals.recordDowntime(
+            server,
+            new Date(now.getTime() - 60_000),
+            now,
+          );
+          const period = await subscriptionPeriodModel.findOne(
+            { subscription: rental },
+            { sort: { periodStart: -1 } },
+          );
+          assertEquals(period!.usage!.downtimeMs, 60_000);
+          // A minute down in a day: 99.93 %; its lease is current again.
+          await serverLeaseModel.updateOne({ _id: server }, {
+            $set: { aliveUntil: new Date(now.getTime() + 60_000) },
+          });
+          await subscriptionPeriodModel.updateOne({ _id: period!._id }, {
+            $set: { periodStart: new Date(now.getTime() - DAY) },
+          });
+          const uptime = (await rentals.uptimes([await sub()])).get(
+            String(rental),
+          )!;
+          assertEquals(Math.round(uptime * 100) / 100, 99.93);
+        },
+      );
+
+      await t.step(
         "unpaid: past due, suspended after 3 days, paid and resumed",
         async () => {
           // Empty the wallet; there's no billing account, so no card is charged.
@@ -432,13 +611,17 @@ Deno.test({
           assertEquals((await sub()).rental!.warned, [7]);
           // 14 days: released.
           const server = (await sub()).server!;
+          const removes = (await commands("partition.remove")).length;
           await subscriptionModel.updateOne({ _id: rental }, {
             $set: { "rental.suspendedAt": new Date(Date.now() - 14.1 * DAY) },
             $unset: { nextRenewalAttemptAt: "" },
           });
           await billing.renewIfDue(tenant);
           assertEquals((await sub()).status, "released");
-          assertEquals((await commands("partition.remove")).length, 1);
+          assertEquals(
+            (await commands("partition.remove")).length,
+            removes + 1,
+          );
           assertEquals(await serverModel.countDocuments({ _id: server }), 0);
           await mailed(/was deleted/);
         },

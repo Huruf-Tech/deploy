@@ -78,6 +78,10 @@ export type list$return = {
     pendingChange?: string | undefined;
     rejectedReason?: string | undefined;
     suspendedAt?: Date | undefined;
+    /** This period so far, percent */
+    uptime?: number | undefined;
+    /** Huruf moves it to another machine */
+    moving?: boolean | undefined;
 }[];
 export type request$body = {
     plan?: string | undefined;

@@ -57,6 +57,66 @@ export type rejectResize$params = {
 export type rejectResize$body = {
     reason: string;
 };
+export type moveTargets$params = {
+    id?: string;
+};
+export type moveTargets$return = {
+    from?: string | undefined;
+    moving: boolean;
+    /** Rough: a minute plus copying */
+    downtimeSec: number;
+    targets: {
+        server: string;
+        name: string;
+        free: {
+            memMb: number;
+            diskGb: number;
+        };
+        cpuRoom: number;
+        fits: boolean;
+        remainderShort: boolean;
+        remainderUsesMb?: number | undefined;
+        /** Over the private network */
+        reachable: boolean;
+    }[];
+};
+export type move$params = {
+    id?: string;
+};
+export type move$body = {
+    to?: string;
+};
+export type cancelMove$params = {
+    id?: string;
+};
+export type capacity$return = {
+    /** The target, POOL_SPARE_PERCENT */
+    sparePercent: number;
+    classes: {
+        _id: string;
+        name: string;
+        machines: number;
+        accepting: number;
+        allocatable: {
+            cpus: number;
+            memMb: number;
+            diskGb: number;
+        };
+        rented: {
+            cpus: number;
+            memMb: number;
+            diskGb: number;
+        };
+        /** On machines taking rentals */
+        freeMemMb: number;
+        /** Free memory, percent of the class's */
+        spare: number;
+        /** Cents per month */
+        revenue: number;
+        /** Cents per month */
+        cost: number;
+    }[];
+};
 export type recreatePartition$params = {
     id?: string;
 };
@@ -73,6 +133,19 @@ export type pool$return = {
         /** Cents per month */
         price: number;
         status: string;
+        /** This period so far, percent */
+        uptime?: number | undefined;
+        moving?: {
+            to: string;
+            toName?: string | undefined;
+            startedAt: Date;
+        } | undefined;
+        lastMove?: {
+            from: string;
+            to: string;
+            at: Date;
+            error?: string | undefined;
+        } | undefined;
     }[];
     /** Cents per month from live rentals */
     revenue: number;
@@ -108,6 +181,12 @@ export const rentalsAdminModule = (sdk: typeof BaseSDK) => {
         approveResize$params: approveResize$params,
         rejectResize$params: rejectResize$params,
         rejectResize$body: rejectResize$body,
+        moveTargets$params: moveTargets$params,
+        moveTargets$return: moveTargets$return,
+        move$params: move$params,
+        move$body: move$body,
+        cancelMove$params: cancelMove$params,
+        capacity$return: capacity$return,
         recreatePartition$params: recreatePartition$params,
         pool$params: pool$params,
         pool$return: pool$return,
@@ -288,6 +367,118 @@ export const rentalsAdminModule = (sdk: typeof BaseSDK) => {
             return res;
         }, data);
     },
+        moveTargets(data: {
+        params: moveTargets$params,
+        query?: undefined,
+        body?: undefined,
+    } & TRequestOptions<moveTargets$return>) {
+        return sdk.resolveAxiosResponse(async () => {
+            sdk.checkPermission("rentalsAdmin", "moveTargets");
+
+            const method = "get";
+            const toPath = compile("rentalsAdmin/api/:id/move");
+            const requestPayload = {
+                method,
+                url: toPath(sdk.resolvePathParams(data?.params)),
+                params: data?.query,
+                data: data?.body,
+                signal: data?.signal,
+                ...(data?.axiosConfig
+                ? sdk.resolveAxiosConfig(data.axiosConfig)
+                : undefined),
+            };
+
+            sdk.log("Sending Request:", requestPayload);
+
+            const res = await sdk._axios!.request(requestPayload);
+
+            return res;
+        }, data);
+    },
+        move(data: {
+        params: move$params,
+        query?: undefined,
+        body: move$body,
+    } & TRequestOptions<unknown>) {
+        return sdk.resolveAxiosResponse(async () => {
+            sdk.checkPermission("rentalsAdmin", "move");
+
+            const method = "post";
+            const toPath = compile("rentalsAdmin/api/:id/move");
+            const requestPayload = {
+                method,
+                url: toPath(sdk.resolvePathParams(data?.params)),
+                params: data?.query,
+                data: data?.body,
+                signal: data?.signal,
+                ...(data?.axiosConfig
+                ? sdk.resolveAxiosConfig(data.axiosConfig)
+                : undefined),
+            };
+
+            sdk.log("Sending Request:", requestPayload);
+
+            const res = await sdk._axios!.request(requestPayload);
+
+            return res;
+        }, data);
+    },
+        cancelMove(data: {
+        params: cancelMove$params,
+        query?: undefined,
+        body?: undefined,
+    } & TRequestOptions<unknown>) {
+        return sdk.resolveAxiosResponse(async () => {
+            sdk.checkPermission("rentalsAdmin", "cancelMove");
+
+            const method = "post";
+            const toPath = compile("rentalsAdmin/api/:id/move/cancel");
+            const requestPayload = {
+                method,
+                url: toPath(sdk.resolvePathParams(data?.params)),
+                params: data?.query,
+                data: data?.body,
+                signal: data?.signal,
+                ...(data?.axiosConfig
+                ? sdk.resolveAxiosConfig(data.axiosConfig)
+                : undefined),
+            };
+
+            sdk.log("Sending Request:", requestPayload);
+
+            const res = await sdk._axios!.request(requestPayload);
+
+            return res;
+        }, data);
+    },
+        capacity(data?: {
+        params?: undefined,
+        query?: undefined,
+        body?: undefined,
+    } & TRequestOptions<capacity$return>) {
+        return sdk.resolveAxiosResponse(async () => {
+            sdk.checkPermission("rentalsAdmin", "capacity");
+
+            const method = "get";
+            const toPath = compile("rentalsAdmin/api/capacity");
+            const requestPayload = {
+                method,
+                url: toPath(sdk.resolvePathParams(data?.params)),
+                params: data?.query,
+                data: data?.body,
+                signal: data?.signal,
+                ...(data?.axiosConfig
+                ? sdk.resolveAxiosConfig(data.axiosConfig)
+                : undefined),
+            };
+
+            sdk.log("Sending Request:", requestPayload);
+
+            const res = await sdk._axios!.request(requestPayload);
+
+            return res;
+        }, data);
+    },
         recreatePartition(data: {
         params: recreatePartition$params,
         query?: undefined,
@@ -436,6 +627,10 @@ export const rentalsAdminModule = (sdk: typeof BaseSDK) => {
     (methods.reject as any).__scope = "rentalsAdmin";
     (methods.approveResize as any).__scope = "rentalsAdmin";
     (methods.rejectResize as any).__scope = "rentalsAdmin";
+    (methods.moveTargets as any).__scope = "rentalsAdmin";
+    (methods.move as any).__scope = "rentalsAdmin";
+    (methods.cancelMove as any).__scope = "rentalsAdmin";
+    (methods.capacity as any).__scope = "rentalsAdmin";
     (methods.recreatePartition as any).__scope = "rentalsAdmin";
     (methods.pool as any).__scope = "rentalsAdmin";
     (methods.updatePool as any).__scope = "rentalsAdmin";

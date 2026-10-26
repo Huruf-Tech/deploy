@@ -6,10 +6,15 @@ import { hostSetupPayload, issueCommand } from "@/lib/agents/commands.ts";
 import { agentEndpoints, createJoinToken } from "@/lib/agents/bootstrap.ts";
 import { sealTo } from "@/lib/agents/sealing.ts";
 import { serverModel } from "@/schemas/infrastructure/server.ts";
-import type {
-  $partitionCreatePayload,
-  $partitionSize,
-  $poolEnsurePayload,
+import { encodeHex } from "@std/encoding/hex";
+import { meshIpOf } from "@/schemas/infrastructure/network.ts";
+import {
+  type $partitionCreatePayload,
+  type $partitionReceivePayload,
+  type $partitionSendPayload,
+  type $partitionSize,
+  type $poolEnsurePayload,
+  MOVE_PORT,
 } from "@/schemas/protocol/agent.ts";
 
 type TPartitionSize = z.output<typeof $partitionSize>;
@@ -37,7 +42,7 @@ async function platformTenant() {
 async function machine(server: ObjectId, prepared: boolean) {
   const doc = await serverModel.findOne(
     { _id: server, status: "active" },
-    { projection: { tenant: 1, name: 1, identity: 1, pool: 1 } },
+    { projection: { tenant: 1, name: 1, identity: 1, pool: 1, mesh: 1 } },
   );
   if (!doc) throw Response.notFound("No active server with this id");
   if (!doc.tenant.equals(await platformTenant())) {
@@ -194,4 +199,62 @@ export async function resizePartition(
     payload: { name, size },
     createdBy,
   });
+}
+
+/**
+ * Moves a partition between pool machines (PLAN §26.10): the source stops it
+ * and serves it on its mesh address, the target pulls it and starts it. Both
+ * commands are sealed: they carry the move's one-time token. The control
+ * plane removes the source's copy once the target reports it running.
+ */
+export async function movePartition(opts: {
+  from: ObjectId;
+  to: ObjectId;
+  name: string;
+  size: TPartitionSize;
+  createdBy: ObjectId;
+}) {
+  const [source, target] = await Promise.all([
+    machine(opts.from, true),
+    machine(opts.to, true),
+  ]);
+  if (!source.mesh?.index) {
+    throw Response.badRequest(`${source.name} isn't on the private network`);
+  }
+  const listen = `${meshIpOf(source.mesh.index)}:${MOVE_PORT}`;
+  const token = encodeHex(crypto.getRandomValues(new Uint8Array(32)));
+  const send: z.input<typeof $partitionSendPayload> = {
+    name: opts.name,
+    listen,
+    token,
+  };
+  const receive: z.input<typeof $partitionReceivePayload> = {
+    name: opts.name,
+    size: opts.size,
+    from: listen,
+    token,
+  };
+  // The target first: it waits for the source, not the other way round.
+  const received = await issueCommand({
+    server: target._id,
+    tenant: target.tenant,
+    type: "partition.receive",
+    payload: {
+      sealed: await sealTo(
+        target.identity.boxPublicKey,
+        JSON.stringify(receive),
+      ),
+    },
+    createdBy: opts.createdBy,
+  });
+  await issueCommand({
+    server: source._id,
+    tenant: source.tenant,
+    type: "partition.send",
+    payload: {
+      sealed: await sealTo(source.identity.boxPublicKey, JSON.stringify(send)),
+    },
+    createdBy: opts.createdBy,
+  });
+  return received;
 }

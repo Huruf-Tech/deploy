@@ -47,6 +47,11 @@ type Driver interface {
 	Usage(ctx context.Context, name string) (Usage, error)
 	// Restore re-creates what a reboot loses, at agent start.
 	Restore(ctx context.Context, names []string) error
+	// Send stops a partition and serves it on `listen` for one Receive; it
+	// starts it again if the transfer doesn't finish (PLAN §26.10).
+	Send(ctx context.Context, name, listen, token string) error
+	// Receive pulls a partition from `from` and starts it here.
+	Receive(ctx context.Context, name string, size protocol.PartitionSize, weight int, from, token string) error
 }
 
 // Entry is one partition in the machine's state file.
@@ -389,6 +394,85 @@ func (m *Manager) Remove(ctx context.Context, p protocol.PartitionNamePayload) (
 		}
 	}
 	return result, nil
+}
+
+// Send moves a rented partition off this machine (`partition.send`). It
+// stays here, stopped, until the control plane removes it once the receiving
+// machine runs it. The lock isn't held while sending: polls read usage.
+func (m *Manager) Send(ctx context.Context, p protocol.PartitionSendPayload) (map[string]any, error) {
+	m.mu.Lock()
+	s, err := m.load()
+	var entry Entry
+	ok := false
+	if err == nil {
+		entry, ok = s.Partitions[p.Name]
+	}
+	m.mu.Unlock()
+	switch {
+	case err != nil:
+		return nil, err
+	case !ok:
+		return nil, fmt.Errorf("no partition %s", p.Name)
+	case entry.Remainder:
+		return nil, errors.New("the remainder isn't moved: each machine has its own")
+	}
+	if err := m.Driver.Send(ctx, p.Name, p.Listen, p.Token); err != nil {
+		return nil, err
+	}
+	return map[string]any{"name": p.Name, "sent": true}, nil
+}
+
+// Receive takes a moving partition (`partition.receive`): its size is carved
+// from the remainder first, and given back if the transfer fails.
+func (m *Manager) Receive(ctx context.Context, p protocol.PartitionReceivePayload) (map[string]any, error) {
+	m.mu.Lock()
+	s, err := m.load()
+	if err != nil {
+		m.mu.Unlock()
+		return nil, err
+	}
+	if s.Allocatable.MemMb == 0 {
+		m.mu.Unlock()
+		return nil, errors.New("this machine isn't a pool machine yet (pool.ensure)")
+	}
+	if _, exists := s.Partitions[p.Name]; exists {
+		m.mu.Unlock()
+		return nil, fmt.Errorf("partition %s is on this machine already", p.Name)
+	}
+	left, err := s.free(p.Name, &p.Size)
+	if err == nil {
+		err = m.sizeRemainder(ctx, s, left)
+	}
+	entry := Entry{Size: p.Size}
+	if err == nil {
+		s.Partitions[p.Name] = entry
+		err = m.save()
+	}
+	m.mu.Unlock()
+	if err != nil {
+		return nil, err
+	}
+
+	if err := m.Driver.Receive(ctx, p.Name, p.Size, weight(entry), p.From, p.Token); err != nil {
+		m.mu.Lock()
+		defer m.mu.Unlock()
+		_ = m.Driver.Remove(context.WithoutCancel(ctx), p.Name)
+		delete(s.Partitions, p.Name)
+		_ = m.save()
+		if left, ferr := s.free("", nil); ferr == nil {
+			_ = m.sizeRemainder(ctx, s, left)
+		}
+		return nil, err
+	}
+	// A canceled move removed it meanwhile: its source runs again, so this copy mustn't.
+	m.mu.Lock()
+	_, kept := s.Partitions[p.Name]
+	m.mu.Unlock()
+	if !kept {
+		_ = m.Driver.Remove(context.WithoutCancel(ctx), p.Name)
+		return nil, errors.New("the move was canceled")
+	}
+	return map[string]any{"name": p.Name, "size": p.Size}, nil
 }
 
 // Restore runs at agent start on a pool machine: what a reboot lost.

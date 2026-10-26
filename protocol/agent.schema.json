@@ -537,7 +537,9 @@
                   "partition.resize",
                   "partition.stop",
                   "partition.start",
-                  "partition.remove"
+                  "partition.remove",
+                  "partition.send",
+                  "partition.receive"
                 ]
               },
               "payload": {
@@ -2624,6 +2626,85 @@
       },
       "required": [
         "name"
+      ],
+      "additionalProperties": false
+    },
+    "PartitionSendPayload": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z0-9]{1,12}$"
+        },
+        "listen": {
+          "type": "string",
+          "maxLength": 64,
+          "description": "host:port, the mesh address"
+        },
+        "token": {
+          "type": "string",
+          "minLength": 32,
+          "maxLength": 128
+        }
+      },
+      "required": [
+        "name",
+        "listen",
+        "token"
+      ],
+      "additionalProperties": false
+    },
+    "PartitionReceivePayload": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z0-9]{1,12}$"
+        },
+        "size": {
+          "type": "object",
+          "properties": {
+            "cpus": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 512
+            },
+            "memMb": {
+              "type": "integer",
+              "minimum": 256,
+              "maximum": 9007199254740991
+            },
+            "diskGb": {
+              "type": "integer",
+              "minimum": 5,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "cpus",
+            "memMb",
+            "diskGb"
+          ],
+          "additionalProperties": false
+        },
+        "from": {
+          "type": "string",
+          "maxLength": 64,
+          "description": "host:port"
+        },
+        "token": {
+          "type": "string",
+          "minLength": 32,
+          "maxLength": 128
+        }
+      },
+      "required": [
+        "name",
+        "size",
+        "from",
+        "token"
       ],
       "additionalProperties": false
     }

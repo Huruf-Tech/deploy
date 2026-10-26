@@ -66,6 +66,21 @@ export const $subscription = z.object({
     suspendedAt: z.date().optional(),
     /** Release warnings sent (days before release). */
     warned: z.array(z.number().int()).optional(),
+    /** A move to another pool machine under way (PLAN §26.10). */
+    move: z.object({
+      to: $objectId.meta({ ref: "servers" }),
+      /** The target's `partition.receive`: its result ends the move. */
+      command: $objectId,
+      startedAt: z.date(),
+      by: $objectId.meta({ ref: "users" }),
+    }).optional(),
+    /** How the last move ended, for the admin. */
+    lastMove: z.object({
+      from: $objectId.meta({ ref: "servers" }),
+      to: $objectId.meta({ ref: "servers" }),
+      at: z.date(),
+      error: z.string().max(1_000).optional(),
+    }).optional(),
   }).optional(),
   startedAt: z.date(),
   createdBy: $objectId.meta({ ref: "users" }),

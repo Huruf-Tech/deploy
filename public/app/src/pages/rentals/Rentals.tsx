@@ -183,11 +183,26 @@ export function RentalPanel({ server }: { server: string }) {
             label: rental.cancelAtPeriodEnd ? t("Ends on") : t("Renews on"),
             value: day(rental.currentPeriodEnd),
           },
+          ...(rental.uptime !== undefined
+            ? [
+                {
+                  label: t("Uptime this period"),
+                  value: `${rental.uptime.toFixed(2)}%`,
+                },
+              ]
+            : []),
           ...(resizeTo
             ? [{ label: t("Resize requested"), value: resizeTo.name }]
             : []),
         ]}
       />
+      {rental.moving && (
+        <p className="rounded-lg bg-info-soft px-3 py-2 text-[13px] text-info-foreground">
+          {t(
+            "Huruf is moving it to another machine: it's offline for a few minutes, then everything is as before."
+          )}
+        </p>
+      )}
       {rental.status === "suspended" && (
         <p className="rounded-lg bg-destructive-soft px-3 py-2 text-[13px] text-destructive-foreground">
           {t(

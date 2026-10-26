@@ -17,6 +17,8 @@ import {
   prepareHost,
 } from "@/lib/agents/commands.ts";
 import { $hostCleanupPayload } from "@/schemas/protocol/agent.ts";
+import { subscriptionModel } from "@/schemas/billing/subscription.ts";
+import type { ObjectId } from "mongodb";
 import { latestAgent, requestAgentUpdate } from "@/lib/agents/updates.ts";
 import {
   agentEndpoints,
@@ -28,6 +30,33 @@ import {
   $serverUpdate,
   serverModel,
 } from "@/schemas/infrastructure/server.ts";
+
+/**
+ * A rented partition goes when its rental is canceled (PLAN §26.9), and a
+ * pool machine only once no rental lives on it (draining, PLAN §26.7).
+ */
+async function assertRemovable(id: ObjectId, tenant: ObjectId) {
+  const doc = await serverModel.findOne({ _id: id, tenant }, {
+    projection: { "provider.kind": 1, "pool.status": 1 },
+  });
+  if (doc?.provider?.kind === "rented") {
+    throw Response.badRequest(
+      "This is a rented server: cancel the rental on its page instead",
+    );
+  }
+  const rented = doc?.pool && await subscriptionModel.countDocuments({
+    kind: "server",
+    status: { $in: ["active", "pastDue", "suspended"] },
+    $or: [{ "rental.host": id }, { "rental.move.to": id }],
+  });
+  if (rented) {
+    throw Response.badRequest(
+      `${rented} rented partition${
+        rented === 1 ? "" : "s"
+      } live on this pool machine: stop it taking rentals and move them to other machines first`,
+    );
+  }
+}
 
 export default new Router("/api", function servers(router) {
   const $params = z.object({ id: $objectId });
@@ -53,16 +82,7 @@ export default new Router("/api", function servers(router) {
     hooks: {
       beforeDel: async ({ _id, session }, req) => {
         const tenant = (await withTenant(req)).tenant._id;
-        const doc = await serverModel.findOne({ _id, tenant }, {
-          projection: { "provider.kind": 1 },
-          session,
-        });
-        // A rented partition goes when its rental is canceled (PLAN §26.9).
-        if (doc?.provider?.kind === "rented") {
-          throw Response.badRequest(
-            "This is a rented server: cancel the rental on its page instead",
-          );
-        }
+        await assertRemovable(_id, tenant);
         await releaseServer(_id, tenant, session);
       },
     },
@@ -185,6 +205,7 @@ export default new Router("/api", function servers(router) {
         const { id } = $params.parse(paramsAsJson(req));
         const payload = $body.parse(await bodyAsJson(req));
         const { tenant, user } = await withTenant(req);
+        if (!payload.dryRun) await assertRemovable(id, tenant._id);
         const { command } = await issueCommand({
           server: id,
           tenant: tenant._id,

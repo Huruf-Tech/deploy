@@ -1,5 +1,6 @@
 import { MongoBulkWriteError } from "mongodb";
 import { BoundedCache } from "@/lib/core/boundedCache.ts";
+import { Logger } from "@/core/utils/logger.ts";
 import { safetyLimit } from "@/lib/limits/safety.ts";
 import { forgetAgent, type TAgentIdentity } from "@/lib/agents/agentAuth.ts";
 import { getAgentConfig } from "@/lib/agents/config.ts";
@@ -151,6 +152,7 @@ const poll = async (
       projection: {
         shard: 1,
         offline: 1,
+        aliveUntil: 1,
         throttled: 1,
         commandSeq: 1,
         deliveredSeq: 1,
@@ -170,6 +172,12 @@ const poll = async (
 
   // Back from offline: resolve its agentOffline alerts (rare, so off the idle path).
   if (lease.offline) await onServerBack(identity.server);
+  // Back after its lease ran out: a rented server was down since then (PLAN
+  // §26.11). Not the sweep's flag, which can lag minutes in a small fleet.
+  if (lease.aliveUntil && lease.aliveUntil < now) {
+    await rentals.recordDowntime(identity.server, lease.aliveUntil, now)
+      .catch((e) => Logger.warn(`[rentals] downtime: ${e}`));
+  }
 
   const applied = request.appliedVersion ?? 0;
   /** What's waiting for the agent: commands, terminal input, a newer spec. */
@@ -342,12 +350,17 @@ const ingestCommandResults = async (
     .find({
       server: identity.server,
       seq: { $in: fresh.map((event) => event.data.seq) },
-      type: { $in: ["docker.ensure", "pool.ensure", "build.run"] },
+      type: {
+        $in: ["docker.ensure", "pool.ensure", "build.run", "partition.receive"],
+      },
     }, { projection: { seq: 1, type: 1 } })
     .toArray();
-  for (const { seq, type } of typed) {
+  for (const { _id, seq, type } of typed) {
     const event = fresh.find((e) => e.data.seq === seq)!;
-    if (type === "docker.ensure" || type === "pool.ensure") {
+    if (type === "partition.receive") {
+      // A move ends with the target's result (PLAN §26.10).
+      await rentals.moveFinished(_id, event.data);
+    } else if (type === "docker.ensure" || type === "pool.ensure") {
       // `pool.ensure` runs the usual host setup inside (PLAN §26.5).
       if (type === "pool.ensure") {
         await recordPoolSetup(identity.server, event.data);

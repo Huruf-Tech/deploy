@@ -2,6 +2,7 @@ package pool
 
 import (
 	"context"
+	"errors"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -14,6 +15,8 @@ type fake struct {
 	weights map[string]int
 	used    map[string]Usage
 	scripts []string
+
+	sendErr, receiveErr error
 }
 
 func newFake() *fake {
@@ -46,7 +49,15 @@ func (f *fake) Usage(_ context.Context, name string) (Usage, error) {
 	u.State = "running"
 	return u, nil
 }
-func (f *fake) Restore(context.Context, []string) error { return nil }
+func (f *fake) Restore(context.Context, []string) error            { return nil }
+func (f *fake) Send(context.Context, string, string, string) error { return f.sendErr }
+func (f *fake) Receive(_ context.Context, name string, size protocol.PartitionSize, weight int, _, _ string) error {
+	if f.receiveErr != nil {
+		return f.receiveErr
+	}
+	f.sizes[name], f.weights[name] = size, weight
+	return nil
+}
 
 func install() protocol.PartitionCreatePayloadInstall {
 	return protocol.PartitionCreatePayloadInstall{Url: "https://cp.example", Tenant: "6adf368974315b9a88178fa5", JoinToken: "tok'en"}
@@ -182,5 +193,47 @@ func TestUsageAndState(t *testing.T) {
 	}
 	if len(f.scripts) != before+1 || f.sizes["salha"] != small {
 		t.Error("re-creating changed more than the install")
+	}
+}
+
+func TestMoveSendsRentalsOnly(t *testing.T) {
+	m, _ := setup(t)
+	ctx := context.Background()
+	if _, err := m.Send(ctx, protocol.PartitionSendPayload{Name: "huruf"}); err == nil {
+		t.Error("sending the remainder should fail")
+	}
+	if _, err := m.Send(ctx, protocol.PartitionSendPayload{Name: "nope"}); err == nil {
+		t.Error("sending an unknown partition should fail")
+	}
+}
+
+func TestReceiveCarvesAndGivesBack(t *testing.T) {
+	m, f := setup(t)
+	ctx := context.Background()
+	size := protocol.PartitionSize{Cpus: 1, MemMb: 2176, DiskGb: 25}
+	f.receiveErr = errors.New("connection reset")
+	if _, err := m.Receive(ctx, protocol.PartitionReceivePayload{Name: "pmoved", Size: size}); err == nil {
+		t.Fatal("a failed transfer should fail")
+	}
+	if got := f.sizes["huruf"]; got.MemMb != 7168 || got.DiskGb != 100 {
+		t.Errorf("remainder after a failed receive = %+v, want everything back", got)
+	}
+	if _, ok := f.sizes["pmoved"]; ok {
+		t.Error("the failed partition should be gone")
+	}
+
+	f.receiveErr = nil
+	if _, err := m.Receive(ctx, protocol.PartitionReceivePayload{Name: "pmoved", Size: size}); err != nil {
+		t.Fatal(err)
+	}
+	if got := f.sizes["huruf"]; got.MemMb != 7168-2176 || got.DiskGb != 75 {
+		t.Errorf("remainder = %+v, want what the move took carved off", got)
+	}
+	if _, err := m.Receive(ctx, protocol.PartitionReceivePayload{Name: "pmoved", Size: size}); err == nil {
+		t.Error("receiving a partition twice should fail")
+	}
+	big := protocol.PartitionSize{Cpus: 1, MemMb: 8000, DiskGb: 10}
+	if _, err := m.Receive(ctx, protocol.PartitionReceivePayload{Name: "ptoobig", Size: big}); err == nil {
+		t.Error("a partition that doesn't fit should be refused")
 	}
 }

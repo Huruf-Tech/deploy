@@ -52,6 +52,66 @@ export type rejectResize$params = {
 export type rejectResize$body = {
     reason: string;
 };
+export type moveTargets$params = {
+    id?: string;
+};
+export type moveTargets$return = {
+    from?: string | undefined;
+    moving: boolean;
+    /** Rough: a minute plus copying */
+    downtimeSec: number;
+    targets: {
+        server: string;
+        name: string;
+        free: {
+            memMb: number;
+            diskGb: number;
+        };
+        cpuRoom: number;
+        fits: boolean;
+        remainderShort: boolean;
+        remainderUsesMb?: number | undefined;
+        /** Over the private network */
+        reachable: boolean;
+    }[];
+};
+export type move$params = {
+    id?: string;
+};
+export type move$body = {
+    to?: string;
+};
+export type cancelMove$params = {
+    id?: string;
+};
+export type capacity$return = {
+    /** The target, POOL_SPARE_PERCENT */
+    sparePercent: number;
+    classes: {
+        _id: string;
+        name: string;
+        machines: number;
+        accepting: number;
+        allocatable: {
+            cpus: number;
+            memMb: number;
+            diskGb: number;
+        };
+        rented: {
+            cpus: number;
+            memMb: number;
+            diskGb: number;
+        };
+        /** On machines taking rentals */
+        freeMemMb: number;
+        /** Free memory, percent of the class's */
+        spare: number;
+        /** Cents per month */
+        revenue: number;
+        /** Cents per month */
+        cost: number;
+    }[];
+};
 export type recreatePartition$params = {
     id?: string;
 };
@@ -68,6 +128,19 @@ export type pool$return = {
         /** Cents per month */
         price: number;
         status: string;
+        /** This period so far, percent */
+        uptime?: number | undefined;
+        moving?: {
+            to: string;
+            toName?: string | undefined;
+            startedAt: Date;
+        } | undefined;
+        lastMove?: {
+            from: string;
+            to: string;
+            at: Date;
+            error?: string | undefined;
+        } | undefined;
     }[];
     /** Cents per month from live rentals */
     revenue: number;
@@ -102,6 +175,12 @@ export declare const rentalsAdminModule: (sdk: typeof BaseSDK) => {
         approveResize$params: approveResize$params;
         rejectResize$params: rejectResize$params;
         rejectResize$body: rejectResize$body;
+        moveTargets$params: moveTargets$params;
+        moveTargets$return: moveTargets$return;
+        move$params: move$params;
+        move$body: move$body;
+        cancelMove$params: cancelMove$params;
+        capacity$return: capacity$return;
         recreatePartition$params: recreatePartition$params;
         pool$params: pool$params;
         pool$return: pool$return;
@@ -176,6 +255,50 @@ export declare const rentalsAdminModule: (sdk: typeof BaseSDK) => {
         then: <TResult1 = unknown, TResult2 = never>(onfulfilled?: ((value: unknown) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
         catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<unknown>;
         finally: (onfinally?: (() => void) | null | undefined) => Promise<unknown>;
+    };
+    readonly moveTargets: (data: {
+        params: moveTargets$params;
+        query?: undefined;
+        body?: undefined;
+    } & TRequestOptions<moveTargets$return>) => {
+        readonly raw: Promise<import("axios").AxiosResponse<moveTargets$return, any, {}, any>>;
+        readonly data: Promise<moveTargets$return>;
+        then: <TResult1 = moveTargets$return, TResult2 = never>(onfulfilled?: ((value: moveTargets$return) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+        catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<moveTargets$return | TResult>;
+        finally: (onfinally?: (() => void) | null | undefined) => Promise<moveTargets$return>;
+    };
+    readonly move: (data: {
+        params: move$params;
+        query?: undefined;
+        body: move$body;
+    } & TRequestOptions<unknown>) => {
+        readonly raw: Promise<import("axios").AxiosResponse<unknown, any, {}, any>>;
+        readonly data: Promise<unknown>;
+        then: <TResult1 = unknown, TResult2 = never>(onfulfilled?: ((value: unknown) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+        catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<unknown>;
+        finally: (onfinally?: (() => void) | null | undefined) => Promise<unknown>;
+    };
+    readonly cancelMove: (data: {
+        params: cancelMove$params;
+        query?: undefined;
+        body?: undefined;
+    } & TRequestOptions<unknown>) => {
+        readonly raw: Promise<import("axios").AxiosResponse<unknown, any, {}, any>>;
+        readonly data: Promise<unknown>;
+        then: <TResult1 = unknown, TResult2 = never>(onfulfilled?: ((value: unknown) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+        catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<unknown>;
+        finally: (onfinally?: (() => void) | null | undefined) => Promise<unknown>;
+    };
+    readonly capacity: (data?: {
+        params?: undefined;
+        query?: undefined;
+        body?: undefined;
+    } & TRequestOptions<capacity$return>) => {
+        readonly raw: Promise<import("axios").AxiosResponse<capacity$return, any, {}, any>>;
+        readonly data: Promise<capacity$return>;
+        then: <TResult1 = capacity$return, TResult2 = never>(onfulfilled?: ((value: capacity$return) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+        catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<capacity$return | TResult>;
+        finally: (onfinally?: (() => void) | null | undefined) => Promise<capacity$return>;
     };
     readonly recreatePartition: (data: {
         params: recreatePartition$params;

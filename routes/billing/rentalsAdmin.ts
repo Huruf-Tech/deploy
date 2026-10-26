@@ -143,6 +143,88 @@ export default new Router("/api", function rentalsAdmin(router) {
     };
   });
 
+  // Moving a rental to another pool machine (PLAN §26.10).
+  router.get("/:id/move", function moveTargets() {
+    const $return = z.object({
+      from: z.string().optional(),
+      moving: z.boolean(),
+      downtimeSec: z.number().describe("Rough: a minute plus copying"),
+      targets: z.array(z.object({
+        server: z.string(),
+        name: z.string(),
+        free: z.object({ memMb: z.number(), diskGb: z.number() }),
+        cpuRoom: z.number(),
+        fits: z.boolean(),
+        remainderShort: z.boolean(),
+        remainderUsesMb: z.number().optional(),
+        reachable: z.boolean().describe("Over the private network"),
+      })),
+    });
+
+    return {
+      shape: () => ({ params: $params, return: $return }),
+      handler: async (req) => {
+        const { id } = $params.parse(paramsAsJson(req));
+        return Response.json(await rentalService.moveTargets(id));
+      },
+    };
+  });
+
+  router.post("/:id/move", function move() {
+    const $body = z.object({ to: $objectId });
+
+    return {
+      shape: () => ({ params: $params, body: $body }),
+      handler: async (req) => {
+        const { id } = $params.parse(paramsAsJson(req));
+        const { to } = $body.parse(await bodyAsJson(req));
+        await rentalService.move(id, to, await admin(req));
+        return Response.json({ ok: true });
+      },
+    };
+  });
+
+  // For a move that never reports back: it starts again where it was.
+  router.post("/:id/move/cancel", function cancelMove() {
+    return {
+      shape: () => ({ params: $params }),
+      handler: async (req) => {
+        const { id } = $params.parse(paramsAsJson(req));
+        await rentalService.cancelMove(id);
+        return Response.json({ ok: true });
+      },
+    };
+  });
+
+  // Per class: capacity, spare share, revenue and cost (PLAN §26.7, §26.11).
+  router.get("/capacity", function capacity() {
+    const $size = z.object({
+      cpus: z.number(),
+      memMb: z.number(),
+      diskGb: z.number(),
+    });
+    const $return = z.object({
+      sparePercent: z.number().describe("The target, POOL_SPARE_PERCENT"),
+      classes: z.array(z.object({
+        _id: z.string(),
+        name: z.string(),
+        machines: z.number(),
+        accepting: z.number(),
+        allocatable: $size,
+        rented: $size,
+        freeMemMb: z.number().describe("On machines taking rentals"),
+        spare: z.number().describe("Free memory, percent of the class's"),
+        revenue: z.number().describe("Cents per month"),
+        cost: z.number().describe("Cents per month"),
+      })),
+    });
+
+    return {
+      shape: () => ({ return: $return }),
+      handler: async () => Response.json(await rentalService.capacity()),
+    };
+  });
+
   // Re-creates an approved rental's partition (e.g. its create failed).
   router.post("/:id/partition", function recreatePartition() {
     return {
@@ -179,6 +261,18 @@ export default new Router("/api", function rentalsAdmin(router) {
         plan: z.string().optional(),
         price: z.number().describe("Cents per month"),
         status: z.string(),
+        uptime: z.number().optional().describe("This period so far, percent"),
+        moving: z.object({
+          to: z.string(),
+          toName: z.string().optional(),
+          startedAt: z.date(),
+        }).optional(),
+        lastMove: z.object({
+          from: z.string(),
+          to: z.string(),
+          at: z.date(),
+          error: z.string().optional(),
+        }).optional(),
       })),
       revenue: z.number().describe("Cents per month from live rentals"),
     });
@@ -200,16 +294,21 @@ export default new Router("/api", function rentalsAdmin(router) {
             status: { $in: ["active", "pastDue", "suspended"] },
           }, { limit: 200 }).toArray()
           : [];
-        const [tenants, plans] = await Promise.all([
+        const [tenants, plans, uptimes, targets] = await Promise.all([
           tenantModel.find({ _id: { $in: subs.map((s) => s.tenant) } }, {
             projection: { name: 1 },
           }).toArray(),
           planModel.find({ _id: { $in: subs.map((s) => s.plan) } }, {
             projection: { name: 1, price: 1 },
           }).toArray(),
+          rentalService.uptimes(subs),
+          serverModel.find({
+            _id: { $in: subs.flatMap((s) => s.rental?.move?.to ?? []) },
+          }, { projection: { name: 1 } }).toArray(),
         ]);
         const rows = subs.map((s) => {
           const plan = plans.find((p) => p._id.equals(s.plan));
+          const move = s.rental?.move;
           return {
             _id: s._id,
             partition: s.rental?.partition,
@@ -217,6 +316,17 @@ export default new Router("/api", function rentalsAdmin(router) {
             plan: plan?.name,
             price: plan?.price.amount ?? 0,
             status: s.status,
+            uptime: uptimes.get(String(s._id)),
+            ...(move
+              ? {
+                moving: {
+                  to: String(move.to),
+                  toName: targets.find((m) => m._id.equals(move.to))?.name,
+                  startedAt: move.startedAt,
+                },
+              }
+              : {}),
+            ...(s.rental?.lastMove ? { lastMove: s.rental.lastMove } : {}),
           };
         });
         return Response.json({
