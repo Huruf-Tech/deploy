@@ -137,6 +137,42 @@ type ResourceSummary struct {
 	MemFree int64 `json:"memFree"`
 
 	DiskFree int64 `json:"diskFree"`
+
+	// Pool machines only (PLAN §26)
+	Partitions []PartitionUsage `json:"partitions,omitempty"`
+}
+
+type PartitionUsage struct {
+	Name string `json:"name"`
+
+	Remainder bool `json:"remainder"`
+
+	// Docker state: running, exited…
+	State string `json:"state"`
+
+	Size PartitionSize `json:"size"`
+
+	// CPU time used since it started
+	CpuMicros int64 `json:"cpuMicros"`
+
+	// Bytes it can't give back
+	MemUsed int64 `json:"memUsed"`
+
+	DiskUsed int64 `json:"diskUsed"`
+
+	// Traffic in since it was created
+	RxBytes int64 `json:"rxBytes"`
+
+	// Traffic out since it was created
+	TxBytes int64 `json:"txBytes"`
+}
+
+type PartitionSize struct {
+	Cpus float64 `json:"cpus"`
+
+	MemMb int64 `json:"memMb"`
+
+	DiskGb int64 `json:"diskGb"`
 }
 
 type PollResponse struct {
@@ -159,7 +195,7 @@ type PollResponse struct {
 type Command struct {
 	Seq int64 `json:"seq"`
 
-	// One of: ping, docker.ensure, stream.open, stream.close, build.run, server.prune, agent.update, registry.delete, host.cleanup
+	// One of: ping, docker.ensure, stream.open, stream.close, build.run, server.prune, agent.update, registry.delete, host.cleanup, pool.ensure, partition.create, partition.resize, partition.stop, partition.start, partition.remove
 	Type string `json:"type"`
 
 	Payload map[string]any `json:"payload"`
@@ -777,4 +813,81 @@ type HostCleanupPayload struct {
 	Keep []string `json:"keep,omitempty"`
 
 	Remove []string `json:"remove,omitempty"`
+}
+
+type PoolEnsurePayload struct {
+	Reserve PoolEnsurePayloadReserve `json:"reserve"`
+
+	Volume PoolEnsurePayloadVolume `json:"volume"`
+
+	AllowIps []string `json:"allowIps"`
+
+	Docker PoolEnsurePayloadDocker `json:"docker"`
+}
+
+type PoolEnsurePayloadReserve struct {
+	Cpus float64 `json:"cpus"`
+
+	MemMb int64 `json:"memMb"`
+
+	DiskGb int64 `json:"diskGb"`
+}
+
+type PoolEnsurePayloadVolume struct {
+	// A block device for partition data; formatted XFS only when it has no filesystem
+	Device string `json:"device,omitempty"`
+
+	// Without a device: a loop file this size (tests, small machines)
+	LoopSizeGb *int64 `json:"loopSizeGb,omitempty"`
+}
+
+type PoolEnsurePayloadDocker struct {
+	// Per-container log file size, e.g. 10m
+	LogMaxSize string `json:"logMaxSize"`
+
+	LogMaxFile int64 `json:"logMaxFile"`
+
+	// Caddy image for the edge proxy
+	EdgeImage string `json:"edgeImage"`
+
+	// Local Docker network for projects
+	Network string `json:"network"`
+
+	// The network's subnet, unique in the tenant (e.g. 10.210.3.0/24), so container IPs route over the mesh
+	Subnet string `json:"subnet,omitempty"`
+
+	// Mesh addresses (e.g. 10.209.0.0/16): trusted as an insecure registry (traffic is WireGuard-encrypted)
+	MeshCidr string `json:"meshCidr,omitempty"`
+}
+
+type PartitionCreatePayload struct {
+	Name string `json:"name"`
+
+	// Not for the remainder
+	Size *PartitionSize `json:"size,omitempty"`
+
+	Remainder bool `json:"remainder"`
+
+	Install PartitionCreatePayloadInstall `json:"install"`
+}
+
+type PartitionCreatePayloadInstall struct {
+	// The control plane, as the agent inside reaches it
+	Url string `json:"url"`
+
+	Tenant string `json:"tenant"`
+
+	JoinToken string `json:"joinToken"`
+
+	DownloadBase string `json:"downloadBase,omitempty"`
+}
+
+type PartitionResizePayload struct {
+	Name string `json:"name"`
+
+	Size PartitionSize `json:"size"`
+}
+
+type PartitionNamePayload struct {
+	Name string `json:"name"`
 }

@@ -56,6 +56,27 @@ export type get$return = {
             cpu: number;
             memFree: number;
             diskFree: number;
+            /** Pool machines only (PLAN §26) */
+            partitions?: {
+                name: string;
+                remainder: boolean;
+                /** Docker state: running, exited… */
+                state: string;
+                size: {
+                    cpus: number;
+                    memMb: number;
+                    diskGb: number;
+                };
+                /** CPU time used since it started */
+                cpuMicros: number;
+                /** Bytes it can't give back */
+                memUsed: number;
+                diskUsed: number;
+                /** Traffic in since it was created */
+                rxBytes: number;
+                /** Traffic out since it was created */
+                txBytes: number;
+            }[] | undefined;
             reportedAt: Date;
         } | undefined;
         setup?: {
@@ -80,6 +101,18 @@ export type get$return = {
             } | undefined;
             error?: string | undefined;
             reportedAt?: Date | undefined;
+        } | undefined;
+        pool?: {
+            status: "pending" | "ready" | "failed";
+            allocatable?: {
+                cpus: number;
+                memMb: number;
+                diskGb: number;
+            } | undefined;
+            sysbox?: string | undefined;
+            notes?: string[] | undefined;
+            error?: string | undefined;
+            updatedAt: Date;
         } | undefined;
         tunnelPort?: number | undefined;
         acceptedBy?: string | undefined;

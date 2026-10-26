@@ -1251,6 +1251,34 @@ Owner's decisions recorded (§25.10). 15a–15d built; the owner tested the paym
 
 ### Phase 16 — Shared resources: rent partitions of Huruf's machines (planned, D47, §26)
 Not started; the owner says go per stage. Each stage ends with a review. Built on the existing mechanisms, refactoring them where needed (§26.6).
+- **16c status: built (pending review).** The agent's host role, and the control plane functions 16d's approval will call.
+  - **Agent (`agent/internal/pool`):**
+    - `Driver` interface (the `PartitionDriver`), with a `Sysbox` implementation ported from the 16a spike scripts (`tools/pool-spike` removed); the partition image is embedded in the agent (`partition.Dockerfile`).
+    - `Manager` serializes partition changes (commands run concurrently) and keeps sizes in `<state-dir>/pool.json`.
+    - The remainder always holds allocatable minus everything rented: memory and disk are taken from it before a rental is created or grown, and given back after one shrinks or is removed. CPU stays uncapped at the lowest weight; a rental's weight is 1024 per vCPU.
+    - It refuses to shrink any partition below its real memory or disk use, instead of letting the kernel kill a process.
+  - **Commands** (existing command channel):
+    - `pool.ensure` installs Sysbox, mounts the XFS volume (a device formatted only when empty, or a loop file), moves Docker onto it (overlay2, Sysbox runtime), runs the usual `docker.ensure` inside, builds the partition image and applies the network rules. It refuses a machine running anything but our own containers.
+    - `partition.create` is sealed, since it carries a join token minted by the same `createJoinToken` the SSH wizard now uses. It creates the partition and installs our agent inside, which joins its tenant.
+    - `partition.resize` (live), `partition.stop`, `partition.start`, `partition.remove`.
+  - **Network:**
+    - The nftables table `huruf_pool` is written to `/etc/huruf-pool.nft` and included by `nftables.service`, so isolation is back at boot before Docker restarts partitions.
+    - Per-partition traffic counters are restored by the agent at start, and start at 0 again after a reboot (16d treats a smaller value as a reset).
+    - `POOL_ALLOW_IPS` lets partitions reach a control plane on a private address.
+  - **Reports:**
+    - Each partition's state, size, CPU time, memory in use, disk and traffic ride on the poll summary (`resources.partitions`); nothing new is stored.
+    - A partition's agent says hello again when its limits change, so its server shows the new size.
+  - **Control plane (`lib/pool/pool.ts`):** `makePoolMachine` (platform servers only; reserve from `POOL_RESERVE_CPUS` 0.25, `POOL_RESERVE_MEM_MB` 512, `POOL_RESERVE_DISK_GB` 10), `recordPoolSetup` (`servers.pool`: status, allocatable, Sysbox version, notes), `createPartition`, `resizePartition`, `stopPartition`, `startPartition`, `removePartition`, `partitionName` (`p` + 11 hex). `hostSetupPayload` was split out of `prepareHost` so `pool.ensure` carries the usual host setup.
+  - **Tests:** `agent/internal/pool` (fake driver: remainder sizing, carving, too big, remainder in use, resize up and down, removal, install-script quoting, state kept across restarts) and `tests/pool_test.ts` (platform-only pool machines, waiting for ready, the sealed create opening to a live join token for the customer's tenant, resize and remove payloads, partitions in the summary schema).
+  - **Verified end to end on a fresh spike machine:**
+    1. Our agent installed as a platform server; `pool.ensure` from the control plane installed Sysbox, formatted the loop volume, moved Docker and reported 11.75 vCPU / 15,355 MB / 19 GB allocatable.
+    2. Huruf's remainder partition and Salha's rental (1 vCPU / 2.25 GB / 10 GB) were created; each agent joined its own tenant and the remainder was carved live.
+    3. Usage and traffic arrived in the summary.
+    4. A live resize to 2 vCPU / 4 GB / 15 GB changed both partitions without restarts; an impossible size was refused.
+    5. Stop and start worked; removal returned everything to the remainder.
+    6. The remainder's server updated to its new size after a carve.
+    7. After a reboot the volume, rules, counters and partitions all came back, with the host still blocked and the internet reachable from a partition.
+  - **Found on the way:** `.env.test` didn't blank `INGRESS_TUNNEL_ADDRS`, so a local agent tried production's tunnel address (refused before connecting). Add `INGRESS_TUNNEL_ADDRS=` to `.env.test` when testing agents locally.
 - **16b status: built (pending review).** Refactors only; behaviour unchanged except proration, which now applies to every upgrade.
   - **Subscriptions per subject:** `subscriptions.kind` (`workspace`/`server`) and `server`. The unique index is now one workspace subscription per tenant plus one per rented server. Existing rows are migrated by `syncDeployIndexes` (`deno task setup:prod`), and the workspace queries also match rows not migrated yet.
   - **Periods:** `subscriptionPeriods.scope`; `resourcesSnapshot`; `proratedCredit`. The tenant's plan and the card gate read workspace periods only. The entitlements' copy of the period query now calls `billing.currentPeriod`.

@@ -1,0 +1,436 @@
+// Package pool is the host role of a pool machine (PLAN §26.5): the machine
+// is split into partitions, each running our agent and joining a tenant.
+// The remainder partition (Huruf's own) always holds whatever isn't rented,
+// so no capacity sits idle (§26.4). How partitions are made is the Driver's
+// business (Sysbox for now), so the technology can change behind it.
+package pool
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
+	"sort"
+	"strings"
+	"sync"
+
+	"github.com/Huruf-Tech/huruf-deploy/agent/internal/protocol"
+)
+
+const MiB = 1 << 20
+
+// Usage is what a Driver reads about one partition.
+type Usage struct {
+	State     string
+	CPUMicros int64
+	MemUsed   int64 // bytes it can't give back (anon, not reclaimable cache)
+	DiskUsed  int64
+	RxBytes   int64
+	TxBytes   int64
+}
+
+// Driver makes partitions (PLAN §26.3: `PartitionDriver`).
+type Driver interface {
+	// Setup prepares the machine and reports what partitions may use in all.
+	Setup(ctx context.Context, p protocol.PoolEnsurePayload) (allocatable protocol.PartitionSize, result map[string]any, err error)
+	// Create starts a partition; `weight` is its CPU share under contention.
+	Create(ctx context.Context, name string, size protocol.PartitionSize, weight int) error
+	// Resize changes a running partition's limits without restarting it.
+	Resize(ctx context.Context, name string, size protocol.PartitionSize, weight int) error
+	Stop(ctx context.Context, name string) error
+	Start(ctx context.Context, name string) error
+	Remove(ctx context.Context, name string) error
+	// Exec runs a shell script inside the partition.
+	Exec(ctx context.Context, name, script string) (string, error)
+	Usage(ctx context.Context, name string) (Usage, error)
+	// Restore re-creates what a reboot loses, at agent start.
+	Restore(ctx context.Context, names []string) error
+}
+
+// Entry is one partition in the machine's state file.
+type Entry struct {
+	Size      protocol.PartitionSize `json:"size"`
+	Remainder bool                   `json:"remainder,omitempty"`
+}
+
+type state struct {
+	Allocatable protocol.PartitionSize `json:"allocatable"`
+	Partitions  map[string]Entry       `json:"partitions"`
+}
+
+// Manager serializes partition changes (commands run concurrently) and keeps
+// the remainder sized to the rest.
+type Manager struct {
+	Driver Driver
+	// Path is the state file: the sizes, so the remainder can be computed.
+	Path string
+
+	mu     sync.Mutex
+	state  *state
+	loaded bool
+}
+
+func (m *Manager) load() (*state, error) {
+	if m.loaded {
+		return m.state, nil
+	}
+	s := &state{Partitions: map[string]Entry{}}
+	data, err := os.ReadFile(m.Path)
+	if err == nil {
+		if err := json.Unmarshal(data, s); err != nil {
+			return nil, fmt.Errorf("reading %s: %w", m.Path, err)
+		}
+		if s.Partitions == nil {
+			s.Partitions = map[string]Entry{}
+		}
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return nil, err
+	}
+	m.state, m.loaded = s, true
+	return s, nil
+}
+
+func (m *Manager) save() error {
+	data, _ := json.MarshalIndent(m.state, "", "  ")
+	if err := os.MkdirAll(filepath.Dir(m.Path), 0o700); err != nil {
+		return err
+	}
+	tmp := m.Path + ".tmp"
+	if err := os.WriteFile(tmp, data, 0o600); err != nil {
+		return err
+	}
+	return os.Rename(tmp, m.Path)
+}
+
+// weight gives each partition a CPU share in proportion to the cores it pays
+// for; the remainder gets the least, so it yields at once under contention.
+func weight(e Entry) int {
+	if e.Remainder {
+		return 2
+	}
+	return max(2, int(e.Size.Cpus*1024))
+}
+
+func (s *state) remainder() (string, bool) {
+	for name, e := range s.Partitions {
+		if e.Remainder {
+			return name, true
+		}
+	}
+	return "", false
+}
+
+// free is what's left for the remainder once every rented partition is paid
+// for, optionally as if `name` had size `size`.
+func (s *state) free(name string, size *protocol.PartitionSize) (protocol.PartitionSize, error) {
+	left := protocol.PartitionSize{MemMb: s.Allocatable.MemMb, DiskGb: s.Allocatable.DiskGb}
+	for n, e := range s.Partitions {
+		if e.Remainder {
+			continue
+		}
+		if n == name {
+			continue
+		}
+		left.MemMb -= e.Size.MemMb
+		left.DiskGb -= e.Size.DiskGb
+	}
+	if size != nil {
+		if size.MemMb > left.MemMb || size.DiskGb > left.DiskGb {
+			return left, fmt.Errorf("doesn't fit on this machine: at most %d MB and %d GB are free for it", left.MemMb, left.DiskGb)
+		}
+		left.MemMb -= size.MemMb
+		left.DiskGb -= size.DiskGb
+	}
+	return left, nil
+}
+
+// fitsIn refuses to shrink a partition below what it uses: the kernel would
+// kill its largest process (measured in the 16a spike).
+func (m *Manager) fitsIn(ctx context.Context, name string, size protocol.PartitionSize) error {
+	usage, err := m.Driver.Usage(ctx, name)
+	if err != nil {
+		return err
+	}
+	if usage.MemUsed > size.MemMb*MiB {
+		return fmt.Errorf("partition %s uses %d MB of memory, more than %d MB: free memory there first", name, usage.MemUsed/MiB, size.MemMb)
+	}
+	if usage.DiskUsed > size.DiskGb<<30 {
+		return fmt.Errorf("partition %s uses %d GB of disk, more than %d GB: free disk there first", name, usage.DiskUsed>>30, size.DiskGb)
+	}
+	return nil
+}
+
+// sizeRemainder gives the remainder `to` (the CPU stays uncapped).
+func (m *Manager) sizeRemainder(ctx context.Context, s *state, to protocol.PartitionSize) error {
+	name, ok := s.remainder()
+	if !ok {
+		return nil
+	}
+	current := s.Partitions[name]
+	to.Cpus = 0
+	if to == current.Size {
+		return nil
+	}
+	if to.MemMb < current.Size.MemMb || to.DiskGb < current.Size.DiskGb {
+		if err := m.fitsIn(ctx, name, to); err != nil {
+			return err
+		}
+	}
+	if err := m.Driver.Resize(ctx, name, to, weight(current)); err != nil {
+		return err
+	}
+	s.Partitions[name] = Entry{Size: to, Remainder: true}
+	return m.save()
+}
+
+// Ensure prepares the machine (`pool.ensure`) and resizes the remainder to
+// the allocatable capacity it reports.
+func (m *Manager) Ensure(ctx context.Context, p protocol.PoolEnsurePayload) (map[string]any, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	s, err := m.load()
+	if err != nil {
+		return nil, err
+	}
+	allocatable, result, err := m.Driver.Setup(ctx, p)
+	if err != nil {
+		return result, err
+	}
+	s.Allocatable = allocatable
+	if err := m.save(); err != nil {
+		return result, err
+	}
+	if left, err := s.free("", nil); err == nil {
+		if err := m.sizeRemainder(ctx, s, left); err != nil {
+			result["remainder"] = err.Error()
+		}
+	}
+	result["allocatable"] = allocatable
+	return result, nil
+}
+
+// installScript waits for the partition's systemd, then installs our agent
+// with the join token, like the SSH wizard does on a server.
+func installScript(i protocol.PartitionCreatePayloadInstall) string {
+	args := fmt.Sprintf("--url %s --tenant %s --join-token %s", quote(i.Url), quote(i.Tenant), quote(i.JoinToken))
+	if i.DownloadBase != "" {
+		args += " --download-base " + quote(i.DownloadBase)
+	}
+	return `for i in $(seq 1 120); do
+  case "$(systemctl is-system-running 2>/dev/null)" in running|degraded) break;; esac
+  sleep 0.5
+done
+curl -fsSL ` + quote(i.Url+"/agents/api/install.sh") + ` | sh -s -- ` + args
+}
+
+func quote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+}
+
+// Create makes a partition (`partition.create`) and installs our agent in
+// it. A rented partition takes its memory and disk from the remainder first;
+// re-running for an existing partition only re-runs the install.
+func (m *Manager) Create(ctx context.Context, p protocol.PartitionCreatePayload) (map[string]any, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	s, err := m.load()
+	if err != nil {
+		return nil, err
+	}
+	if s.Allocatable.MemMb == 0 {
+		return nil, errors.New("this machine isn't a pool machine yet (pool.ensure)")
+	}
+
+	if _, exists := s.Partitions[p.Name]; !exists {
+		var entry Entry
+		if p.Remainder {
+			if other, ok := s.remainder(); ok {
+				return nil, fmt.Errorf("the remainder partition is %s already", other)
+			}
+			left, err := s.free("", nil)
+			if err != nil {
+				return nil, err
+			}
+			entry = Entry{Size: protocol.PartitionSize{MemMb: left.MemMb, DiskGb: left.DiskGb}, Remainder: true}
+		} else {
+			if p.Size == nil {
+				return nil, errors.New("a rented partition needs a size")
+			}
+			left, err := s.free(p.Name, p.Size)
+			if err != nil {
+				return nil, err
+			}
+			// The remainder gives up what the new partition takes, first.
+			if err := m.sizeRemainder(ctx, s, left); err != nil {
+				return nil, err
+			}
+			entry = Entry{Size: *p.Size}
+		}
+		if err := m.Driver.Create(ctx, p.Name, entry.Size, weight(entry)); err != nil {
+			return nil, err
+		}
+		s.Partitions[p.Name] = entry
+		if err := m.save(); err != nil {
+			return nil, err
+		}
+	}
+
+	out, err := m.Driver.Exec(ctx, p.Name, installScript(p.Install))
+	result := map[string]any{"name": p.Name, "size": s.Partitions[p.Name].Size}
+	if err != nil {
+		return result, fmt.Errorf("installing the agent in %s: %w: %s", p.Name, err, tail(out, 600))
+	}
+	result["install"] = tail(out, 600)
+	return result, nil
+}
+
+func tail(s string, n int) string {
+	if len(s) > n {
+		return s[len(s)-n:]
+	}
+	return s
+}
+
+// Resize changes a rented partition's size (`partition.resize`), live: a
+// larger one takes from the remainder first, a smaller one gives back after.
+func (m *Manager) Resize(ctx context.Context, p protocol.PartitionResizePayload) (map[string]any, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	s, err := m.load()
+	if err != nil {
+		return nil, err
+	}
+	current, ok := s.Partitions[p.Name]
+	if !ok {
+		return nil, fmt.Errorf("no partition %s", p.Name)
+	}
+	if current.Remainder {
+		return nil, errors.New("the remainder is sized automatically")
+	}
+	left, err := s.free(p.Name, &p.Size)
+	if err != nil {
+		return nil, err
+	}
+	shrinking := p.Size.MemMb < current.Size.MemMb || p.Size.DiskGb < current.Size.DiskGb
+	if shrinking {
+		if err := m.fitsIn(ctx, p.Name, p.Size); err != nil {
+			return nil, err
+		}
+	} else if err := m.sizeRemainder(ctx, s, left); err != nil {
+		return nil, err
+	}
+	next := Entry{Size: p.Size}
+	if err := m.Driver.Resize(ctx, p.Name, p.Size, weight(next)); err != nil {
+		return nil, err
+	}
+	s.Partitions[p.Name] = next
+	if err := m.save(); err != nil {
+		return nil, err
+	}
+	if shrinking {
+		if err := m.sizeRemainder(ctx, s, left); err != nil {
+			return map[string]any{"size": p.Size, "remainder": err.Error()}, nil
+		}
+	}
+	return map[string]any{"size": p.Size}, nil
+}
+
+// Stop and Start suspend and resume a partition (`partition.stop/start`):
+// data is kept, its size stays reserved.
+func (m *Manager) Stop(ctx context.Context, p protocol.PartitionNamePayload) (map[string]any, error) {
+	return m.simple(ctx, p.Name, m.Driver.Stop)
+}
+
+func (m *Manager) Start(ctx context.Context, p protocol.PartitionNamePayload) (map[string]any, error) {
+	return m.simple(ctx, p.Name, m.Driver.Start)
+}
+
+func (m *Manager) simple(ctx context.Context, name string, fn func(context.Context, string) error) (map[string]any, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	s, err := m.load()
+	if err != nil {
+		return nil, err
+	}
+	if _, ok := s.Partitions[name]; !ok {
+		return nil, fmt.Errorf("no partition %s", name)
+	}
+	return map[string]any{"name": name}, fn(ctx, name)
+}
+
+// Remove deletes a partition and its data (`partition.remove`); a rented
+// partition's memory and disk go back to the remainder.
+func (m *Manager) Remove(ctx context.Context, p protocol.PartitionNamePayload) (map[string]any, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	s, err := m.load()
+	if err != nil {
+		return nil, err
+	}
+	entry, ok := s.Partitions[p.Name]
+	if !ok {
+		return map[string]any{"name": p.Name, "removed": false}, nil
+	}
+	if err := m.Driver.Remove(ctx, p.Name); err != nil {
+		return nil, err
+	}
+	delete(s.Partitions, p.Name)
+	if err := m.save(); err != nil {
+		return nil, err
+	}
+	result := map[string]any{"name": p.Name, "removed": true}
+	if !entry.Remainder {
+		if left, err := s.free("", nil); err == nil {
+			if err := m.sizeRemainder(ctx, s, left); err != nil {
+				result["remainder"] = err.Error()
+			}
+		}
+	}
+	return result, nil
+}
+
+// Restore runs at agent start on a pool machine: what a reboot lost.
+func (m *Manager) Restore(ctx context.Context) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	s, err := m.load()
+	if err != nil || len(s.Partitions) == 0 {
+		return err
+	}
+	names := make([]string, 0, len(s.Partitions))
+	for name := range s.Partitions {
+		names = append(names, name)
+	}
+	return m.Driver.Restore(ctx, names)
+}
+
+// Usage reports every partition for the poll summary; nil on other servers.
+func (m *Manager) Usage(ctx context.Context) []protocol.PartitionUsage {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	s, err := m.load()
+	if err != nil || len(s.Partitions) == 0 {
+		return nil
+	}
+	names := make([]string, 0, len(s.Partitions))
+	for name := range s.Partitions {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	out := make([]protocol.PartitionUsage, 0, len(names))
+	for _, name := range names {
+		e := s.Partitions[name]
+		u, err := m.Driver.Usage(ctx, name)
+		if err != nil {
+			u = Usage{State: "unknown"}
+		}
+		out = append(out, protocol.PartitionUsage{
+			Name: name, Remainder: e.Remainder, State: u.State, Size: e.Size,
+			CpuMicros: u.CPUMicros, MemUsed: u.MemUsed, DiskUsed: u.DiskUsed,
+			RxBytes: u.RxBytes, TxBytes: u.TxBytes,
+		})
+	}
+	return out
+}

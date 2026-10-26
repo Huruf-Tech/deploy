@@ -31,10 +31,36 @@ export const $inventory = z.object({
   ),
 });
 
+/** A partition's size (PLAN §26): `cpus: 0` is uncapped (the remainder). */
+export const $partitionSize = z.object({
+  cpus: z.number().min(0).max(512),
+  memMb: z.number().int().min(256),
+  diskGb: z.number().int().min(5),
+});
+
+/** Partition names are short: they become bridge names (`hp-<name>`, 15 chars max). */
+export const $partitionName = z.string().regex(/^[a-z0-9]{1,12}$/);
+
+/** One partition of a pool machine, reported with the summary (PLAN §26.5). */
+export const $partitionUsage = z.object({
+  name: $partitionName,
+  remainder: z.boolean(),
+  state: z.string().describe("Docker state: running, exited…"),
+  size: $partitionSize,
+  cpuMicros: z.number().int().min(0).describe("CPU time used since it started"),
+  memUsed: z.number().int().min(0).describe("Bytes it can't give back"),
+  diskUsed: z.number().int().min(0),
+  rxBytes: z.number().int().min(0).describe("Traffic in since it was created"),
+  txBytes: z.number().int().min(0).describe("Traffic out since it was created"),
+});
+
 export const $resourceSummary = z.object({
   cpu: z.number().min(0).max(1).describe("Used fraction"),
   memFree: z.number().int().min(0),
   diskFree: z.number().int().min(0),
+  partitions: z.array($partitionUsage).max(200).optional().describe(
+    "Pool machines only (PLAN §26)",
+  ),
 });
 
 export const $helloRequest = z.object({
@@ -105,6 +131,12 @@ export const $commandType = z.enum([
   "agent.update",
   "registry.delete",
   "host.cleanup",
+  "pool.ensure",
+  "partition.create",
+  "partition.resize",
+  "partition.stop",
+  "partition.start",
+  "partition.remove",
 ]);
 
 /**
@@ -204,6 +236,59 @@ export const $dockerEnsurePayload = z.object({
     "Mesh addresses (e.g. 10.209.0.0/16): trusted as an insecure registry (traffic is WireGuard-encrypted)",
   ),
 });
+
+/**
+ * `pool.ensure` (PLAN §26.5): makes a server a pool machine: Sysbox, an XFS
+ * volume with project quotas for partitions, Docker's data on it, the
+ * partition network rules and image, then the usual host setup (`docker`).
+ * For a fresh machine: it refuses when containers other than ours exist.
+ */
+export const $poolEnsurePayload = z.object({
+  /** What the machine keeps for itself; the rest is allocatable. */
+  reserve: z.object({
+    cpus: z.number().min(0),
+    memMb: z.number().int().min(0),
+    diskGb: z.number().int().min(0),
+  }),
+  volume: z.object({
+    device: z.string().max(100).optional().describe(
+      "A block device for partition data; formatted XFS only when it has no filesystem",
+    ),
+    loopSizeGb: z.number().int().min(10).optional().describe(
+      "Without a device: a loop file this size (tests, small machines)",
+    ),
+  }),
+  /** Private addresses partitions may still reach (the control plane in the same VPC). */
+  allowIps: z.array(z.string().max(64)).max(10).default([]),
+  docker: $dockerEnsurePayload,
+});
+
+/**
+ * `partition.create`, sealed (it carries a join token): a partition with our
+ * agent inside, joining `install.tenant` (PLAN §26.5). `remainder` sizes it to
+ * whatever isn't rented and keeps it so.
+ */
+export const $partitionCreatePayload = z.object({
+  name: $partitionName,
+  size: $partitionSize.optional().describe("Not for the remainder"),
+  remainder: z.boolean().default(false),
+  install: z.object({
+    url: z.string().describe(
+      "The control plane, as the agent inside reaches it",
+    ),
+    tenant: z.string().regex(/^[a-f0-9]{24}$/),
+    joinToken: z.string(),
+    downloadBase: z.string().optional(),
+  }),
+});
+
+export const $partitionResizePayload = z.object({
+  name: $partitionName,
+  size: $partitionSize,
+});
+
+/** `partition.stop`, `partition.start`, `partition.remove`. */
+export const $partitionNamePayload = z.object({ name: $partitionName });
 
 /** One host preflight result, reported by `docker.ensure`. */
 export const $hostCheck = z.object({

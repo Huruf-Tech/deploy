@@ -47,6 +47,10 @@ const MESSAGES: Array<[string, z.ZodType, "input" | "output"]> = [
   ["AgentUpdatePayload", protocol.$agentUpdatePayload, "output"],
   ["RegistryDeletePayload", protocol.$registryDeletePayload, "output"],
   ["HostCleanupPayload", protocol.$hostCleanupPayload, "output"],
+  ["PoolEnsurePayload", protocol.$poolEnsurePayload, "output"],
+  ["PartitionCreatePayload", protocol.$partitionCreatePayload, "output"],
+  ["PartitionResizePayload", protocol.$partitionResizePayload, "output"],
+  ["PartitionNamePayload", protocol.$partitionNamePayload, "output"],
 ];
 
 const schemas = Object.fromEntries(
@@ -64,6 +68,8 @@ const SHARED: Array<[string, z.ZodType]> = [
   ["AgentConfig", protocol.$agentConfig],
   ["Inventory", protocol.$inventory],
   ["ResourceSummary", protocol.$resourceSummary],
+  ["PartitionSize", protocol.$partitionSize],
+  ["PartitionUsage", protocol.$partitionUsage],
   ["Command", protocol.$command],
   ["TerminalInput", protocol.$terminalInput],
   ["Workload", protocol.$workload],

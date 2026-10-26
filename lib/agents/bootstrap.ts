@@ -106,6 +106,31 @@ const exec = (client: Client, command: string, stdin?: string) =>
   });
 
 /**
+ * A one-time join token for `tenant` (PLAN §4.3): an agent installed with it
+ * activates without pairing. The SSH wizard and pool partitions (PLAN §26.5)
+ * both install this way; the session records where it went.
+ */
+export const createJoinToken = async (opts: {
+  tenant: ObjectId;
+  createdBy: ObjectId;
+  host: string;
+  port: number;
+  username: string;
+}) => {
+  const token = encodeBase64Url(crypto.getRandomValues(new Uint8Array(32)));
+  const now = new Date();
+  const { insertedId: session } = await bootstrapSessionModel.insertOne({
+    ...opts,
+    status: "installing",
+    tokenHash: await createHash(SupportedHashAlg.SHA_256, token),
+    steps: [],
+    createdAt: now,
+    expiresAt: new Date(now.getTime() + SESSION_TTL_MS),
+  });
+  return { session, token };
+};
+
+/**
  * `POST /servers/api/bootstrap` (PLAN §4.3): SSH in once, start the installer
  * detached with a one-time join token, disconnect. Credentials live only in
  * this call's memory and are never stored or logged.
@@ -128,20 +153,12 @@ export const startBootstrap = async (opts: {
   }
 
   const ip = await resolveTarget(opts.host);
-  const token = encodeBase64Url(crypto.getRandomValues(new Uint8Array(32)));
-  const now = new Date();
-
-  const { insertedId: session } = await bootstrapSessionModel.insertOne({
+  const { session, token } = await createJoinToken({
     tenant: opts.tenant,
     createdBy: opts.user._id,
     host: opts.host,
     port: opts.port,
     username: opts.username,
-    status: "installing",
-    tokenHash: await createHash(SupportedHashAlg.SHA_256, token),
-    steps: [],
-    createdAt: now,
-    expiresAt: new Date(now.getTime() + SESSION_TTL_MS),
   });
 
   const step = (message: string) =>

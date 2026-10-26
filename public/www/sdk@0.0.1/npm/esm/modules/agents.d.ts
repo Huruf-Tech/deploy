@@ -66,6 +66,27 @@ export type poll$body = {
         cpu: number;
         memFree: number;
         diskFree: number;
+        /** Pool machines only (PLAN §26) */
+        partitions?: {
+            name: string;
+            remainder: boolean;
+            /** Docker state: running, exited… */
+            state: string;
+            size: {
+                cpus: number;
+                memMb: number;
+                diskGb: number;
+            };
+            /** CPU time used since it started */
+            cpuMicros: number;
+            /** Bytes it can't give back */
+            memUsed: number;
+            diskUsed: number;
+            /** Traffic in since it was created */
+            rxBytes: number;
+            /** Traffic out since it was created */
+            txBytes: number;
+        }[] | undefined;
     } | undefined;
     /** Open terminals: session -> highest input seq applied. Only sent while one is open */
     streams?: {
@@ -77,7 +98,7 @@ export type poll$return = {
     configVersion: string;
     commands: {
         seq: number;
-        type: "ping" | "docker.ensure" | "stream.open" | "stream.close" | "build.run" | "server.prune" | "agent.update" | "registry.delete" | "host.cleanup";
+        type: "ping" | "docker.ensure" | "stream.open" | "stream.close" | "build.run" | "server.prune" | "agent.update" | "registry.delete" | "host.cleanup" | "pool.ensure" | "partition.create" | "partition.resize" | "partition.stop" | "partition.start" | "partition.remove";
         payload: {
             [K in string]: unknown;
         };

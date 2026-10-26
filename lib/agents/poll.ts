@@ -4,6 +4,7 @@ import { safetyLimit } from "@/lib/limits/safety.ts";
 import { forgetAgent, type TAgentIdentity } from "@/lib/agents/agentAuth.ts";
 import { getAgentConfig } from "@/lib/agents/config.ts";
 import { recordHostSetup } from "@/lib/agents/commands.ts";
+import { recordPoolSetup } from "@/lib/pool/pool.ts";
 import { offlineSweep, shardOf } from "@/lib/agents/sweep.ts";
 import { serverModel } from "@/schemas/infrastructure/server.ts";
 import { serverLeaseModel } from "@/schemas/infrastructure/serverLease.ts";
@@ -336,13 +337,23 @@ const ingestCommandResults = async (
     .find({
       server: identity.server,
       seq: { $in: fresh.map((event) => event.data.seq) },
-      type: { $in: ["docker.ensure", "build.run"] },
+      type: { $in: ["docker.ensure", "pool.ensure", "build.run"] },
     }, { projection: { seq: 1, type: 1 } })
     .toArray();
   for (const { seq, type } of typed) {
     const event = fresh.find((e) => e.data.seq === seq)!;
-    if (type === "docker.ensure") {
-      await recordHostSetup(identity.server, event.data);
+    if (type === "docker.ensure" || type === "pool.ensure") {
+      // `pool.ensure` runs the usual host setup inside (PLAN §26.5).
+      if (type === "pool.ensure") {
+        await recordPoolSetup(identity.server, event.data);
+      }
+      const host = type === "pool.ensure"
+        ? {
+          ...event.data,
+          result: event.data.result?.host as typeof event.data.result,
+        }
+        : event.data;
+      await recordHostSetup(identity.server, host);
       // A prepared host gets its spec, private network included (PLAN §8.2).
       if (event.data.ok) await refreshSpecs([identity.server]);
     } else await onBuildResult(identity.server, seq, event.data);

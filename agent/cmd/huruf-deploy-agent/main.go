@@ -35,6 +35,7 @@ import (
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/mesh"
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/metrics"
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/monitor"
+	"github.com/Huruf-Tech/huruf-deploy/agent/internal/pool"
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/protocol"
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/reconcile"
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/state"
@@ -162,6 +163,18 @@ func main() {
 	a.Monitor = usage
 	streamManager.Capacity = usage
 	go usage.Run(ctx)
+	// A pool machine's host role (PLAN §26.5): partitions running our agent.
+	pools := &pool.Manager{Driver: pool.Sysbox{}, Path: filepath.Join(*stateDir, "pool.json")}
+	if err := pools.Restore(ctx); err != nil {
+		log.Warn("restoring partitions", "error", err)
+	}
+	a.Partitions = pools.Usage
+	a.Commands["pool.ensure"] = commands.Typed(pools.Ensure)
+	a.Commands["partition.create"] = commands.Sealed(id.Open, pools.Create)
+	a.Commands["partition.resize"] = commands.Typed(pools.Resize)
+	a.Commands["partition.stop"] = commands.Typed(pools.Stop)
+	a.Commands["partition.start"] = commands.Typed(pools.Start)
+	a.Commands["partition.remove"] = commands.Typed(pools.Remove)
 	// The built-in registry lives with the mesh: it deletes images of releases that are gone.
 	a.Commands["registry.delete"] = commands.Typed(func(ctx context.Context, p protocol.RegistryDeletePayload) (map[string]any, error) {
 		return network.DeleteTags(ctx, p.Tags)

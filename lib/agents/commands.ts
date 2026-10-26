@@ -85,22 +85,26 @@ export const prepareHost = async (
   await serverModel.updateOne({ _id: server }, {
     $set: { setup: { status: "pending", updatedAt: new Date() } },
   });
-  // The tenant-unique subnet makes container IPs routable over the mesh (PLAN §8.2).
-  const index = await ensureMeshIndex(server, tenant);
-
   return await issueCommand({
     server,
     tenant,
     type: "docker.ensure",
     createdBy,
-    payload: {
-      logMaxSize: await readTextSetting("AGENT_CONTAINER_LOG_MAX_SIZE", "10m"),
-      logMaxFile: await readNumberSetting("AGENT_CONTAINER_LOG_MAX_FILE", 5),
-      edgeImage: await readTextSetting("AGENT_EDGE_IMAGE", "caddy:2-alpine"),
-      network: PROJECT_NETWORK,
-      ...(index ? { subnet: subnetOf(index), meshCidr: MESH_CIDR } : {}),
-    },
+    payload: await hostSetupPayload(server, tenant),
   });
+};
+
+/** `docker.ensure`'s values; pool machines get them inside `pool.ensure` (PLAN §26.5). */
+export const hostSetupPayload = async (server: ObjectId, tenant: ObjectId) => {
+  // The tenant-unique subnet makes container IPs routable over the mesh (PLAN §8.2).
+  const index = await ensureMeshIndex(server, tenant);
+  return {
+    logMaxSize: await readTextSetting("AGENT_CONTAINER_LOG_MAX_SIZE", "10m"),
+    logMaxFile: await readNumberSetting("AGENT_CONTAINER_LOG_MAX_FILE", 5),
+    edgeImage: await readTextSetting("AGENT_EDGE_IMAGE", "caddy:2-alpine"),
+    network: PROJECT_NETWORK,
+    ...(index ? { subnet: subnetOf(index), meshCidr: MESH_CIDR } : {}),
+  };
 };
 
 /**

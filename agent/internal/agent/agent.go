@@ -52,20 +52,25 @@ type Agent struct {
 	Monitor interface {
 		SetSpec(spec protocol.DesiredSpec)
 	}
-	Log *slog.Logger
+	// A pool machine's partitions, sent with the summary (PLAN §26.5); may be nil.
+	Partitions func(ctx context.Context) []protocol.PartitionUsage
+	Log        *slog.Logger
 
 	config        *protocol.AgentConfig
 	configVersion string
 	registered    bool
 	lastStatus    string
 	lastSummary   time.Time
-	sampler       host.Sampler
-	reconcileMs   atomic.Int64 // read by the reconciler's goroutine
-	monitorMs     atomic.Int64
-	capacity      atomic.Pointer[protocol.AgentConfigCapacity]
-	mu            sync.Mutex // guards events: commands finish on their own goroutines
-	wake          chan struct{}
-	events        []any
+	// The size sent with the last hello: a partition resized live (PLAN §26)
+	// says hello again, so the control plane sees its new size.
+	size        [3]float64
+	sampler     host.Sampler
+	reconcileMs atomic.Int64 // read by the reconciler's goroutine
+	monitorMs   atomic.Int64
+	capacity    atomic.Pointer[protocol.AgentConfigCapacity]
+	mu          sync.Mutex // guards events: commands finish on their own goroutines
+	wake        chan struct{}
+	events      []any
 }
 
 // Run polls until ctx is cancelled or the tenant rejects this server. Events
@@ -132,8 +137,14 @@ func (a *Agent) step(ctx context.Context) (wait time.Duration, stop bool, err er
 		request.Streams = a.Streams.InputCursors() // nil (omitted) unless a terminal is open
 	}
 	summaryDue := time.Since(a.lastSummary) >= time.Duration(a.config.SummaryIntervalMs)*time.Millisecond
+	if summaryDue && currentSize() != a.size {
+		a.registered = false // resized: the next step says hello with the new size
+	}
 	if summaryDue {
 		summary := a.sampler.Summary()
+		if a.Partitions != nil {
+			summary.Partitions = a.Partitions(ctx)
+		}
 		request.Summary = &summary
 	}
 
@@ -255,6 +266,11 @@ func (a *Agent) ReconcileInterval() time.Duration {
 	return unreachableRetryCap
 }
 
+func currentSize() [3]float64 {
+	disk, _ := host.DataDisk()
+	return [3]float64{host.Cores(), float64(host.Memory()), float64(disk)}
+}
+
 func (a *Agent) hello(ctx context.Context) error {
 	var response protocol.HelloResponse
 	_, err := a.Client.Post(ctx, "/agents/api/hello", protocol.HelloRequest{
@@ -267,6 +283,7 @@ func (a *Agent) hello(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	a.size = currentSize()
 
 	// Registered as a new server (removed and added again): start over.
 	if changed, err := a.Store.RegisteredAs(response.Server); err != nil {

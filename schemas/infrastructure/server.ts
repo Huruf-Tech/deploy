@@ -4,6 +4,7 @@ import { $objectId } from "@/core/utils/createCRUD.ts";
 import {
   $hostCheck,
   $inventory,
+  $partitionSize,
   $resourceSummary,
 } from "@/schemas/protocol/agent.ts";
 
@@ -67,6 +68,16 @@ export const $server = $serverUpdate.extend({
     peers: z.record(z.string(), z.boolean()).optional(),
     error: z.string().optional(),
     reportedAt: z.date().optional(),
+  }).optional(),
+  /** Pool machines (PLAN §26.5): what `pool.ensure` reported. */
+  pool: z.object({
+    status: z.enum(["pending", "ready", "failed"]),
+    /** What partitions may use in all, after the machine's reserve. */
+    allocatable: $partitionSize.optional(),
+    sysbox: z.string().optional(),
+    notes: z.array(z.string()).optional(),
+    error: z.string().optional(),
+    updatedAt: z.date(),
   }).optional(),
   /** Its reverse tunnel's port on every control plane instance (PLAN §14). */
   tunnelPort: z.number().int().min(1).max(65_535).optional(),
