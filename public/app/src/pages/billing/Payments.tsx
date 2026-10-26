@@ -51,7 +51,6 @@ type TCard = TCards["cards"][number]
 
 const PRESETS = [1_000, 2_000, 5_000, 10_000]
 
-
 function CardBrand({ brand }: { brand: string }) {
   const Icon =
     brand === "visa"
@@ -489,7 +488,20 @@ export default function Payments() {
       <StatStrip className="lg:grid-cols-3">
         <Stat
           label={t("Balance")}
-          value={summary ? money(summary.balance, "usd") : "…"}
+          value={
+            summary ? (
+              <span
+                dir="ltr"
+                className={cn(
+                  summary.balance < 0 && "text-destructive-foreground"
+                )}
+              >
+                {money(summary.balance, "usd")}
+              </span>
+            ) : (
+              "…"
+            )
+          }
           hint={t("Plans and other payments come out of it")}
         />
         <Stat
@@ -698,18 +710,23 @@ export default function Payments() {
                   id: "amount",
                   header: t("Amount"),
                   align: "end",
+                  // Debits are stored negative: one sign, from the type.
                   sortValue: (e) =>
-                    e.type === "credit" ? e.amount : -e.amount,
+                    e.type === "credit"
+                      ? Math.abs(e.amount)
+                      : -Math.abs(e.amount),
                   cell: (e) => (
                     <span
                       dir="ltr"
                       className={cn(
                         "font-mono text-xs",
-                        e.type === "credit" && "text-success-foreground"
+                        e.type === "credit"
+                          ? "text-success-foreground"
+                          : "text-destructive-foreground"
                       )}
                     >
                       {e.type === "credit" ? "+" : "−"}
-                      {money(e.amount, "usd")}
+                      {money(Math.abs(e.amount), "usd")}
                     </span>
                   ),
                 },
