@@ -7,6 +7,7 @@ import { Entitlements } from "@/lib/billing/entitlements.ts";
 import { BillingService } from "@/lib/billing/billing.ts";
 import { GitHubApi } from "@/lib/github/githubApi.ts";
 import { PaymentService } from "@/lib/payments/payments.ts";
+import { RentalService } from "@/lib/rentals/rentals.ts";
 import { StripeGateway } from "@/lib/payments/stripe.ts";
 import { Wallet } from "@/plugins/Huruf-Tech/thunder-core/lib/wallet.ts";
 import { keyringModel } from "@/schemas/crypto/keyring.ts";
@@ -74,3 +75,12 @@ export const payments: PaymentService = new PaymentService(
   rateLimiter,
 );
 Wallet.onInsufficientBalance = (request) => payments.coverShortfall(request);
+
+/**
+ * Rentals (PLAN §26): requests, approval, partitions and traffic. Billing
+ * calls its hooks when a rental renews, goes unpaid or ends.
+ */
+export const rentals: RentalService = new RentalService(billing, {
+  fundNow: (opts) => payments.fundNow(opts),
+});
+billing.rentals = rentals;

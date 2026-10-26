@@ -15,6 +15,12 @@ export const $bootstrapSession = z.object({
   status: z.enum(["installing", "registered", "failed"]),
   tokenHash: z.string(),
   server: $objectId.meta({ ref: "servers" }).optional(),
+  /** A rented partition (PLAN §26): the server it creates is `rented`, named so. */
+  rental: z.object({
+    host: $objectId.meta({ ref: "servers" }),
+    subscription: $objectId.meta({ ref: "subscriptions" }),
+    name: z.string(),
+  }).optional(),
   steps: z.array(z.object({ at: z.date(), message: z.string() })),
   error: z.string().optional(),
   createdAt: z.date(),

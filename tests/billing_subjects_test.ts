@@ -170,7 +170,7 @@ Deno.test({
         },
       );
 
-      const server = new ObjectId();
+      const rental = new ObjectId();
       await t.step(
         "a rented server's subscription lives beside the workspace plan",
         async () => {
@@ -190,7 +190,7 @@ Deno.test({
             tenantId,
             session.user,
             plans.small,
-            { kind: "server", server },
+            { kind: "server", subscription: rental },
           );
           assertEquals(res.result, "active");
           assertEquals(await balance(), before - 2_200);
@@ -212,7 +212,7 @@ Deno.test({
           // A workspace plan isn't a server size, and the other way round.
           await billing.subscribe(tenantId, session.user, plans.a, {
             kind: "server",
-            server,
+            subscription: rental,
           }).then(
             () => assert(false, "a workspace plan for a server"),
             (e: Response) => assertEquals(e.status, 404),
@@ -245,7 +245,7 @@ Deno.test({
 
         // Cancelling the workspace plan leaves the rented server alone.
         await billing.cancel(tenantId);
-        const rented = await subscriptionModel.findOne({ server });
+        const rented = await subscriptionModel.findOne({ _id: rental });
         assertEquals(rented!.cancelAtPeriodEnd, false);
       });
     } finally {

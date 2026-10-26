@@ -30,6 +30,10 @@ export const $subscriptionPeriod = z.object({
   featuresSnapshot: $planFeatures,
   /** Server periods: the size paid for. */
   resourcesSnapshot: $planResources.optional(),
+  /** Server periods: the partition's traffic during the period (in + out). */
+  usage: z.object({ trafficBytes: z.number().min(0) }).optional(),
+  /** Charged with this period: the previous period's traffic beyond its allowance. */
+  overage: z.object({ gb: z.number(), amount: z.number().int() }).optional(),
   kind: z.enum(["paid", "complimentary"]),
   paidAt: z.date().optional(),
   /** Why a complimentary period was granted. */

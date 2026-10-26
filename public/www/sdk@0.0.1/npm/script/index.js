@@ -16,6 +16,9 @@ const billingAdmin_js_1 = require("./modules/billingAdmin.js");
 const payments_js_1 = require("./modules/payments.js");
 const paymentsAdmin_js_1 = require("./modules/paymentsAdmin.js");
 const plans_js_1 = require("./modules/plans.js");
+const rentals_js_1 = require("./modules/rentals.js");
+const rentalsAdmin_js_1 = require("./modules/rentalsAdmin.js");
+const serverClasses_js_1 = require("./modules/serverClasses.js");
 const ai_js_1 = require("./modules/ai.js");
 const gitIntegrations_js_1 = require("./modules/gitIntegrations.js");
 const githubHooks_js_1 = require("./modules/githubHooks.js");
@@ -136,6 +139,9 @@ Object.defineProperty(ThunderSDK, "_moduleNames", {
         "payments",
         "paymentsAdmin",
         "plans",
+        "rentals",
+        "rentalsAdmin",
+        "serverClasses",
         "ai",
         "gitIntegrations",
         "githubHooks",
@@ -220,6 +226,24 @@ Object.defineProperty(ThunderSDK, "plans", {
     configurable: true,
     writable: true,
     value: (0, plans_js_1.plansModule)(_a)
+});
+Object.defineProperty(ThunderSDK, "rentals", {
+    enumerable: true,
+    configurable: true,
+    writable: true,
+    value: (0, rentals_js_1.rentalsModule)(_a)
+});
+Object.defineProperty(ThunderSDK, "rentalsAdmin", {
+    enumerable: true,
+    configurable: true,
+    writable: true,
+    value: (0, rentalsAdmin_js_1.rentalsAdminModule)(_a)
+});
+Object.defineProperty(ThunderSDK, "serverClasses", {
+    enumerable: true,
+    configurable: true,
+    writable: true,
+    value: (0, serverClasses_js_1.serverClassesModule)(_a)
 });
 Object.defineProperty(ThunderSDK, "ai", {
     enumerable: true,

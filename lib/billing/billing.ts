@@ -49,13 +49,30 @@ const isInsufficient = (error: unknown) =>
 
 /**
  * What a subscription pays for (PLAN §26.6 B): the tenant's workspace plan,
- * or one rented server.
+ * or one rental, known by its subscription (its server comes later).
  */
 export type TSubject =
   | { kind: "workspace" }
-  | { kind: "server"; server: ObjectId };
+  | { kind: "server"; subscription: ObjectId };
 
 export const WORKSPACE: TSubject = { kind: "workspace" };
+
+/**
+ * What rentals add to a server subscription's renewal (PLAN §26.9),
+ * implemented by `RentalService` so billing knows nothing of partitions.
+ */
+export type TRentalHooks = {
+  /** The ended period's traffic beyond its allowance, charged with the renewal. */
+  overage(
+    sub: WithId<TSubscription>,
+  ): Promise<{ gb: number; amount: number } | null>;
+  /** After a paid renewal: resume a suspended partition, apply a scheduled size. */
+  renewed(sub: WithId<TSubscription>, plan: WithId<TPlan>): Promise<void>;
+  /** A renewal that couldn't be paid: suspend or release when due. */
+  unpaid(sub: WithId<TSubscription>, now: Date): Promise<void>;
+  /** Canceled at the period end: the partition goes. */
+  ended(sub: WithId<TSubscription>): Promise<void>;
+};
 
 /**
  * The subscription document of a subject. Workspace subscriptions written
@@ -64,7 +81,7 @@ export const WORKSPACE: TSubject = { kind: "workspace" };
 const subjectFilter = (tenant: ObjectId, subject: TSubject) =>
   subject.kind === "workspace"
     ? { tenant, kind: { $ne: "server" as const } }
-    : { tenant, kind: "server" as const, server: subject.server };
+    : { _id: subject.subscription, tenant, kind: "server" as const };
 
 /**
  * The unused part of a paid period, in cents (PLAN §26.6 B): what it cost
@@ -107,6 +124,8 @@ export class BillingService {
     private readonly entitlements: Entitlements,
     /** Tops up from the saved card before a charge (PLAN §25.5). */
     private readonly funds?: Pick<PaymentService, "fundNow" | "fundRenewal">,
+    /** Rentals' part of a server renewal (PLAN §26.9); set once at startup. */
+    public rentals?: TRentalHooks,
   ) {}
 
   /** Active public plans of a kind, plus private ones offered to this tenant. */
@@ -193,6 +212,8 @@ export class BillingService {
     start: Date;
     idempotencyKey: string;
     credit?: number;
+    /** A rental's traffic overage, charged with this period (PLAN §26.9). */
+    overage?: { gb: number; amount: number } | null;
     user?: ObjectId;
     session: ClientSession;
   }) {
@@ -200,7 +221,7 @@ export class BillingService {
     const _id = new ObjectId();
     const end = addInterval(opts.start, plan.price.interval);
     const credit = Math.min(opts.credit ?? 0, plan.price.amount);
-    const due = plan.price.amount - credit;
+    const due = plan.price.amount - credit + (opts.overage?.amount ?? 0);
     const refund = (opts.credit ?? 0) - credit;
     const common = {
       currency: plan.price.currency,
@@ -219,6 +240,8 @@ export class BillingService {
         idempotencyKey: opts.idempotencyKey,
         description: credit
           ? `${plan.name} plan (unused time credited)`
+          : opts.overage
+          ? `${plan.name} plan + ${opts.overage.gb} GB extra traffic`
           : `${plan.name} plan`,
       })
       : undefined;
@@ -249,7 +272,10 @@ export class BillingService {
       ...(transfer ? { ledgerReference: transfer.reference } : {}),
       limitsSnapshot: plan.limits,
       featuresSnapshot: plan.features,
-      ...(plan.resources ? { resourcesSnapshot: plan.resources } : {}),
+      ...(plan.resources
+        ? { resourcesSnapshot: plan.resources, usage: { trafficBytes: 0 } }
+        : {}),
+      ...(opts.overage ? { overage: opts.overage } : {}),
       kind: "paid",
       paidAt: opts.start,
       createdAt: new Date(),
@@ -341,7 +367,8 @@ export class BillingService {
       return { result: "scheduled" as const, at: current.periodEnd };
     }
 
-    const subscription = sub?._id ?? new ObjectId();
+    const subscription = sub?._id ??
+      (subject.kind === "server" ? subject.subscription : new ObjectId());
     // A double click (or a retry) on the same change charges once.
     const key = `sub:${subscription}:to:${plan._id}:from:${
       current?._id ?? "none"
@@ -396,7 +423,6 @@ export class BillingService {
             $setOnInsert: {
               tenant,
               kind: subject.kind,
-              ...(subject.kind === "server" ? { server: subject.server } : {}),
               startedAt: now,
               createdBy: user,
             },
@@ -416,6 +442,72 @@ export class BillingService {
     }
     this.entitlements.invalidate(tenant);
     return { result: "active" as const };
+  }
+
+  /**
+   * A requested rental approved (PLAN §26.9): its first month is charged now,
+   * with the customer away. They funded the wallet when requesting; if it was
+   * spent since, the saved card covers it (autoPay), else approval waits.
+   */
+  async activate(subscription: ObjectId, user: ObjectId) {
+    const sub = await subscriptionModel.findOne({
+      _id: subscription,
+      kind: "server",
+      status: "requested",
+    });
+    if (!sub) throw Response.badRequest("No requested rental with this id");
+    const plan = await planModel.findOne({ _id: sub.plan });
+    if (!plan) throw Response.notFound("Plan not found");
+    const key = `sub:${sub._id}:first`;
+    if (this.funds && plan.price.amount > 0) {
+      const funded = await this.funds.fundRenewal({
+        tenant: sub.tenant,
+        amount: plan.price.amount,
+        currency: plan.price.currency,
+        key: `fund:${key}:${Math.floor(Date.now() / RETRY_MS)}`,
+      });
+      if (funded !== "funded") {
+        throw Response.badRequest(
+          "The customer's wallet is short and their card couldn't cover it: ask them to add funds",
+        );
+      }
+    }
+    const now = new Date();
+    try {
+      await mongodb.withSession((client) =>
+        client.withTransaction(async (session) => {
+          const end = await this.chargePeriod({
+            tenant: sub.tenant,
+            subscription: sub._id,
+            scope: "server",
+            plan,
+            start: now,
+            idempotencyKey: key,
+            user,
+            session,
+          });
+          await subscriptionModel.updateOne(
+            { _id: sub._id, status: "requested" },
+            {
+              $set: {
+                status: "active",
+                currentPeriodEnd: end,
+                startedAt: now,
+                updatedAt: now,
+              },
+            },
+            { session },
+          );
+        })
+      );
+    } catch (error) {
+      if (isInsufficient(error)) {
+        throw Response.badRequest(
+          "The customer's wallet is short: ask them to add funds",
+        );
+      }
+      throw error;
+    }
   }
 
   /** Cancel at the period end; a workspace then falls back to Free. */
@@ -443,7 +535,8 @@ export class BillingService {
     const now = new Date();
     const due = await subscriptionModel.find({
       tenant,
-      status: { $in: ["active", "pastDue"] },
+      // A suspended rental keeps trying, so paying resumes it (PLAN §26.9).
+      status: { $in: ["active", "pastDue", "suspended"] },
       currentPeriodEnd: { $lte: now },
       $or: [
         { nextRenewalAttemptAt: { $exists: false } },
@@ -467,23 +560,30 @@ export class BillingService {
     const plan = !sub.cancelAtPeriodEnd && sub.autoRenew &&
       await planModel.findOne({ _id: sub.nextPlan ?? sub.plan, active: true });
     if (!plan || plan.isFree) {
-      await subscriptionModel.updateOne(guard, {
+      const { modifiedCount } = await subscriptionModel.updateOne(guard, {
         $set: { status: "canceled", updatedAt: now },
       });
+      if (modifiedCount && sub.kind === "server") {
+        await this.rentals?.ended(sub).catch((e) => log(`rental end: ${e}`));
+      }
       this.entitlements.invalidate(tenant);
       return;
     }
+    const overage = sub.kind === "server"
+      ? await this.rentals?.overage(sub) ?? null
+      : null;
+    const amount = plan.price.amount + (overage?.amount ?? 0);
 
     try {
       // The card covers what the wallet is short of, before the transaction.
       // One key per hourly attempt: a declined card is retried next hour.
-      if (this.funds && plan.price.amount > 0) {
+      if (this.funds && amount > 0) {
         const attempt = Math.floor(
           (now.getTime() - ended.getTime()) / RETRY_MS,
         );
         const funded = await this.funds.fundRenewal({
           tenant,
-          amount: plan.price.amount,
+          amount,
           currency: plan.price.currency,
           key: `renew:${sub._id}:${ended.toISOString()}:${attempt}`,
         });
@@ -504,6 +604,7 @@ export class BillingService {
             plan,
             start: now,
             idempotencyKey: `sub:${sub._id}:renew:${ended.toISOString()}`,
+            overage,
             session,
           });
           const { modifiedCount } = await subscriptionModel.updateOne(guard, {
@@ -513,30 +614,46 @@ export class BillingService {
               currentPeriodEnd: end,
               updatedAt: now,
             },
-            $unset: { nextPlan: "", nextRenewalAttemptAt: "", lastError: "" },
+            $unset: {
+              nextPlan: "",
+              nextRenewalAttemptAt: "",
+              lastError: "",
+              pastDueSince: "",
+            },
           }, { session });
           if (!modifiedCount) throw new Error("Renewed meanwhile");
         })
       );
+      if (sub.kind === "server") {
+        await this.rentals?.renewed(sub, plan).catch((e) =>
+          log(`rental renewal: ${e}`)
+        );
+      }
     } catch (error) {
       if (
         isInsufficient(error) || error instanceof TopupPendingError ||
         (error as Error).message?.includes("Payments")
       ) {
-        const pastDue = {
-          status: "pastDue" as const,
+        const retry = {
           nextRenewalAttemptAt: new Date(now.getTime() + RETRY_MS),
           lastError: String((error as Error).message).slice(0, 300),
           updatedAt: now,
         };
-        // Only the attempt that turns it past due tells the owner; retries stay quiet.
+        // Only the attempt that turns it past due tells the owner; retries
+        // stay quiet and keep the status (a suspended rental stays suspended).
         const { modifiedCount } = await subscriptionModel.updateOne(
           { ...guard, status: "active" },
-          { $set: pastDue },
+          { $set: { ...retry, status: "pastDue", pastDueSince: now } },
         );
         if (modifiedCount) {
           notifyPastDue(tenant, plan).catch((e) => log(`notice: ${e}`));
-        } else await subscriptionModel.updateOne(guard, { $set: pastDue });
+        } else await subscriptionModel.updateOne(guard, { $set: retry });
+        if (sub.kind === "server") {
+          await this.rentals?.unpaid(
+            { ...sub, pastDueSince: sub.pastDueSince ?? now },
+            now,
+          ).catch((e) => log(`rental unpaid: ${e}`));
+        }
       } else if (
         !isDuplicateKeyError(error) &&
         (error as Error).message !== "Renewed meanwhile"

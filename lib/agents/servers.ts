@@ -10,6 +10,7 @@ import { prepareHost, resumeHostSetup } from "@/lib/agents/commands.ts";
 import { serverModel } from "@/schemas/infrastructure/server.ts";
 import { serverLeaseModel } from "@/schemas/infrastructure/serverLease.ts";
 import { bootstrapSessionModel } from "@/schemas/infrastructure/bootstrapSession.ts";
+import { subscriptionModel } from "@/schemas/billing/subscription.ts";
 import { isPublicAddress } from "@/lib/agents/addresses.ts";
 import { createHash, SupportedHashAlg } from "@/core/utils/hash.ts";
 import { tenantModel } from "@/plugins/Huruf-Tech/thunder-core/schemas/tenant.ts";
@@ -185,21 +186,27 @@ const claimJoinToken = async (token: string, tenant: ObjectId) =>
       $set: { status: "registered" },
       $push: { steps: { at: new Date(), message: "Agent registered" } },
     },
-    { projection: { createdBy: 1 } },
+    { projection: { createdBy: 1, rental: 1 } },
   );
 
 const registerJoinedAgent = async (
   hello: Parameters<typeof registerAgent>[0],
   fingerprint: string,
   tenant: ObjectId,
-  session: { _id: ObjectId; createdBy: ObjectId },
+  session: {
+    _id: ObjectId;
+    createdBy: ObjectId;
+    rental?: { host: ObjectId; subscription: ObjectId; name: string };
+  },
 ): Promise<THelloResponse> => {
   const failSession = (error: string) =>
     bootstrapSessionModel.updateOne({ _id: session._id }, {
       $set: { status: "failed", error },
     });
 
-  if (!await acquireServerSlot(tenant)) {
+  // A rented partition (PLAN §26) was approved by an admin: no plan quota.
+  const { rental } = session;
+  if (!rental && !await acquireServerSlot(tenant)) {
     await failSession("Your plan's server limit is reached");
     throw Response.forbidden("Your plan's server limit is reached");
   }
@@ -207,7 +214,7 @@ const registerJoinedAgent = async (
   const now = new Date();
   const { insertedId } = await serverModel.insertOne({
     tenant,
-    name: hello.inventory.hostname,
+    name: rental?.name ?? hello.inventory.hostname,
     labels: {},
     status: "active",
     identity: {
@@ -216,7 +223,9 @@ const registerJoinedAgent = async (
       fingerprint,
     },
     installMethod: "ssh",
-    provider: { kind: "byo" },
+    provider: rental
+      ? { kind: "rented", host: rental.host, subscription: rental.subscription }
+      : { kind: "byo" },
     inventory: hello.inventory,
     acceptedBy: session.createdBy,
     acceptedAt: now,
@@ -227,6 +236,11 @@ const registerJoinedAgent = async (
   await bootstrapSessionModel.updateOne({ _id: session._id }, {
     $set: { server: insertedId },
   });
+  if (rental) {
+    await subscriptionModel.updateOne({ _id: rental.subscription }, {
+      $set: { server: insertedId, updatedAt: now },
+    });
+  }
   await prepareHost(insertedId, tenant, session.createdBy);
 
   return {
@@ -384,11 +398,14 @@ export const releaseServer = async (
 ) => {
   const doc = await serverModel.findOne(
     { _id: server, tenant },
-    { projection: { status: 1 }, session },
+    { projection: { status: 1, "provider.kind": 1 }, session },
   );
   if (doc?.status !== "active") return;
 
-  await quotaGuard.release(tenant, "servers", session);
+  // A rented server never took a quota slot (PLAN §26.6 D).
+  if (doc.provider?.kind !== "rented") {
+    await quotaGuard.release(tenant, "servers", session);
+  }
   await serverLeaseModel.deleteOne({ _id: server }, { session });
 };
 

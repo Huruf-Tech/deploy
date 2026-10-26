@@ -1251,6 +1251,52 @@ Owner's decisions recorded (§25.10). 15a–15d built; the owner tested the paym
 
 ### Phase 16 — Shared resources: rent partitions of Huruf's machines (planned, D47, §26)
 Not started; the owner says go per stage. Each stage ends with a review. Built on the existing mechanisms, refactoring them where needed (§26.6).
+- **16d status: built (pending review).** Rentals on the backend; the screens are 16e.
+  - **Classes and sizes:** `serverClasses` (rate card, included traffic per vCPU, CPU overcommit, maximum per rental; root CRUD `serverClasses`). Sizes are server plans with a `class`. `deno task setup` seeds the launch classes and sizes (§26.8), never overwriting edits. `priceOf` (rate card + the partition overhead at the memory rate, rounded up to whole dollars) prices seeds and custom requests.
+  - **Requests** (`rentals` router, members see, the owner rents, a saved card required):
+    - `catalog`, `quote` (custom amounts within the class's maximum and steps), `request` (a size or custom; custom becomes a private plan for the tenant), `withdraw`, `resize`, `cancel`, and the tenant's rentals.
+    - A request is a `requested` server subscription with its partition size (resources + `PARTITION_OVERHEAD_MB`).
+    - The first month is funded on session (`fundNow`, 3-D Secure in the browser) but not charged; a decline leaves no request behind.
+  - **Approval** (`rentalsAdmin`, root only):
+    - The queue (requests and resizes) and placement: pool machines of the class with room, fullest first; memory and disk hard, CPU up to the class's overcommit; flagged when Huruf's partition would have to give back memory it uses.
+    - `approve` charges the first month (`BillingService.activate`, the card off session if the wallet was spent) and creates the partition, then emails the owner. `reject` records a reason and emails.
+    - Plus: re-create a partition, prepare a pool machine, set its class, accepting flag and cost, and add Huruf's remainder partition.
+  - **The rented server:**
+    - The partition's join token carries the rental, so its agent creates a `rented` server ("Huruf · Small") linked to its pool machine and subscription, without a plan quota slot.
+    - Deleting it from the servers list is refused (cancel the rental), and releasing it gives no quota back.
+  - **Billing hooks** (`TRentalHooks`, implemented by `RentalService`; billing knows nothing of partitions):
+    - **Renewal** charges the month plus the ended period's traffic overage (whole GB beyond the allowance × the class's rate, snapshotted at approval).
+    - **Unpaid:**
+      1. Past due (`pastDueSince`).
+      2. After `SHARED_GRACE_DAYS` (3): suspended (`partition.stop`) with an email.
+      3. Warnings 7 days and 1 day before release.
+      4. After `SHARED_RETENTION_DAYS` (14): released (`partition.remove`, the server record deleted) with an email.
+      
+      A suspended rental keeps retrying hourly; paying resumes the partition.
+    - **Resize:** larger is prorated and applied live; smaller applies at the period end.
+    - **Cancel:** the partition is removed at the period end.
+  - **Traffic:** each pool machine's summary turns per-partition counters into each rental's current period (`usage.trafficBytes`). The first reading is a baseline, so the install isn't billed, and a smaller value is a counter reset. A rental due for renewal renews there too, so an idle customer still renews.
+  - **Fixes on the way:**
+    - The pool setup result no longer overwrites the admin's class and cost.
+    - The unique index for rented servers only applies once a server is linked, so pending requests don't collide.
+    - A failed retry no longer turns a suspended rental back into "past due".
+  - **Tests:** `tests/rentals_test.ts` covers:
+    - price, overage and counter arithmetic;
+    - catalog and custom quotes;
+    - a funded, uncharged request (the admin queue refused to a customer);
+    - approval charging, sealing the partition's size and token, and the joining agent becoming a rented server without quota (and not deletable);
+    - traffic with a baseline and a reset;
+    - renewal with 6 GB of overage;
+    - a prorated resize applied live;
+    - past due → suspended → paid and resumed;
+    - suspended → warned → released, server deleted;
+    - withdrawal and rejection.
+  - **Verified on the spike pool machine through the real routes:**
+    1. The machine's class was set.
+    2. A Nano was requested and the request funded.
+    3. The queue and placement showed the machine with room.
+    4. On approval, the partition was created and its agent joined the customer's tenant as "Huruf · Nano" (0.5 vCPU, 1,152 MB), rented and linked.
+    5. Downloads inside it reached the rental's period as traffic.
 - **16c status: built (pending review).** The agent's host role, and the control plane functions 16d's approval will call.
   - **Agent (`agent/internal/pool`):**
     - `Driver` interface (the `PartitionDriver`), with a `Sysbox` implementation ported from the 16a spike scripts (`tools/pool-spike` removed); the partition image is embedded in the agent (`partition.Dockerfile`).
@@ -2110,12 +2156,12 @@ Huruf is a managed platform (deploys, domains, monitoring, a server of your own)
 
 | Size | vCPU | Memory | Disk | Traffic | Price/month |
 |---|---|---|---|---|---|
-| Nano | 0.5 | 1 GB | 10 GB | 50 GB | $10 |
+| Nano | 0.5 | 1 GB | 10 GB | 50 GB | $12 |
 | Small | 1 | 2 GB | 25 GB | 100 GB | $22 |
-| Medium | 2 | 4 GB | 50 GB | 200 GB | $43 |
-| Large | 4 | 8 GB | 100 GB | 400 GB | $84 |
+| Medium | 2 | 4 GB | 50 GB | 200 GB | $41 |
+| Large | 4 | 8 GB | 100 GB | 400 GB | $79 |
 
-The Dedicated CPU class offers Medium and Large only (Medium about $67).
+The Dedicated CPU class offers Medium ($69) and Large ($135). These are the prices `deno task setup` seeds, computed from the rate card by `priceOf` and rounded up to whole dollars; admins change them in Admin → Plans.
 
 **Notes:**
 - **Traffic allowances are deliberately smaller than DigitalOcean's:** AWS charges us ~$0.09/GB, so a 2 TB allowance would cost more than the rental. Overage is just above that cost.

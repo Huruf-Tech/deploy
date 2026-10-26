@@ -1,6 +1,7 @@
 import { storageModel } from "@/schemas/infrastructure/storage.ts";
 import { subscriptionModel } from "@/schemas/billing/subscription.ts";
 import { planModel } from "@/schemas/billing/plan.ts";
+import { serverClassModel } from "@/schemas/billing/serverClass.ts";
 import { walletTopupModel } from "@/plugins/Huruf-Tech/thunder-core/schemas/walletTopup.ts";
 import {
   billingAccountModel,
@@ -60,6 +61,7 @@ export const syncDeployIndexes = async () => {
     $set: { kind: "workspace" },
   });
   await subscriptionModel.dropIndex("uniqueTenant").catch(() => {});
+  await subscriptionModel.dropIndex("uniqueServer").catch(() => {});
 
   await Promise.all([
     controlPlaneSampleModel.createIndex({ at: 1 }, { name: "at" }),
@@ -307,9 +309,23 @@ export const syncDeployIndexes = async () => {
       partialFilterExpression: { kind: "workspace" },
     }),
     subscriptionModel.createIndex({ server: 1 }, {
-      name: "uniqueServer",
+      name: "uniqueRentedServer",
       unique: true,
+      // A requested rental has no server yet.
+      partialFilterExpression: { kind: "server", server: { $exists: true } },
+    }),
+    // Rentals by pool machine and partition (PLAN §26.9).
+    subscriptionModel.createIndex({ "rental.host": 1, "rental.partition": 1 }, {
+      name: "rentalPartition",
       partialFilterExpression: { kind: "server" },
+    }),
+    // The admin's queue: requests and resizes waiting.
+    subscriptionModel.createIndex({ status: 1, updatedAt: 1 }, {
+      name: "rentalRequests",
+      partialFilterExpression: { kind: "server" },
+    }),
+    serverClassModel.createIndex({ active: 1, sortOrder: 1 }, {
+      name: "activeClasses",
     }),
     subscriptionModel.createIndex({ tenant: 1, currentPeriodEnd: 1 }, {
       name: "tenantDue",

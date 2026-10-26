@@ -5,6 +5,7 @@ import { forgetAgent, type TAgentIdentity } from "@/lib/agents/agentAuth.ts";
 import { getAgentConfig } from "@/lib/agents/config.ts";
 import { recordHostSetup } from "@/lib/agents/commands.ts";
 import { recordPoolSetup } from "@/lib/pool/pool.ts";
+import { rentals } from "@/lib/services.ts";
 import { offlineSweep, shardOf } from "@/lib/agents/sweep.ts";
 import { serverModel } from "@/schemas/infrastructure/server.ts";
 import { serverLeaseModel } from "@/schemas/infrastructure/serverLease.ts";
@@ -208,6 +209,10 @@ const poll = async (
     serverModel.updateOne({ _id: identity.server }, {
       $set: { resources: { ...request.summary, reportedAt: now } },
     }),
+    // A pool machine's partitions: rentals' traffic and lazy renewal (PLAN §26).
+    request.summary?.partitions?.length &&
+    rentals.recordUsage(identity.server, request.summary.partitions)
+      .catch((e) => console.warn("[rentals] usage:", e)),
     offlineSweep.tick(lease.shard ?? shardOf(identity.server)),
     offlineSweep.tickRandom(),
   ]);

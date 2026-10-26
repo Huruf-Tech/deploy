@@ -113,6 +113,9 @@ export type get$return = {
             notes?: string[] | undefined;
             error?: string | undefined;
             updatedAt: Date;
+            class?: string | undefined;
+            accepting?: boolean | undefined;
+            monthlyCost?: number | undefined;
         } | undefined;
         tunnelPort?: number | undefined;
         acceptedBy?: string | undefined;

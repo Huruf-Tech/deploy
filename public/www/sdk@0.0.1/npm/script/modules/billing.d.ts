@@ -36,7 +36,7 @@ export type get$return = {
         kind: "paid" | "complimentary";
     } | undefined;
     subscription?: {
-        status: "active" | "pastDue" | "canceled";
+        status: "requested" | "rejected" | "active" | "pastDue" | "suspended" | "released" | "canceled";
         autoRenew: boolean;
         cancelAtPeriodEnd: boolean;
         currentPeriodEnd?: Date | undefined;
@@ -65,6 +65,7 @@ export type plans$return = {
         diskGb: number;
         trafficGb: number;
     } | undefined;
+    class?: string | undefined;
     slug: string;
     description?: string | undefined;
     visibility: "public" | "private";

@@ -56,6 +56,8 @@ export const $planInput = z.object({
     canFilter: true,
   }),
   resources: $planResources.optional(),
+  /** `server` plans: the class whose pool machines it runs on (PLAN §26.8). */
+  class: $objectId.meta({ ref: "serverClasses" }).optional(),
   slug: z.string().min(1).max(50).regex(/^[a-z0-9-]+$/).meta({
     canFilter: true,
   }),

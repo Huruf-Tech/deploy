@@ -18,7 +18,20 @@ export const $subscription = z.object({
   /** `server` subscriptions: the rented server. */
   server: $objectId.meta({ ref: "servers" }).optional(),
   plan: $objectId.meta({ ref: "plans" }),
-  status: z.enum(["active", "pastDue", "canceled"]),
+  /**
+   * `requested`, `rejected`, `suspended` and `released` are rentals only
+   * (PLAN §26.9): waiting for an admin, refused, stopped for non-payment,
+   * deleted after the retention.
+   */
+  status: z.enum([
+    "requested",
+    "rejected",
+    "active",
+    "pastDue",
+    "suspended",
+    "released",
+    "canceled",
+  ]),
   autoRenew: z.boolean(),
   cancelAtPeriodEnd: z.boolean(),
   /** A downgrade waiting for the period end. */
@@ -26,6 +39,34 @@ export const $subscription = z.object({
   currentPeriodEnd: z.date().optional(),
   nextRenewalAttemptAt: z.date().optional(),
   lastError: z.string().max(300).optional(),
+  /** When a renewal first failed; drives suspension and release (PLAN §26.9). */
+  pastDueSince: z.date().optional(),
+  /** `server` subscriptions: the rental (PLAN §26). */
+  rental: z.object({
+    class: $objectId.meta({ ref: "serverClasses" }),
+    /** The pool machine and partition, once approved. */
+    host: $objectId.meta({ ref: "servers" }).optional(),
+    partition: z.string().optional(),
+    /** The partition's size: the plan's resources plus the overhead. */
+    size: z.object({
+      cpus: z.number(),
+      memMb: z.number().int(),
+      diskGb: z.number().int(),
+    }),
+    /** Snapshot at approval: traffic beyond the period's allowance, per GB. */
+    trafficRatePerGb: z.number().int().min(0),
+    /** The partition's traffic counters when last read (a smaller value is a reset). */
+    counters: z.object({ rx: z.number(), tx: z.number() }).optional(),
+    /** A resize waiting for an admin. */
+    pendingChange: z.object({
+      plan: $objectId.meta({ ref: "plans" }),
+      requestedAt: z.date(),
+    }).optional(),
+    rejectedReason: z.string().max(500).optional(),
+    suspendedAt: z.date().optional(),
+    /** Release warnings sent (days before release). */
+    warned: z.array(z.number().int()).optional(),
+  }).optional(),
   startedAt: z.date(),
   createdBy: $objectId.meta({ ref: "users" }),
   updatedAt: z.date(),

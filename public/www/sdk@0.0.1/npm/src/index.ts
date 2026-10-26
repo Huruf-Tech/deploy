@@ -14,6 +14,9 @@ import { billingAdminModule } from "./modules/billingAdmin.js";
 import { paymentsModule } from "./modules/payments.js";
 import { paymentsAdminModule } from "./modules/paymentsAdmin.js";
 import { plansModule } from "./modules/plans.js";
+import { rentalsModule } from "./modules/rentals.js";
+import { rentalsAdminModule } from "./modules/rentalsAdmin.js";
+import { serverClassesModule } from "./modules/serverClasses.js";
 import { aiModule } from "./modules/ai.js";
 import { gitIntegrationsModule } from "./modules/gitIntegrations.js";
 import { githubHooksModule } from "./modules/githubHooks.js";
@@ -63,6 +66,9 @@ export class ThunderSDK extends BaseSDK {
         "payments",
         "paymentsAdmin",
         "plans",
+        "rentals",
+        "rentalsAdmin",
+        "serverClasses",
         "ai",
         "gitIntegrations",
         "githubHooks",
@@ -108,6 +114,9 @@ export class ThunderSDK extends BaseSDK {
     static payments: ReturnType<typeof paymentsModule> = paymentsModule(this);
     static paymentsAdmin: ReturnType<typeof paymentsAdminModule> = paymentsAdminModule(this);
     static plans: ReturnType<typeof plansModule> = plansModule(this);
+    static rentals: ReturnType<typeof rentalsModule> = rentalsModule(this);
+    static rentalsAdmin: ReturnType<typeof rentalsAdminModule> = rentalsAdminModule(this);
+    static serverClasses: ReturnType<typeof serverClassesModule> = serverClassesModule(this);
     static ai: ReturnType<typeof aiModule> = aiModule(this);
     static gitIntegrations: ReturnType<typeof gitIntegrationsModule> = gitIntegrationsModule(this);
     static githubHooks: ReturnType<typeof githubHooksModule> = githubHooksModule(this);

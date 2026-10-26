@@ -6,11 +6,11 @@ import type { BaseSDK } from "../base.js";
 import { compile } from "path-to-regexp";
 
 export type subscriptions$query = {
-    status?: ("active" | "pastDue" | "canceled") | undefined;
+    status?: ("requested" | "rejected" | "active" | "pastDue" | "suspended" | "released" | "canceled") | undefined;
     limit?: number;
 };
 export type subscriptions$return = {
-    status: "active" | "pastDue" | "canceled";
+    status: "requested" | "rejected" | "active" | "pastDue" | "suspended" | "released" | "canceled";
     autoRenew: boolean;
     cancelAtPeriodEnd: boolean;
     currentPeriodEnd?: Date | undefined;

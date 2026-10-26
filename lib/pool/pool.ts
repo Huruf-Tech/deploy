@@ -63,7 +63,8 @@ export async function makePoolMachine(opts: {
 }) {
   const doc = await machine(opts.server, false);
   await serverModel.updateOne({ _id: doc._id }, {
-    $set: { pool: { status: "pending", updatedAt: new Date() } },
+    $set: { "pool.status": "pending", "pool.updatedAt": new Date() },
+    $unset: { "pool.error": "" },
   });
   const allowIps = (await readTextSetting("POOL_ALLOW_IPS", ""))
     .split(/[\s,]+/).filter(Boolean);
@@ -92,20 +93,21 @@ export async function recordPoolSetup(
   outcome: { ok: boolean; result?: Record<string, unknown>; error?: string },
 ) {
   const result = outcome.result ?? {};
+  // Field by field: the admin's class, accepting flag and cost stay.
   await serverModel.updateOne({ _id: server }, {
     $set: {
-      pool: {
-        status: outcome.ok ? "ready" : "failed",
-        ...(result.allocatable
-          ? { allocatable: result.allocatable as TPartitionSize }
-          : {}),
-        ...(typeof result.sysbox === "string" ? { sysbox: result.sysbox } : {}),
-        ...(Array.isArray(result.notes)
-          ? { notes: result.notes as string[] }
-          : {}),
-        ...(outcome.error ? { error: outcome.error.slice(0, 1_000) } : {}),
-        updatedAt: new Date(),
-      },
+      "pool.status": outcome.ok ? "ready" : "failed",
+      ...(result.allocatable
+        ? { "pool.allocatable": result.allocatable as TPartitionSize }
+        : {}),
+      ...(typeof result.sysbox === "string"
+        ? { "pool.sysbox": result.sysbox }
+        : {}),
+      ...(Array.isArray(result.notes)
+        ? { "pool.notes": result.notes as string[] }
+        : {}),
+      ...(outcome.error ? { "pool.error": outcome.error.slice(0, 1_000) } : {}),
+      "pool.updatedAt": new Date(),
     },
   });
 }
@@ -122,6 +124,8 @@ export async function createPartition(opts: {
   size?: TPartitionSize;
   remainder?: boolean;
   createdBy: ObjectId;
+  /** A rental: the server its agent creates is `rented`, named so (PLAN §26). */
+  rental?: { subscription: ObjectId; name: string };
 }) {
   const doc = await machine(opts.host, true);
   const { token } = await createJoinToken({
@@ -130,6 +134,7 @@ export async function createPartition(opts: {
     host: `${doc.name}/${opts.name}`,
     port: 0,
     username: "partition",
+    ...(opts.rental ? { rental: { host: doc._id, ...opts.rental } } : {}),
   });
   const { controlPlaneUrl, downloadBase } = await agentEndpoints();
   const payload: z.input<typeof $partitionCreatePayload> = {

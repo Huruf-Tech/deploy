@@ -1,5 +1,6 @@
 import z from "zod";
 import { Router } from "@/core/http/router.ts";
+import { Response } from "@/core/http/response.ts";
 import { payments } from "@/lib/services.ts";
 import { bodyAsJson, paramsAsJson } from "@/core/http/utils.ts";
 import { $objectId, createCRUD } from "@/core/utils/createCRUD.ts";
@@ -50,8 +51,20 @@ export default new Router("/api", function servers(router) {
       tenant: (await withTenant(req)).tenant._id,
     }),
     hooks: {
-      beforeDel: async ({ _id, session }, req) =>
-        releaseServer(_id, (await withTenant(req)).tenant._id, session),
+      beforeDel: async ({ _id, session }, req) => {
+        const tenant = (await withTenant(req)).tenant._id;
+        const doc = await serverModel.findOne({ _id, tenant }, {
+          projection: { "provider.kind": 1 },
+          session,
+        });
+        // A rented partition goes when its rental is canceled (PLAN §26.9).
+        if (doc?.provider?.kind === "rented") {
+          throw Response.badRequest(
+            "This is a rented server: cancel the rental on its page instead",
+          );
+        }
+        await releaseServer(_id, tenant, session);
+      },
     },
   });
 

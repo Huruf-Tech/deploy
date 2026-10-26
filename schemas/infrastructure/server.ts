@@ -78,6 +78,11 @@ export const $server = $serverUpdate.extend({
     notes: z.array(z.string()).optional(),
     error: z.string().optional(),
     updatedAt: z.date(),
+    /** Set by admins (PLAN §26.7): the class it rents, whether it takes new rentals, its cost. */
+    class: $objectId.meta({ ref: "serverClasses" }).optional(),
+    accepting: z.boolean().optional(),
+    /** What the machine costs Huruf a month (cents), for cost vs revenue. */
+    monthlyCost: z.number().int().min(0).optional(),
   }).optional(),
   /** Its reverse tunnel's port on every control plane instance (PLAN §14). */
   tunnelPort: z.number().int().min(1).max(65_535).optional(),

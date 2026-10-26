@@ -40,6 +40,8 @@ export const syncDeployAccessControl = async () => {
     "billing",
     // Cards and Add funds; every handler but config checks for the owner.
     "payments",
+    // Rented servers (PLAN §26): everyone sees them; renting checks for the owner.
+    "rentals",
     "networks",
     "alertRules",
     "alertEvents",
