@@ -179,6 +179,15 @@ export class StripeGateway implements PaymentGateway {
     );
   }
 
+  // Search lags writes by about a minute; only rows stuck 15 minutes ask.
+  async findCharge(topup: ObjectId) {
+    const { data } = await (await this.client()).paymentIntents.search({
+      query: `metadata['topup']:'${topup.toHexString()}'`,
+      limit: 1,
+    });
+    return data[0] ? this.resultOf(data[0]) : null;
+  }
+
   async parseWebhook(req: Request): Promise<TGatewayEvent | void> {
     const secret = await readTextSetting("STRIPE_WEBHOOK_SECRET", "");
     const signature = req.headers.get("stripe-signature");

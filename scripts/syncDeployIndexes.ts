@@ -1,6 +1,7 @@
 import { storageModel } from "@/schemas/infrastructure/storage.ts";
 import { subscriptionModel } from "@/schemas/billing/subscription.ts";
 import { planModel } from "@/schemas/billing/plan.ts";
+import { walletTopupModel } from "@/plugins/Huruf-Tech/thunder-core/schemas/walletTopup.ts";
 import {
   billingAccountModel,
   paymentCardModel,
@@ -83,6 +84,14 @@ export const syncDeployIndexes = async () => {
     paymentEventModel.createIndex({ eventId: 1 }, {
       name: "uniqueEvent",
       unique: true,
+    }),
+    paymentEventModel.createIndex({ processedAt: -1 }, {
+      name: "keptEvents",
+      partialFilterExpression: { kept: true },
+    }),
+    // Admin → Payments lists top-ups by status, newest first.
+    walletTopupModel.createIndex({ status: 1, createdAt: -1 }, {
+      name: "statusCreated",
     }),
     // Refunds and disputes have no expiresAt and are kept.
     paymentEventModel.createIndex(

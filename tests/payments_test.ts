@@ -95,8 +95,13 @@ class FakeGateway implements PaymentGateway {
       ...this.next(opts.amount),
     });
   }
+  /** What `readCharge`/`findCharge` report; set by the recovery test. */
+  found: TChargeResult | null = null;
   readCharge(providerRef: string): Promise<TChargeResult> {
-    return Promise.resolve({ status: "completed", providerRef });
+    return Promise.resolve(this.found ?? { status: "completed", providerRef });
+  }
+  findCharge(): Promise<TChargeResult | null> {
+    return Promise.resolve(this.found);
   }
   async parseWebhook(req: Request): Promise<TGatewayEvent | void> {
     if (req.headers.get("x-fake-signature") !== "ok") {
@@ -596,6 +601,124 @@ Deno.test({
         },
       );
 
+      await t.step(
+        "admin recovery: settle, abandon, a released key, refunds",
+        async () => {
+          const topups = d.collection("walletTopups");
+          const old = new Date(Date.now() - 20 * 60_000);
+          const row = async (amount: number, extra = {}) =>
+            (await topups.insertOne({
+              status: "initiated",
+              tenant,
+              currency: "usd",
+              amount,
+              createdAt: old,
+              updatedAt: old,
+              ...extra,
+            })).insertedId;
+          const refused = (fn: () => Promise<unknown>) =>
+            fn().then(() => null, (e) => e as Response);
+
+          // A fresh row is still waiting on its webhook: not the admin's yet.
+          const fresh = await row(100, { createdAt: new Date() });
+          assertEquals(
+            (await refused(() => payments.settleStuck(fresh)))?.status,
+            400,
+          );
+
+          // Charged, but the call never returned the charge id: Settle finds
+          // it at the gateway and credits it once.
+          const before = await balance();
+          const charged = await row(700);
+          gateway.found = {
+            status: "completed",
+            providerRef: "pi_found",
+            amount: 700,
+          };
+          // A live charge is never abandoned.
+          assertEquals(
+            (await refused(() => payments.abandonStuck(charged)))?.status,
+            400,
+          );
+          const settled = await payments.settleStuck(charged);
+          assertEquals(settled.status, "completed");
+          assertEquals(await balance(), before + 700);
+          assertEquals(
+            (await topups.findOne({ _id: charged }))?.providerRef,
+            "pi_found",
+          );
+          // Settled rows aren't stuck: a second Settle is refused, nothing credited.
+          assertEquals(
+            (await refused(() => payments.settleStuck(charged)))?.status,
+            400,
+          );
+          assertEquals(await balance(), before + 700);
+
+          // Never reached the gateway: nothing to settle; Abandon frees its key.
+          gateway.found = null;
+          const lost = await row(400, { idempotencyKey: `add:${tenant}:lost` });
+          assertEquals((await payments.settleStuck(lost)).outcome, "no_charge");
+          await payments.abandonStuck(lost);
+          const abandoned = await topups.findOne({ _id: lost });
+          assertEquals(abandoned?.status, "failed");
+          assertEquals(abandoned?.idempotencyKey, undefined);
+
+          // Paid but not credited (a missing settlement tenant): Settle retries.
+          const paid = await row(250, {
+            status: "paid",
+            providerRef: "pi_paid",
+          });
+          assertEquals((await payments.settleStuck(paid)).status, "completed");
+          assertEquals(await balance(), before + 950);
+
+          // A declined plan payment doesn't keep its key: retrying with a
+          // working card charges afresh.
+          const key = `fund:test:${tenant}`;
+          const need = (await balance()) + 1_000;
+          gateway.next = () => ({
+            status: "failed",
+            error: "Your card was declined.",
+          });
+          await assertRejects(() =>
+            payments.fundNow({ tenant, amount: need, currency: "usd", key })
+          );
+          gateway.next = (amount) => ({ status: "completed", amount });
+          assertEquals(
+            (await payments.fundNow({
+              tenant,
+              amount: need,
+              currency: "usd",
+              key,
+            }))
+              .status,
+            "funded",
+          );
+
+          // A refund is kept for the admin until marked handled.
+          await payments.handleWebhook(
+            "stripe",
+            webhook({
+              id: `evt_refund_${tenant}`,
+              type: "charge.refunded",
+              kind: "refund",
+              providerRef: "pi_found",
+              amount: 700,
+              currency: "usd",
+            }),
+          );
+          const kept = await paymentEventModel.findOne({
+            eventId: `evt_refund_${tenant}`,
+          });
+          assertEquals(kept?.kept, true);
+          assert(!kept?.expiresAt);
+          assertEquals(String(kept?.tenant), String(tenant));
+          await payments.markHandled(kept!._id, session.user);
+          assert(
+            (await paymentEventModel.findOne({ _id: kept!._id }))?.handledAt,
+          );
+        },
+      );
+
       await t.step("the last card stays while servers run", async () => {
         const only = (await paymentCardModel.findOne({ tenant }))!;
         const server = await serverModel.insertOne({
@@ -627,6 +750,10 @@ Deno.test({
             },
           );
           assertEquals(other.status, 403);
+
+          // Admin → Payments is root only.
+          const admin = await session.call("GET", "/paymentsAdmin/api/topups");
+          assertEquals(admin.status, 403, JSON.stringify(admin.json));
 
           const forged = await session.call(
             "POST",

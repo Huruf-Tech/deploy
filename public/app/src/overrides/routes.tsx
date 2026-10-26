@@ -8,6 +8,7 @@ import {
   IconReceipt2,
   IconReportMoney,
   IconBucket,
+  IconCash,
   IconHistory,
   IconBraces,
   IconBrandGithub,
@@ -36,6 +37,7 @@ import Storage from "@/pages/storage"
 import Billing from "@/pages/billing"
 import BillingAdmin from "@/pages/billing/Admin"
 import Payments from "@/pages/billing/Payments"
+import PaymentsAdmin from "@/pages/billing/PaymentsAdmin"
 import ControlPlane from "@/pages/admin/ControlPlane"
 import Network from "@/pages/network"
 import AlertRules from "@/pages/alerts"
@@ -80,6 +82,15 @@ export const routes: TRoutesOverride = {
     display: () => ThunderSDK.isPermitted("billingAdmin", "subscriptions"),
     Component: BillingAdmin,
   },
+  // Card top-ups across tenants: Settle/Abandon, refunds and disputes (15d).
+  paymentsAdmin: {
+    name: "Payments",
+    path: "payments",
+    group: "Admin",
+    icon: IconCash,
+    display: () => ThunderSDK.isPermitted("paymentsAdmin", "topups"),
+    Component: PaymentsAdmin,
+  },
   controlPlane: {
     name: "Control plane",
     path: "controlPlane",
@@ -114,6 +125,8 @@ export const routes: TRoutesOverride = {
   // Reached through the built-in wallet page, not navigation.
   wallets: { merge: true, display: false },
   walletLedgers: { merge: true, display: false },
+  // Admin → Payments lists top-ups with Settle and Abandon instead.
+  walletTopups: { merge: true, display: false },
 
   servers: { merge: true, name: "Servers", priority: 0 },
 

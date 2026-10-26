@@ -23,7 +23,8 @@ export function PageHeader({
   return (
     <header className={cn("flex flex-col gap-3", className)}>
       <div className="flex flex-wrap items-start gap-x-4 gap-y-2">
-        <div className="min-w-0 flex-1">
+        {/* A 16rem basis: on phones the actions wrap below instead of squeezing the title. */}
+        <div className="min-w-0 flex-[1_1_16rem]">
           <div className="flex flex-wrap items-center gap-2">
             {typeof title === "string" ? (
               <h1 className="truncate font-heading text-xl font-semibold tracking-tight">

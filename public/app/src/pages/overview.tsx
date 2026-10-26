@@ -111,7 +111,7 @@ function VerifyEmailAlert({ email }: { email: string }) {
       className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-[10px] border border-warning/40 bg-warning-soft px-3 py-2 text-[13px] text-warning-foreground"
     >
       <IconMailExclamation className="size-4 shrink-0" aria-hidden />
-      <p className="min-w-0 flex-1">
+      <p className="min-w-0 flex-[1_1_16rem]">
         <span className="font-medium">{t("Verify your email address")}</span>
         {" · "}
         {t(

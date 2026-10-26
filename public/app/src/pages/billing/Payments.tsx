@@ -449,7 +449,7 @@ export default function Payments() {
           className="flex flex-wrap items-center gap-3 rounded-[10px] border border-info/30 bg-info-soft px-4 py-3 text-[13px] text-info-foreground"
         >
           <IconShieldCheck className="size-5 shrink-0" aria-hidden />
-          <p className="min-w-0 flex-1">
+          <p className="min-w-0 flex-[1_1_16rem]">
             <span className="font-medium">
               {t("Add a card to start using Huruf Deploy.")}
             </span>{" "}
@@ -473,7 +473,7 @@ export default function Payments() {
           className="flex flex-wrap items-center gap-3 rounded-[10px] border border-warning/40 bg-warning-soft px-4 py-3 text-[13px] text-warning-foreground"
         >
           <IconAlertTriangle className="size-5 shrink-0" aria-hidden />
-          <p className="min-w-0 flex-1">
+          <p className="min-w-0 flex-[1_1_16rem]">
             <span className="font-medium">
               {t("Your bank needs you to confirm a payment.")}
             </span>{" "}

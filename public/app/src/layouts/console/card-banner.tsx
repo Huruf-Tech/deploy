@@ -33,7 +33,7 @@ export function CardBanner() {
       className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-b bg-info-soft px-3 py-1.5 text-[13px] text-info-foreground md:px-4"
     >
       <IconShieldCheck className="size-4 shrink-0" aria-hidden />
-      <p className="min-w-0 flex-1">
+      <p className="min-w-0 flex-[1_1_16rem]">
         <span className="font-medium">
           {t("Add a card to start using Huruf Deploy.")}
         </span>{" "}

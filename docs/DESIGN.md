@@ -248,6 +248,7 @@ Each of these shipped, was caught after the redesign, and was fixed. Check new U
 - **Persisted UI state uses our own key and a sensible default.** The sidebar read core's `sidebar_state` cookie, which held core navbar's closed default, so it started collapsed for everyone. Own `localStorage` key, open by default, every read/write in `try/catch`.
 - **No lonely sections.** A route group with one page renders that page unlabelled at the top, not as a labelled section of one; loose pages stay together at the top instead of landing between groups.
 - **Touch targets in the icon rail:** at least ~6 px between 32 px icons (WCAG 2.5.8). Density is for rows of text, not for icon-only targets.
+- **Text beside actions needs a basis, not just `flex-1`.** A `min-w-0 flex-1` title next to actions in a wrapping row never wraps: on a phone the actions keep their width and the title shrinks to "Ov…" with its description one word per line. `PageHeader` and the notice banners give the text `flex-[1_1_16rem]`, so the actions drop to their own line instead. Check every new header or banner at 390 px.
 - **Things that organize a page belong on that page.** Project groups were a nav item; they're folders on the Projects page. Before adding a nav entry, ask whether it's a page of its own or a way to arrange another page.
 
 ### Permissions
@@ -272,6 +273,7 @@ Each of these shipped, was caught after the redesign, and was fixed. Check new U
 ### How we check
 
 - **See it with data.** Pages were "verified" on an account with no projects, an offline server and no network, so menus, moves and graphs went untested. When the test account lacks data, mock the API in Playwright (`page.route`) and open every menu, dialog and row action, not just the page.
+- **Check phones on every page, not one.** Collect the pages from the sidebar and visit each at 390 px: no horizontal page scroll, titles on one line, descriptions at full width.
 - **Click every new control once** (menus, toggles, row actions) in the browser before calling it done; a page that renders can still crash on first click.
 - **Delegated work is reviewed like our own:** screenshots plus a click-through of each changed page, in light, dark, phone and Arabic, and axe.
 - **Local runs use `ENV_TYPE=test`**, including `deno task generate:sdk`.

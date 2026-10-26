@@ -16,7 +16,11 @@ import { readNumberSetting, readTextSetting } from "@/lib/core/settings.ts";
 import { subscriptionModel } from "@/schemas/billing/subscription.ts";
 import { subscriptionPeriodModel } from "@/schemas/billing/subscriptionPeriod.ts";
 import type { RateLimiter } from "@/lib/core/rateLimiter.ts";
-import { walletTopupModel } from "@/plugins/Huruf-Tech/thunder-core/schemas/walletTopup.ts";
+import {
+  TOPUP_CLAIM_TIMEOUT_MS,
+  TopupStatus,
+  walletTopupModel,
+} from "@/plugins/Huruf-Tech/thunder-core/schemas/walletTopup.ts";
 import {
   billingAccountModel,
   paymentCardModel,
@@ -54,6 +58,28 @@ type TChargeContext = {
   error?: string;
 };
 const chargeContext = new AsyncLocalStorage<TChargeContext>();
+
+/** An `initiated` or `pending` top-up this old has lost its webhook. */
+export const STUCK_AFTER_MS = 15 * 60_000;
+
+/**
+ * Top-ups an admin may have to finish (PLAN §25.5, Recovery): charged but not
+ * credited (`paid`), a claim whose process died (`processing`), or an outcome
+ * the webhook never brought (`initiated`, `pending`).
+ */
+export const stuckTopups = (now = Date.now()) => ({
+  $or: [
+    {
+      status: { $in: [TopupStatus.Initiated, TopupStatus.Pending] },
+      createdAt: { $lt: new Date(now - STUCK_AFTER_MS) },
+    },
+    { status: TopupStatus.Paid },
+    {
+      status: TopupStatus.Processing,
+      updatedAt: { $lt: new Date(now - TOPUP_CLAIM_TIMEOUT_MS) },
+    },
+  ],
+});
 
 /** A card still usable this month. */
 export const cardIsValid = (
@@ -376,6 +402,9 @@ export class PaymentService {
       );
       return { status: "funded" };
     } catch (error) {
+      // A declined attempt mustn't hold its key: the owner may retry the same
+      // change with another card.
+      await this.releaseFailed(opts.key);
       if (error instanceof InsufficientBalanceError) return { status: "short" };
       if (!(error instanceof TopupPendingError)) throw error;
       return { status: "pending", ...await this.pending(error.topup) };
@@ -600,19 +629,7 @@ export class PaymentService {
             error: event.error,
           });
           tenant = row.tenant;
-          // A renewal's top-up landed: renew on the next check, not next hour.
-          const renewal = row.idempotencyKey?.match(/^renew:([0-9a-f]{24}):/);
-          if (event.status === "completed" && renewal) {
-            await subscriptionModel.updateOne(
-              { _id: new ObjectId(renewal[1]) },
-              { $unset: { nextRenewalAttemptAt: "" } },
-            );
-          }
-          // Paid or given up: either way nothing waits for the owner now.
-          await billingAccountModel.updateOne(
-            { tenant, "actionRequired.topup": topup },
-            { $unset: { actionRequired: "" } },
-          );
+          await this.afterSettle(row);
         } catch (error) {
           if ((error as Error).message === "Top-up not found!") break;
           throw error;
@@ -647,6 +664,7 @@ export class PaymentService {
 
     const kept = event.kind === "refund" || event.kind === "dispute";
     await paymentEventModel.insertOne({
+      kept: kept || undefined,
       gateway: gatewayId,
       eventId: event.id,
       type: event.type,
@@ -661,6 +679,149 @@ export class PaymentService {
       // A concurrent delivery recorded it first.
       if ((error as { code?: number }).code !== 11000) throw error;
     });
+  }
+
+  /** A settled top-up: wake its renewal, clear the owner's flag. */
+  private async afterSettle(row: {
+    _id: ObjectId;
+    tenant: ObjectId;
+    status: string;
+    idempotencyKey?: string;
+  }) {
+    // A renewal's top-up landed: renew on the next check, not next hour.
+    const renewal = row.idempotencyKey?.match(/^renew:([0-9a-f]{24}):/);
+    if (row.status === "completed" && renewal) {
+      await subscriptionModel.updateOne(
+        { _id: new ObjectId(renewal[1]) },
+        { $unset: { nextRenewalAttemptAt: "" } },
+      );
+    }
+    // Paid or given up: either way nothing waits for the owner now.
+    if (row.status === "completed" || row.status === "failed") {
+      await billingAccountModel.updateOne(
+        { tenant: row.tenant, "actionRequired.topup": row._id },
+        { $unset: { actionRequired: "" } },
+      );
+    }
+  }
+
+  /** Frees the key of a failed top-up so the next attempt charges afresh. */
+  private async releaseFailed(key: string) {
+    const row = await walletTopupModel.findOne(
+      { idempotencyKey: key, status: TopupStatus.Failed },
+      { projection: { error: 1 } },
+    );
+    if (row) await Wallet.abandonTopup({ topup: row._id, reason: row.error });
+  }
+
+  /** What the gateway says happened to a top-up's charge (recovery). */
+  private async chargeOf(row: {
+    _id: ObjectId;
+    provider?: string;
+    providerRef?: string;
+  }) {
+    const gateway = this.gateway(
+      (row.provider as TGatewayId | undefined) ?? this.primary.id,
+    );
+    try {
+      const charge = row.providerRef
+        ? await gateway.readCharge(row.providerRef)
+        : await gateway.findCharge(row._id);
+      return { gateway, charge };
+    } catch (error) {
+      // An admin reads this: the gateway's own words ("No such payment_intent").
+      throw Response.badRequest(
+        `${gateway.id}: ${error instanceof Error ? error.message : error}`,
+      );
+    }
+  }
+
+  private async stuckTopup(topup: ObjectId) {
+    const row = await walletTopupModel.findOne({
+      _id: topup,
+      ...stuckTopups(),
+    });
+    if (!row) {
+      throw Response.badRequest(
+        "Only a stuck top-up can be settled or abandoned",
+      );
+    }
+    return row;
+  }
+
+  /**
+   * Admin → Payments, Settle (PLAN §25.5): asks the gateway what really
+   * happened and settles the top-up to match. Safe to repeat.
+   */
+  async settleStuck(topup: ObjectId): Promise<{
+    outcome: "settled" | "waiting" | "owner" | "no_charge";
+    status: string;
+    error?: string;
+  }> {
+    const row = await this.stuckTopup(topup);
+    const { gateway, charge } = await this.chargeOf(row);
+    if (!charge) return { outcome: "no_charge", status: row.status };
+    if (charge.status === "pending" || charge.status === "action_required") {
+      return { outcome: "waiting", status: row.status };
+    }
+    // The bank wants the owner (an off-session renewal): theirs to confirm.
+    if (
+      charge.status === "failed" &&
+      await billingAccountModel.countDocuments({
+        tenant: row.tenant,
+        "actionRequired.topup": row._id,
+      })
+    ) {
+      return { outcome: "owner", status: row.status };
+    }
+    if (!row.providerRef && charge.providerRef) {
+      await walletTopupModel.updateOne(
+        { _id: row._id, providerRef: { $exists: false } },
+        { $set: { provider: gateway.id, providerRef: charge.providerRef } },
+      );
+    }
+    const { topup: settled } = await Wallet.settleTopup({
+      topup: row._id,
+      status: charge.status,
+      amount: charge.status === "completed" ? charge.amount : undefined,
+      error: charge.error,
+    });
+    await this.afterSettle(settled);
+    return { outcome: "settled", status: settled.status, error: settled.error };
+  }
+
+  /**
+   * Admin → Payments, Abandon: closes an `initiated` top-up the gateway never
+   * charged, freeing its key. Refused while the gateway has a live charge,
+   * which Settle finishes instead.
+   */
+  async abandonStuck(topup: ObjectId) {
+    const row = await this.stuckTopup(topup);
+    if (row.status !== "initiated") {
+      throw Response.badRequest("Only an initiated top-up can be abandoned");
+    }
+    const { charge } = await this.chargeOf(row);
+    if (charge && charge.status !== "failed") {
+      throw Response.badRequest(
+        `The gateway has this charge as ${
+          charge.status.replace("_", " ")
+        }: settle it instead`,
+      );
+    }
+    await Wallet.abandonTopup({
+      topup: row._id,
+      reason: charge?.error ??
+        "Never reached the gateway; abandoned by an admin",
+    });
+  }
+
+  /** Admin → Payments: a refund or dispute dealt with in the gateway. */
+  async markHandled(event: ObjectId, by: ObjectId) {
+    const { matchedCount } = await paymentEventModel.updateOne(
+      { _id: event, kept: true },
+      { $set: { handledAt: new Date(), handledBy: by } },
+    );
+    if (!matchedCount) throw Response.notFound("Event not found");
   }
 
   /** Drops a card we no longer have and promotes another to default. */

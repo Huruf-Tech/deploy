@@ -75,6 +75,10 @@ export const $paymentEvent = z.object({
   currency: z.string().optional(),
   processedAt: z.date(),
   expiresAt: z.date().optional(),
+  /** Refunds and disputes: kept for Admin → Payments until handled. */
+  kept: z.literal(true).optional(),
+  handledAt: z.date().optional(),
+  handledBy: $objectId.meta({ ref: "users" }).optional(),
 });
 
 export type TPaymentEvent = z.output<typeof $paymentEvent>;

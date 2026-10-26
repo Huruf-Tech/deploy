@@ -103,6 +103,11 @@ export interface PaymentGateway {
   }): Promise<TChargeResult>;
   /** The charge's current state, for recovery and for on-session confirmation. */
   readCharge(providerRef: string): Promise<TChargeResult>;
+  /**
+   * The charge opened for a top-up whose call never returned its id (the
+   * process died mid-call); null when it never reached the gateway.
+   */
+  findCharge(topup: ObjectId): Promise<TChargeResult | null>;
   /** Verifies the signature and maps the event; nothing for events we ignore. */
   parseWebhook(req: Request): Promise<TGatewayEvent | void>;
 }
