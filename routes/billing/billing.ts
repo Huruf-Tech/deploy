@@ -9,7 +9,11 @@ import { withTenant } from "@/plugins/Huruf-Tech/thunder-core/utils/withTenant.t
 import { tenantOwner } from "@/lib/billing/owner.ts";
 import { tenantMemberModel } from "@/plugins/Huruf-Tech/thunder-core/schemas/tenantMember.ts";
 import { walletModel } from "@/plugins/Huruf-Tech/thunder-core/schemas/wallet.ts";
-import { billing as billingService, entitlements } from "@/lib/services.ts";
+import {
+  billing as billingService,
+  entitlements,
+  payments,
+} from "@/lib/services.ts";
 import {
   $plan,
   $planFeatures,
@@ -227,8 +231,11 @@ export default new Router("/api", function billing(router) {
   router.post("/subscribe", function subscribe() {
     const $body = z.object({ plan: $objectId });
     const $return = z.object({
-      result: z.enum(["active", "scheduled", "resumed"]),
+      result: z.enum(["active", "scheduled", "resumed", "pending"]),
       at: z.date().optional().describe("When a scheduled change applies"),
+      /** `pending`: the card top-up waits on the bank (PLAN §25.5). */
+      topup: z.string().optional(),
+      clientSecret: z.string().optional(),
     });
 
     return {
@@ -236,6 +243,7 @@ export default new Router("/api", function billing(router) {
       handler: async (req) => {
         const { plan } = $body.parse(await bodyAsJson(req));
         const { tenant, user } = await ownerOnly(req);
+        await payments.requireCard(tenant._id);
         return Response.json(
           await billingService.subscribe(tenant._id, user._id, plan),
         );

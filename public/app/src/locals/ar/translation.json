@@ -1100,5 +1100,7 @@
   "Your bank is still processing it; the funds appear when it confirms.": "ما زال بنكك يعالج الدفع؛ يظهر الرصيد عند التأكيد.",
   "Your bank needs you to confirm a payment.": "يحتاج بنكك إلى تأكيدك لعملية دفع.",
   "{{amount}} added": "أُضيف {{amount}}",
-  "Funds added by card": "رصيد مضاف بالبطاقة"
+  "Funds added by card": "رصيد مضاف بالبطاقة",
+  "We won't charge you; Free stays free.": "لن نخصم منك؛ الخطة المجانية تبقى مجانية.",
+  "Your bank is still processing it; the plan starts when it confirms.": "لا يزال البنك يعالج الدفع؛ ستبدأ الخطة عند تأكيده."
 }

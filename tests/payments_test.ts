@@ -21,6 +21,11 @@ import {
   paymentEventModel,
 } from "@/schemas/billing/payment.ts";
 import { serverModel } from "@/schemas/infrastructure/server.ts";
+import { BillingService } from "@/lib/billing/billing.ts";
+import { entitlements } from "@/lib/services.ts";
+import { $plan, planModel } from "@/schemas/billing/plan.ts";
+import { subscriptionModel } from "@/schemas/billing/subscription.ts";
+import { subscriptionPeriodModel } from "@/schemas/billing/subscriptionPeriod.ts";
 import { testSession } from "./_session.ts";
 
 // Payments (PLAN §25, Phase 15a): cards, the wallet top-up hook and webhooks,
@@ -113,7 +118,7 @@ Deno.test({
   sanitizeOps: false,
   sanitizeResources: false,
   fn: async (t) => {
-    const session = await testSession("payments");
+    const session = await testSession("payments", { card: false });
     const funding = await testSession("payments-funding");
     const tenant = session.tenantId;
     const d = mongodb.db();
@@ -131,6 +136,10 @@ Deno.test({
     const config = Env.getAll<Record<string, string>>();
     const previousFunding = config.WALLET_TOPUP_TENANT;
     config.WALLET_TOPUP_TENANT = funding.tenantId.toHexString();
+    // Settings are cached a minute per process: set them before anything reads them.
+    const platform = await testSession("payments-platform");
+    const previousPlatform = config.PLATFORM_TENANT;
+    config.PLATFORM_TENANT = platform.tenantId.toHexString();
 
     const card = (n: string, extra: Partial<TCardDetails> = {}) => ({
       providerRef: `pm_${n}`,
@@ -416,6 +425,66 @@ Deno.test({
         );
       });
 
+      await t.step(
+        "the card gate: no card, no servers, projects or plans",
+        async () => {
+          const bare = await testSession("payments-bare", { card: false });
+          // The gate is on only when payments are configured.
+          const config = Env.getAll<Record<string, string>>();
+          const keys = {
+            secret: config.STRIPE_SECRET_KEY,
+            publishable: config.STRIPE_PUBLISHABLE_KEY,
+          };
+          config.STRIPE_SECRET_KEY = "sk_test_gate";
+          config.STRIPE_PUBLISHABLE_KEY = "pk_test_gate";
+          try {
+            const project = await bare.call("POST", "/projects/api", {
+              name: "gated",
+              slug: `gated-${Date.now()}`,
+              source: { type: "image", image: "nginx:alpine" },
+              servers: [new ObjectId().toHexString()],
+            });
+            assertEquals(project.status, 402, JSON.stringify(project.json));
+            assertEquals(project.json.code, "card_required");
+
+            const bootstrap = await bare.call(
+              "POST",
+              "/servers/api/bootstrap",
+              {
+                host: "203.0.113.10",
+                username: "root",
+                password: "x",
+              },
+            );
+            assertEquals(bootstrap.status, 402);
+
+            // A granted plan is exempt.
+            const now = new Date();
+            await d.collection("subscriptionPeriods").insertOne({
+              tenant: bare.tenantId,
+              subscription: new ObjectId(),
+              plan: new ObjectId(),
+              periodStart: new Date(now.getTime() - 1_000),
+              periodEnd: new Date(now.getTime() + 60_000),
+              amount: 0,
+              currency: "usd",
+              limitsSnapshot: {},
+              featuresSnapshot: {},
+              kind: "complimentary",
+              createdAt: now,
+            });
+            await payments.requireCard(bare.tenantId);
+          } finally {
+            config.STRIPE_SECRET_KEY = keys.secret;
+            config.STRIPE_PUBLISHABLE_KEY = keys.publishable;
+            await d.collection("subscriptionPeriods").deleteMany({
+              tenant: bare.tenantId,
+            });
+            await bare.cleanup();
+          }
+        },
+      );
+
       await t.step("unsigned webhooks are refused", async () => {
         const refused = await payments.handleWebhook(
           "stripe",
@@ -429,6 +498,103 @@ Deno.test({
         assertEquals(refused?.status, 400);
         assertEquals(await paymentCardModel.countDocuments({ tenant }), 1);
       });
+
+      await t.step(
+        "plans: the card pays the shortfall, on and off session",
+        async () => {
+          const billing = new BillingService(entitlements, payments);
+          const price = 900_000;
+          const { insertedId: plan } = await planModel.insertOne($plan.parse({
+            name: "Card plan",
+            slug: `card-plan-${Date.now()}`,
+            price: { amount: price, currency: "usd", interval: "month" },
+          }));
+          const endPeriod = async () => {
+            const past = new Date(Date.now() - 1_000);
+            await subscriptionPeriodModel.updateMany(
+              { tenant, periodEnd: { $gt: past } },
+              { $set: { periodEnd: past } },
+            );
+            await subscriptionModel.updateOne({ tenant }, {
+              $set: { currentPeriodEnd: past },
+              $unset: { nextRenewalAttemptAt: "" },
+            });
+            entitlements.invalidate(tenant);
+          };
+          try {
+            // Subscribe: the card covers exactly what the wallet lacks.
+            const have = await balance();
+            const charges = gateway.charges.length;
+            const result = await billing.subscribe(tenant, session.user, plan);
+            assertEquals(result.result, "active");
+            assertEquals(gateway.charges.at(-1)!.amount, price - have);
+            assertEquals(gateway.charges.at(-1)!.offSession, false);
+            assertEquals(gateway.charges.length, charges + 1);
+            assertEquals(await balance(), 0);
+
+            // Renewal, owner away: the card pays the whole price once.
+            await endPeriod();
+            await billing.renewIfDue(tenant);
+            assertEquals(gateway.charges.at(-1)!.amount, price);
+            assertEquals(gateway.charges.at(-1)!.offSession, true);
+            assertEquals(
+              (await subscriptionModel.findOne({ tenant }))?.status,
+              "active",
+            );
+
+            // The bank wants the owner: past due, retried later, not charged again.
+            gateway.next = () => ({
+              status: "failed",
+              error: "Authentication required",
+              authenticationRequired: true,
+            });
+            await endPeriod();
+            await billing.renewIfDue(tenant);
+            const pastDue = await subscriptionModel.findOne({ tenant });
+            assertEquals(pastDue?.status, "pastDue");
+            assert(pastDue?.nextRenewalAttemptAt);
+            gateway.next = (amount) => ({ status: "completed", amount });
+
+            // The owner confirms; the webhook clears the hourly wait, so the
+            // next check renews from the funds that just landed.
+            const flagged = (await billingAccountModel.findOne({ tenant }))!
+              .actionRequired!;
+            await payments.handleWebhook(
+              "stripe",
+              webhook({
+                id: `evt_renew_${flagged.topup}`,
+                type: "payment_intent.succeeded",
+                kind: "charge",
+                status: "completed",
+                topup: flagged.topup.toHexString(),
+                providerRef: "pi_renew",
+              }),
+            );
+            assertEquals(
+              (await subscriptionModel.findOne({ tenant }))
+                ?.nextRenewalAttemptAt,
+              undefined,
+            );
+            const before = gateway.charges.length;
+            await billing.renewIfDue(tenant);
+            assertEquals(
+              (await subscriptionModel.findOne({ tenant }))?.status,
+              "active",
+            );
+            assertEquals(gateway.charges.length, before);
+          } finally {
+            await Promise.all([
+              planModel.deleteOne({ _id: plan }),
+              subscriptionModel.deleteMany({ tenant }),
+              subscriptionPeriodModel.deleteMany({ tenant }),
+              d.collection("walletLedgers").deleteMany({
+                tenant: platform.tenantId,
+              }),
+              d.collection("wallets").deleteMany({ tenant: platform.tenantId }),
+            ]);
+          }
+        },
+      );
 
       await t.step("the last card stays while servers run", async () => {
         const only = (await paymentCardModel.findOne({ tenant }))!;
@@ -474,6 +640,7 @@ Deno.test({
     } finally {
       Wallet.onInsufficientBalance = previousHook;
       config.WALLET_TOPUP_TENANT = previousFunding;
+      config.PLATFORM_TENANT = previousPlatform;
       await Promise.all([
         billingAccountModel.deleteMany({ tenant }),
         paymentCardModel.deleteMany({ tenant }),
@@ -489,6 +656,7 @@ Deno.test({
       ]);
       await session.cleanup();
       await funding.cleanup();
+      await platform.cleanup();
     }
   },
 });

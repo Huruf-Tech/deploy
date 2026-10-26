@@ -63,14 +63,22 @@ export const entitlements: Entitlements = new Entitlements({
     billing.enforceLimits(tenant, resolved),
 });
 
-export const billing: BillingService = new BillingService(entitlements);
+export const billing: BillingService = new BillingService(
+  entitlements,
+  // Lazy: `payments` is built below.
+  {
+    fundNow: (opts) => payments.fundNow(opts),
+    fundRenewal: (opts) => payments.fundRenewal(opts),
+  },
+);
 
 /**
  * Payments (PLAN §25): one service over the enabled gateways. Every wallet
  * short of funds asks it to charge the saved card (thunder-core's top-up
  * hook), so wiring it here covers every caller, scripts and tests included.
  */
-export const payments: PaymentService = new PaymentService([
-  new StripeGateway(),
-]);
+export const payments: PaymentService = new PaymentService(
+  [new StripeGateway()],
+  rateLimiter,
+);
 Wallet.onInsufficientBalance = (request) => payments.coverShortfall(request);

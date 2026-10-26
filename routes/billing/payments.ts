@@ -66,6 +66,8 @@ export default new Router("/api", function payments(router) {
       balance: z.number(),
       currency: z.string(),
       hasCard: z.boolean(),
+      /** The card gate applies: no valid card and not exempt. */
+      cardRequired: z.boolean(),
       isOwner: z.boolean(),
     });
 
@@ -73,14 +75,16 @@ export default new Router("/api", function payments(router) {
       shape: () => ({ return: $return }),
       handler: async (req) => {
         const { tenant, user, owner } = await withTenant(req);
-        const [{ balance }, hasCard] = await Promise.all([
+        const [{ balance }, hasCard, cardRequired] = await Promise.all([
           paymentService.statement(tenant._id, 0),
           paymentService.hasValidCard(tenant._id),
+          paymentService.needsCard(tenant._id),
         ]);
         return Response.json({
           balance,
           currency: PAYMENTS_CURRENCY,
           hasCard,
+          cardRequired,
           isOwner: user._id.equals(owner._id),
         });
       },

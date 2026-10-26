@@ -120,9 +120,11 @@ export type subscribe$body = {
     plan?: string;
 };
 export type subscribe$return = {
-    result: "active" | "scheduled" | "resumed";
+    result: "active" | "scheduled" | "resumed" | "pending";
     /** When a scheduled change applies */
     at?: Date | undefined;
+    topup?: string | undefined;
+    clientSecret?: string | undefined;
 };
 
 export const billingModule = (sdk: typeof BaseSDK) => {

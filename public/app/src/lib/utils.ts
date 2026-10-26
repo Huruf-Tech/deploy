@@ -9,6 +9,13 @@ export function cn(...inputs: ClassValue[]) {
 export function errorMessage(error: unknown): string | null {
   const data = (error as { response?: { data?: unknown } }).response?.data
   if (typeof data === "string" && data) return data
-  const messages = (data as { messages?: { message?: string }[] })?.messages
-  return messages?.[0]?.message ?? null
+  const body = data as {
+    message?: string
+    messages?: { message?: string }[]
+  } | null
+  // A bare Error (no response) is ours, e.g. the bank's reason from Stripe.
+  if (!data && error instanceof Error && !("response" in error)) {
+    return error.message
+  }
+  return body?.messages?.[0]?.message ?? body?.message ?? null
 }

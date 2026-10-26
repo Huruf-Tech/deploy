@@ -1100,5 +1100,7 @@
   "Your bank is still processing it; the funds appear when it confirms.": "Your bank is still processing it; the funds appear when it confirms.",
   "Your bank needs you to confirm a payment.": "Your bank needs you to confirm a payment.",
   "{{amount}} added": "{{amount}} added",
-  "Funds added by card": "Funds added by card"
+  "Funds added by card": "Funds added by card",
+  "We won't charge you; Free stays free.": "We won't charge you; Free stays free.",
+  "Your bank is still processing it; the plan starts when it confirms.": "Your bank is still processing it; the plan starts when it confirms."
 }

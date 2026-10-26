@@ -24,6 +24,7 @@ import { HeaderActionsProvider } from "@/core/context/HeaderActions"
 import { NotificationPopover } from "@/core/pages/notifications/notification-popover"
 import { features } from "@/core/lib/features"
 import { useLogout } from "@/core/protected"
+import { CardBanner } from "./card-banner"
 import { use } from "@/core/hooks/use"
 import {
   getAuthUrl,
@@ -176,6 +177,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
             </header>
           )}
         </HeaderActionsProvider>
+        <CardBanner />
         {/* SidebarInset is the page's <main>. */}
         <div
           id="main"

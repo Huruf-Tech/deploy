@@ -1,5 +1,6 @@
 import z from "zod";
 import { Router } from "@/core/http/router.ts";
+import { payments } from "@/lib/services.ts";
 import { bodyAsJson, paramsAsJson } from "@/core/http/utils.ts";
 import { $objectId, createCRUD } from "@/core/utils/createCRUD.ts";
 import { withTenant } from "@/plugins/Huruf-Tech/thunder-core/utils/withTenant.ts";
@@ -95,6 +96,8 @@ export default new Router("/api", function servers(router) {
         const { id } = $params.parse(paramsAsJson(req));
         const { pairingCode } = $body.parse(await bodyAsJson(req));
         const { tenant, user } = await withTenant(req);
+        // A saved card first, Free included (PLAN §25.10, 4).
+        await payments.requireCard(tenant._id);
 
         const accepted = await acceptServer({
           server: id,
@@ -219,6 +222,8 @@ export default new Router("/api", function servers(router) {
       handler: async (req) => {
         const body = $body.parse(await bodyAsJson(req));
         const { tenant, user } = await withTenant(req);
+        // A saved card first, Free included (PLAN §25.10, 4).
+        await payments.requireCard(tenant._id);
 
         const session = await startBootstrap({
           tenant: tenant._id,

@@ -2,7 +2,12 @@ import { type ClientSession, ObjectId, type WithId } from "mongodb";
 import { Response } from "@/core/http/response.ts";
 import { Logger } from "@/core/utils/logger.ts";
 import { isDuplicateKeyError, mongodb } from "@/database.ts";
-import { Wallet } from "@/plugins/Huruf-Tech/thunder-core/lib/wallet.ts";
+import {
+  InsufficientBalanceError,
+  TopupPendingError,
+  Wallet,
+} from "@/plugins/Huruf-Tech/thunder-core/lib/wallet.ts";
+import type { PaymentService } from "@/lib/payments/payments.ts";
 import { Mailer } from "@/plugins/Huruf-Tech/thunder-core/lib/mailer.ts";
 import { tenantModel } from "@/plugins/Huruf-Tech/thunder-core/schemas/tenant.ts";
 import { userModel } from "@/plugins/Huruf-Tech/thunder-core/schemas/user.ts";
@@ -36,7 +41,7 @@ const monthly = (plan: Pick<TPlan, "price">) =>
   plan.price.interval === "year" ? plan.price.amount / 12 : plan.price.amount;
 
 const isInsufficient = (error: unknown) =>
-  error instanceof Error && /balance/i.test(error.message);
+  error instanceof InsufficientBalanceError;
 
 /** Emails the workspace owner that the plan couldn't renew (PLAN §22.3). */
 async function notifyPastDue(tenant: ObjectId, plan: WithId<TPlan>) {
@@ -56,7 +61,8 @@ async function notifyPastDue(tenant: ObjectId, plan: WithId<TPlan>) {
         doc!.name
       }: the wallet doesn't have enough ${plan.price.currency.toUpperCase()}.\n\n` +
       `The tenant is on Free until it renews; nothing is deleted and your apps keep running. ` +
-      `We try again every hour. Add funds or pick a plan on the Plan & usage page.`,
+      `We try again every hour. On the Billing page you can add funds, check your card, ` +
+      `or confirm the payment if your bank asked for it.`,
   });
 }
 
@@ -67,7 +73,11 @@ async function notifyPastDue(tenant: ObjectId, plan: WithId<TPlan>) {
  * ponytail: plan periods only; usage meters (§24) get their own charge method here.
  */
 export class BillingService {
-  constructor(private readonly entitlements: Entitlements) {}
+  constructor(
+    private readonly entitlements: Entitlements,
+    /** Tops up from the saved card before a charge (PLAN §25.5). */
+    private readonly funds?: Pick<PaymentService, "fundNow" | "fundRenewal">,
+  ) {}
 
   /** Active public plans, plus private ones offered to this tenant. */
   available(tenant: ObjectId) {
@@ -202,6 +212,27 @@ export class BillingService {
 
     const now = new Date();
     const subscription = sub?._id ?? new ObjectId();
+    // A double click (or a retry) on the same change charges once.
+    const key = `sub:${subscription}:to:${plan._id}:from:${
+      current?._id ?? "none"
+    }`;
+    // The card covers what the wallet is short of, outside the transaction.
+    if (this.funds && plan.price.amount > 0) {
+      const funded = await this.funds.fundNow({
+        tenant,
+        amount: plan.price.amount,
+        currency: plan.price.currency,
+        key: `fund:${key}`,
+      });
+      // The bank wants the owner: the browser confirms, then subscribes again.
+      if (funded.status === "pending") {
+        return {
+          result: "pending" as const,
+          topup: funded.topup,
+          clientSecret: funded.clientSecret,
+        };
+      }
+    }
     try {
       await mongodb.withSession((client) =>
         client.withTransaction(async (session) => {
@@ -210,10 +241,7 @@ export class BillingService {
             subscription,
             plan,
             start: now,
-            // A double click (or a retry) on the same change charges once.
-            idempotencyKey: `sub:${subscription}:to:${plan._id}:from:${
-              current?._id ?? "none"
-            }`,
+            idempotencyKey: key,
             user,
             session,
           });
@@ -303,6 +331,26 @@ export class BillingService {
     }
 
     try {
+      // The card covers what the wallet is short of, before the transaction.
+      // One key per hourly attempt: a declined card is retried next hour.
+      if (this.funds && plan.price.amount > 0) {
+        const attempt = Math.floor(
+          (now.getTime() - ended.getTime()) / RETRY_MS,
+        );
+        const funded = await this.funds.fundRenewal({
+          tenant,
+          amount: plan.price.amount,
+          currency: plan.price.currency,
+          key: `renew:${sub._id}:${ended.toISOString()}:${attempt}`,
+        });
+        // The bank is processing, or wants the owner: past due until it lands.
+        if (funded === "pending") {
+          throw new TopupPendingError(
+            sub._id,
+            "Waiting for the payment to be confirmed",
+          );
+        }
+      }
       await mongodb.withSession((client) =>
         client.withTransaction(async (session) => {
           const end = await this.chargePeriod({
@@ -327,7 +375,8 @@ export class BillingService {
       );
     } catch (error) {
       if (
-        isInsufficient(error) || (error as Error).message?.includes("Payments")
+        isInsufficient(error) || error instanceof TopupPendingError ||
+        (error as Error).message?.includes("Payments")
       ) {
         const pastDue = {
           status: "pastDue" as const,

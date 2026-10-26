@@ -2,6 +2,7 @@ import z from "zod";
 import { templateModel } from "@/schemas/build/template.ts";
 import type { ObjectId } from "mongodb";
 import { Router } from "@/core/http/router.ts";
+import { payments } from "@/lib/services.ts";
 import { bodyAsJson, paramsAsJson, queryAsJson } from "@/core/http/utils.ts";
 import { $objectId } from "@/core/utils/createCRUD.ts";
 import { networkWarnings } from "@/lib/network/network.ts";
@@ -354,6 +355,8 @@ export default new Router("/api", function projects(router) {
       handler: async (req) => {
         const input = $projectInput.parse(await bodyAsJson(req));
         const { tenant, user } = await withTenant(req);
+        // A saved card first, Free included (PLAN §25.10, 4).
+        await payments.requireCard(tenant._id);
         const { _id, deployKeyPublic } = await createProject({
           tenant: tenant._id,
           user: user._id,

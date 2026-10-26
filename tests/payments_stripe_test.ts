@@ -32,7 +32,7 @@ Deno.test({
     const stripe = new Stripe(key, {
       httpClient: Stripe.createFetchHttpClient(),
     });
-    const session = await testSession("stripe");
+    const session = await testSession("stripe", { card: false });
     const funding = await testSession("stripe-funding");
     const tenant = session.tenantId;
     const d = mongodb.db();
@@ -41,7 +41,9 @@ Deno.test({
         ?.balance ?? 0;
 
     const gateway = new StripeGateway();
-    const payments = new PaymentService([gateway]);
+    const payments = new PaymentService([gateway], {
+      hit: () => Promise.resolve(true),
+    });
     const previousHook = Wallet.onInsufficientBalance;
     Wallet.onInsufficientBalance = (r) => payments.coverShortfall(r);
     const config = Env.getAll<Record<string, string>>();

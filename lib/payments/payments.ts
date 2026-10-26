@@ -4,6 +4,7 @@ import type { WithId } from "mongodb";
 import { Response } from "@/core/http/response.ts";
 import { Logger } from "@/core/utils/logger.ts";
 import {
+  InsufficientBalanceError,
   TopupPendingError,
   type TWalletTopupRequest,
   type TWalletTopupResult,
@@ -11,7 +12,9 @@ import {
 } from "@/plugins/Huruf-Tech/thunder-core/lib/wallet.ts";
 import { walletModel } from "@/plugins/Huruf-Tech/thunder-core/schemas/wallet.ts";
 import { walletLedgerModel } from "@/plugins/Huruf-Tech/thunder-core/schemas/walletLedger.ts";
-import { readNumberSetting } from "@/lib/core/settings.ts";
+import { readNumberSetting, readTextSetting } from "@/lib/core/settings.ts";
+import { subscriptionModel } from "@/schemas/billing/subscription.ts";
+import { subscriptionPeriodModel } from "@/schemas/billing/subscriptionPeriod.ts";
 import type { RateLimiter } from "@/lib/core/rateLimiter.ts";
 import { walletTopupModel } from "@/plugins/Huruf-Tech/thunder-core/schemas/walletTopup.ts";
 import {
@@ -322,20 +325,121 @@ export class PaymentService {
       };
     } catch (error) {
       if (!(error instanceof TopupPendingError)) throw error;
-      // Waiting on the bank: the browser finishes 3-D Secure if asked.
-      const row = await walletTopupModel.findOne({ _id: error.topup });
-      const pending = row?.providerRef
-        ? await this.gateway(row.provider as TGatewayId ?? this.primary.id)
-          .readCharge(row.providerRef)
-        : undefined;
-      return {
-        status: "pending" as const,
-        topup: String(error.topup),
-        clientSecret: pending?.status === "action_required"
-          ? pending.clientSecret
-          : undefined,
-      };
+      return { status: "pending" as const, ...await this.pending(error.topup) };
     }
+  }
+
+  /**
+   * A top-up waiting on the bank: what the browser needs to finish 3-D Secure,
+   * if the bank asked for it.
+   */
+  private async pending(topup: ObjectId) {
+    const row = await walletTopupModel.findOne({ _id: topup });
+    const charge = row?.providerRef
+      ? await this.gateway((row.provider as TGatewayId) ?? this.primary.id)
+        .readCharge(row.providerRef)
+      : undefined;
+    return {
+      topup: String(topup),
+      clientSecret: charge?.status === "action_required"
+        ? charge.clientSecret
+        : undefined,
+    };
+  }
+
+  /**
+   * A paid plan, with the owner present (PLAN §25.5): tops up what the wallet
+   * is short of before the plan is charged in its own transaction. `short`:
+   * nothing to charge (no card or account); the charge then says the wallet
+   * is short. A declined card throws with the bank's reason.
+   */
+  async fundNow(opts: {
+    tenant: ObjectId;
+    amount: number;
+    currency: string;
+    key: string;
+  }): Promise<
+    { status: "funded" | "short" } | {
+      status: "pending";
+      topup: string;
+      clientSecret?: string;
+    }
+  > {
+    try {
+      await this.onSession(() =>
+        Wallet.ensureBalance({
+          tenant: opts.tenant,
+          currency: opts.currency,
+          amount: opts.amount,
+          idempotencyKey: opts.key,
+        })
+      );
+      return { status: "funded" };
+    } catch (error) {
+      if (error instanceof InsufficientBalanceError) return { status: "short" };
+      if (!(error instanceof TopupPendingError)) throw error;
+      return { status: "pending", ...await this.pending(error.topup) };
+    }
+  }
+
+  /**
+   * A renewal, with the owner away (PLAN §25.5): `funded`, `pending` (the bank
+   * is processing, or wants the owner to confirm) or `short` (no card, autoPay
+   * off, or declined).
+   */
+  async fundRenewal(opts: {
+    tenant: ObjectId;
+    amount: number;
+    currency: string;
+    key: string;
+  }): Promise<"funded" | "pending" | "short"> {
+    try {
+      await Wallet.ensureBalance({
+        tenant: opts.tenant,
+        currency: opts.currency,
+        amount: opts.amount,
+        idempotencyKey: opts.key,
+      });
+      return "funded";
+    } catch (error) {
+      if (error instanceof TopupPendingError) return "pending";
+      if (error instanceof InsufficientBalanceError) return "short";
+      throw error;
+    }
+  }
+
+  /** Whether the card gate below would stop this tenant. */
+  async needsCard(tenant: ObjectId) {
+    if (await this.hasValidCard(tenant)) return false;
+    if (!await this.primary.isConfigured()) return false;
+    const exempt = await Promise.all([
+      readTextSetting("PLATFORM_TENANT", ""),
+      readTextSetting("WALLET_TOPUP_TENANT", ""),
+    ]);
+    if (exempt.includes(tenant.toHexString())) return false;
+    const now = new Date();
+    const granted = await subscriptionPeriodModel.findOne({
+      tenant,
+      kind: "complimentary",
+      periodStart: { $lte: now },
+      periodEnd: { $gt: now },
+    }, { projection: { _id: 1 } });
+    return !granted;
+  }
+
+  /**
+   * The card gate (PLAN §25.10, 4): adding a server, creating a project and
+   * subscribing need a valid saved card, Free included. Exempt: tenants on a
+   * granted (complimentary) plan, the platform's own tenants, and every tenant
+   * while payments aren't configured.
+   */
+  async requireCard(tenant: ObjectId) {
+    if (!await this.needsCard(tenant)) return;
+    throw Response.json({
+      code: "card_required",
+      message:
+        "Add a card on the Billing page first. We won't charge you: a card verifies your account, and Free stays free.",
+    }, { status: 402 });
   }
 
   /** A top-up of this tenant, for the browser waiting on a webhook. */
@@ -496,6 +600,14 @@ export class PaymentService {
             error: event.error,
           });
           tenant = row.tenant;
+          // A renewal's top-up landed: renew on the next check, not next hour.
+          const renewal = row.idempotencyKey?.match(/^renew:([0-9a-f]{24}):/);
+          if (event.status === "completed" && renewal) {
+            await subscriptionModel.updateOne(
+              { _id: new ObjectId(renewal[1]) },
+              { $unset: { nextRenewalAttemptAt: "" } },
+            );
+          }
           // Paid or given up: either way nothing waits for the owner now.
           await billingAccountModel.updateOne(
             { tenant, "actionRequired.topup": topup },

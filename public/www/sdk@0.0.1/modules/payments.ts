@@ -14,6 +14,7 @@ export type summary$return = {
     balance: number;
     currency: string;
     hasCard: boolean;
+    cardRequired: boolean;
     isOwner: boolean;
 };
 export type statement$return = {

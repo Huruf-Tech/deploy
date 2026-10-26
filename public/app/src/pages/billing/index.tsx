@@ -29,6 +29,7 @@ import { DataTable } from "@/components/console/data-table"
 import { useFresh } from "@/hooks/use-fresh"
 import { cn, errorMessage } from "@/lib/utils"
 import { isUnlimited, money } from "@/lib/plans"
+import { confirmPayment } from "./stripe"
 
 type TOverview = Awaited<ReturnType<typeof ThunderSDK.billing.get>>
 type TPlan = Awaited<ReturnType<typeof ThunderSDK.billing.plans>>[number]
@@ -124,9 +125,26 @@ function ConfirmDialog({
     if (!plan) return
     setBusy(true)
     try {
-      const { result, at } = await ThunderSDK.billing.subscribe({
-        body: { plan: plan._id },
-      })
+      const subscribe = () =>
+        ThunderSDK.billing.subscribe({ body: { plan: plan._id } })
+      let { result, at, ...payment } = await subscribe()
+      // The card top-up needs the bank (PLAN §25.5): confirm, then subscribe
+      // again with the funds in (the same change, so it isn't charged twice).
+      if (result === "pending" && payment.topup) {
+        toast.info(t("Confirming the payment with your bank…"))
+        const done = await confirmPayment({
+          topup: payment.topup,
+          clientSecret: payment.clientSecret,
+        })
+        if (!done) {
+          toast.info(
+            t("Your bank is still processing it; the plan starts when it confirms.")
+          )
+          onOpenChange(false)
+          return
+        }
+        ;({ result, at, ...payment } = await subscribe())
+      }
       toast.success(
         result === "scheduled"
           ? t("{{name}} starts on {{date}}", { name: plan.name, date: day(at) })

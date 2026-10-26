@@ -44,25 +44,13 @@ import { useTheme } from "@/components/theme-provider"
 import { useFresh } from "@/hooks/use-fresh"
 import { cn, errorMessage } from "@/lib/utils"
 import { money } from "@/lib/plans"
-import { stripeAppearance, stripeFor } from "./stripe"
+import { stripeAppearance, stripeFor, waitForTopup as settled } from "./stripe"
 
 type TCards = Awaited<ReturnType<typeof ThunderSDK.payments.cards>>
 type TCard = TCards["cards"][number]
 
 const PRESETS = [1_000, 2_000, 5_000, 10_000]
 
-/** Waits for a top-up the webhook settles (3-D Secure, bank processing). */
-async function settled(topup: string, timeoutMs = 60_000) {
-  const until = Date.now() + timeoutMs
-  while (Date.now() < until) {
-    const row = await ThunderSDK.payments.topupStatus({
-      params: { id: topup },
-    })
-    if (row.status === "completed" || row.status === "failed") return row
-    await new Promise((resolve) => setTimeout(resolve, 2_000))
-  }
-  return null
-}
 
 function CardBrand({ brand }: { brand: string }) {
   const Icon =
