@@ -44,9 +44,8 @@
               ]
             },
             "cpuCores": {
-              "type": "integer",
-              "minimum": 1,
-              "maximum": 9007199254740991
+              "type": "number",
+              "minimum": 0.1
             },
             "memory": {
               "type": "integer",
@@ -2017,9 +2016,7 @@
           "type": "object",
           "properties": {
             "cpuCores": {
-              "type": "integer",
-              "minimum": -9007199254740991,
-              "maximum": 9007199254740991
+              "type": "number"
             },
             "memTotal": {
               "type": "integer",

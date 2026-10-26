@@ -666,7 +666,6 @@
   "Up": "Up",
   "Update agent": "Update agent",
   "Updating: the agent restarts in a few seconds, then host setup runs.": "Updating: the agent restarts in a few seconds, then host setup runs.",
-  "Upgrades start now with a full period, paid from the tenant wallet; there's no proration for what's left of the current one. A cheaper plan starts when the current period ends.": "Upgrades start now with a full period, paid from the tenant wallet; there's no proration for what's left of the current one. A cheaper plan starts when the current period ends.",
   "Upload a .env file": "Upload a .env file",
   "Use for every project": "Use for every project",
   "Use from scripts and CI": "Use from scripts and CI",
@@ -1136,5 +1135,14 @@
   "Refund": "Refund",
   "Date": "Date",
   "Handled": "Handled",
-  "Mark handled": "Mark handled"
+  "Mark handled": "Mark handled",
+  "Upgrades start now with a full period, paid from the tenant wallet; the unused part of your current period is credited. A cheaper plan starts when the current period ends.": "Upgrades start now with a full period, paid from the tenant wallet; the unused part of your current period is credited. A cheaper plan starts when the current period ends.",
+  "{{price}} per {{interval}}": "{{price}} per {{interval}}",
+  "Starts when your current period ends; nothing is charged now.": "Starts when your current period ends; nothing is charged now.",
+  "Unused time of your current plan": "Unused time of your current plan",
+  "Due now": "Due now",
+  "Back to your wallet": "Back to your wallet",
+  "Wallet balance": "Wallet balance",
+  "month": "month",
+  "year": "year"
 }

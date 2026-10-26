@@ -449,6 +449,7 @@ export class PaymentService {
     const now = new Date();
     const granted = await subscriptionPeriodModel.findOne({
       tenant,
+      scope: { $ne: "server" },
       kind: "complimentary",
       periodStart: { $lte: now },
       periodEnd: { $gt: now },

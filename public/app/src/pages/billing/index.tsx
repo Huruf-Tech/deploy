@@ -120,6 +120,17 @@ function ConfirmDialog({
   const wallet = current?.wallets.find(
     (w) => w.currency === plan?.price.currency
   )
+  // What the change costs now, unused time credited (PLAN §26.6 B).
+  const quote = use(
+    ThunderSDK.useCaching(
+      ["billing", "quote", plan?._id ?? ""],
+      async ({ signal }) =>
+        plan && !plan.isFree && current?.isOwner
+          ? await ThunderSDK.billing.quote({ query: { plan: plan._id }, signal })
+          : null
+    )
+  ).data
+  const cost = (amount: number) => money(amount, plan?.price.currency ?? "usd")
 
   const confirm = async () => {
     if (!plan) return
@@ -174,18 +185,56 @@ function ConfirmDialog({
                   "Your current plan stays until its period ends, then the tenant moves to Free. Nothing is deleted; anything beyond Free's limits can't grow."
                 )
               : t(
-                  "Upgrades start now with a full period, paid from the tenant wallet; there's no proration for what's left of the current one. A cheaper plan starts when the current period ends."
+                  "Upgrades start now with a full period, paid from the tenant wallet; the unused part of your current period is credited. A cheaper plan starts when the current period ends."
                 )}
           </DialogDescription>
         </DialogHeader>
         {plan && !plan.isFree && (
-          <p className="text-sm">
-            {t("{{price}} per {{interval}}. Wallet balance: {{balance}}.", {
-              price: money(plan.price.amount, plan.price.currency),
-              interval: t(plan.price.interval),
-              balance: money(wallet?.balance ?? 0, plan.price.currency),
-            })}
-          </p>
+          <dl className="grid grid-cols-[1fr_auto] gap-x-4 gap-y-1 text-sm">
+            <dt className="text-muted-foreground">{t("Price")}</dt>
+            <dd className="text-end tabular-nums">
+              {t("{{price}} per {{interval}}", {
+                price: `⁦${cost(plan.price.amount)}⁩`,
+                interval: t(plan.price.interval),
+              })}
+            </dd>
+            {quote?.change === "scheduled" ? (
+              <dd className="col-span-2 text-muted-foreground">
+                {t("Starts when your current period ends; nothing is charged now.")}
+              </dd>
+            ) : (
+              <>
+                {!!quote?.credit && (
+                  <>
+                    <dt className="text-muted-foreground">
+                      {t("Unused time of your current plan")}
+                    </dt>
+                    <dd className="text-end tabular-nums">
+                      <span dir="ltr">−{cost(quote.credit)}</span>
+                    </dd>
+                  </>
+                )}
+                <dt className="font-medium">{t("Due now")}</dt>
+                <dd className="text-end font-medium tabular-nums">
+                  <span dir="ltr">{quote ? cost(quote.due) : "…"}</span>
+                </dd>
+                {!!quote?.refund && (
+                  <>
+                    <dt className="text-muted-foreground">
+                      {t("Back to your wallet")}
+                    </dt>
+                    <dd className="text-end tabular-nums">
+                      <span dir="ltr">+{cost(quote.refund)}</span>
+                    </dd>
+                  </>
+                )}
+              </>
+            )}
+            <dt className="text-muted-foreground">{t("Wallet balance")}</dt>
+            <dd className="text-end tabular-nums">
+              <span dir="ltr">{cost(wallet?.balance ?? 0)}</span>
+            </dd>
+          </dl>
         )}
         <DialogFooter>
           <Button onClick={confirm} disabled={busy}>

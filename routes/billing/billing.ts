@@ -1,7 +1,7 @@
 import z from "zod";
 import type { ObjectId } from "mongodb";
 import { Router } from "@/core/http/router.ts";
-import { bodyAsJson } from "@/core/http/utils.ts";
+import { bodyAsJson, queryAsJson } from "@/core/http/utils.ts";
 import { Response } from "@/core/http/response.ts";
 import { $objectId } from "@/core/utils/createCRUD.ts";
 import { readNumberSetting, readTextSetting } from "@/lib/core/settings.ts";
@@ -125,7 +125,10 @@ export default new Router("/api", function billing(router) {
                 projection: { name: 1 },
               }),
               billingService.currentPeriod(tenant._id),
-              subscriptionModel.findOne({ tenant: tenant._id }),
+              subscriptionModel.findOne({
+                tenant: tenant._id,
+                kind: { $ne: "server" },
+              }),
               usageOf(tenant._id),
               tenantUsageModel.findOne({ tenant: tenant._id }, {
                 projection: { overLimitSince: 1 },
@@ -224,6 +227,39 @@ export default new Router("/api", function billing(router) {
           ...p,
           planName: plans.find((x) => x._id.equals(p.plan))?.name,
         })));
+      },
+    };
+  });
+
+  // What a plan change costs now, with the current period's unused time
+  // credited (PLAN §26.6 B); the dialog shows it before confirming.
+  router.get("/quote", function quote() {
+    const $query = z.object({ plan: $objectId });
+    const $return = z.object({
+      change: z.enum(["now", "scheduled"]),
+      price: z.number(),
+      currency: z.string(),
+      credit: z.number().describe("Unused time of the current period"),
+      due: z.number().describe("Charged now"),
+      refund: z.number().describe(
+        "Credit beyond the price, back to the wallet",
+      ),
+    });
+
+    return {
+      shape: () => ({ query: $query, return: $return }),
+      handler: async (req) => {
+        const { plan } = $query.parse(queryAsJson(req));
+        const { tenant } = await ownerOnly(req);
+        const q = await billingService.quote(tenant._id, plan);
+        return Response.json({
+          change: q.change,
+          price: q.price,
+          currency: q.currency,
+          credit: q.credit,
+          due: q.due,
+          refund: q.refund,
+        });
       },
     };
   });

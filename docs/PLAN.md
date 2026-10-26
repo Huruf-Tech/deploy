@@ -1251,6 +1251,28 @@ Owner's decisions recorded (§25.10). 15a–15d built; the owner tested the paym
 
 ### Phase 16 — Shared resources: rent partitions of Huruf's machines (planned, D47, §26)
 Not started; the owner says go per stage. Each stage ends with a review. Built on the existing mechanisms, refactoring them where needed (§26.6).
+- **16b status: built (pending review).** Refactors only; behaviour unchanged except proration, which now applies to every upgrade.
+  - **Subscriptions per subject:** `subscriptions.kind` (`workspace`/`server`) and `server`. The unique index is now one workspace subscription per tenant plus one per rented server. Existing rows are migrated by `syncDeployIndexes` (`deno task setup:prod`), and the workspace queries also match rows not migrated yet.
+  - **Periods:** `subscriptionPeriods.scope`; `resourcesSnapshot`; `proratedCredit`. The tenant's plan and the card gate read workspace periods only. The entitlements' copy of the period query now calls `billing.currentPeriod`.
+  - **`BillingService` per subscription:** `subscribe`, `cancel` and `quote` take a subject (the workspace by default). `renewIfDue` renews every due subscription of the tenant, each on its own key. `grantComplimentary` is workspace only.
+  - **Proration:** the replaced period's unused value (what it cost, including any credit it got) is taken off the new price. Credit beyond the price goes back to the wallet in the same transaction, never blocked by the platform's balance. `GET /billing/api/quote?plan=` returns it, and the plan dialog shows price, credit, due now, any refund and the wallet balance.
+  - **Plans:** `kind` (`workspace`/`server`) and `resources`. `available()` lists workspace plans unless asked for server sizes. `limits.managedServers` and `features.managedServers` are removed, as is the plan form's row for them.
+  - **Servers:** `provider.kind: "rented"` (replaces the unused `managed`) with `host` and `subscription`. The over-limit throttle doesn't count rented servers.
+  - **Fit function:** `public/app/src/lib/capacity.ts` is already pure and imported by Deno tests, so 16d placement imports it as is; nothing moved.
+  - **Emails:** `lib/billing/notify.ts` `notifyOwner(tenant, {subject, text})`; the past-due email uses it.
+  - **Agent:**
+    - A new `cgroup` package reads the partition's own limits and usage.
+    - Inventory, the poll summary, the metrics charts, container CPU shares and capacity reports use the partition's CPU, memory and disk (`host.Cores()`, `Memory()`, `MemoryFree()`, `DataDisk()`, which also counts a separate Docker data disk).
+    - Containers get a default memory limit when the agent itself runs under one.
+    - `cpuCores` is a number in the protocol, so 0.5 vCPU fits; old agents' whole numbers stay valid.
+  - **Tests:**
+    - `tests/billing_subjects_test.ts`: the proration function; an upgrade halfway charged the difference, matching the quote; a yearly-to-monthly upgrade refunding the rest; a server subscription beside the workspace plan, not changing the tenant's plan; renewal of each due subscription once under 5 concurrent attempts; cancel leaving the rented server alone.
+    - `agent/internal/cgroup` tests.
+    - All existing tests pass (apart from the known `router.test.ts`).
+  - **Verified:**
+    - On the spike pool machine, the new agent in Salha's partition reported 1 vCPU, 2.25 GB and 10 GB (v0.0.20 reported 12 CPUs, 15.5 GB and 1 TB). After a live resize it reported 0.5 vCPU, accepted by the control plane.
+    - In the browser (light, dark at phone width, Arabic): the dialog halfway through a $19.50 plan showed −$9.75 and $40.25 due for a $50 plan, and confirming charged exactly $40.25.
+  - **To roll out:** `deno task setup:prod` (the subscription migration and indexes), then an agent release for the cgroup-aware agent.
 - **16a status: done, recommendation GO** (details §26.13; scripts in `tools/pool-spike/`: `setup-host.sh`, `partition.sh`, `network.sh`, `partition/Dockerfile`).
 - **16a Spike (go/no-go):** one pool machine (Ubuntu 24.04) with Sysbox.
   - A partition image with systemd, Docker and our agent; our agent inside, joining a tenant through `/bootstrap`.

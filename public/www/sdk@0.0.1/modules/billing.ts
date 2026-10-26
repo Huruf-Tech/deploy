@@ -27,14 +27,12 @@ export type get$return = {
         registries: number;
         domains: number;
         aiRequestsPerMonth: number;
-        managedServers: number;
     };
     features: {
         blueGreen: boolean;
         autoscale: boolean;
         privateNetwork: boolean;
         backups: boolean;
-        managedServers: boolean;
         aiAssistant: boolean;
     };
     period?: {
@@ -65,6 +63,13 @@ export type get$return = {
 };
 export type plans$return = {
     name: string;
+    kind: "workspace" | "server";
+    resources?: {
+        vcpu: number;
+        memMb: number;
+        diskGb: number;
+        trafficGb: number;
+    } | undefined;
     slug: string;
     description?: string | undefined;
     visibility: "public" | "private";
@@ -89,14 +94,12 @@ export type plans$return = {
         registries: number;
         domains: number;
         aiRequestsPerMonth: number;
-        managedServers: number;
     };
     features: {
         blueGreen: boolean;
         autoscale: boolean;
         privateNetwork: boolean;
         backups: boolean;
-        managedServers: boolean;
         aiAssistant: boolean;
     };
     isFree: boolean;
@@ -116,6 +119,20 @@ export type periods$return = {
     _id: string;
     planName?: string | undefined;
 }[];
+export type quote$query = {
+    plan?: string;
+};
+export type quote$return = {
+    change: "now" | "scheduled";
+    price: number;
+    currency: string;
+    /** Unused time of the current period */
+    credit: number;
+    /** Charged now */
+    due: number;
+    /** Credit beyond the price, back to the wallet */
+    refund: number;
+};
 export type subscribe$body = {
     plan?: string;
 };
@@ -132,6 +149,8 @@ export const billingModule = (sdk: typeof BaseSDK) => {
         get$return: get$return,
         plans$return: plans$return,
         periods$return: periods$return,
+        quote$query: quote$query,
+        quote$return: quote$return,
         subscribe$body: subscribe$body,
         subscribe$return: subscribe$return,
     };
@@ -222,6 +241,34 @@ export const billingModule = (sdk: typeof BaseSDK) => {
             return res;
         }, data);
     },
+        quote(data: {
+        params?: undefined,
+        query: quote$query,
+        body?: undefined,
+    } & TRequestOptions<quote$return>) {
+        return sdk.resolveAxiosResponse(async () => {
+            sdk.checkPermission("billing", "quote");
+
+            const method = "get";
+            const toPath = compile("billing/api/quote");
+            const requestPayload = {
+                method,
+                url: toPath(sdk.resolvePathParams(data?.params)),
+                params: data?.query,
+                data: data?.body,
+                signal: data?.signal,
+                ...(data?.axiosConfig
+                ? sdk.resolveAxiosConfig(data.axiosConfig)
+                : undefined),
+            };
+
+            sdk.log("Sending Request:", requestPayload);
+
+            const res = await sdk._axios!.request(requestPayload);
+
+            return res;
+        }, data);
+    },
         subscribe(data: {
         params?: undefined,
         query?: undefined,
@@ -283,6 +330,7 @@ export const billingModule = (sdk: typeof BaseSDK) => {
     (methods.get as any).__scope = "billing";
     (methods.plans as any).__scope = "billing";
     (methods.periods as any).__scope = "billing";
+    (methods.quote as any).__scope = "billing";
     (methods.subscribe as any).__scope = "billing";
     (methods.cancel as any).__scope = "billing";
 

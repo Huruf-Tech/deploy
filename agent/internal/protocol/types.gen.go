@@ -35,7 +35,7 @@ type Inventory struct {
 	// One of: amd64, arm64
 	Arch string `json:"arch"`
 
-	CpuCores int64 `json:"cpuCores"`
+	CpuCores float64 `json:"cpuCores"`
 
 	// Bytes
 	Memory int64 `json:"memory"`
@@ -684,7 +684,7 @@ type CapacityReport struct {
 }
 
 type CapacityReportHost struct {
-	CpuCores int64 `json:"cpuCores"`
+	CpuCores float64 `json:"cpuCores"`
 
 	MemTotal int64 `json:"memTotal"`
 

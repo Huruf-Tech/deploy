@@ -666,7 +666,6 @@
   "Up": "يعمل",
   "Update agent": "تحديث الوكيل",
   "Updating: the agent restarts in a few seconds, then host setup runs.": "جارٍ التحديث: يُعاد تشغيل الوكيل خلال ثوانٍ، ثم يبدأ تجهيز الخادم.",
-  "Upgrades start now with a full period, paid from the tenant wallet; there's no proration for what's left of the current one. A cheaper plan starts when the current period ends.": "تبدأ الترقية الآن بفترة كاملة تُدفع من محفظة المستأجر، دون احتساب نسبي لما تبقى من الفترة الحالية. أما الخطة الأرخص فتبدأ عند انتهاء الفترة الحالية.",
   "Upload a .env file": "رفع ملف .env",
   "Use for every project": "استخدام لكل المشاريع",
   "Use from scripts and CI": "للاستخدام من السكربتات وCI",
@@ -1136,5 +1135,14 @@
   "Refund": "استرداد",
   "Date": "التاريخ",
   "Handled": "تمت المعالجة",
-  "Mark handled": "تعليم كمعالَج"
+  "Mark handled": "تعليم كمعالَج",
+  "Upgrades start now with a full period, paid from the tenant wallet; the unused part of your current period is credited. A cheaper plan starts when the current period ends.": "تبدأ الترقيات الآن بفترة كاملة تُدفع من محفظة المستأجر، ويُحتسب الجزء غير المستخدم من فترتك الحالية رصيدًا. أما الخطة الأرخص فتبدأ عند انتهاء الفترة الحالية.",
+  "{{price}} per {{interval}}": "{{price}} لكل {{interval}}",
+  "Starts when your current period ends; nothing is charged now.": "تبدأ عند انتهاء فترتك الحالية؛ لا يُخصم شيء الآن.",
+  "Unused time of your current plan": "الوقت غير المستخدم من خطتك الحالية",
+  "Due now": "المستحق الآن",
+  "Back to your wallet": "يعود إلى محفظتك",
+  "Wallet balance": "رصيد المحفظة",
+  "month": "شهر",
+  "year": "سنة"
 }

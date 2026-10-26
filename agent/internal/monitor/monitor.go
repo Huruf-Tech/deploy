@@ -42,7 +42,7 @@ type Monitor struct {
 	Host  func() protocol.MetricsSample
 	// Disk sizes of images (by repo:tag) and volumes (by name); may be nil.
 	Disk     func(ctx context.Context) (images, volumes map[string]int64)
-	Cores    int
+	Cores    float64
 	Scaler   Scaler
 	Emit     func(event any)
 	Interval func() time.Duration
@@ -202,7 +202,7 @@ func (m *Monitor) record(now time.Time, host protocol.MetricsSample, byWorkload 
 	if m.accs == nil {
 		m.accs = map[string]*acc{}
 	}
-	m.hostAcc.cpu = append(m.hostAcc.cpu, host.Cpu*float64(m.Cores))
+	m.hostAcc.cpu = append(m.hostAcc.cpu, host.Cpu*m.Cores)
 	m.hostAcc.mem = append(m.hostAcc.mem, host.MemUsed)
 	m.hostAcc.disk = max(m.hostAcc.disk, host.DiskUsed)
 	for name, u := range byWorkload {
@@ -537,7 +537,7 @@ func (m *Monitor) Report(ctx context.Context) protocol.CapacityReport {
 	report := protocol.CapacityReport{
 		At: m.Now().UnixMilli(),
 		Host: protocol.CapacityReportHost{
-			CpuCores: int64(m.Cores), MemTotal: host.MemTotal, DiskTotal: host.DiskTotal,
+			CpuCores: m.Cores, MemTotal: host.MemTotal, DiskTotal: host.DiskTotal,
 			HeadroomPercent: m.headroom(),
 		},
 		Workloads: []protocol.CapacityReportWorkloadsItem{},

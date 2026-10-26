@@ -26,7 +26,6 @@ export const $planLimits = z.object({
   domains: z.number().int().min(0).default(3),
   /** AI template assistant calls per calendar month (UTC), with `aiAssistant`. */
   aiRequestsPerMonth: z.number().int().min(0).default(50),
-  managedServers: z.number().int().min(0).default(0),
 });
 
 export const $planFeatures = z.object({
@@ -34,13 +33,29 @@ export const $planFeatures = z.object({
   autoscale: z.boolean().default(true),
   privateNetwork: z.boolean().default(true),
   backups: z.boolean().default(true),
-  managedServers: z.boolean().default(false),
   /** The AI template assistant (Phase 12): off unless a plan turns it on. */
   aiAssistant: z.boolean().default(false),
 });
 
+/** What a rentable server size gives (PLAN §26.6 A); `kind: "server"` plans only. */
+export const $planResources = z.object({
+  vcpu: z.number().min(0.25).max(64),
+  memMb: z.number().int().min(256),
+  diskGb: z.number().int().min(5),
+  /** Traffic included per period; beyond it is charged per GB. */
+  trafficGb: z.number().int().min(0),
+});
+
 export const $planInput = z.object({
   name: z.string().min(1).max(50).meta({ canFilter: true }),
+  /**
+   * `workspace`: the tenant's plan (quotas and features). `server`: a rentable
+   * size of a pool machine (PLAN §26), with `resources`.
+   */
+  kind: z.enum(["workspace", "server"]).default("workspace").meta({
+    canFilter: true,
+  }),
+  resources: $planResources.optional(),
   slug: z.string().min(1).max(50).regex(/^[a-z0-9-]+$/).meta({
     canFilter: true,
   }),
@@ -66,6 +81,7 @@ export const $planInput = z.object({
  * $planInput, renaming a plan would reset its limits, features and visibility.
  */
 export const $planUpdate = $planInput.extend({
+  kind: $planInput.shape.kind.unwrap(),
   visibility: $planInput.shape.visibility.unwrap(),
   allowedTenants: $planInput.shape.allowedTenants.unwrap(),
   limits: $planLimits,
@@ -82,6 +98,7 @@ export const $plan = $planInput.extend({
 
 export type TPlanLimits = z.output<typeof $planLimits>;
 export type TPlanFeatures = z.output<typeof $planFeatures>;
+export type TPlanResources = z.output<typeof $planResources>;
 export type TPlan = z.output<typeof $plan>;
 
 export const planModel = mongodb.db().collection<TPlan>("plans");

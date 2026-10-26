@@ -28,9 +28,15 @@ export const $server = $serverUpdate.extend({
   installMethod: z.enum(["manual", "ssh"]).default("manual").meta({
     canFilter: true,
   }),
-  provider: z.object({ kind: z.enum(["byo", "managed"]) }).default({
-    kind: "byo",
-  }),
+  /**
+   * `byo`: the customer's own machine. `rented`: a partition of one of Huruf's
+   * pool machines (`host`), paid by `subscription` (PLAN §26).
+   */
+  provider: z.object({
+    kind: z.enum(["byo", "rented"]),
+    host: $objectId.meta({ ref: "servers" }).optional(),
+    subscription: $objectId.meta({ ref: "subscriptions" }).optional(),
+  }).default({ kind: "byo" }),
   // The dashboard's list filters (the agent protocol schema stays as is).
   inventory: $inventory.extend({
     hostname: $inventory.shape.hostname.meta({ canFilter: true }),

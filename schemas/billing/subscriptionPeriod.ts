@@ -1,20 +1,35 @@
 import z from "zod";
 import { mongodb } from "@/database.ts";
 import { $objectId } from "@/core/utils/createCRUD.ts";
-import { $planFeatures, $planLimits } from "@/schemas/billing/plan.ts";
+import {
+  $planFeatures,
+  $planLimits,
+  $planResources,
+} from "@/schemas/billing/plan.ts";
+import { $subscriptionKind } from "@/schemas/billing/subscription.ts";
 
-/** The payment log (PLAN §22.1). The entry covering `now` is the tenant's effective plan. */
+/**
+ * The payment log (PLAN §22.1). The workspace entry covering `now` is the
+ * tenant's effective plan; server entries pay for rented servers (PLAN §26).
+ */
 export const $subscriptionPeriod = z.object({
   tenant: $objectId.meta({ ref: "tenants" }),
   subscription: $objectId.meta({ ref: "subscriptions" }),
+  /** The subscription's kind; absent on periods written before PLAN §26. */
+  scope: $subscriptionKind.optional(),
   plan: $objectId.meta({ ref: "plans" }),
   periodStart: z.date(),
   periodEnd: z.date(),
+  /** What was charged: the price minus `proratedCredit`. */
   amount: z.number().int().min(0),
   currency: z.string(),
+  /** Unused time of the replaced period, credited against this one (PLAN §26.6 B). */
+  proratedCredit: z.number().int().min(0).optional(),
   ledgerReference: z.string().optional(),
   limitsSnapshot: $planLimits,
   featuresSnapshot: $planFeatures,
+  /** Server periods: the size paid for. */
+  resourcesSnapshot: $planResources.optional(),
   kind: z.enum(["paid", "complimentary"]),
   paidAt: z.date().optional(),
   /** Why a complimentary period was granted. */

@@ -22,6 +22,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Huruf-Tech/huruf-deploy/agent/internal/cgroup"
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/ledger"
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/protocol"
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/reconcile"
@@ -137,6 +138,11 @@ func (d *Docker) Start(ctx context.Context, spec reconcile.ContainerSpec) (recon
 	}
 	if rel.MemoryMb != nil {
 		args = append(args, "--memory", fmt.Sprintf("%dm", *rel.MemoryMb))
+	} else if limit := cgroup.MemoryMax(); limit > 0 {
+		// In a partition (PLAN §26) /proc/meminfo shows the whole machine: a
+		// limit lets runtimes that size themselves from cgroups (Node, Java,
+		// Go) see the partition's memory instead.
+		args = append(args, "--memory", strconv.FormatInt(limit, 10))
 	}
 	for _, v := range rel.Volumes {
 		name := v.Name

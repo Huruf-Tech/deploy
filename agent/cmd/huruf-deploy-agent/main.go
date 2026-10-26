@@ -17,7 +17,6 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"sync/atomic"
 	"syscall"
@@ -30,6 +29,7 @@ import (
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/dns"
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/docker"
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/edge"
+	"github.com/Huruf-Tech/huruf-deploy/agent/internal/host"
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/identity"
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/ledger"
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/mesh"
@@ -149,7 +149,7 @@ func main() {
 		Stats:    metrics.Stats,
 		Host:     hostSampler.Sample,
 		Disk:     metrics.DiskUsage,
-		Cores:    runtime.NumCPU(),
+		Cores:    host.Cores(),
 		Scaler:   reconciler,
 		Emit:     func(event any) { a.Enqueue(event); a.Wake() },
 		Interval: a.MonitorInterval,

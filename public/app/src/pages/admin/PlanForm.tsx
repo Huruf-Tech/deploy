@@ -42,7 +42,6 @@ const LIMITS = [
   ["registries", "Registries", 10],
   ["domains", "Custom domains", 3],
   ["aiRequestsPerMonth", "AI requests per month", 50],
-  ["managedServers", "Managed servers", 0],
 ] as const
 
 const FEATURES = [
@@ -50,7 +49,6 @@ const FEATURES = [
   ["autoscale", "Autoscale", true],
   ["privateNetwork", "Private network", true],
   ["backups", "Backups", true],
-  ["managedServers", "Managed servers", false],
   ["aiAssistant", "AI assistant", false],
 ] as const
 

@@ -15,7 +15,6 @@ import {
   $planLimits,
   planModel,
 } from "@/schemas/billing/plan.ts";
-import { subscriptionPeriodModel } from "@/schemas/billing/subscriptionPeriod.ts";
 import { rateCounterModel } from "@/schemas/limits/rateCounter.ts";
 import { tenantUsageModel } from "@/schemas/limits/tenantUsage.ts";
 
@@ -49,14 +48,7 @@ const freePlan = cache(async () => {
 }, 60_000);
 
 export const entitlements: Entitlements = new Entitlements({
-  currentPeriod: (tenant, now) =>
-    subscriptionPeriodModel.findOne(
-      { tenant, periodStart: { $lte: now }, periodEnd: { $gt: now } },
-      {
-        sort: { periodEnd: -1 },
-        projection: { plan: 1, limitsSnapshot: 1, featuresSnapshot: 1 },
-      },
-    ),
+  currentPeriod: (tenant, now) => billing.currentPeriod(tenant, now),
   freePlan,
   renew: (tenant): Promise<void> => billing.renewIfDue(tenant),
   enforce: (tenant, resolved): Promise<void> =>

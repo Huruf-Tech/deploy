@@ -2,6 +2,13 @@ import type { TRequestOptions, TFilters, TPagination } from "../types.js";
 import type { BaseSDK } from "../base.js";
 export type create$body = {
     name: string;
+    kind?: "workspace" | "server";
+    resources?: {
+        vcpu: number;
+        memMb: number;
+        diskGb: number;
+        trafficGb: number;
+    } | undefined;
     slug: string;
     description?: string | undefined;
     visibility?: "public" | "private";
@@ -27,14 +34,12 @@ export type create$body = {
         registries?: number;
         domains?: number;
         aiRequestsPerMonth?: number;
-        managedServers?: number;
     };
     features?: {
         blueGreen?: boolean;
         autoscale?: boolean;
         privateNetwork?: boolean;
         backups?: boolean;
-        managedServers?: boolean;
         aiAssistant?: boolean;
     };
     isFree?: boolean;
@@ -60,6 +65,13 @@ export type get$query = TPagination;
 export type get$return = {
     results: {
         name: string;
+        kind: "workspace" | "server";
+        resources?: {
+            vcpu: number;
+            memMb: number;
+            diskGb: number;
+            trafficGb: number;
+        } | undefined;
         slug: string;
         description?: string | undefined;
         visibility: "public" | "private";
@@ -85,14 +97,12 @@ export type get$return = {
             registries: number;
             domains: number;
             aiRequestsPerMonth: number;
-            managedServers: number;
         };
         features: {
             blueGreen: boolean;
             autoscale: boolean;
             privateNetwork: boolean;
             backups: boolean;
-            managedServers: boolean;
             aiAssistant: boolean;
         };
         isFree: boolean;
@@ -108,6 +118,13 @@ export type update$params = {
 };
 export type update$body = {
     name?: (string | undefined) | undefined;
+    kind?: (("workspace" | "server") | undefined) | undefined;
+    resources?: (({
+        vcpu: number;
+        memMb: number;
+        diskGb: number;
+        trafficGb: number;
+    } | undefined) | undefined) | undefined;
     slug?: (string | undefined) | undefined;
     description?: ((string | undefined) | undefined) | undefined;
     visibility?: (("public" | "private") | undefined) | undefined;
@@ -133,14 +150,12 @@ export type update$body = {
         registries?: number;
         domains?: number;
         aiRequestsPerMonth?: number;
-        managedServers?: number;
     } | undefined) | undefined;
     features?: ({
         blueGreen?: boolean;
         autoscale?: boolean;
         privateNetwork?: boolean;
         backups?: boolean;
-        managedServers?: boolean;
         aiAssistant?: boolean;
     } | undefined) | undefined;
     isFree?: (boolean | undefined) | undefined;

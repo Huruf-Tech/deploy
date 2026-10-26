@@ -63,6 +63,26 @@ export const billingModule = (sdk) => {
                 return res;
             }, data);
         },
+        quote(data) {
+            return sdk.resolveAxiosResponse(async () => {
+                sdk.checkPermission("billing", "quote");
+                const method = "get";
+                const toPath = compile("billing/api/quote");
+                const requestPayload = {
+                    method,
+                    url: toPath(sdk.resolvePathParams(data?.params)),
+                    params: data?.query,
+                    data: data?.body,
+                    signal: data?.signal,
+                    ...(data?.axiosConfig
+                        ? sdk.resolveAxiosConfig(data.axiosConfig)
+                        : undefined),
+                };
+                sdk.log("Sending Request:", requestPayload);
+                const res = await sdk._axios.request(requestPayload);
+                return res;
+            }, data);
+        },
         subscribe(data) {
             return sdk.resolveAxiosResponse(async () => {
                 sdk.checkPermission("billing", "subscribe");
@@ -107,6 +127,7 @@ export const billingModule = (sdk) => {
     methods.get.__scope = "billing";
     methods.plans.__scope = "billing";
     methods.periods.__scope = "billing";
+    methods.quote.__scope = "billing";
     methods.subscribe.__scope = "billing";
     methods.cancel.__scope = "billing";
     sdk["_moduleGroup"].set(methods, "Billing");

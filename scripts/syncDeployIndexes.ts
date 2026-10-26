@@ -54,6 +54,12 @@ export const syncDeployIndexes = async () => {
   // The first version left `project` out: projects of one tenant couldn't
   // share a variable name. Replaced by uniqueKeyPerScopeOwner.
   await variableModel.dropIndex("uniqueKeyPerOwner").catch(() => {});
+  // Subscriptions per subject (PLAN §26.6 B): existing ones are workspace
+  // plans, and "one per tenant" becomes "one workspace plan per tenant".
+  await subscriptionModel.updateMany({ kind: { $exists: false } }, {
+    $set: { kind: "workspace" },
+  });
+  await subscriptionModel.dropIndex("uniqueTenant").catch(() => {});
 
   await Promise.all([
     controlPlaneSampleModel.createIndex({ at: 1 }, { name: "at" }),
@@ -293,10 +299,20 @@ export const syncDeployIndexes = async () => {
       name: "dueChecks",
       partialFilterExpression: { status: "checking" },
     }),
-    // One subscription per tenant (PLAN §22.1).
+    // One workspace subscription per tenant (PLAN §22.1), one per rented
+    // server (PLAN §26.6 B); due renewals per tenant.
     subscriptionModel.createIndex({ tenant: 1 }, {
-      name: "uniqueTenant",
+      name: "uniqueWorkspace",
       unique: true,
+      partialFilterExpression: { kind: "workspace" },
+    }),
+    subscriptionModel.createIndex({ server: 1 }, {
+      name: "uniqueServer",
+      unique: true,
+      partialFilterExpression: { kind: "server" },
+    }),
+    subscriptionModel.createIndex({ tenant: 1, currentPeriodEnd: 1 }, {
+      name: "tenantDue",
     }),
     // Throttling servers beyond the quota (PLAN §22.5).
     serverLeaseModel.createIndex({ tenant: 1, throttled: 1 }, {

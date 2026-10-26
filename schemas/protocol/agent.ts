@@ -18,7 +18,8 @@ export const $inventory = z.object({
   hostname: z.string().max(255),
   os: z.string().max(100),
   arch: z.enum(["amd64", "arm64"]),
-  cpuCores: z.number().int().min(1),
+  /** Whole cores on a machine; a partition's limit can be fractional (PLAN §26). */
+  cpuCores: z.number().min(0.1),
   memory: z.number().int().min(0).describe("Bytes"),
   disk: z.number().int().min(0).describe("Bytes"),
   publicIp: z.string().max(64).optional(),
@@ -551,7 +552,7 @@ export const $footprint = z.object({
 export const $capacityReport = z.object({
   at: z.number().int(),
   host: z.object({
-    cpuCores: z.number().int(),
+    cpuCores: z.number(),
     memTotal: z.number().int(),
     diskTotal: z.number().int(),
     headroomPercent: z.number(),

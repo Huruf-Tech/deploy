@@ -22,14 +22,12 @@ export type get$return = {
         registries: number;
         domains: number;
         aiRequestsPerMonth: number;
-        managedServers: number;
     };
     features: {
         blueGreen: boolean;
         autoscale: boolean;
         privateNetwork: boolean;
         backups: boolean;
-        managedServers: boolean;
         aiAssistant: boolean;
     };
     period?: {
@@ -60,6 +58,13 @@ export type get$return = {
 };
 export type plans$return = {
     name: string;
+    kind: "workspace" | "server";
+    resources?: {
+        vcpu: number;
+        memMb: number;
+        diskGb: number;
+        trafficGb: number;
+    } | undefined;
     slug: string;
     description?: string | undefined;
     visibility: "public" | "private";
@@ -84,14 +89,12 @@ export type plans$return = {
         registries: number;
         domains: number;
         aiRequestsPerMonth: number;
-        managedServers: number;
     };
     features: {
         blueGreen: boolean;
         autoscale: boolean;
         privateNetwork: boolean;
         backups: boolean;
-        managedServers: boolean;
         aiAssistant: boolean;
     };
     isFree: boolean;
@@ -111,6 +114,20 @@ export type periods$return = {
     _id: string;
     planName?: string | undefined;
 }[];
+export type quote$query = {
+    plan?: string;
+};
+export type quote$return = {
+    change: "now" | "scheduled";
+    price: number;
+    currency: string;
+    /** Unused time of the current period */
+    credit: number;
+    /** Charged now */
+    due: number;
+    /** Credit beyond the price, back to the wallet */
+    refund: number;
+};
 export type subscribe$body = {
     plan?: string;
 };
@@ -126,6 +143,8 @@ export declare const billingModule: (sdk: typeof BaseSDK) => {
         get$return: get$return;
         plans$return: plans$return;
         periods$return: periods$return;
+        quote$query: quote$query;
+        quote$return: quote$return;
         subscribe$body: subscribe$body;
         subscribe$return: subscribe$return;
     };
@@ -161,6 +180,17 @@ export declare const billingModule: (sdk: typeof BaseSDK) => {
         then: <TResult1 = periods$return, TResult2 = never>(onfulfilled?: ((value: periods$return) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
         catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<periods$return | TResult>;
         finally: (onfinally?: (() => void) | null | undefined) => Promise<periods$return>;
+    };
+    readonly quote: (data: {
+        params?: undefined;
+        query: quote$query;
+        body?: undefined;
+    } & TRequestOptions<quote$return>) => {
+        readonly raw: Promise<import("axios").AxiosResponse<quote$return, any, {}, any>>;
+        readonly data: Promise<quote$return>;
+        then: <TResult1 = quote$return, TResult2 = never>(onfulfilled?: ((value: quote$return) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+        catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<quote$return | TResult>;
+        finally: (onfinally?: (() => void) | null | undefined) => Promise<quote$return>;
     };
     readonly subscribe: (data: {
         params?: undefined;

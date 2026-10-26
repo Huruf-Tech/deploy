@@ -34,14 +34,12 @@ export const seedPlans = async () => {
     limits: {
       ...Object.fromEntries(Object.keys(limits).map((k) => [k, UNLIMITED])),
       releasesKept: 20,
-      managedServers: 0,
     },
     features: {
       blueGreen: true,
       autoscale: true,
       privateNetwork: true,
       backups: true,
-      managedServers: false,
       aiAssistant: true,
     },
     sortOrder: 1000,

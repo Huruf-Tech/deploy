@@ -13,21 +13,21 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/Huruf-Tech/huruf-deploy/agent/internal/cgroup"
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/protocol"
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/update"
 )
 
 func Inventory(agentVersion string) protocol.Inventory {
 	hostname, _ := os.Hostname()
-	mem := meminfo()
-	total, _ := disk("/")
+	total, _ := DataDisk()
 
 	return protocol.Inventory{
 		Hostname:      hostname,
 		Os:            osName(),
 		Arch:          runtime.GOARCH,
-		CpuCores:      int64(runtime.NumCPU()),
-		Memory:        mem["MemTotal"],
+		CpuCores:      Cores(),
+		Memory:        Memory(),
 		Disk:          total,
 		PrivateIp:     privateIP(),
 		DockerVersion: dockerVersion(),
@@ -48,21 +48,79 @@ func privateIP() string {
 	return conn.LocalAddr().(*net.UDPAddr).IP.String()
 }
 
-// Sampler computes CPU usage between consecutive calls from /proc/stat.
-type Sampler struct{ idle, total uint64 }
+// Cores is what the agent may use: the partition's CPU limit (PLAN §26), else
+// the machine's cores.
+func Cores() float64 {
+	if cpus := cgroup.CPUs(); cpus > 0 {
+		return cpus
+	}
+	return float64(runtime.NumCPU())
+}
+
+// Memory is the partition's memory limit, else the machine's memory.
+func Memory() int64 {
+	total := meminfo()["MemTotal"]
+	if limit := cgroup.MemoryMax(); limit > 0 && (total == 0 || limit < total) {
+		return limit
+	}
+	return total
+}
+
+// MemoryFree is what's left for apps: within the partition's limit, else
+// the machine's available memory.
+func MemoryFree() int64 {
+	if limit := cgroup.MemoryMax(); limit > 0 {
+		return max(0, Memory()-cgroup.MemoryUsed())
+	}
+	return meminfo()["MemAvailable"]
+}
+
+// DataDisk is the system disk plus Docker's data disk when that's another
+// filesystem. A partition keeps Docker's data on its own quota (PLAN §26), so
+// its size is the two together; on most servers they're the same disk.
+func DataDisk() (total, free int64) {
+	total, free = disk("/")
+	var root, data syscall.Statfs_t
+	if syscall.Statfs("/", &root) == nil && syscall.Statfs("/var/lib/docker", &data) == nil &&
+		root.Fsid != data.Fsid {
+		t, f := disk("/var/lib/docker")
+		total, free = total+t, free+f
+	}
+	return total, free
+}
+
+// Sampler computes CPU usage between consecutive calls: from the partition's
+// cgroup when it has a CPU limit, else from /proc/stat.
+type Sampler struct {
+	idle, total uint64
+	usage       uint64
+	at          time.Time
+}
+
+// CPU is the share of Cores() used since the previous call.
+func (s *Sampler) CPU() float64 {
+	cpu := 0.0
+	if cores := cgroup.CPUs(); cores > 0 {
+		now, usage := time.Now(), cgroup.CPUUsageMicros()
+		if elapsed := now.Sub(s.at).Microseconds(); !s.at.IsZero() && elapsed > 0 && usage >= s.usage {
+			cpu = float64(usage-s.usage) / (float64(elapsed) * cores)
+		}
+		s.usage, s.at = usage, now
+	} else {
+		idle, total := cpuTimes()
+		if s.total > 0 && total > s.total {
+			cpu = 1 - float64(idle-s.idle)/float64(total-s.total)
+		}
+		s.idle, s.total = idle, total
+	}
+	return min(1, max(0, cpu))
+}
 
 func (s *Sampler) Summary() protocol.ResourceSummary {
-	idle, total := cpuTimes()
-	cpu := 0.0
-	if s.total > 0 && total > s.total {
-		cpu = 1 - float64(idle-s.idle)/float64(total-s.total)
-	}
-	s.idle, s.total = idle, total
-
-	_, free := disk("/")
+	_, free := DataDisk()
 	return protocol.ResourceSummary{
-		Cpu:      min(1, max(0, cpu)),
-		MemFree:  meminfo()["MemAvailable"],
+		Cpu:      s.CPU(),
+		MemFree:  MemoryFree(),
 		DiskFree: free,
 	}
 }

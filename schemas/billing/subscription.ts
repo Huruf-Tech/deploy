@@ -3,11 +3,20 @@ import { mongodb } from "@/database.ts";
 import { $objectId } from "@/core/utils/createCRUD.ts";
 
 /**
- * A tenant's subscription (PLAN §22.1): what to renew and when. What a tenant
- * may use comes from its current `subscriptionPeriods` entry, else Free.
+ * What a subscription pays for (PLAN §26.6 B): the tenant's workspace plan
+ * (one per tenant), or one rented server (one per server).
+ */
+export const $subscriptionKind = z.enum(["workspace", "server"]);
+
+/**
+ * A subscription (PLAN §22.1): what to renew and when. What a tenant may use
+ * comes from its current workspace `subscriptionPeriods` entry, else Free.
  */
 export const $subscription = z.object({
   tenant: $objectId.meta({ ref: "tenants" }),
+  kind: $subscriptionKind,
+  /** `server` subscriptions: the rented server. */
+  server: $objectId.meta({ ref: "servers" }).optional(),
   plan: $objectId.meta({ ref: "plans" }),
   status: z.enum(["active", "pastDue", "canceled"]),
   autoRenew: z.boolean(),
@@ -23,6 +32,7 @@ export const $subscription = z.object({
 });
 
 export type TSubscription = z.output<typeof $subscription>;
+export type TSubscriptionKind = z.output<typeof $subscriptionKind>;
 
 export const subscriptionModel = mongodb.db().collection<TSubscription>(
   "subscriptions",

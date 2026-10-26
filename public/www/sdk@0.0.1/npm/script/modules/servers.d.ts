@@ -31,7 +31,9 @@ export type get$return = {
         pairingExpiresAt?: Date | undefined;
         installMethod: "manual" | "ssh";
         provider: {
-            kind: "byo" | "managed";
+            kind: "byo" | "rented";
+            host?: string | undefined;
+            subscription?: string | undefined;
         };
         inventory: {
             hostname: string;

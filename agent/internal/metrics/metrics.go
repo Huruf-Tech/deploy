@@ -9,13 +9,12 @@ import (
 	"encoding/json"
 	"os"
 	"os/exec"
-	"runtime"
 	"strconv"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
+	"github.com/Huruf-Tech/huruf-deploy/agent/internal/host"
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/protocol"
 )
 
@@ -32,33 +31,32 @@ const (
 // Sampler turns cumulative counters (/proc/stat, /proc/net/dev) into rates
 // between two calls. Each consumer owns one, so their intervals don't mix.
 type Sampler struct {
-	idle, total uint64
-	rx, tx      uint64
-	at          time.Time
+	cpu    host.Sampler
+	rx, tx uint64
+	at     time.Time
 }
 
+// Sample is the machine's usage, or the partition's within its limits
+// (PLAN §26): the host package reads both.
 func (s *Sampler) Sample() protocol.MetricsSample {
 	now := time.Now()
-	idle, total := cpuTimes()
 	rx, tx := netBytes()
-	memTotal, memAvailable := memory()
-	diskTotal, diskFree := disk("/")
+	memTotal := host.Memory()
+	diskTotal, diskFree := host.DataDisk()
 
 	sample := protocol.MetricsSample{
 		T:         now.UnixMilli(),
-		MemUsed:   memTotal - memAvailable,
+		Cpu:       s.cpu.CPU(),
+		MemUsed:   memTotal - host.MemoryFree(),
 		MemTotal:  memTotal,
 		DiskUsed:  diskTotal - diskFree,
 		DiskTotal: diskTotal,
-	}
-	if s.total > 0 && total > s.total {
-		sample.Cpu = 1 - float64(idle-s.idle)/float64(total-s.total)
 	}
 	if seconds := now.Sub(s.at).Seconds(); !s.at.IsZero() && seconds > 0 && rx >= s.rx && tx >= s.tx {
 		sample.NetRx = float64(rx-s.rx) / seconds
 		sample.NetTx = float64(tx-s.tx) / seconds
 	}
-	s.idle, s.total, s.rx, s.tx, s.at = idle, total, rx, tx, now
+	s.rx, s.tx, s.at = rx, tx, now
 	return sample
 }
 
@@ -196,7 +194,7 @@ func Containers(ctx context.Context) []protocol.MetricsSampleContainersItem {
 	}
 	usage := Stats(ctx)
 
-	cores := float64(runtime.NumCPU())
+	cores := host.Cores()
 	var items []protocol.MetricsSampleContainersItem
 	for _, line := range strings.Split(strings.TrimSpace(string(ps)), "\n") {
 		var c struct{ ID, Names, Image, State string }
@@ -238,22 +236,6 @@ func ParseBytes(text string) int64 {
 	return 0
 }
 
-func cpuTimes() (idle, total uint64) {
-	data, err := os.ReadFile("/proc/stat")
-	if err != nil {
-		return 0, 0
-	}
-	line, _, _ := strings.Cut(string(data), "\n")
-	for i, field := range strings.Fields(line)[1:] {
-		n, _ := strconv.ParseUint(field, 10, 64)
-		total += n
-		if i == 3 || i == 4 { // idle, iowait
-			idle += n
-		}
-	}
-	return idle, total
-}
-
 // netBytes sums received and sent bytes over all interfaces except loopback.
 func netBytes() (rx, tx uint64) {
 	data, err := os.ReadFile("/proc/net/dev")
@@ -273,33 +255,4 @@ func netBytes() (rx, tx uint64) {
 		}
 	}
 	return rx, tx
-}
-
-func memory() (total, available int64) {
-	data, err := os.ReadFile("/proc/meminfo")
-	if err != nil {
-		return 0, 0
-	}
-	for _, line := range strings.Split(string(data), "\n") {
-		fields := strings.Fields(line)
-		if len(fields) < 2 {
-			continue
-		}
-		kb, _ := strconv.ParseInt(fields[1], 10, 64)
-		switch fields[0] {
-		case "MemTotal:":
-			total = kb * 1024
-		case "MemAvailable:":
-			available = kb * 1024
-		}
-	}
-	return total, available
-}
-
-func disk(path string) (total, free int64) {
-	var st syscall.Statfs_t
-	if syscall.Statfs(path, &st) != nil {
-		return 0, 0
-	}
-	return int64(st.Blocks) * st.Bsize, int64(st.Bavail) * st.Bsize
 }
