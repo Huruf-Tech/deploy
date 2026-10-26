@@ -8,9 +8,13 @@ import z from "zod";
 import { ObjectId } from "mongodb";
 import type { JWTPayload } from "jose";
 import { mongodb } from "@/database.ts";
-import { Wallet } from "@/lib/wallet.ts";
+import { TopupPendingError, Wallet } from "@/lib/wallet.ts";
 import { OAuth2 } from "@/lib/oauth2.ts";
-import { walletModel, walletSchema } from "@/schemas/wallet.ts";
+import {
+  walletBalanceSchema,
+  walletModel,
+  walletSchema,
+} from "@/schemas/wallet.ts";
 import { userModel } from "@/schemas/user.ts";
 import { tenantModel } from "@/schemas/tenant.ts";
 import { tenantMemberModel } from "@/schemas/tenantMember.ts";
@@ -105,11 +109,11 @@ export default new Router("/api", function wallets(router) {
     });
 
     const $feeStructure = z.object({
-      total: z.number(),
+      total: walletBalanceSchema,
       breakdown: z.array(z.object({
         tenant: z.instanceof(ObjectId),
         name: z.string(),
-        amount: z.number(),
+        amount: walletBalanceSchema,
       })),
     });
 
@@ -340,11 +344,79 @@ export default new Router("/api", function wallets(router) {
     };
   });
 
+  router.post("/add-balance", function addBalance() {
+    const $body = z.object({
+      amount: walletBalanceSchema.positive(),
+      currency: z.string().optional(),
+      /**
+       * Makes a double-submitted request reuse one gateway charge. Scoped to
+       * the caller's tenant below, so one tenant cannot reuse another's key.
+       */
+      idempotencyKey: z.string().min(1).max(200).optional(),
+    });
+
+    const $return = z.object({
+      status: z.string(),
+      balance: walletBalanceSchema,
+      toppedUp: walletBalanceSchema,
+      topup: $objectId.optional(),
+    });
+
+    return {
+      shape: () => ({
+        body: $body,
+        return: $return,
+      }),
+      handler: async (req: Request) => {
+        const { tenant } = await withTenant(req);
+
+        const body = $body.parse(await bodyAsJson(req));
+        const currency = await resolveCurrency(body.currency);
+
+        try {
+          const result = await Wallet.addBalance({
+            tenant: tenant._id,
+            currency,
+            amount: body.amount,
+            idempotencyKey: body.idempotencyKey &&
+              `tenant:${tenant._id}:${body.idempotencyKey}`,
+          });
+
+          return Response.created(
+            {
+              status: result.topup?.status ?? "completed",
+              balance: result.wallet.balance,
+              toppedUp: result.toppedUp,
+              topup: result.topup?._id,
+            } satisfies z.output<typeof $return>,
+          );
+        } catch (error) {
+          // Not a failure: the gateway is confirming out of band and the
+          // webhook will credit the wallet. 202 so the client polls or waits
+          // rather than retrying the charge.
+          if (error instanceof TopupPendingError) {
+            return Response.json(
+              {
+                status: "pending",
+                balance: 0,
+                toppedUp: 0,
+                topup: error.topup,
+              } satisfies z.output<typeof $return>,
+              { status: 202 },
+            );
+          }
+
+          throw error;
+        }
+      },
+    };
+  });
+
   router.post("/update/overdraft-limit", function updateOverdraftLimit() {
     const $body = z.object({
       userId: $objectId,
       tenantId: $objectId,
-      limit: z.number().min(0),
+      limit: walletBalanceSchema.min(0),
     });
 
     return {
@@ -355,17 +427,17 @@ export default new Router("/api", function wallets(router) {
         const body = $body.parse(await bodyAsJson(req));
         await walletModel.updateOne(
           { user: body.userId, tenant: body.tenantId },
-          { 
+          {
             $set: { overdraftLimit: body.limit },
             $setOnInsert: {
               currency: await resolveCurrency(),
               balance: 0,
               previousBalance: 0,
               createdAt: new Date(),
-              updatedAt: new Date()
-            }
+              updatedAt: new Date(),
+            },
           },
-          { upsert: true }
+          { upsert: true },
         );
 
         return Response.ok();
@@ -392,7 +464,7 @@ export default new Router("/api", function wallets(router) {
         const query = $query.parse(queryAsJson(req));
         const wallet = await walletModel.findOne(
           { user: query.userId, tenant: query.tenantId },
-          { projection: { overdraftLimit: 1 } }
+          { projection: { overdraftLimit: 1 } },
         );
 
         return Response.json({

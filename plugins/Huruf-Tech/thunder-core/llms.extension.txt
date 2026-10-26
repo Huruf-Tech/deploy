@@ -20,6 +20,28 @@ resolve as `@/utils/...`, `@/lib/...`, `@/schemas/...`).
 > obvious from the code. For exact routes, request/response shapes, and model fields,
 > always read the referenced source files — they are the authoritative, up-to-date spec.
 
+## Route URLs
+
+A route's URL is **not** the router's prefix. Thunder composes three parts:
+
+```
+/<route filename>/<Router prefix>/<handler path>
+```
+
+The first path segment is matched against the route **file name**
+(`core/http/discover.ts` uses `basename(file)` as the namespace); whatever follows is then
+matched inside that router. So `routes/walletTopups.ts` holding
+`new Router("/api", function walletTopups(router) { router.post("/webhook", ...) })`
+serves:
+
+```
+POST /walletTopups/api/webhook        # NOT /api/walletTopups/webhook
+```
+
+The same applies to `createCRUD`, whose create handler registers `/`: an invite is created
+by `POST /tenantInvites/api/`. Renaming the file changes the URL; renaming the router
+function changes the RBAC scope (see "RBAC / Access Control"), not the URL.
+
 ## Plugin Lifecycle & Setup
 
 Installing the plugin only copies files and merges the import map. The setup script does
@@ -136,6 +158,7 @@ IMAGEKIT_PUBLIC_KEY=public_...
 ```bash
 DEFAULT_CURRENCY=pkr               # Default wallet currency (defaults to "pkr")
 AVAILABLE_CURRENCIES=pkr,usd,eur   # Comma list surfaced by the wallet metadata endpoint
+WALLET_TOPUP_TENANT=<objectId>     # Tenant that funds gateway top-ups (see "Low-balance fallback")
 ```
 
 ### RBAC behavior
@@ -234,7 +257,7 @@ absolute date) when creating the invite; on acceptance it is copied onto the new
 `expiresAt`. Both fields are **optional** — omit them and the membership never expires.
 
 ```jsonc
-// POST /api/tenantInvites
+// POST /tenantInvites/api/
 {
   "email": "temp@contractor.com",
   "role": "member",
@@ -320,7 +343,7 @@ for the current, authoritative list. At the time of writing:
 
 | Policy      | Permissions |
 | ----------- | ----------- |
-| `public`    | `index`, `home`, `wellKnown`, `auth`, `oauth`, `me.get` |
+| `public`    | `index`, `home`, `wellKnown`, `auth`, `oauth`, `me.get`, `walletTopups.webhook` |
 | `developer` | `oauthClients`, `apiKeys` |
 | `iam`       | `tenants`, `tenantMembers`, `tenantInvites`, `tenantMemberships.get`, `accessControlPolicies.myPolicies`, `accessControlPolicies.get` |
 | `media`     | `imageKit.auth` |
@@ -412,6 +435,29 @@ with idempotency, overdraft, refunds, and pluggable fees. Wallets are per
 MongoDB transaction. Read `lib/wallet.ts`, `schemas/wallet.ts`, and
 `schemas/walletLedger.ts` for the full option and field set.
 
+> ### Every amount is an integer in minor units
+>
+> Cents, paisa, fils — **never** a decimal currency unit. `$5.00` is `500`, not `5` and
+> not `5.00`. This applies to every number the wallet touches: `amount`, `balance`,
+> `previousBalance`, `overdraftLimit`, fees, and top-ups.
+>
+> It is enforced, not just documented. `assertCents(amount, label, min?)` (exported from
+> `lib/wallet.ts`) is the single definition of the rule, and it throws on anything
+> non-integer, non-finite, or below the floor. It guards `transfer`, `ensureBalance`,
+> every overdraft limit, `calculateFee`'s output, `openTopup` and `settleTopup`. At the
+> persistence layer `walletBalanceSchema` (`z.number().int()`) does the same for
+> `schemas/wallet.ts`, `schemas/walletLedger.ts` and `schemas/walletTopup.ts`.
+>
+> The reason is precision: floats cannot represent most decimal fractions exactly, so
+> `0.1 + 0.2 !== 0.3`, and that error compounds across a ledger that is supposed to
+> balance to the cent. Amounts also round-trip through JSON and BSON, which would quietly
+> round a near-integer. Rejecting fractions at the boundary keeps the ledger exact by
+> construction.
+>
+> Convert at the edges of your own code — parse user input to cents on the way in, divide
+> by 100 only when formatting for display. Reuse `walletBalanceSchema` in your own route
+> schemas rather than `z.number()`, so a float is rejected before it reaches a handler.
+
 ```typescript
 import { Wallet } from "@/lib/wallet.ts";
 
@@ -435,7 +481,8 @@ await Wallet.refund({ refToRefund, /* ...subset of transfer opts */ });
 ```
 
 Rules & extension points:
-- `amount` must be a positive non-zero integer (cents). Self-transfers are rejected.
+- `amount` must be a positive non-zero integer (cents, see above). Self-transfers are
+  rejected.
 - Idempotency is enforced by a unique index; the auto key incorporates
   currency/amount/minute/from/to/description/foreignRef.
 - Overdraft is off by default. When `allowOverdraft` is on, the limit is
@@ -445,7 +492,9 @@ Rules & extension points:
   `{ fromWallet, toWallet, transferOpts, overdraftApplied, minimumAllowedBalance }`,
   return `false` to reject.
 - `Wallet.onCalculateFee?` — optional static hook returning
-  `{ total, breakdown: Array<{ tenant, name, amount }> }`.
+  `{ total, breakdown: Array<{ tenant, name, amount }> }`. Every one of those amounts is
+  in cents and is checked: a percentage fee is exactly where a fractional cent creeps in,
+  so round (`Math.round`/`Math.floor`) inside the hook — returning `amount * 0.029` throws.
 - `Wallet.calculateFee(opts)` — public; calls `onCalculateFee` when set, otherwise returns
   `{ total: 0, breakdown: [] }`. **It only computes the fee; it does not move money.**
   Charging the breakdown is the caller's job (see `routes/wallets.ts` for the pattern).
@@ -468,13 +517,345 @@ Rules & extension points:
     The `receiver` query param is `<ref>[:<tenantId>]`, where `<ref>` is an ObjectId, email
     or `phoneNumber`; without a tenant id it targets the receiver's owned tenant. Fee legs
     that are zero/negative or self-directed are skipped.
+  - `addBalance` — `POST /wallets/api/add-balance`, the HTTP face of
+    `Wallet.addBalance`. Body is `{ amount, currency?, idempotencyKey? }`, scoped to the
+    active tenant. Returns **201** with `{ status, balance, toppedUp, topup }` once the
+    funds are credited, or **202** with `{ status: "pending", topup }` when the gateway
+    confirms out of band — a client that sees 202 should wait for the webhook, not
+    retry. A client-supplied `idempotencyKey` is namespaced with the tenant id before it
+    reaches the wallet, so one tenant cannot reuse another's key.
   - `updateOverdraftLimit` / `getOverdraftLimit` — set and read a wallet's
     `overdraftLimit` by `{ userId, tenantId }` (the setter upserts the wallet).
 - `routes/walletLedgers.ts` (router fn `walletLedgers`) — read-only `createCRUD` over the
   ledger, isolated to the active tenant.
+- `routes/walletTopups.ts` (router fn `walletTopups`) — read-only `createCRUD` over top-up
+  records, plus the `webhook` endpoint described below.
 
-Neither router is in a default seeded policy, so grant `wallets`/`walletLedgers`
-permissions explicitly (see RBAC above).
+`wallets` and `walletLedgers` are not in any default seeded policy, so grant those
+permissions explicitly (see RBAC above). `walletTopups.webhook` **is** seeded into the
+`public` policy, because gateways post to it unauthenticated; the read-only
+`walletTopups` CRUD is not.
+
+### Low-balance fallback (gateway top-ups)
+
+When a transfer cannot be covered, `Wallet.transfer` throws
+`InsufficientBalanceError`. Set `Wallet.onInsufficientBalance` once at boot and that
+error becomes a hook instead: charge the customer through your payment gateway, and the
+wallet is credited and the transfer retried for you.
+
+```typescript
+import { Wallet } from "@/lib/wallet.ts";
+
+Wallet.onInsufficientBalance = async ({ topup, wallet, shortfall, currency }) => {
+  const intent = await stripe.paymentIntents.create({
+    amount: shortfall,              // cents, already computed for you
+    currency,
+    customer: await customerIdFor(wallet.tenant),
+    confirm: true,
+    // `topup` is this charge's row id, written before you were called. Pass
+    // it both ways: as the gateway's idempotency key, and in metadata so the
+    // webhook can find the row even before `providerRef` is stored.
+    metadata: { topup: topup.toString() },
+  }, { idempotencyKey: topup.toString() });
+
+  if (intent.status === "succeeded") {
+    return { status: "completed", provider: "stripe", providerRef: intent.id };
+  }
+
+  // 3DS, bank debit, anything that confirms out of band.
+  if (intent.status === "processing") {
+    return { status: "pending", provider: "stripe", providerRef: intent.id };
+  }
+
+  return { status: "failed" };   // rethrows the original InsufficientBalanceError
+};
+```
+
+The hook receives `{ topup, transfer, wallet, currency, required, available, shortfall }`.
+`available` is the balance *plus* any overdraft room, and `shortfall` is
+`required - available` — the exact number of cents to charge. Return `amount` in the
+result to credit something other than the shortfall; it too must be whole cents.
+
+Most gateways already work in minor units (Stripe's `amount` is cents), so `shortfall`
+usually passes straight through. If yours takes decimals, convert at the call and convert
+back — never hand the wallet the decimal.
+
+**Do not call `Wallet.transfer` yourself from inside the hook.** Returning `completed`
+credits the wallet and replays the original transfer; doing it by hand charges twice.
+
+#### The row is written before the charge
+
+The top-up row is inserted in `initiated` **before** the hook runs, and its `_id` is
+passed to the hook. This is deliberate: charging first and recording afterwards loses the
+customer's money whenever the insert fails, and lets a fast gateway's webhook arrive
+before any row exists for it to settle. Because the id exists first, you can hand it to
+the gateway as the idempotency key and recover the charge from either side.
+
+If the hook itself throws, the row stays `initiated` with the error recorded — the charge
+may or may not have gone through, and `initiated` is settleable, so a webhook carrying
+that id still completes it.
+
+#### Top-up lifecycle
+
+| Status | Money taken? | Meaning |
+| ------ | ------------ | ------- |
+| `initiated` | unknown | Row written, gateway outcome not yet known. **Settleable.** |
+| `pending`   | not yet | Gateway accepted; will confirm by webhook. **Settleable.** |
+| `paid`      | **yes** | Confirmed, wallet not credited yet. **Settleable** — this is the retry state. |
+| `processing`| yes | A settlement attempt holds the claim. Re-claimable once stale (see below). |
+| `completed` | yes | Credited; any parked transfer replayed. Terminal. |
+| `failed`    | no | Declined or refused. Terminal. |
+
+`settleTopup` claims any settleable row atomically and moves it to `processing`, so
+duplicate webhook deliveries cannot both credit. A replay of a terminal row returns the
+stored outcome untouched.
+
+**A dead claim does not strand a row.** If the process that claimed a row dies before
+finishing — a deploy, a crash, a serverless timeout — the row would otherwise hold
+`processing` forever in a state nothing can settle. A `processing` claim older than
+`TOPUP_CLAIM_TIMEOUT_MS` (5 minutes, exported from `schemas/walletTopup.ts`) can be taken
+over by the next attempt. Re-crediting is safe because a replayed transfer returns its
+original ledger pair instead of inserting a second one.
+
+**A paid top-up is never marked `failed`.** If the gateway charge succeeds but crediting
+the wallet does not — an unset `WALLET_TOPUP_TENANT` being the usual cause — the row goes
+back to `paid` with the error recorded, *not* to `failed`. `paid` is claimable, so once
+the cause is fixed a redelivered webhook or a manual `settleTopup` finishes the job. The
+money is never stranded in a terminal state.
+
+#### The two paths
+
+| Hook returns | What `transfer()` does |
+| ------------ | ---------------------- |
+| `completed`  | Credits the wallet, retries the transfer, returns its result. The caller never sees the failure. |
+| `pending`    | Parks the transfer and throws `TopupPendingError` carrying the top-up `_id`. The transfer has **not** happened yet. |
+| `failed` / nothing | Rethrows the original `InsufficientBalanceError`. |
+
+For `pending`, the original request is long gone by the time the gateway confirms, so the
+transfer is persisted to the `walletTopups` collection (`schemas/walletTopup.ts`) and
+resumed later from your webhook:
+
+```typescript
+// Parse your gateway's event. Receives the untouched Request, so the raw body
+// is still available for signature verification.
+Wallet.onTopupWebhook = async (req) => {
+  const event = stripe.webhooks.constructEvent(
+    await req.text(),
+    req.headers.get("stripe-signature")!,
+    STRIPE_WEBHOOK_SECRET,
+  );
+
+  if (event.type === "payment_intent.succeeded") {
+    return { providerRef: event.data.object.id, status: "completed" };
+  }
+
+  if (event.type === "payment_intent.payment_failed") {
+    return { providerRef: event.data.object.id, status: "failed" };
+  }
+
+  // Returning nothing acknowledges an event you do not care about.
+};
+```
+
+`routes/walletTopups.ts` exposes `POST /walletTopups/api/webhook` (see "Route URLs"),
+which calls your parser and hands the result to
+`Wallet.settleTopup({ providerRef, status })`. You can also call `settleTopup` directly
+from a route of your own and skip the shipped endpoint.
+
+#### Not charging twice
+
+Nothing about a shortfall is unique on its own: two tabs, a retry after
+`TopupPendingError`, a lazy renewal that runs on many requests, or two concurrent
+renewals will each open their own gateway charge. Pass an idempotency key to collapse
+them into one:
+
+```typescript
+await Wallet.ensureBalance({
+  tenant,
+  currency: "usd",
+  amount: 500,
+  idempotencyKey: `renewal:${subscriptionId}:${period}`,
+});
+
+await Wallet.transfer({
+  /* ... */
+  topupIdempotencyKey: `invoice:${invoiceId}`,  // dedupes the TOP-UP
+  idempotencyKey: `invoice:${invoiceId}:charge`, // dedupes the TRANSFER
+});
+```
+
+A matching row is reused instead of charging again, and the key is uniquely indexed, so
+two concurrent attempts resolve to one row rather than racing. What happens next depends
+on the reused row's status: `paid` settles, `initiated`/`pending` throws
+`TopupPendingError`, `failed` surfaces the original error.
+
+`transfer` derives a default `topupIdempotencyKey` from its own `idempotencyKey`, so
+retries of one logical transfer already share a top-up. `ensureBalance` and `addBalance`
+have no natural key and do **not** dedupe unless you pass one.
+
+**A key is bound to its row for good.** After a `failed` row exists, that key keeps
+returning the stored failure rather than retrying — even once the customer fixes their
+card. An `initiated` row whose charge never reached the gateway holds its key the same
+way. This is deliberate (it is what stops a decline from re-hitting the gateway on every
+request), but it means you need one of:
+
+- **Put the attempt in the key** — `renew:<subscription>:<period>:<attempt>` — so a
+  genuine retry is a genuinely new charge. Pair it with your own scheduling claim, such
+  as a `nextRenewalAttemptAt`, so the retry cadence is yours rather than per-request.
+- **Release the key** with `Wallet.abandonTopup({ topup })` (or `{ providerRef }`). It
+  closes an `initiated` or `failed` row and unsets its `idempotencyKey`, freeing it for a
+  fresh charge. The row stays for audit.
+
+> `abandonTopup` marks the row `failed`, and `failed` is **not** settleable — a payment
+> that did go through could no longer be credited by its webhook. Confirm with the
+> gateway that no charge landed before abandoning an `initiated` row.
+
+#### `ensureBalance` — top up without transferring
+
+`transfer()` cannot run the fallback when it is handed a `databaseSession`, which is a
+problem when the transfer has to be atomic with your own writes. `ensureBalance` solves
+that by splitting the two: it tops the wallet up **first**, outside any transaction, so
+the transfer that follows is a pure database operation.
+
+```typescript
+// 1. Secure the funds. Hits the gateway only if the balance is short.
+await Wallet.ensureBalance({ tenant, currency: "usd", amount: 500 });
+
+// 2. Now spend them atomically with everything else that must succeed together.
+await mongodb.withSession((s) =>
+  s.withTransaction(async (session) => {
+    await Wallet.transfer({
+      fromTenant: tenant,
+      toTenant: platformTenant,
+      currency: "usd",
+      amount: 500,
+      databaseSession: session,
+    });
+
+    await orderModel.insertOne(order, { session });
+  })
+);
+```
+
+It nets out the same shortfall calculation as `transfer()` and drives the same
+`onInsufficientBalance` hook, with one difference: the hook's `transfer` field is
+`undefined`, because there is no transfer yet. Nothing is parked for resume either — once
+the top-up settles the money is simply in the wallet.
+
+`amount` is in cents, like everywhere else in the class.
+
+Returns `{ wallet, available, toppedUp, topup? }` — `toppedUp` is `0` when the balance
+already sufficed. It throws the same two errors as `transfer()`:
+`InsufficientBalanceError` when no fallback is configured or it declines (also if the
+gateway covered less than asked), and `TopupPendingError` when the charge confirms out of
+band — retry once your webhook has settled it.
+
+Takes `allowOverdraft` / `overdraftLimit` so the headroom it checks matches the transfer
+you are about to make. Pass the same values to both, or it will top up for a shortfall the
+transfer would have absorbed as overdraft.
+
+#### `addBalance` — a deliberate top-up
+
+`ensureBalance` raises only what a payment is short by. `addBalance` raises exactly what
+you ask for, whatever the balance is — the "add funds" button, an admin credit,
+pre-loading an account:
+
+```typescript
+await Wallet.addBalance({
+  tenant,
+  currency: "usd",
+  amount: 2000,                              // $20.00, in cents
+  idempotencyKey: `topup:${requestId}`,
+});
+```
+
+`routes/wallets.ts` exposes this as `POST /wallets/api/add-balance` (see "Wallet
+routes"), so an "add funds" button needs no route of your own.
+
+It drives the same `onInsufficientBalance` fallback and the same lifecycle, with
+`shortfall === amount` and no `transfer` in the payload. Returns the same
+`{ wallet, available, toppedUp, topup }`, and throws `TopupPendingError` when the gateway
+confirms out of band. Unlike `ensureBalance` it throws a plain `Error` — not
+`InsufficientBalanceError` — when no fallback is configured or it declines, since there
+is no insufficiency involved.
+
+> **It is a check, not a reservation.** Nothing is held: a concurrent debit can still
+> spend the balance between `ensureBalance` and your transfer. `transfer()` re-checks
+> atomically against the database, so the worst case is the same failure you would have
+> had without it — never a silent overdraw.
+
+#### Rules & gotchas
+
+- **The fallback is skipped when `transfer` is given a `databaseSession`.** Calling a
+  payment gateway inside someone else's MongoDB transaction would let the charge outlive
+  a rollback, so the `InsufficientBalanceError` is rethrown untouched instead. This means
+  `Wallet.refund` never triggers it, and neither does the `transfer` handler in
+  `routes/wallets.ts` (which wraps the transfer and its fee legs in one transaction). To
+  use the fallback, call `Wallet.transfer` *without* a session.
+- **`WALLET_TOPUP_TENANT` is required** before any top-up can settle. Double-entry needs a
+  counterparty, so the credit is a real transfer from that tenant's wallet. It is the
+  gateway's settlement account and is expected to run **negative** — its balance is what
+  customers have paid in from outside the system. It is credited with
+  `allowOverdraft: true` and an effectively unlimited overdraft for that reason.
+- **Duplicate webhooks are safe.** `settleTopup` claims the row atomically (any
+  settleable status → `processing`); a replay finds nothing to claim and returns the
+  stored outcome without crediting again. The resumed transfer also reuses the original
+  `reference` and `idempotencyKey`, so the ledger's unique index is the backstop.
+- **`providerRef` and `idempotencyKey` are uniquely indexed** (both sparse). A webhook
+  finds its top-up by `providerRef` or by the row `_id` you passed to the gateway;
+  `idempotencyKey` is what stops a second charge being opened for the same need.
+- **`WALLET_TOPUP_TENANT` must exist before the first charge, not just before the first
+  settlement.** Getting it wrong does not lose money — the row parks in `paid` and
+  settles once fixed — but it does mean a customer is charged and waits.
+- The retry happens **once**. If the top-up still is not enough, the original
+  `InsufficientBalanceError` surfaces.
+- **A replayed transfer returns its original result.** `transfer` looks the
+  `idempotencyKey` up in the ledger before writing, and returns the existing debit/credit
+  pair if it is already there, rather than throwing on the unique index. This is what
+  makes `settleTopup` safe to re-run, which every recovery path depends on. Inside a
+  caller's `databaseSession` only that pre-check applies — a duplicate-key error there is
+  the caller's to handle, because swallowing it would leave their session aborted.
+- If the gateway charge succeeds but replaying the transfer fails, the top-up is still
+  recorded as `completed` (the customer's money *is* in their wallet) with the failure in
+  its `error` field. `settleTopup` does not throw in that case, because that would tell
+  the gateway to retry a webhook that was already honoured.
+- Top-up rows are per-tenant and carry `status`, `amount`, `provider`, `providerRef`,
+  `idempotencyKey`, `topupReference` (the funding transfer), `resumedReference` (the
+  original transfer) and `error`.
+- **Worth alerting on:** rows sitting in `paid` or `initiated` beyond a few minutes.
+  `paid` means a customer has paid and has not been credited; `initiated` means a charge
+  whose outcome was never resolved. Both are recoverable by re-running `settleTopup`,
+  but neither should persist.
+
+#### Testing the top-up paths
+
+The money-critical behaviour here is atomic claims, unique indexes and transactions —
+mocking those would test the mocks. `lib/wallet.integration_test.ts` runs against a real
+MongoDB instead and covers settling, duplicate webhook delivery, a webhook that lands
+while the fallback is still running, recovery from `paid`, stale-claim takeover, key
+reuse, transfer replay and `abandonTopup`.
+
+```bash
+docker run -d --name thunder-wallet-test-mongo -p 27018:27017 \
+  mongo:8 --replSet rs0 --bind_ip_all
+docker exec thunder-wallet-test-mongo mongosh --quiet --eval 'rs.initiate()'
+
+echo 'DATABASE_URL=mongodb://127.0.0.1:27018/thunder_wallet_test?replicaSet=rs0&directConnection=true' > .env.test
+deno task test:integration
+```
+
+A **replica set** is required — the ledger writes its pairs in transactions. `.env.test`
+is gitignored.
+
+The suite **skips itself** unless `ENV_TYPE=test` *and* the resolved `DATABASE_URL`
+points at localhost. These tests delete collections, and the project's `.env` points at
+a shared cluster, so the guard is not optional. `deno task test` runs the unit tests
+(arithmetic and state-machine invariants) with no database at all.
+
+> Note for writing more of these: `Env` snapshots the process environment once and lets
+> `.env` override it, so `Deno.env.set` cannot change config per test. Override the seam
+> instead — the suite replaces `Wallet.resolveTopupTenant` rather than setting
+> `WALLET_TOPUP_TENANT`.
 
 ## References (sequential counters)
 
@@ -567,7 +948,8 @@ for the exact fields, defaults, and unique indexes (`scripts/syncDBIndexes.ts`):
 `schemas/user.ts`, `schemas/session.ts`, `schemas/tenant.ts`, `schemas/tenantMember.ts`,
 `schemas/tenantInvite.ts`, `schemas/accessControl.ts`, `schemas/accessControlPolicy.ts`,
 `schemas/apiKey.ts`, `schemas/oauthClient.ts`, `schemas/oauthConsent.ts`, `schemas/jwk.ts`,
-`schemas/env.ts`, `schemas/references.ts`, `schemas/wallet.ts`, `schemas/walletLedger.ts`.
+`schemas/env.ts`, `schemas/references.ts`, `schemas/wallet.ts`, `schemas/walletLedger.ts`,
+`schemas/walletTopup.ts`.
 
 `resourceGrantSchema` (exported from `schemas/oauthConsent.ts`) maps a tenant id → granted
 scopes, and is reused by both OAuth consents and API keys to scope access per tenant.

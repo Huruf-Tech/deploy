@@ -9,6 +9,9 @@ export const syncAccessControl = async () => {
     "auth",
     "oauth",
     "me.get",
+    // Payment gateways post here unauthenticated; `Wallet.onTopupWebhook`
+    // is responsible for verifying the signature.
+    "walletTopups.webhook",
   ]);
   const developerPolicy = await ACManager.resolvePolicy("developer", [
     "oauthClients",

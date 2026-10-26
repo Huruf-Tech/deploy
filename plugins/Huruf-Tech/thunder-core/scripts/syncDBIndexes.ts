@@ -7,6 +7,7 @@ import { oauthConsentModel } from "../schemas/oauthConsent.ts";
 import { apiKeyModel } from "@/schemas/apiKey.ts";
 import { walletModel } from "@/schemas/wallet.ts";
 import { walletLedgerModel } from "@/schemas/walletLedger.ts";
+import { walletTopupModel } from "@/schemas/walletTopup.ts";
 
 export const syncDBIndexes = async () => {
   await Promise.allSettled([
@@ -83,6 +84,35 @@ export const syncDBIndexes = async () => {
         name: "uniqueReference",
         background: true,
         unique: true,
+      },
+    ),
+    // A gateway webhook finds its top-up by providerRef; a duplicate would
+    // make settlement ambiguous.
+    walletTopupModel.createIndex(
+      { providerRef: 1 },
+      {
+        name: "uniqueProviderRef",
+        background: true,
+        unique: true,
+        sparse: true,
+      },
+    ),
+    walletTopupModel.createIndex(
+      { tenant: 1, status: 1 },
+      {
+        name: "topupsByTenant",
+        background: true,
+      },
+    ),
+    // Makes "reuse instead of charging again" race-proof: a second concurrent
+    // attempt loses the insert and reads the winner's row.
+    walletTopupModel.createIndex(
+      { idempotencyKey: 1 },
+      {
+        name: "uniqueTopupIdempotencyKey",
+        background: true,
+        unique: true,
+        sparse: true,
       },
     ),
   ]);
