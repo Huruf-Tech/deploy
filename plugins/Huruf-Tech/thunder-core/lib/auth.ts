@@ -103,6 +103,20 @@ export const betterAuthConfig = {
       });
     },
   },
+  emailVerification: {
+    sendVerificationEmail: async ({ user, url }) => {
+      await Mailer.send({
+        template: "emailVerificationRequest",
+        to: user.email,
+        subject: "Verify your email address",
+        html: `
+        <p>Click the following link to verify your email:</p>
+        <a href="${url}">Reset now!</a>
+        `,
+        url,
+      });
+    },
+  },
   socialProviders: {
     ...(capabilities.includes("github")
       ? {
