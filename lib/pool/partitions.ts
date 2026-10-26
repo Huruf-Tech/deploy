@@ -10,6 +10,7 @@ import {
   resizePartition,
 } from "@/lib/pool/pool.ts";
 import { serverModel } from "@/schemas/infrastructure/server.ts";
+import { bootstrapSessionModel } from "@/schemas/infrastructure/bootstrapSession.ts";
 import { subscriptionModel } from "@/schemas/billing/subscription.ts";
 import { detachServer } from "@/lib/deploy/projects.ts";
 import type { $partitionSize } from "@/schemas/protocol/agent.ts";
@@ -198,4 +199,41 @@ export async function onServerDeleted(id: ObjectId, tenant: ObjectId) {
       await serverModel.deleteOne({ _id: p._id });
     }
   }
+}
+
+/**
+ * The partitions a machine reports, each with its server, or whether it's
+ * still joining (its join token waits to be used). Neither means its server
+ * is gone and the partition only takes room: remove it.
+ */
+export async function partitionsOf(tenant: ObjectId, machine: ObjectId) {
+  const doc = await serverModel.findOne(
+    { _id: machine, tenant, "provider.kind": "machine" },
+    { projection: { "resources.partitions": 1 } },
+  );
+  if (!doc) throw Response.notFound("No machine with this id");
+  const reported = (doc.resources?.partitions ?? []).filter((p) =>
+    !p.remainder
+  );
+  const [servers, joining] = await Promise.all([
+    serverModel.find({ tenant, "provider.host": machine }, {
+      projection: { name: 1, "provider.partition": 1 },
+    }).toArray(),
+    bootstrapSessionModel.find({
+      tenant,
+      "partition.host": machine,
+      status: "installing",
+      expiresAt: { $gt: new Date() },
+    }, { projection: { "partition.name": 1 } }).toArray(),
+  ]);
+  return reported.map((p) => {
+    const server = servers.find((s) => s.provider?.partition === p.name);
+    return {
+      name: p.name,
+      ...(server
+        ? { server: { _id: String(server._id), name: server.name } }
+        : {}),
+      joining: !server && joining.some((j) => j.partition?.name === p.name),
+    };
+  });
 }

@@ -83,6 +83,26 @@ export const serversModule = (sdk) => {
                 return res;
             }, data);
         },
+        partitions(data) {
+            return sdk.resolveAxiosResponse(async () => {
+                sdk.checkPermission("servers", "partitions");
+                const method = "get";
+                const toPath = compile("servers/api/:id/partitions");
+                const requestPayload = {
+                    method,
+                    url: toPath(sdk.resolvePathParams(data?.params)),
+                    params: data?.query,
+                    data: data?.body,
+                    signal: data?.signal,
+                    ...(data?.axiosConfig
+                        ? sdk.resolveAxiosConfig(data.axiosConfig)
+                        : undefined),
+                };
+                sdk.log("Sending Request:", requestPayload);
+                const res = await sdk._axios.request(requestPayload);
+                return res;
+            }, data);
+        },
         createPartition(data) {
             return sdk.resolveAxiosResponse(async () => {
                 sdk.checkPermission("servers", "createPartition");
@@ -388,6 +408,7 @@ export const serversModule = (sdk) => {
     methods.get.__scope = "servers";
     methods.update.__scope = "servers";
     methods.del.__scope = "servers";
+    methods.partitions.__scope = "servers";
     methods.createPartition.__scope = "servers";
     methods.resizePartition.__scope = "servers";
     methods.removePartition.__scope = "servers";

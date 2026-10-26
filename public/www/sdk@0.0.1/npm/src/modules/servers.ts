@@ -146,6 +146,18 @@ export type update$body = {
 export type del$params = {
     id: string;
 };
+export type partitions$params = {
+    id?: string;
+};
+export type partitions$return = {
+    name: string;
+    server?: {
+        _id: string;
+        name: string;
+    } | undefined;
+    /** Its agent hasn't joined yet */
+    joining: boolean;
+}[];
 export type createPartition$params = {
     id?: string;
 };
@@ -276,6 +288,8 @@ export const serversModule = (sdk: typeof BaseSDK) => {
         update$params: update$params,
         update$body: update$body,
         del$params: del$params,
+        partitions$params: partitions$params,
+        partitions$return: partitions$return,
         createPartition$params: createPartition$params,
         createPartition$body: createPartition$body,
         createPartition$return: createPartition$return,
@@ -401,6 +415,34 @@ export const serversModule = (sdk: typeof BaseSDK) => {
 
             const method = "delete";
             const toPath = compile("servers/api/:id");
+            const requestPayload = {
+                method,
+                url: toPath(sdk.resolvePathParams(data?.params)),
+                params: data?.query,
+                data: data?.body,
+                signal: data?.signal,
+                ...(data?.axiosConfig
+                ? sdk.resolveAxiosConfig(data.axiosConfig)
+                : undefined),
+            };
+
+            sdk.log("Sending Request:", requestPayload);
+
+            const res = await sdk._axios!.request(requestPayload);
+
+            return res;
+        }, data);
+    },
+        partitions(data: {
+        params: partitions$params,
+        query?: undefined,
+        body?: undefined,
+    } & TRequestOptions<partitions$return>) {
+        return sdk.resolveAxiosResponse(async () => {
+            sdk.checkPermission("servers", "partitions");
+
+            const method = "get";
+            const toPath = compile("servers/api/:id/partitions");
             const requestPayload = {
                 method,
                 url: toPath(sdk.resolvePathParams(data?.params)),
@@ -845,6 +887,7 @@ export const serversModule = (sdk: typeof BaseSDK) => {
     (methods.get as any).__scope = "servers";
     (methods.update as any).__scope = "servers";
     (methods.del as any).__scope = "servers";
+    (methods.partitions as any).__scope = "servers";
     (methods.createPartition as any).__scope = "servers";
     (methods.resizePartition as any).__scope = "servers";
     (methods.removePartition as any).__scope = "servers";

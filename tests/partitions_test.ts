@@ -5,6 +5,7 @@ import { mongodb } from "@/database.ts";
 import { createJoinToken } from "@/lib/agents/bootstrap.ts";
 import { openSealed } from "@/lib/agents/sealing.ts";
 import { registerAgent } from "@/lib/agents/servers.ts";
+import { ingestEvents } from "@/lib/agents/poll.ts";
 import { recordPoolSetup } from "@/lib/pool/pool.ts";
 import { computeSpec } from "@/lib/deploy/specs.ts";
 import { serverModel } from "@/schemas/infrastructure/server.ts";
@@ -289,12 +290,72 @@ Deno.test({
               }],
             },
           });
+          // Joining while its join token waits; otherwise its server is gone.
+          await createJoinToken({
+            tenant,
+            createdBy: user,
+            host: "box/p00000000010",
+            port: 0,
+            username: "partition",
+            partition: { host: machine, name: "p00000000010" },
+          });
+          await serverModel.updateOne({ _id: machine }, {
+            $push: {
+              "resources.partitions": {
+                name: "p00000000010",
+                remainder: false,
+                state: "running",
+                size: { cpus: 1, memMb: 1024, diskGb: 10 },
+                cpuMicros: 0,
+                memUsed: 0,
+                diskUsed: 0,
+                rxBytes: 0,
+                txBytes: 0,
+              },
+            },
+          });
+          const listed = await call(
+            "GET",
+            `/servers/api/${machine}/partitions`,
+          );
+          assertEquals(listed.status, 200, JSON.stringify(listed.json));
+          assertEquals(
+            listed.json.map((p: { name: string; joining: boolean }) => [
+              p.name,
+              p.joining,
+            ]),
+            [["p00000000009", false], ["p00000000010", true]],
+          );
+          await serverModel.updateOne({ _id: machine }, {
+            $pull: { "resources.partitions": { name: "p00000000010" } },
+          });
           const orphan = await call(
             "DELETE",
             `/servers/api/${machine}/partitions/p00000000009`,
           );
           assertEquals(orphan.status, 200, JSON.stringify(orphan.json));
           assert(orphan.json.command);
+          // The machine's answer drops it from the list at once, not at its next report.
+          const removal = await agentCommandModel.findOne({
+            _id: new ObjectId(orphan.json.command),
+          });
+          await ingestEvents(
+            { server: machine, tenant, key: undefined as unknown as CryptoKey },
+            [{
+              id: `cmd-${removal!.seq}`,
+              type: "command.result",
+              data: {
+                seq: removal!.seq,
+                ok: true,
+                result: { name: "p00000000009", removed: true },
+              },
+            }],
+          );
+          assertEquals(
+            (await serverModel.findOne({ _id: machine }))!.resources
+              ?.partitions,
+            [],
+          );
           const unknown = await call(
             "DELETE",
             `/servers/api/${machine}/partitions/p00000000008`,

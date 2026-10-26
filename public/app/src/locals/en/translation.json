@@ -1333,5 +1333,7 @@
   "Rent out (admins)": "Rent out (admins)",
   "Optional: offer this machine's capacity to customers": "Optional: offer this machine's capacity to customers",
   "Turns an empty Huruf machine into a pool machine whose partitions customers can rent: Docker moves onto the partition volume and rented partitions are kept apart. Not needed to use the machine yourself.": "Turns an empty Huruf machine into a pool machine whose partitions customers can rent: Docker moves onto the partition volume and rented partitions are kept apart. Not needed to use the machine yourself.",
-  "The machine couldn't remove it": "The machine couldn't remove it"
+  "The machine couldn't remove it": "The machine couldn't remove it",
+  "The machine is still removing it; it leaves this list once it's done.": "The machine is still removing it; it leaves this list once it's done.",
+  "Server removed: remove this partition": "Server removed: remove this partition"
 }

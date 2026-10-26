@@ -351,13 +351,27 @@ const ingestCommandResults = async (
       server: identity.server,
       seq: { $in: fresh.map((event) => event.data.seq) },
       type: {
-        $in: ["docker.ensure", "pool.ensure", "build.run", "partition.receive"],
+        $in: [
+          "docker.ensure",
+          "pool.ensure",
+          "build.run",
+          "partition.receive",
+          "partition.remove",
+        ],
       },
     }, { projection: { seq: 1, type: 1 } })
     .toArray();
   for (const { _id, seq, type } of typed) {
     const event = fresh.find((e) => e.data.seq === seq)!;
-    if (type === "partition.receive") {
+    if (type === "partition.remove") {
+      // Gone now, not at the machine's next report (PLAN §27.2).
+      const name = event.data.result?.name;
+      if (event.data.ok && typeof name === "string") {
+        await serverModel.updateOne({ _id: identity.server }, {
+          $pull: { "resources.partitions": { name } },
+        });
+      }
+    } else if (type === "partition.receive") {
       // A move ends with the target's result (PLAN §26.10).
       await rentals.moveFinished(_id, event.data);
     } else if (type === "docker.ensure" || type === "pool.ensure") {

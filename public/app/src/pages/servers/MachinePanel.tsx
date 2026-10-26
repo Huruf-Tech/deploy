@@ -25,7 +25,11 @@ import { errorMessage } from "@/lib/utils"
 import type { TServer } from "./server"
 
 type TSize = { cpus: number; memMb: number; diskGb: number }
-type TPartitionServer = { _id: string; name: string; partition?: string }
+type TPartitionServer = {
+  name: string
+  server?: { _id: string; name: string }
+  joining: boolean
+}
 
 const gbOfMb = (mb: number) => Math.floor((mb / 1024) * 2) / 2
 const gb = (bytes: number) => `${(bytes / 2 ** 30).toFixed(1)} GB`
@@ -60,37 +64,17 @@ export function MachinePanel({
 
   const load = React.useCallback(() => {
     ThunderSDK.servers
-      .get({
-        params: {},
-        query: {
-          limit: 100,
-          project: { _id: 1, name: 1, "provider.partition": 1 },
-          filters: {
-            "provider.host": { $eq: { type: "objectId", value: server._id } },
-          },
-        },
-      })
-      .then(({ results }) =>
-        setServers(
-          (
-            results as {
-              _id: string
-              name: string
-              provider?: { partition?: string }
-            }[]
-          ).map((s) => ({
-            _id: s._id,
-            name: s.name,
-            partition: s.provider?.partition,
-          }))
-        )
-      )
+      .partitions({ params: { id: server._id } })
+      .then(setServers)
       .catch(() => {})
   }, [server._id])
   React.useEffect(load, [load])
   // A new partition's server appears once its agent joins.
   usePolling(() => {
-    if (partitions.some((p) => !servers?.some((s) => s.partition === p.name)))
+    if (
+      servers?.some((s) => s.joining) ||
+      partitions.length !== servers?.length
+    )
       load()
   }, 5_000)
 
@@ -118,16 +102,23 @@ export function MachinePanel({
       setRemoving(undefined)
       load()
       // The machine removes it; its answer says whether that worked.
-      for (let i = 0; i < 40; i++) {
+      let done = false
+      for (let i = 0; i < 40 && !done; i++) {
         await new Promise((r) => setTimeout(r, 1_500))
         const outcome = await ThunderSDK.servers.command({
           params: { id: server._id, command },
         })
         if (outcome.status === "failed")
           throw new Error(outcome.error ?? t("The machine couldn't remove it"))
-        if (outcome.status === "done") break
+        done = outcome.status === "done"
       }
-      toast.success(t("Partition removed with its projects and data"))
+      if (done) toast.success(t("Partition removed with its projects and data"))
+      else
+        toast.info(
+          t(
+            "The machine is still removing it; it leaves this list once it's done."
+          )
+        )
       onChanged()
     } catch (e) {
       toast.error(errorMessage(e) ?? t("Could not remove it"))
@@ -208,7 +199,8 @@ export function MachinePanel({
               id: "name",
               header: t("Partition"),
               cell: (p) => {
-                const s = servers?.find((x) => x.partition === p.name)
+                const row = servers?.find((x) => x.name === p.name)
+                const s = row?.server
                 return (
                   <div className="min-w-0">
                     <div className="flex items-center gap-1.5 font-medium">
@@ -226,7 +218,9 @@ export function MachinePanel({
                         </Link>
                       ) : (
                         <span className="text-muted-foreground">
-                          {t("Joining…")}
+                          {!row || row.joining
+                            ? t("Joining…")
+                            : t("Server removed: remove this partition")}
                         </span>
                       )}
                     </div>

@@ -20,6 +20,7 @@ import { $hostCleanupPayload } from "@/schemas/protocol/agent.ts";
 import {
   createOwnPartition,
   onServerDeleted,
+  partitionsOf,
   removeOwnPartition,
   resizeOwnPartition,
 } from "@/lib/pool/partitions.ts";
@@ -104,6 +105,23 @@ export default new Router("/api", function servers(router) {
   const $partitionParams = z.object({
     id: $objectId,
     name: z.string().regex(/^p[0-9a-f]{11}$/),
+  });
+
+  router.get("/:id/partitions", function partitions() {
+    const $return = z.array(z.object({
+      name: z.string(),
+      server: z.object({ _id: z.string(), name: z.string() }).optional(),
+      joining: z.boolean().describe("Its agent hasn't joined yet"),
+    }));
+
+    return {
+      shape: () => ({ params: $params, return: $return }),
+      handler: async (req) => {
+        const { id } = $params.parse(paramsAsJson(req));
+        const { tenant } = await withTenant(req);
+        return Response.json(await partitionsOf(tenant._id, id));
+      },
+    };
   });
 
   router.post("/:id/partitions", function createPartition() {

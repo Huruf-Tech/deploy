@@ -139,6 +139,18 @@ export type update$body = {
 export type del$params = {
     id: string;
 };
+export type partitions$params = {
+    id?: string;
+};
+export type partitions$return = {
+    name: string;
+    server?: {
+        _id: string;
+        name: string;
+    } | undefined;
+    /** Its agent hasn't joined yet */
+    joining: boolean;
+}[];
 export type createPartition$params = {
     id?: string;
 };
@@ -268,6 +280,8 @@ export declare const serversModule: (sdk: typeof BaseSDK) => {
         update$params: update$params;
         update$body: update$body;
         del$params: del$params;
+        partitions$params: partitions$params;
+        partitions$return: partitions$return;
         createPartition$params: createPartition$params;
         createPartition$body: createPartition$body;
         createPartition$return: createPartition$return;
@@ -339,6 +353,17 @@ export declare const serversModule: (sdk: typeof BaseSDK) => {
         then: <TResult1 = unknown, TResult2 = never>(onfulfilled?: ((value: unknown) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
         catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<unknown>;
         finally: (onfinally?: (() => void) | null | undefined) => Promise<unknown>;
+    };
+    readonly partitions: (data: {
+        params: partitions$params;
+        query?: undefined;
+        body?: undefined;
+    } & TRequestOptions<partitions$return>) => {
+        readonly raw: Promise<import("axios").AxiosResponse<partitions$return, any, {}, any>>;
+        readonly data: Promise<partitions$return>;
+        then: <TResult1 = partitions$return, TResult2 = never>(onfulfilled?: ((value: partitions$return) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+        catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<partitions$return | TResult>;
+        finally: (onfinally?: (() => void) | null | undefined) => Promise<partitions$return>;
     };
     readonly createPartition: (data: {
         params: createPartition$params;
