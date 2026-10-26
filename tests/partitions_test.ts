@@ -11,6 +11,7 @@ import { serverModel } from "@/schemas/infrastructure/server.ts";
 import { agentCommandModel } from "@/schemas/infrastructure/agentCommand.ts";
 import { tenantUsageModel } from "@/schemas/limits/tenantUsage.ts";
 import { MESH_PORT } from "@/schemas/infrastructure/network.ts";
+import { projectModel } from "@/schemas/applications/project.ts";
 import { seedKeys } from "./sealing_test.ts";
 import { testSession } from "./_session.ts";
 
@@ -214,6 +215,93 @@ Deno.test({
         assertEquals(await serverModel.countDocuments({ _id: first }), 0);
         assertEquals(await slots(), before - 1);
       });
+
+      await t.step(
+        "deleting a partition removes it from its machine, with its projects",
+        async () => {
+          const joinAs = async (name: string) =>
+            new ObjectId(
+              (await join(
+                name,
+                (await createJoinToken({
+                  tenant,
+                  createdBy: user,
+                  host: `box/${name}`,
+                  port: 0,
+                  username: "partition",
+                  partition: { host: machine, name },
+                })).token,
+              )).server,
+            );
+          const second = (await serverModel.findOne({
+            "provider.partition": "p00000000002",
+          }))!._id;
+          const third = await joinAs("p00000000003");
+          const project = async (slug: string, servers: ObjectId[]) => {
+            const res = await call("POST", "/projects/api", {
+              name: slug,
+              slug,
+              source: { type: "image", image: "nginx:1.27" },
+              servers: servers.map(String),
+            });
+            assertEquals(res.status, 200, JSON.stringify(res.json));
+            return new ObjectId(res.json._id);
+          };
+          const solo = await project("solo", [second]);
+          const both = await project("both", [second, third]);
+
+          const res = await call("DELETE", `/servers/api/${second}`);
+          assertEquals(res.status, 200, JSON.stringify(res.json));
+          assertEquals(
+            (await last(machine, "partition.remove")).payload,
+            { name: "p00000000002" },
+          );
+          assertEquals(await projectModel.countDocuments({ _id: solo }), 0);
+          assertEquals(
+            (await projectModel.findOne({ _id: both }))!.servers.map(String),
+            [String(third)],
+          );
+
+          // While the machine can't remove partitions, the delete is refused.
+          await serverModel.updateOne({ _id: machine }, {
+            $set: { "pool.status": "pending" },
+          });
+          const refused = await call("DELETE", `/servers/api/${third}`);
+          assertEquals(refused.status, 400, JSON.stringify(refused.json));
+          assertEquals(await serverModel.countDocuments({ _id: third }), 1);
+          await serverModel.updateOne({ _id: machine }, {
+            $set: { "pool.status": "ready" },
+          });
+
+          // A partition the machine reports, whose server is gone: still removable.
+          await serverModel.updateOne({ _id: machine }, {
+            $set: {
+              "resources.partitions": [{
+                name: "p00000000009",
+                remainder: false,
+                state: "running",
+                size: { cpus: 1, memMb: 1024, diskGb: 10 },
+                cpuMicros: 0,
+                memUsed: 0,
+                diskUsed: 0,
+                rxBytes: 0,
+                txBytes: 0,
+              }],
+            },
+          });
+          const orphan = await call(
+            "DELETE",
+            `/servers/api/${machine}/partitions/p00000000009`,
+          );
+          assertEquals(orphan.status, 200, JSON.stringify(orphan.json));
+          assert(orphan.json.command);
+          const unknown = await call(
+            "DELETE",
+            `/servers/api/${machine}/partitions/p00000000008`,
+          );
+          assertEquals(unknown.status, 404);
+        },
+      );
 
       await t.step("deleting the machine takes its partitions", async () => {
         const res = await call("DELETE", `/servers/api/${machine}`);

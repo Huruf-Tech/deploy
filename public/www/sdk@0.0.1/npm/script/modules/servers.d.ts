@@ -169,6 +169,10 @@ export type removePartition$params = {
     id?: string;
     name: string;
 };
+export type removePartition$return = {
+    /** The machine's partition.remove */
+    command: string;
+};
 export type agentRelease$return = {
     /** arch -> SHA-256 */
     sums: {
@@ -270,6 +274,7 @@ export declare const serversModule: (sdk: typeof BaseSDK) => {
         resizePartition$params: resizePartition$params;
         resizePartition$body: resizePartition$body;
         removePartition$params: removePartition$params;
+        removePartition$return: removePartition$return;
         agentRelease$return: agentRelease$return;
         updateAgent$params: updateAgent$params;
         accept$params: accept$params;
@@ -361,12 +366,12 @@ export declare const serversModule: (sdk: typeof BaseSDK) => {
         params: removePartition$params;
         query?: undefined;
         body?: undefined;
-    } & TRequestOptions<unknown>) => {
-        readonly raw: Promise<import("axios").AxiosResponse<unknown, any, {}, any>>;
-        readonly data: Promise<unknown>;
-        then: <TResult1 = unknown, TResult2 = never>(onfulfilled?: ((value: unknown) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
-        catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<unknown>;
-        finally: (onfinally?: (() => void) | null | undefined) => Promise<unknown>;
+    } & TRequestOptions<removePartition$return>) => {
+        readonly raw: Promise<import("axios").AxiosResponse<removePartition$return, any, {}, any>>;
+        readonly data: Promise<removePartition$return>;
+        then: <TResult1 = removePartition$return, TResult2 = never>(onfulfilled?: ((value: removePartition$return) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+        catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<removePartition$return | TResult>;
+        finally: (onfinally?: (() => void) | null | undefined) => Promise<removePartition$return>;
     };
     readonly agentRelease: (data?: {
         params?: undefined;

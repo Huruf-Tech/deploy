@@ -176,6 +176,10 @@ export type removePartition$params = {
     id?: string;
     name: string;
 };
+export type removePartition$return = {
+    /** The machine's partition.remove */
+    command: string;
+};
 export type agentRelease$return = {
     /** arch -> SHA-256 */
     sums: {
@@ -278,6 +282,7 @@ export const serversModule = (sdk: typeof BaseSDK) => {
         resizePartition$params: resizePartition$params,
         resizePartition$body: resizePartition$body,
         removePartition$params: removePartition$params,
+        removePartition$return: removePartition$return,
         agentRelease$return: agentRelease$return,
         updateAgent$params: updateAgent$params,
         accept$params: accept$params,
@@ -474,7 +479,7 @@ export const serversModule = (sdk: typeof BaseSDK) => {
         params: removePartition$params,
         query?: undefined,
         body?: undefined,
-    } & TRequestOptions<unknown>) {
+    } & TRequestOptions<removePartition$return>) {
         return sdk.resolveAxiosResponse(async () => {
             sdk.checkPermission("servers", "removePartition");
 

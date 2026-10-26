@@ -662,6 +662,26 @@ async function hasComposeVolumes(project: WithId<TProject>, pasted?: string) {
  * Removes the project: running containers go away on the next spec, then
  * releases, deployments and project variables are deleted.
  */
+/**
+ * A server is gone (PLAN §27.4): projects that ran only there go with it
+ * (their containers and data went with the server); the others drop it.
+ */
+export async function detachServer(tenant: ObjectId, server: ObjectId) {
+  const projects = await projectModel.find({
+    tenant,
+    $or: [{ servers: server }, { placedOn: server }],
+  }, { projection: { servers: 1 }, limit: 1_000 }).toArray();
+  for (const p of projects) {
+    if (p.servers.every((s) => s.equals(server))) {
+      await deleteProject(tenant, p._id);
+    } else {
+      await projectModel.updateOne({ _id: p._id }, {
+        $pull: { servers: server, placedOn: server },
+      });
+    }
+  }
+}
+
 export async function deleteProject(tenant: ObjectId, id: ObjectId) {
   const project = await getProject(tenant, id);
   const active = await deploymentModel.find(

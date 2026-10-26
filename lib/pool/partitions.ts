@@ -10,6 +10,8 @@ import {
   resizePartition,
 } from "@/lib/pool/pool.ts";
 import { serverModel } from "@/schemas/infrastructure/server.ts";
+import { subscriptionModel } from "@/schemas/billing/subscription.ts";
+import { detachServer } from "@/lib/deploy/projects.ts";
 import type { $partitionSize } from "@/schemas/protocol/agent.ts";
 
 type TSize = z.output<typeof $partitionSize>;
@@ -119,31 +121,71 @@ export async function resizeOwnPartition(opts: {
   return await resizePartition(opts.machine, opts.name, opts.size);
 }
 
-/** Deletes a partition with its projects' data, and its server. */
+/**
+ * Deletes a partition with its projects and their data, and its server. It
+ * works from what the machine reports too, so a partition whose server is
+ * gone can still be removed. Returns the machine's command, whose result
+ * says whether the agent removed it.
+ */
 export async function removeOwnPartition(opts: {
   tenant: ObjectId;
   machine: ObjectId;
   name: string;
 }) {
-  const doc = await ownPartition(opts.tenant, opts.machine, opts.name);
-  await removePartition(opts.machine, opts.name);
-  await releaseServer(doc._id, opts.tenant);
-  await serverModel.deleteOne({ _id: doc._id, tenant: opts.tenant });
+  const machine = await serverModel.findOne({
+    _id: opts.machine,
+    tenant: opts.tenant,
+    "provider.kind": "machine",
+  }, { projection: { "resources.partitions": 1 } });
+  if (!machine) throw Response.notFound("No machine with this id");
+  const doc = await serverModel.findOne({
+    tenant: opts.tenant,
+    "provider.host": opts.machine,
+    "provider.partition": opts.name,
+  }, { projection: { provider: 1 } });
+  const rented = doc?.provider.kind === "rented" ||
+    await subscriptionModel.countDocuments({
+      "rental.host": opts.machine,
+      "rental.partition": opts.name,
+      status: { $in: ["active", "pastDue", "suspended"] },
+    });
+  if (rented) {
+    throw Response.badRequest("A rented partition goes with its rental");
+  }
+  const reported = machine.resources?.partitions?.some((p) =>
+    p.name === opts.name && !p.remainder
+  );
+  if (!doc && !reported) {
+    throw Response.notFound("No partition with this name on this machine");
+  }
+  const { command } = await removePartition(opts.machine, opts.name);
+  if (doc) {
+    await detachServer(opts.tenant, doc._id);
+    await releaseServer(doc._id, opts.tenant);
+    await serverModel.deleteOne({ _id: doc._id, tenant: opts.tenant });
+  }
+  return { command: String(command) };
 }
 
 /**
- * Deleting a server (PLAN §27.4): a partition goes from its machine too; a
- * machine takes its partitions' servers with it (its uninstall removes the
- * partitions themselves).
+ * Deleting a server (PLAN §27.4): its projects go with it (or drop it, when
+ * they run elsewhere too); a partition goes from its machine, and the delete
+ * is refused when that can't be started; a machine takes its partitions'
+ * servers with it (its uninstall removes the partitions themselves).
  */
 export async function onServerDeleted(id: ObjectId, tenant: ObjectId) {
   const doc = await serverModel.findOne({ _id: id, tenant }, {
     projection: { provider: 1 },
   });
   if (doc?.provider?.kind === "partition" && doc.provider.host) {
-    await removePartition(doc.provider.host, doc.provider.partition!)
-      .catch(() => {}); // the machine may be gone already
+    try {
+      await removePartition(doc.provider.host, doc.provider.partition!);
+    } catch (error) {
+      // Only a machine that's gone has nothing left to remove.
+      if ((error as Response)?.status !== 404) throw error;
+    }
   }
+  await detachServer(tenant, id);
   if (doc?.provider?.kind === "machine") {
     const partitions = await serverModel.find({
       tenant,
@@ -151,6 +193,7 @@ export async function onServerDeleted(id: ObjectId, tenant: ObjectId) {
       "provider.kind": "partition",
     }, { projection: { _id: 1 } }).toArray();
     for (const p of partitions) {
+      await detachServer(tenant, p._id);
       await releaseServer(p._id, tenant);
       await serverModel.deleteOne({ _id: p._id });
     }

@@ -153,13 +153,18 @@ export default new Router("/api", function servers(router) {
   });
 
   router.del("/:id/partitions/:name", function removePartition() {
+    const $return = z.object({
+      command: z.string().describe("The machine's partition.remove"),
+    });
+
     return {
-      shape: () => ({ params: $partitionParams }),
+      shape: () => ({ params: $partitionParams, return: $return }),
       handler: async (req) => {
         const { id, name } = $partitionParams.parse(paramsAsJson(req));
         const { tenant } = await withTenant(req);
-        await removeOwnPartition({ tenant: tenant._id, machine: id, name });
-        return Response.json({ ok: true });
+        return Response.json(
+          await removeOwnPartition({ tenant: tenant._id, machine: id, name }),
+        );
       },
     };
   });

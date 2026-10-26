@@ -1332,5 +1332,6 @@
   "System": "النظام",
   "Rent out (admins)": "التأجير (للمسؤولين)",
   "Optional: offer this machine's capacity to customers": "اختياري: إتاحة سعة هذا الجهاز للعملاء",
-  "Turns an empty Huruf machine into a pool machine whose partitions customers can rent: Docker moves onto the partition volume and rented partitions are kept apart. Not needed to use the machine yourself.": "يحوّل جهاز Huruf فارغًا إلى جهاز مجمّع يمكن للعملاء استئجار أقسامه: ينتقل Docker إلى وحدة تخزين الأقسام وتُعزل الأقسام المؤجَّرة عن بعضها. لا حاجة إليه لاستخدام الجهاز بنفسك."
+  "Turns an empty Huruf machine into a pool machine whose partitions customers can rent: Docker moves onto the partition volume and rented partitions are kept apart. Not needed to use the machine yourself.": "يحوّل جهاز Huruf فارغًا إلى جهاز مجمّع يمكن للعملاء استئجار أقسامه: ينتقل Docker إلى وحدة تخزين الأقسام وتُعزل الأقسام المؤجَّرة عن بعضها. لا حاجة إليه لاستخدام الجهاز بنفسك.",
+  "The machine couldn't remove it": "تعذّر على الجهاز إزالته"
 }

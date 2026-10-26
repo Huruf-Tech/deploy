@@ -112,13 +112,23 @@ export function MachinePanel({
 
   const remove = async (name: string) => {
     try {
-      await ThunderSDK.servers.removePartition({
+      const { command } = await ThunderSDK.servers.removePartition({
         params: { id: server._id, name },
       })
-      toast.success(t("Partition removed with its projects and data"))
       setRemoving(undefined)
-      onChanged()
       load()
+      // The machine removes it; its answer says whether that worked.
+      for (let i = 0; i < 40; i++) {
+        await new Promise((r) => setTimeout(r, 1_500))
+        const outcome = await ThunderSDK.servers.command({
+          params: { id: server._id, command },
+        })
+        if (outcome.status === "failed")
+          throw new Error(outcome.error ?? t("The machine couldn't remove it"))
+        if (outcome.status === "done") break
+      }
+      toast.success(t("Partition removed with its projects and data"))
+      onChanged()
     } catch (e) {
       toast.error(errorMessage(e) ?? t("Could not remove it"))
     }
