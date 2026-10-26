@@ -159,6 +159,19 @@ export type TWalletFeeStructure = {
 type TResolvedTransferOptions = IWalletTransferOptions & {
   reference: string;
   idempotencyKey: string;
+
+  /**
+   * Whether repeating this key means "the same operation again" rather than
+   * "a second, identical operation".
+   *
+   * Only true when the key is authoritative: the caller supplied it, or we
+   * are resuming a transfer already recorded on a top-up. The default key is
+   * derived from the amount, the parties and the current minute, so two
+   * genuinely separate but identical transfers inside one minute share it —
+   * returning the first one's result there would report a charge that never
+   * happened.
+   */
+  replaySafe: boolean;
 };
 
 /** Thrown when the payer's wallet cannot cover a transfer. */
@@ -512,6 +525,9 @@ export class Wallet {
       ...opts,
       reference,
       idempotencyKey,
+      // A derived key is a collision guard, not a statement of intent, so it
+      // must keep failing loudly instead of reporting a phantom success.
+      replaySafe: opts.idempotencyKey !== undefined,
       // Retries of the same logical transfer share one gateway charge.
       topupIdempotencyKey: opts.topupIdempotencyKey ??
         hash({ type: "topup-for", transfer: idempotencyKey }),
@@ -540,9 +556,12 @@ export class Wallet {
       if (!funded) throw error;
 
       // settleTopup replays the parked transfer itself. When it did not (we
-      // reused a top-up that had already settled) the funds are there, so
-      // run it now — its own idempotency key guards against a repeat.
-      return funded.transfer ?? await this.execute(resolved);
+      // reused a top-up that had already settled, or a webhook beat us to it)
+      // the funds are there, so run it now. Replay-safe regardless of how the
+      // key was derived: this transfer is recorded on the top-up row, so it is
+      // one attempt being finished, not a second purchase.
+      return funded.transfer ??
+        await this.execute({ ...resolved, replaySafe: true });
     }
   }
 
@@ -585,9 +604,11 @@ export class Wallet {
   ): Promise<TWalletTransferResult> {
     const { reference, idempotencyKey } = opts;
 
-    const already = await this.findTransferByKey(idempotencyKey);
+    if (opts.replaySafe) {
+      const already = await this.findTransferByKey(idempotencyKey);
 
-    if (already) return already;
+      if (already) return already;
+    }
 
     const walletA = await this.resolve({
       tenant: opts.fromTenant,
@@ -752,11 +773,22 @@ export class Wallet {
     try {
       return await mongodb.withSession((_) => _.withTransaction(makeTransfer));
     } catch (error) {
-      // Lost a race with a concurrent run of the same key; its result stands.
       if (isDuplicateKeyError(error)) {
-        const settled = await this.findTransferByKey(idempotencyKey);
+        // Lost a race with a concurrent run of the same key; its result stands.
+        if (opts.replaySafe) {
+          const settled = await this.findTransferByKey(idempotencyKey);
 
-        if (settled) return settled;
+          if (settled) return settled;
+        } else {
+          // Two separate transfers collided on the derived key — same amount,
+          // same parties, same minute. Failing is correct; the caller must not
+          // be told the second one went through.
+          throw new Error(
+            `A transfer with the same amount and parties already ran this minute. ` +
+              `Pass an explicit idempotencyKey to tell the two apart.`,
+            { cause: error },
+          );
+        }
       }
 
       throw error;
@@ -1305,7 +1337,12 @@ export class Wallet {
       // Reuses the original reference and idempotency key, so a duplicate
       // settlement cannot run the transfer twice.
       if (topup.transfer) {
-        transfer = await this.execute(withoutNulls(topup.transfer));
+        transfer = await this.execute({
+          ...withoutNulls(topup.transfer),
+          // Resuming a row is replaying one recorded attempt, whatever kind
+          // of key it carries.
+          replaySafe: true,
+        });
       }
     } catch (error) {
       resumeError = reason(error);

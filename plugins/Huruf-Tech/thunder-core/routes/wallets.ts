@@ -327,6 +327,10 @@ export default new Router("/api", function wallets(router) {
                 user: user._id,
                 purpose: "fund_transfer_fee",
                 description: "Fund transfer fee charges",
+                // Without an explicit key these fall back to the minute-based
+                // default, so two unrelated transfers charging the same fee to
+                // the same tenant in one minute would collide.
+                idempotencyKey: `${payload.challengeId}:fee:${fee.tenant}`,
                 databaseSession: session,
               });
             }

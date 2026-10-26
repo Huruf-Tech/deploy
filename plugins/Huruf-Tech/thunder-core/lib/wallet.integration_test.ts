@@ -46,14 +46,20 @@ const load = async () => {
   // Patches ZodType.prototype.strictParse, which the schemas rely on.
   await import("@/core/bootstrap.ts");
 
-  const [lib, wallet, topup, ledger, tenant, db] = await Promise.all([
-    import("@/lib/wallet.ts"),
-    import("@/schemas/wallet.ts"),
-    import("@/schemas/walletTopup.ts"),
-    import("@/schemas/walletLedger.ts"),
-    import("@/schemas/tenant.ts"),
-    import("@/database.ts"),
-  ]);
+  const [lib, wallet, topup, ledger, tenant, db, indexes] = await Promise
+    .all([
+      import("@/lib/wallet.ts"),
+      import("@/schemas/wallet.ts"),
+      import("@/schemas/walletTopup.ts"),
+      import("@/schemas/walletLedger.ts"),
+      import("@/schemas/tenant.ts"),
+      import("@/database.ts"),
+      import("@/scripts/syncDBIndexes.ts"),
+    ]);
+
+  // Without these the unique indexes do not exist, and every idempotency
+  // guarantee in this suite would pass for the wrong reason.
+  await indexes.syncDBIndexes();
 
   return { ...lib, ...wallet, ...topup, ...ledger, ...tenant, ...db };
 };
@@ -457,4 +463,51 @@ test("abandoning a top-up frees its key for a new charge", async () => {
 
   assert.equal(charges, 2, "the freed key opened a new charge");
   assert.equal(await balanceOf(tenant), 600);
+});
+
+test("two identical transfers in one minute both go through or fail loudly", async () => {
+  const payer = await makeTenant(1000);
+  const payee = await makeTenant();
+
+  // No explicit key: the default is derived from amount, parties and the
+  // current minute, so a customer buying the same item twice collides on it.
+  const buy = () =>
+    mod.Wallet.transfer({
+      fromTenant: payer,
+      toTenant: payee,
+      currency: CURRENCY,
+      amount: 250,
+      description: "same item",
+    });
+
+  await buy();
+
+  // It must NOT quietly hand back the first transfer's result — that would
+  // report a charge that never happened.
+  await assert.rejects(buy, /same amount and parties already ran this minute/);
+
+  assert.equal(await balanceOf(payer), 750, "debited once, visibly");
+  assert.equal(await balanceOf(payee), 250);
+});
+
+test("distinct explicit keys let identical transfers both run", async () => {
+  const payer = await makeTenant(1000);
+  const payee = await makeTenant();
+
+  const buy = (key: string) =>
+    mod.Wallet.transfer({
+      fromTenant: payer,
+      toTenant: payee,
+      currency: CURRENCY,
+      amount: 250,
+      description: "same item",
+      idempotencyKey: key,
+    });
+
+  const first = await buy("order_1");
+  const second = await buy("order_2");
+
+  assert.notEqual(first.reference, second.reference);
+  assert.equal(await balanceOf(payer), 500, "both purchases charged");
+  assert.equal(await balanceOf(payee), 500);
 });

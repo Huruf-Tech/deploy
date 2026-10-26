@@ -809,12 +809,31 @@ is no insufficiency involved.
   settles once fixed — but it does mean a customer is charged and waits.
 - The retry happens **once**. If the top-up still is not enough, the original
   `InsufficientBalanceError` surfaces.
-- **A replayed transfer returns its original result.** `transfer` looks the
-  `idempotencyKey` up in the ledger before writing, and returns the existing debit/credit
-  pair if it is already there, rather than throwing on the unique index. This is what
-  makes `settleTopup` safe to re-run, which every recovery path depends on. Inside a
-  caller's `databaseSession` only that pre-check applies — a duplicate-key error there is
-  the caller's to handle, because swallowing it would leave their session aborted.
+- **A replayed transfer returns its original result — but only when you supplied the
+  key.** If you pass `idempotencyKey`, repeating it means "the same operation again":
+  `transfer` finds the existing debit/credit pair and returns it instead of throwing on
+  the unique index. That is what makes `settleTopup` safe to re-run, which every recovery
+  path depends on.
+
+  Without a key, `transfer` derives one from the amount, the parties, the description and
+  **the current minute**. That is a collision guard, not a statement of intent — two
+  genuinely separate but identical transfers inside one minute share it. Returning the
+  first one's result there would tell the caller a second charge went through when
+  nothing moved, so the second call **throws** instead:
+
+  ```
+  A transfer with the same amount and parties already ran this minute.
+  Pass an explicit idempotencyKey to tell the two apart.
+  ```
+
+  A customer buying the same item twice in a minute is the case to watch. **Pass an
+  explicit `idempotencyKey` for anything a user can repeat** — one per order, invoice or
+  request — and both go through.
+
+  Inside a caller's `databaseSession` only the pre-check applies; a duplicate-key error
+  there is the caller's to handle, because swallowing it would leave their session
+  aborted. Resuming a transfer parked on a top-up is always treated as a replay, whatever
+  kind of key it carries, since the row records one attempt.
 - If the gateway charge succeeds but replaying the transfer fails, the top-up is still
   recorded as `completed` (the customer's money *is* in their wallet) with the failure in
   its `error` field. `settleTopup` does not throw in that case, because that would tell
@@ -833,7 +852,11 @@ The money-critical behaviour here is atomic claims, unique indexes and transacti
 mocking those would test the mocks. `lib/wallet.integration_test.ts` runs against a real
 MongoDB instead and covers settling, duplicate webhook delivery, a webhook that lands
 while the fallback is still running, recovery from `paid`, stale-claim takeover, key
-reuse, transfer replay and `abandonTopup`.
+reuse, transfer replay, derived-key collisions and `abandonTopup`.
+
+The suite runs `syncDBIndexes()` on the throwaway database before the first test. Skip
+that and the unique indexes are absent, so every idempotency assertion passes for the
+wrong reason — worth remembering when adding cases.
 
 ```bash
 docker run -d --name thunder-wallet-test-mongo -p 27018:27017 \
