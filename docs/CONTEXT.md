@@ -56,7 +56,7 @@ Background from the planning conversation that is **not** in [PLAN.md](PLAN.md).
   - Generated secrets: `SECRET_KEY` (thunder-core) and **a separate** `DEPLOY_MASTER_KEY` (envelope encryption).
   - An **HTTP email provider** for alerts (`Mailer.onSendMail`; SMTP is discouraged on hot paths), plus `SMTP_*` if used elsewhere.
   - The `PLATFORM_TENANT` (the tenant receiving subscription payments) and `DEFAULT_CURRENCY`.
-- **Later:** a wallet top-up/payment provider (explicitly deferred).
+- **Payments (Phase 15, PLAN §25):** a Stripe account (entity and country), test and live keys (`STRIPE_SECRET_KEY` as a restricted key, `STRIPE_PUBLISHABLE_KEY`, `STRIPE_WEBHOOK_SECRET`), and a separate `WALLET_TOPUP_TENANT` (settlement account) beside `PLATFORM_TENANT`.
 
 ## 5. Moving to the new machine
 

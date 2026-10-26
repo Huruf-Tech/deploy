@@ -115,6 +115,7 @@ A free-to-use SaaS that deploys and operates apps on **the user's own machines**
 | D43 | **Built-in ingress (Phase 11):** Traefik ships in the control plane package (one per instance) and balances each project's custom domains evenly across its healthy servers. Routes come from the control plane (Traefik HTTP provider, no redeploys); certificates are Let's Encrypt via HTTP-01, issued once by the control plane, stored encrypted in MongoDB and synced to every instance. No AWS or Cloudflare dependency; instances are stateless, so more can be added behind any TCP load balancer. Custom domains only: user apps are never served under the platform's own domain (§14). |
 | D44 | **Long polling, not WebSockets (Phase 13):** an agent's poll waits at the control plane until there's something for it (a command, a new spec, terminal input) or a time limit passes. This keeps the polling protocol, adds no dependency to the agent (Go's standard library has no WebSocket client) and keeps old agents working unchanged. WebSockets may come later between the browser and the control plane only, for terminals. |
 | D45 | **AI template assistant (Phase 12):** the platform's own Anthropic key, offered as a plan feature with a monthly limit. It drafts templates (from a GitHub repo or a description) and fixes failed builds and rollouts; a person always reviews and saves. |
+| D46 | **Payments through Stripe, saved cards first (Phase 15, §25):** customers save a card on a Billing page (Stripe Elements; card data never touches us) and are charged later, off session, when a renewal or payment is short, and on demand through "Add funds". Money always lands in the thunder-core wallet first (`Wallet.ensureBalance` / `addBalance` / `settleTopup`), and every charge still goes through `BillingService`. USD only for now. Gateways sit behind one `PaymentGateway` interface, so more can join the same Billing page later. |
 | D42 | **Managed servers (optional, needs owner consent):** provision EC2 instances on the platform's AWS account and bill plan + metered usage from the wallet. The MVP only prepares the seams (§24). |
 
 ---
@@ -1196,6 +1197,21 @@ Found while using the platform; each is in the section it belongs to, and listed
 - **Operations:** every deploy that changes access control or indexes needs `deno task setup:prod` afterwards.
 - **Server metrics:** besides the 24-hour history at 1-minute resolution, the agent keeps the last 15 minutes at 5-second resolution (180 samples) and sends both when a metrics stream opens, so the server chart starts with recent detail instead of empty. Needs the updated agent ("Update agent"); older agents still send the minute history only. Both buffers live in agent memory, so an agent restart starts them over.
 
+### Phase 15 — Payments: Stripe, saved cards and Add funds (planned, D46, §25)
+Waiting for the owner's review of §25. No code before "go".
+- **15a Foundations:** the `PaymentGateway` interface and `StripeGateway`; `billingAccounts` (Stripe customer per tenant, saved cards); settings and the webhook route; wallets switched to USD; thunder-core hooks (`onInsufficientBalance`, top-up settlement) wired to the gateway.
+- **15b Billing page:** Configuration → Billing (replaces the core Wallet entry): balance, saved cards (add with the Payment Element, set default, remove), "Pay automatically when the balance is short" switch, Add funds, and a transactions list (top-ups, plan charges, receipts).
+- **15c Charging:** subscribe/upgrade and lazy renewal call `Wallet.ensureBalance` outside their transaction; 3-D Secure handled on session ("Confirm payment") and off session (past-due banner, email, a link to authenticate); the webhook settles top-ups and wakes the renewal.
+- **15d Operations:** Admin → Payments (top-ups by status, stuck `initiated`/`paid`/`processing` rows with Settle and Abandon), refunds and disputes recorded from webhooks for the admin to act on.
+- **Done when:**
+  1. A customer saves a card (including one that needs 3-D Secure) without leaving the dashboard, and removes it again.
+  2. Add funds $20 credits the wallet once, even with a double click, a slow webhook or a duplicated webhook.
+  3. A renewal with an empty wallet and a saved card charges exactly the shortfall once (5 concurrent attempts tested) and the period starts; with a declined card the tenant goes past due and is emailed.
+  4. A renewal card that needs authentication leaves the tenant past due with a "Confirm payment" action that completes it on session.
+  5. Killing the process between "charged" and "credited" loses nothing: the webhook or an admin's Settle finishes it.
+  6. No card number, CVC or full card data is ever sent to or stored by the control plane (only Stripe ids, brand, last 4, expiry).
+  7. Everything works against Stripe test mode with `stripe listen` forwarding webhooks locally.
+
 ### Phase 14 — Backlog (after MVP)
 - Ability to upgrade already installed agent along with its deps — **done (pending review):**
   - Agents report the SHA-256 of their binary. The control plane compares it with the `SHA256SUMS` the installer uses (`AGENT_DOWNLOAD_BASE`; optional `AGENT_CHECKSUMS_BASE` when the control plane reaches that host under another address), cached 5 minutes.
@@ -1204,7 +1220,7 @@ Found while using the platform; each is in the section it belongs to, and listed
   - **Verified on a VM:** two consecutive updates, each restarting as the new version, with host setup after the restart.
 - **Standby servers and auto-placement** (owner likes it; plan as its own phase): the control plane picks servers by free capacity and labels, and spare servers take over a dead server's projects. Projects with local volumes can't move.
 - Mesh relay for NAT'd servers
-- Wallet top-up (payment providers)
+- More payment gateways on the Billing page (after Phase 15's Stripe)
 - **Proration on upgrade** (owner agrees, about a day): the unused part of the current period is credited against the new plan, as a wallet ledger entry shown in the confirm dialog. Open: on a downgrade, credit the wallet, or switch at the period's end.
 - AWS ECR registry (token refresh)
 - **GitHub Actions as builder, including Android builds of Thunder apps** (the owner's next target after Phase 12): builds that don't run on the servers, with Android signing keys.
@@ -1508,7 +1524,7 @@ Subscriptions are **per tenant**, because thunder-core wallets are per `{tenant,
   1. The same request attempts the renewal charge. The idempotency key prevents double charges under concurrency.
   2. **Success:** a new period starts **now**, not backdated, so an unused tenant isn't charged for time it wasn't there.
   3. **Insufficient balance:** status `pastDue`, the tenant falls back to Free, a notification goes to the outbox, and the attempt is retried at most hourly (`nextRenewalAttemptAt`).
-- **Wallet top-up** is out of scope for now (§16 Phase 10 notes). The admin can credit wallets through thunder-core in the meantime.
+- **Wallet top-up** comes with Phase 15 (Stripe, §25): saved cards charged when a payment is short, and "Add funds". Until then the admin credits wallets through thunder-core.
 
 ### 22.4 Private plans and complimentary access
 
@@ -1654,3 +1670,89 @@ Each axis of variation is an interface with one class per variant. Adding a vari
 - **Requires real payments** (wallet top-up) first.
 - **Data processor role:** customer workloads would run on our infrastructure, which affects the ToS and GDPR. This is a change to the data-minimization principle.
 - **Dependency:** `npm:@aws-sdk/client-ec2`, or a small SigV4 signer on WebCrypto. To be justified at the time.
+
+---
+
+## 25. Payments: Stripe, saved cards and Add funds (D46, Phase 15)
+
+### 25.1 Goal and scope
+- **Customers pay by card through Stripe.** They save a card once on a Billing page and are charged later without being present (off session): when a renewal or payment is short, and whenever they choose "Add funds".
+- **The wallet stays the source of truth.** Every payment first lands in the tenant's thunder-core wallet as a top-up, and plans are still charged from the wallet by `BillingService` (§22.3). Stripe never charges for a plan directly, so complimentary periods, private plans and the period log keep working unchanged, and other gateways (and later, usage meters) plug into the same wallet.
+- **USD only for now.** Plans are already priced in USD; wallets move to USD (`DEFAULT_CURRENCY=usd`, `AVAILABLE_CURRENCIES=usd`). More currencies later means one wallet per currency, no conversion by us.
+- **Out of scope for this phase:** tax/VAT calculation and tax invoices (Stripe Tax later), automatic refunds (recorded, done by an admin in Stripe), more gateways, PKR, payouts.
+
+### 25.2 Building blocks (thunder-core, reviewed)
+- `Wallet.ensureBalance({ tenant, currency, amount, idempotencyKey })`: tops up only the shortfall, **outside** any transaction, so the plan charge that follows stays one transaction with its period log.
+- `Wallet.addBalance({ tenant, currency, amount, idempotencyKey })`: "Add funds", an exact amount.
+- `Wallet.onInsufficientBalance`: our single place that charges the gateway. It receives the top-up row's `_id`, which we pass to Stripe as the idempotency key and in metadata.
+- `Wallet.settleTopup` / `Wallet.abandonTopup`: settlement from the webhook, and the admin's recovery actions. Rows are written before the charge (`initiated`), a paid top-up is never failed, stale claims are taken over, and repeated settles are safe (integration-tested in the plugin).
+- `WALLET_TOPUP_TENANT`: a separate settlement tenant whose wallet runs negative (what customers paid in). It must differ from `PLATFORM_TENANT` (the revenue tenant).
+
+### 25.3 The gateway interface (D41: strategy, not branching)
+```ts
+interface PaymentGateway {
+  id: "stripe"                                   // stored on every row
+  ensureCustomer(tenant): Promise<customerRef>
+  startSaveCard(tenant): Promise<{ clientSecret }>   // Stripe SetupIntent
+  listCards / setDefault / removeCard
+  charge({ tenant, amount, currency, topup, offSession }):
+    Promise<{ status: "completed" | "pending" | "failed" | "action_required",
+              providerRef, clientSecret?, error? }>
+  parseWebhook(req): Promise<GatewayEvent | void>    // verifies the signature
+}
+```
+- `StripeGateway` implements it with the official `npm:stripe` SDK (server) and `@stripe/stripe-js` + `@stripe/react-stripe-js` (Payment Element in the dashboard). New dependencies, justified: card data must stay inside Stripe's iframe (PCI SAQ-A), and the SDK handles API versions, retries and webhook signatures.
+- `lib/payments/` holds the interface, the registry of enabled gateways, and the thunder-core wiring; routes never import Stripe directly.
+
+### 25.4 Data
+| Collection | Fields |
+|---|---|
+| `billingAccounts` | tenant (unique), gateway, customerRef (Stripe customer id), defaultCard, autoPay (default true once a card is saved), billingEmail, name, address (for receipts), createdAt/updatedAt |
+| `paymentCards` | tenant, gateway, providerRef (Stripe PaymentMethod id, unique), brand, last4, expMonth, expYear, isDefault, createdAt. Never the number or CVC. |
+| `walletTopups` (thunder-core) | status, amount, provider `stripe`, providerRef (PaymentIntent id), idempotencyKey, error. We add nothing to it; our own context (purpose, initiating user) goes in Stripe metadata and the wallet ledger's description. |
+| `paymentEvents` | gateway, eventId (unique, so a replayed webhook is ignored), type, tenant, topup?, processedAt; TTL 90 days. Refunds and disputes are kept (no TTL) for the admin. |
+
+### 25.5 Flows
+- **Save a card (on session):** Billing → "Add card" opens the Payment Element; the server creates a SetupIntent (`usage: off_session`) on the tenant's Stripe customer; the browser confirms it (3-D Secure inline when the bank asks). The webhook `setup_intent.succeeded` (and a direct read after confirm, for instant feedback) stores the card; the first card becomes the default. Remove detaches it in Stripe and deletes our row; the default can't be removed while autoPay is on and a subscription renews, unless another card is set.
+- **Add funds (on session):** amount between $5 and $1,000 (settings). `Wallet.addBalance` with key `add:<tenant>:<client nonce>` (a double click reuses one charge) charges the default card. Results:
+  - `succeeded` → credited immediately, shown at once;
+  - `requires_action` (3-D Secure) → the top-up stays `pending`, the browser completes it with the returned client secret, and the webhook settles it;
+  - declined → the Stripe message is shown, nothing is credited.
+- **Subscribe / upgrade (on session):** before today's transaction, `Wallet.ensureBalance(price, key "sub:…")` with autoPay on; `requires_action` returns the client secret to the confirm dialog ("Confirm payment"), then the subscribe call is retried with the same key.
+- **Lazy renewal (off session):** when a period has ended, `ensureBalance(price, key "renew:<sub>:<periodEnd>:<attempt>")` runs before the renewal transaction; `attempt` is the hourly retry count, so a declined card can be retried next hour without reusing a failed charge.
+  - Success → the renewal proceeds as today.
+  - Pending (bank processing) → past due until the webhook settles; on settlement our webhook sets `nextRenewalAttemptAt = now` so the next entitlement check renews.
+  - `requires_action` or declined → past due, Free fallback (§22.2), and one email with a "Confirm payment" link to the Billing page (hourly retries stay quiet).
+  - autoPay off or no card → today's behaviour (wallet only).
+- **Webhook:** our own route `POST /payments/api/webhook/stripe` (public, signature-verified), not thunder-core's shipped one, so one route per gateway can share the Billing page. It records the event id (dedupe), maps `payment_intent.succeeded` / `payment_intent.payment_failed` to `Wallet.settleTopup({ topup: metadata.topup })`, `setup_intent.succeeded` to saving the card, `payment_method.detached` to removing it, and `charge.refunded` / `charge.dispute.created` to `paymentEvents` plus an admin notification. It answers within a few hundred ms; Stripe retries anything else.
+- **Recovery:** Admin → Payments lists top-ups by status. Rows `initiated` older than 15 minutes, `paid` (credit failed) and stale `processing` get **Settle** (asks Stripe for the PaymentIntent's real status, then `settleTopup`) and **Abandon** (only after Stripe confirms no charge; frees the key).
+
+### 25.6 Security
+- No card data on our servers; only Stripe ids, brand, last 4 and expiry. The Payment Element is the only card input.
+- Webhook signatures verified on the raw body (`STRIPE_WEBHOOK_SECRET`); unknown or replayed events ignored.
+- Only the tenant owner manages cards and adds funds (same rule as subscribing, §22.6); members see the balance only. Every amount is validated server side (cents, min/max), never trusted from the browser.
+- Card-testing protection: Add funds limited to 5 attempts per tenant per hour and a daily cap (settings); Stripe Radar on; unverified emails can't add cards (as with servers, §20.3).
+- Stripe keys are platform secrets: `STRIPE_SECRET_KEY` (restricted key, only the permissions used), `STRIPE_PUBLISHABLE_KEY`, `STRIPE_WEBHOOK_SECRET`. Test-mode keys locally and in tests.
+
+### 25.7 Performance (§20)
+- Stripe is never called on a hot path: polls, entitlements on cache hit and dashboard reads never touch it. Calls happen on user actions (save card, Add funds, subscribe) and once per renewal attempt (at most hourly per past-due tenant), with an 8 s timeout; a timeout leaves the top-up `initiated` for the webhook or Settle, never a second charge.
+- The webhook does at most a few indexed writes and answers fast.
+- Billing page reads come from our collections, not Stripe.
+
+### 25.8 Settings and setup
+- Settings: `STRIPE_SECRET_KEY`, `STRIPE_PUBLISHABLE_KEY`, `STRIPE_WEBHOOK_SECRET`, `WALLET_TOPUP_TENANT`, `PAYMENTS_ADD_FUNDS_MIN` (500) / `_MAX` (100000) cents, `PAYMENTS_DAILY_CAP`.
+- `DEFAULT_CURRENCY=usd`, `AVAILABLE_CURRENCIES=usd`.
+- `deno task setup:prod` after deploying (public webhook permission, indexes).
+- Stripe dashboard: one webhook endpoint for the events in §25.5; receipts emailed by Stripe.
+
+### 25.9 Testing
+- A `FakeGateway` implementing `PaymentGateway` drives the flows in tests: completed, pending, declined, action required, timeout, a webhook before the hook returns, duplicate webhooks.
+- Renewal concurrency (5 in parallel) still charges once, now with a top-up.
+- Against Stripe test mode: test cards for success, decline, insufficient funds and 3-D Secure (`4000 0025 0000 3155`), `stripe listen --forward-to localhost:8000/payments/api/webhook/stripe`.
+- Browser: save, remove and default cards, Add funds with 3-D Secure, the subscribe confirm with authentication; light, dark, phone and Arabic.
+
+### 25.10 Open questions for the owner
+1. **Stripe account:** which entity and country, and the live/test keys (§CONTEXT 4).
+2. **Billing replaces the core Wallet nav entry?** Proposed yes: one place for balance, cards and history.
+3. **Add funds limits:** $5 minimum, $1,000 maximum and the daily cap, OK?
+4. **Card required for paid plans?** Proposed no: a funded wallet is enough; autoPay is optional.
