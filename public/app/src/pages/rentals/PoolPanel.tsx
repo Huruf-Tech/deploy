@@ -140,15 +140,16 @@ function PoolDetails({
   // Any machine has host setup (PLAN §27); renting needs the pool layout,
   // which a machine only takes while it has no partitions.
   if (!pool || pool.mode !== "pool") {
-    if (partitions.length) return null
+    // Only a machine with nothing on it yet (PLAN §26.5): not a partition.
+    if (server.provider?.kind !== "machine" || partitions.length) return null
     return (
       <Panel
-        title={t("Pool machine")}
-        description={t("Rent this machine's capacity out in partitions")}
+        title={t("Rent out (admins)")}
+        description={t("Optional: offer this machine's capacity to customers")}
       >
         <p className="mb-3 text-[13px] text-muted-foreground">
           {t(
-            "Installs Sysbox, moves Docker onto a partition volume and prepares the network rules. For a fresh machine only."
+            "Turns an empty Huruf machine into a pool machine whose partitions customers can rent: Docker moves onto the partition volume and rented partitions are kept apart. Not needed to use the machine yourself."
           )}
         </p>
         <Button size="sm" variant="outline" onClick={() => setMaking(true)}>

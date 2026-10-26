@@ -40,8 +40,10 @@ import { StatusPill } from "./StatusPill"
 import { LabelChips } from "./ServerLabels"
 import {
   gib,
+  grouped,
   isMachine,
   isPartition,
+  machineOf,
   serverSchema,
   stateOf,
   type TLiveness,
@@ -228,6 +230,7 @@ function RowActions({
 
 function ServerCard({
   server,
+  machine,
   live,
   onAccept,
   onReject,
@@ -238,6 +241,8 @@ function ServerCard({
   onSelect,
 }: {
   server: TServer
+  /** Listed above it: this is one of its partitions. */
+  machine?: string
   live?: TLiveness
   onAccept: () => void
   onReject: () => void
@@ -270,12 +275,18 @@ function ServerCard({
               {server.name}
             </Link>
           </h3>
-          <p
-            dir="ltr"
-            className="truncate font-mono text-xs text-muted-foreground"
-          >
-            {inventory.hostname}
-          </p>
+          {machine ? (
+            <p className="truncate text-xs text-muted-foreground">
+              {t("Partition of {{machine}}", { machine })}
+            </p>
+          ) : (
+            <p
+              dir="ltr"
+              className="truncate font-mono text-xs text-muted-foreground"
+            >
+              {inventory.hostname}
+            </p>
+          )}
         </div>
         <StatusPill state={state} />
         <Checkbox
@@ -409,23 +420,34 @@ function ServerTable({
       id: "name",
       header: t("Server"),
       sortValue: (s) => s.name,
-      cell: (s) => (
-        <div className="min-w-40">
-          <Link
-            to={`./${s._id}`}
-            state={{ name: s.name }}
-            className="font-medium hover:underline focus-visible:underline focus-visible:outline-none"
-          >
-            {s.name}
-          </Link>
+      cell: (s) => {
+        const machine = machineOf(s, servers)
+        return (
           <div
-            dir="ltr"
-            className="truncate font-mono text-[11px] text-muted-foreground"
+            className={cn(
+              "min-w-40",
+              machine && "ms-3 border-s-2 border-border ps-3"
+            )}
           >
-            {s.inventory.hostname}
+            <Link
+              to={`./${s._id}`}
+              state={{ name: s.name }}
+              className="font-medium hover:underline focus-visible:underline focus-visible:outline-none"
+            >
+              {s.name}
+            </Link>
+            <div className="truncate text-[11px] text-muted-foreground">
+              {machine ? (
+                t("Partition of {{machine}}", { machine: machine.name })
+              ) : (
+                <span dir="ltr" className="font-mono">
+                  {s.inventory.hostname}
+                </span>
+              )}
+            </div>
           </div>
-        </div>
-      ),
+        )
+      },
     },
     {
       id: "status",
@@ -511,7 +533,7 @@ function ServerTable({
     },
     {
       id: "specs",
-      header: t("Machine"),
+      header: t("System"),
       className: "max-xl:hidden",
       cell: (s) => (
         <div className="flex flex-col gap-1">
@@ -789,7 +811,7 @@ export default function ServerCards({
           {/* Desktop: the dense table; phones: cards. */}
           <div className="max-md:hidden">
             <ServerTable
-              servers={servers}
+              servers={grouped(servers)}
               liveness={liveness}
               selectedIds={selectedIds}
               toggleSelect={toggleSelect}
@@ -804,10 +826,11 @@ export default function ServerCards({
             className="grid gap-3 sm:grid-cols-2 md:hidden"
             aria-live="polite"
           >
-            {servers.map((server) => (
+            {grouped(servers).map((server) => (
               <ServerCard
                 key={server._id}
                 server={server}
+                machine={machineOf(server, servers)?.name}
                 live={liveness.get(server._id)}
                 onAccept={() => setAccepting(server)}
                 onReject={() => reject(server)}

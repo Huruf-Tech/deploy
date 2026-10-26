@@ -113,3 +113,32 @@ export const isMachine = (server: Pick<TServer, "provider">) =>
 /** A partition: its own (on the tenant's machine) or rented from Huruf. */
 export const isPartition = (server: Pick<TServer, "provider">) =>
   server.provider?.kind === "partition" || server.provider?.kind === "rented"
+
+/**
+ * Each machine followed by its own partitions (PLAN §27), so the list reads
+ * as machines and what runs on them. Rented partitions (their machine is
+ * Huruf's) and anything else keep their place.
+ */
+export const grouped = (servers: TServer[]) => {
+  const machines = new Set(servers.filter(isMachine).map((s) => s._id))
+  const under = (s: TServer) =>
+    s.provider?.kind === "partition" &&
+    !!s.provider.host &&
+    machines.has(s.provider.host)
+  return servers.flatMap((s) =>
+    under(s)
+      ? []
+      : [
+          s,
+          ...(isMachine(s)
+            ? servers.filter((p) => under(p) && p.provider?.host === s._id)
+            : []),
+        ]
+  )
+}
+
+/** The machine a partition in this list belongs to, if it's listed. */
+export const machineOf = (server: TServer, servers: TServer[]) =>
+  server.provider?.kind === "partition"
+    ? servers.find((s) => s._id === server.provider?.host && isMachine(s))
+    : undefined

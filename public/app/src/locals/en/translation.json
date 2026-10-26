@@ -1327,5 +1327,10 @@
   "Up to {{n}}": "Up to {{n}}",
   "its machine": "its machine",
   "{{count}} partitions": "{{count}} partitions",
-  "{{count}} partitions_one": "{{count}} partition"
+  "{{count}} partitions_one": "{{count}} partition",
+  "Partition of {{machine}}": "Partition of {{machine}}",
+  "System": "System",
+  "Rent out (admins)": "Rent out (admins)",
+  "Optional: offer this machine's capacity to customers": "Optional: offer this machine's capacity to customers",
+  "Turns an empty Huruf machine into a pool machine whose partitions customers can rent: Docker moves onto the partition volume and rented partitions are kept apart. Not needed to use the machine yourself.": "Turns an empty Huruf machine into a pool machine whose partitions customers can rent: Docker moves onto the partition volume and rented partitions are kept apart. Not needed to use the machine yourself."
 }
