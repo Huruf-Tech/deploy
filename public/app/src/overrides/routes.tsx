@@ -68,8 +68,9 @@ export const routes: TRoutesOverride = {
   // CRUD modules (users, roles, policies, plans) show only with their own
   // get/create permission: core's router checks it.
   plans: { merge: true, name: "Plans", icon: IconReceipt2 },
+  // Who is subscribed to which plan (admins); "Billing" read as their own bills.
   billingAdmin: {
-    name: "Billing",
+    name: "Subscriptions",
     path: "billing",
     group: "Admin",
     icon: IconReportMoney,

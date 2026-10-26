@@ -28,6 +28,7 @@ import { StatusBadge } from "@/components/console/status"
 import { DataTable } from "@/components/console/data-table"
 import { useFresh } from "@/hooks/use-fresh"
 import { cn, errorMessage } from "@/lib/utils"
+import { isUnlimited, money } from "@/lib/plans"
 
 type TOverview = Awaited<ReturnType<typeof ThunderSDK.billing.get>>
 type TPlan = Awaited<ReturnType<typeof ThunderSDK.billing.plans>>[number]
@@ -42,12 +43,6 @@ const QUOTAS: { key: keyof TOverview["limits"]; label: string }[] = [
   { key: "registries", label: "Registries" },
   { key: "domains", label: "Custom domains" },
 ]
-
-const money = (cents: number, currency: string) =>
-  new Intl.NumberFormat(undefined, {
-    style: "currency",
-    currency: currency.toUpperCase(),
-  }).format(cents / 100)
 
 const day = (d?: string | Date) => (d ? new Date(d).toLocaleDateString() : "—")
 
@@ -65,7 +60,11 @@ function Usage({ overview }: { overview: TOverview }) {
               label={t(label)}
               value={used}
               total={limit}
-              text={`${used} / ${limit}`}
+              text={
+                isUnlimited(limit)
+                  ? t("{{n}} · unlimited", { n: used })
+                  : `${used} / ${limit}`
+              }
               hue="orange"
               level={used > limit ? "critical" : pct >= 80 ? "warning" : "ok"}
             />
@@ -347,9 +346,7 @@ export default function BillingPage() {
                       )}
                     </h3>
                     <p className="text-xl font-semibold tabular-nums">
-                      {plan.price.amount
-                        ? money(plan.price.amount, plan.price.currency)
-                        : t("Free")}
+                      {money(plan.price.amount, plan.price.currency)}
                       {!!plan.price.amount && (
                         <span className="text-xs font-normal text-muted-foreground">
                           {" "}
@@ -371,7 +368,10 @@ export default function BillingPage() {
                           aria-hidden
                         />
                         <span className="tabular-nums">
-                          {plan.limits[key]} {t(label).toLowerCase()}
+                          {isUnlimited(plan.limits[key])
+                            ? t("Unlimited")
+                            : plan.limits[key]}{" "}
+                          {t(label).toLowerCase()}
                         </span>
                       </li>
                     ))}

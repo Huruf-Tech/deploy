@@ -7,6 +7,7 @@ import type { TCardProps } from "@/core/types"
 import { StatusBadge } from "@/components/console/status"
 import { Button } from "@/components/ui/button"
 import { Chip, RecordCards } from "@/components/record-cards"
+import { isUnlimited, money } from "@/lib/plans"
 
 /* Card views for the admin modules (thunder-ui card overrides). */
 
@@ -32,11 +33,7 @@ const planSchema = z.object({
 
 export function PlanCards(props: TCardProps) {
   const { t } = useTranslation()
-  const money = (cents: number, currency: string) =>
-    new Intl.NumberFormat(undefined, {
-      style: "currency",
-      currency: currency.toUpperCase(),
-    }).format(cents / 100)
+  const limit = (n: number) => (isUnlimited(n) ? "∞" : n)
 
   return (
     <RecordCards
@@ -66,9 +63,7 @@ export function PlanCards(props: TCardProps) {
         body: (
           <div className="flex flex-col gap-2">
             <p className="text-xl font-semibold tabular-nums">
-              {plan.price.amount
-                ? money(plan.price.amount, plan.price.currency)
-                : t("Free")}
+              {money(plan.price.amount, plan.price.currency)}
               {!!plan.price.amount && (
                 <span className="text-xs font-normal text-muted-foreground">
                   {" "}
@@ -77,9 +72,15 @@ export function PlanCards(props: TCardProps) {
               )}
             </p>
             <div className="flex flex-wrap gap-1.5">
-              <Chip>{t("{{n}} servers", { n: plan.limits.servers })}</Chip>
-              <Chip>{t("{{n}} projects", { n: plan.limits.projects })}</Chip>
-              <Chip>{t("{{n}} members", { n: plan.limits.members })}</Chip>
+              <Chip>
+                {t("{{n}} servers", { n: limit(plan.limits.servers) })}
+              </Chip>
+              <Chip>
+                {t("{{n}} projects", { n: limit(plan.limits.projects) })}
+              </Chip>
+              <Chip>
+                {t("{{n}} members", { n: limit(plan.limits.members) })}
+              </Chip>
             </div>
           </div>
         ),

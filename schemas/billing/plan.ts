@@ -2,6 +2,12 @@ import z from "zod";
 import { mongodb } from "@/database.ts";
 import { $objectId } from "@/core/utils/createCRUD.ts";
 
+/**
+ * A quota this high means "no limit" (the built-in Unlimited plan); the
+ * dashboard shows it as Unlimited. Keep in step with public/app/src/lib/plans.ts.
+ */
+export const UNLIMITED = 1_000_000;
+
 /** Plan quotas (PLAN §20.3 A). The defaults are the Free plan. */
 export const $planLimits = z.object({
   servers: z.number().int().min(0).default(5),

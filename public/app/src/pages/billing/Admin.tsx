@@ -168,7 +168,7 @@ export default function BillingAdmin() {
   return (
     <Page className="flex flex-col gap-4 py-5">
       <PageHeader
-        title={t("Billing")}
+        title={t("Subscriptions")}
         description={t(
           "Subscriptions across tenants. Plans are edited under Admin → Plans."
         )}

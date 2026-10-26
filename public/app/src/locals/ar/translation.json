@@ -1047,5 +1047,8 @@
   "New folder…": "مجلد جديد…",
   "Range": "المدى",
   "Take out of the folder": "إخراج من المجلد",
-  "The last 15 minutes, then live every 2 seconds": "آخر 15 دقيقة، ثم مباشرة كل ثانيتين"
+  "The last 15 minutes, then live every 2 seconds": "آخر 15 دقيقة، ثم مباشرة كل ثانيتين",
+  "Subscriptions": "الاشتراكات",
+  "Unlimited": "غير محدود",
+  "{{n}} · unlimited": "{{n}} · غير محدود"
 }
