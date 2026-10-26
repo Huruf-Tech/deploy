@@ -37,6 +37,8 @@
     "@imagekit/react": "^5.0.2",
     "@mdxeditor/editor": "^4.0.4",
     "@number-flow/react": "^0.6.2",
+    "@stripe/react-stripe-js": "^7.0.0",
+    "@stripe/stripe-js": "^10.1.0",
     "@tabler/icons-react": "^3.41.1",
     "@tailwindcss/vite": "^4.2.1",
     "@tanstack/react-table": "^8.21.3",

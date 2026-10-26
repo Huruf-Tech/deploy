@@ -5,6 +5,50 @@ export type config$return = {
     gateway: "stripe";
     publishableKey: string;
 };
+export type summary$return = {
+    balance: number;
+    currency: string;
+    hasCard: boolean;
+    isOwner: boolean;
+};
+export type statement$return = {
+    balance: number;
+    entries: {
+        _id: string;
+        type: string;
+        amount: number;
+        description?: string | undefined;
+        purpose?: string | undefined;
+        reference: string;
+        createdAt?: Date | undefined;
+    }[];
+};
+export type addFunds$body = {
+    /** Cents */
+    amount: number;
+    nonce: string;
+};
+export type addFunds$return = {
+    status: "completed" | "pending";
+    topup: string;
+    clientSecret?: string | undefined;
+};
+export type topupStatus$params = {
+    id?: string;
+};
+export type topupStatus$return = {
+    status: string;
+    amount: number;
+    error?: string | undefined;
+};
+export type flaggedCharge$return = {
+    charge: {
+        topup: string;
+        amount: number;
+        clientSecret: string;
+        cardRef: string;
+    } | null;
+};
 export type cards$return = {
     autoPay: boolean;
     actionRequired?: {
@@ -49,6 +93,13 @@ export type updateAccount$body = {
 export declare const paymentsModule: (sdk: typeof BaseSDK) => {
     readonly type: {
         config$return: config$return;
+        summary$return: summary$return;
+        statement$return: statement$return;
+        addFunds$body: addFunds$body;
+        addFunds$return: addFunds$return;
+        topupStatus$params: topupStatus$params;
+        topupStatus$return: topupStatus$return;
+        flaggedCharge$return: flaggedCharge$return;
         cards$return: cards$return;
         setupCard$return: setupCard$return;
         finishCard$body: finishCard$body;
@@ -67,6 +118,61 @@ export declare const paymentsModule: (sdk: typeof BaseSDK) => {
         then: <TResult1 = config$return, TResult2 = never>(onfulfilled?: ((value: config$return) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
         catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<config$return | TResult>;
         finally: (onfinally?: (() => void) | null | undefined) => Promise<config$return>;
+    };
+    readonly summary: (data?: {
+        params?: undefined;
+        query?: undefined;
+        body?: undefined;
+    } & TRequestOptions<summary$return>) => {
+        readonly raw: Promise<import("axios").AxiosResponse<summary$return, any, {}, any>>;
+        readonly data: Promise<summary$return>;
+        then: <TResult1 = summary$return, TResult2 = never>(onfulfilled?: ((value: summary$return) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+        catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<summary$return | TResult>;
+        finally: (onfinally?: (() => void) | null | undefined) => Promise<summary$return>;
+    };
+    readonly statement: (data?: {
+        params?: undefined;
+        query?: undefined;
+        body?: undefined;
+    } & TRequestOptions<statement$return>) => {
+        readonly raw: Promise<import("axios").AxiosResponse<statement$return, any, {}, any>>;
+        readonly data: Promise<statement$return>;
+        then: <TResult1 = statement$return, TResult2 = never>(onfulfilled?: ((value: statement$return) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+        catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<statement$return | TResult>;
+        finally: (onfinally?: (() => void) | null | undefined) => Promise<statement$return>;
+    };
+    readonly addFunds: (data: {
+        params?: undefined;
+        query?: undefined;
+        body: addFunds$body;
+    } & TRequestOptions<addFunds$return>) => {
+        readonly raw: Promise<import("axios").AxiosResponse<addFunds$return, any, {}, any>>;
+        readonly data: Promise<addFunds$return>;
+        then: <TResult1 = addFunds$return, TResult2 = never>(onfulfilled?: ((value: addFunds$return) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+        catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<addFunds$return | TResult>;
+        finally: (onfinally?: (() => void) | null | undefined) => Promise<addFunds$return>;
+    };
+    readonly topupStatus: (data: {
+        params: topupStatus$params;
+        query?: undefined;
+        body?: undefined;
+    } & TRequestOptions<topupStatus$return>) => {
+        readonly raw: Promise<import("axios").AxiosResponse<topupStatus$return, any, {}, any>>;
+        readonly data: Promise<topupStatus$return>;
+        then: <TResult1 = topupStatus$return, TResult2 = never>(onfulfilled?: ((value: topupStatus$return) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+        catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<topupStatus$return | TResult>;
+        finally: (onfinally?: (() => void) | null | undefined) => Promise<topupStatus$return>;
+    };
+    readonly flaggedCharge: (data?: {
+        params?: undefined;
+        query?: undefined;
+        body?: undefined;
+    } & TRequestOptions<flaggedCharge$return>) => {
+        readonly raw: Promise<import("axios").AxiosResponse<flaggedCharge$return, any, {}, any>>;
+        readonly data: Promise<flaggedCharge$return>;
+        then: <TResult1 = flaggedCharge$return, TResult2 = never>(onfulfilled?: ((value: flaggedCharge$return) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+        catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<flaggedCharge$return | TResult>;
+        finally: (onfinally?: (() => void) | null | undefined) => Promise<flaggedCharge$return>;
     };
     readonly cards: (data?: {
         params?: undefined;

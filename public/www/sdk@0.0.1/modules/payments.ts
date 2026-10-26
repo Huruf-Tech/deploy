@@ -10,6 +10,50 @@ export type config$return = {
     gateway: "stripe";
     publishableKey: string;
 };
+export type summary$return = {
+    balance: number;
+    currency: string;
+    hasCard: boolean;
+    isOwner: boolean;
+};
+export type statement$return = {
+    balance: number;
+    entries: {
+        _id: string;
+        type: string;
+        amount: number;
+        description?: string | undefined;
+        purpose?: string | undefined;
+        reference: string;
+        createdAt?: Date | undefined;
+    }[];
+};
+export type addFunds$body = {
+    /** Cents */
+    amount: number;
+    nonce: string;
+};
+export type addFunds$return = {
+    status: "completed" | "pending";
+    topup: string;
+    clientSecret?: string | undefined;
+};
+export type topupStatus$params = {
+    id?: string;
+};
+export type topupStatus$return = {
+    status: string;
+    amount: number;
+    error?: string | undefined;
+};
+export type flaggedCharge$return = {
+    charge: {
+        topup: string;
+        amount: number;
+        clientSecret: string;
+        cardRef: string;
+    } | null;
+};
 export type cards$return = {
     autoPay: boolean;
     actionRequired?: {
@@ -55,6 +99,13 @@ export type updateAccount$body = {
 export const paymentsModule = (sdk: typeof BaseSDK) => {
     const type = {} as unknown as {
         config$return: config$return,
+        summary$return: summary$return,
+        statement$return: statement$return,
+        addFunds$body: addFunds$body,
+        addFunds$return: addFunds$return,
+        topupStatus$params: topupStatus$params,
+        topupStatus$return: topupStatus$return,
+        flaggedCharge$return: flaggedCharge$return,
         cards$return: cards$return,
         setupCard$return: setupCard$return,
         finishCard$body: finishCard$body,
@@ -76,6 +127,146 @@ export const paymentsModule = (sdk: typeof BaseSDK) => {
 
             const method = "get";
             const toPath = compile("payments/api/config");
+            const requestPayload = {
+                method,
+                url: toPath(sdk.resolvePathParams(data?.params)),
+                params: data?.query,
+                data: data?.body,
+                signal: data?.signal,
+                ...(data?.axiosConfig
+                ? sdk.resolveAxiosConfig(data.axiosConfig)
+                : undefined),
+            };
+
+            sdk.log("Sending Request:", requestPayload);
+
+            const res = await sdk._axios!.request(requestPayload);
+
+            return res;
+        }, data);
+    },
+        summary(data?: {
+        params?: undefined,
+        query?: undefined,
+        body?: undefined,
+    } & TRequestOptions<summary$return>) {
+        return sdk.resolveAxiosResponse(async () => {
+            sdk.checkPermission("payments", "summary");
+
+            const method = "get";
+            const toPath = compile("payments/api/summary");
+            const requestPayload = {
+                method,
+                url: toPath(sdk.resolvePathParams(data?.params)),
+                params: data?.query,
+                data: data?.body,
+                signal: data?.signal,
+                ...(data?.axiosConfig
+                ? sdk.resolveAxiosConfig(data.axiosConfig)
+                : undefined),
+            };
+
+            sdk.log("Sending Request:", requestPayload);
+
+            const res = await sdk._axios!.request(requestPayload);
+
+            return res;
+        }, data);
+    },
+        statement(data?: {
+        params?: undefined,
+        query?: undefined,
+        body?: undefined,
+    } & TRequestOptions<statement$return>) {
+        return sdk.resolveAxiosResponse(async () => {
+            sdk.checkPermission("payments", "statement");
+
+            const method = "get";
+            const toPath = compile("payments/api/statement");
+            const requestPayload = {
+                method,
+                url: toPath(sdk.resolvePathParams(data?.params)),
+                params: data?.query,
+                data: data?.body,
+                signal: data?.signal,
+                ...(data?.axiosConfig
+                ? sdk.resolveAxiosConfig(data.axiosConfig)
+                : undefined),
+            };
+
+            sdk.log("Sending Request:", requestPayload);
+
+            const res = await sdk._axios!.request(requestPayload);
+
+            return res;
+        }, data);
+    },
+        addFunds(data: {
+        params?: undefined,
+        query?: undefined,
+        body: addFunds$body,
+    } & TRequestOptions<addFunds$return>) {
+        return sdk.resolveAxiosResponse(async () => {
+            sdk.checkPermission("payments", "addFunds");
+
+            const method = "post";
+            const toPath = compile("payments/api/add-funds");
+            const requestPayload = {
+                method,
+                url: toPath(sdk.resolvePathParams(data?.params)),
+                params: data?.query,
+                data: data?.body,
+                signal: data?.signal,
+                ...(data?.axiosConfig
+                ? sdk.resolveAxiosConfig(data.axiosConfig)
+                : undefined),
+            };
+
+            sdk.log("Sending Request:", requestPayload);
+
+            const res = await sdk._axios!.request(requestPayload);
+
+            return res;
+        }, data);
+    },
+        topupStatus(data: {
+        params: topupStatus$params,
+        query?: undefined,
+        body?: undefined,
+    } & TRequestOptions<topupStatus$return>) {
+        return sdk.resolveAxiosResponse(async () => {
+            sdk.checkPermission("payments", "topupStatus");
+
+            const method = "get";
+            const toPath = compile("payments/api/topups/:id");
+            const requestPayload = {
+                method,
+                url: toPath(sdk.resolvePathParams(data?.params)),
+                params: data?.query,
+                data: data?.body,
+                signal: data?.signal,
+                ...(data?.axiosConfig
+                ? sdk.resolveAxiosConfig(data.axiosConfig)
+                : undefined),
+            };
+
+            sdk.log("Sending Request:", requestPayload);
+
+            const res = await sdk._axios!.request(requestPayload);
+
+            return res;
+        }, data);
+    },
+        flaggedCharge(data?: {
+        params?: undefined,
+        query?: undefined,
+        body?: undefined,
+    } & TRequestOptions<flaggedCharge$return>) {
+        return sdk.resolveAxiosResponse(async () => {
+            sdk.checkPermission("payments", "flaggedCharge");
+
+            const method = "get";
+            const toPath = compile("payments/api/flagged");
             const requestPayload = {
                 method,
                 url: toPath(sdk.resolvePathParams(data?.params)),
@@ -293,6 +484,11 @@ export const paymentsModule = (sdk: typeof BaseSDK) => {
     } as const;
 
     (methods.config as any).__scope = "payments";
+    (methods.summary as any).__scope = "payments";
+    (methods.statement as any).__scope = "payments";
+    (methods.addFunds as any).__scope = "payments";
+    (methods.topupStatus as any).__scope = "payments";
+    (methods.flaggedCharge as any).__scope = "payments";
     (methods.cards as any).__scope = "payments";
     (methods.setupCard as any).__scope = "payments";
     (methods.finishCard as any).__scope = "payments";

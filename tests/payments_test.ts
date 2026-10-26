@@ -122,7 +122,9 @@ Deno.test({
         ?.balance ?? 0;
 
     const gateway = new FakeGateway();
-    const payments = new PaymentService([gateway]);
+    const payments = new PaymentService([gateway], {
+      hit: () => Promise.resolve(true),
+    });
     const previousHook = Wallet.onInsufficientBalance;
     Wallet.onInsufficientBalance = (r) => payments.coverShortfall(r);
     // `.env` wins over the `envs` collection, so set it on the loaded config.
@@ -162,6 +164,21 @@ Deno.test({
 
           // Saving the same card again (the webhook does too) changes nothing.
           await payments.saveCard(account, card("4242"));
+          assertEquals(await paymentCardModel.countDocuments({ tenant }), 1);
+
+          // The same physical card added a second time is kept once.
+          await paymentCardModel.updateOne({ providerRef: "pm_4242" }, {
+            $set: { fingerprint: "fp_4242" },
+          });
+          const again = await payments.saveCard(
+            account,
+            card("4242", {
+              providerRef: "pm_4242_again",
+              fingerprint: "fp_4242",
+            }),
+          );
+          assertEquals(again.providerRef, "pm_4242");
+          assert(gateway.removed.includes("pm_4242_again"));
           assertEquals(await paymentCardModel.countDocuments({ tenant }), 1);
 
           await assertRejects(() =>
@@ -343,6 +360,61 @@ Deno.test({
           gateway.next = (amount) => ({ status: "completed", amount });
         },
       );
+
+      await t.step("add funds: limits, decline reason, daily cap", async () => {
+        const refused = (fn: () => Promise<unknown>) =>
+          fn().then(() => null, (e) => e as Response);
+
+        assertEquals(
+          (await refused(() => payments.addFunds(tenant, 100, "nonce-small")))
+            ?.status,
+          400,
+        );
+        assertEquals(
+          (await refused(() =>
+            payments.addFunds(tenant, 200_000, "nonce-large")
+          ))?.status,
+          400,
+        );
+
+        // The bank's own words reach the owner.
+        gateway.next = () => ({
+          status: "failed",
+          error: "Your card has insufficient funds.",
+        });
+        const declined = await refused(() =>
+          payments.addFunds(tenant, 1_000, "nonce-declined")
+        );
+        assertEquals(declined?.status, 400);
+        assertEquals(
+          await declined?.text(),
+          "Your card has insufficient funds.",
+        );
+        gateway.next = (amount) => ({ status: "completed", amount });
+
+        const before = await balance();
+        const done = await payments.addFunds(tenant, 1_000, "nonce-ok-1");
+        assertEquals(done.status, "completed");
+        assertEquals(await balance(), before + 1_000);
+
+        // 3-D Secure: pending, with what the browser needs.
+        gateway.next = () => ({
+          status: "action_required",
+          clientSecret: "pi_secret_add",
+        });
+        const pending = await payments.addFunds(tenant, 1_000, "nonce-3ds");
+        assertEquals(pending.status, "pending");
+        gateway.next = (amount) => ({ status: "completed", amount });
+
+        // Today's top-ups plus this one may not pass the daily cap ($2,000).
+        await payments.addFunds(tenant, 100_000, "nonce-cap-1");
+        assertEquals(
+          (await refused(() =>
+            payments.addFunds(tenant, 100_000, "nonce-cap-2")
+          ))?.status,
+          400,
+        );
+      });
 
       await t.step("unsigned webhooks are refused", async () => {
         const refused = await payments.handleWebhook(

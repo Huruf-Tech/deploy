@@ -107,6 +107,7 @@ export class StripeGateway implements PaymentGateway {
       last4: method.card.last4,
       expMonth: method.card.exp_month,
       expYear: method.card.exp_year,
+      fingerprint: method.card.fingerprint ?? undefined,
     };
   }
 
@@ -251,7 +252,11 @@ export class StripeGateway implements PaymentGateway {
   }
 
   private resultOf(intent: Stripe.PaymentIntent): TChargeResult {
-    const base = { providerRef: intent.id };
+    const base = {
+      providerRef: intent.id,
+      // Confirming on session needs it, even for a charge that failed off session.
+      clientSecret: intent.client_secret ?? undefined,
+    };
     switch (intent.status) {
       case "succeeded":
         return { ...base, status: "completed", amount: intent.amount_received };
@@ -259,11 +264,7 @@ export class StripeGateway implements PaymentGateway {
         return { ...base, status: "pending" };
       case "requires_action":
       case "requires_confirmation":
-        return {
-          ...base,
-          status: "action_required",
-          clientSecret: intent.client_secret ?? undefined,
-        };
+        return { ...base, status: "action_required" };
       default:
         return {
           ...base,

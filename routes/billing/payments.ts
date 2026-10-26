@@ -7,7 +7,7 @@ import { withTenant } from "@/plugins/Huruf-Tech/thunder-core/utils/withTenant.t
 import { tenantOwner } from "@/lib/billing/owner.ts";
 import { payments as paymentService } from "@/lib/services.ts";
 import { $gatewayId, $paymentCard } from "@/schemas/billing/payment.ts";
-import { cardIsValid } from "@/lib/payments/payments.ts";
+import { cardIsValid, PAYMENTS_CURRENCY } from "@/lib/payments/payments.ts";
 
 /**
  * Saved cards and the gateway webhooks (PLAN §25.5). Card data never comes
@@ -16,6 +16,7 @@ import { cardIsValid } from "@/lib/payments/payments.ts";
  */
 export default new Router("/api", function payments(router) {
   const owner = (req: Request) => tenantOwner(req, "manage payment methods");
+  const $params = z.object({ id: $objectId });
 
   const $card = $paymentCard.pick({
     brand: true,
@@ -54,6 +55,142 @@ export default new Router("/api", function payments(router) {
           publishableKey: configured
             ? (await gateway.publicConfig()).publishableKey
             : "",
+        });
+      },
+    };
+  });
+
+  // Every member: the balance and whether the tenant can use the platform.
+  router.get("/summary", function summary() {
+    const $return = z.object({
+      balance: z.number(),
+      currency: z.string(),
+      hasCard: z.boolean(),
+      isOwner: z.boolean(),
+    });
+
+    return {
+      shape: () => ({ return: $return }),
+      handler: async (req) => {
+        const { tenant, user, owner } = await withTenant(req);
+        const [{ balance }, hasCard] = await Promise.all([
+          paymentService.statement(tenant._id, 0),
+          paymentService.hasValidCard(tenant._id),
+        ]);
+        return Response.json({
+          balance,
+          currency: PAYMENTS_CURRENCY,
+          hasCard,
+          isOwner: user._id.equals(owner._id),
+        });
+      },
+    };
+  });
+
+  router.get("/statement", function statement() {
+    const $return = z.object({
+      balance: z.number(),
+      entries: z.array(z.object({
+        _id: z.string(),
+        type: z.string(),
+        amount: z.number(),
+        description: z.string().optional(),
+        purpose: z.string().optional(),
+        reference: z.string(),
+        createdAt: z.date().optional(),
+      })),
+    });
+
+    return {
+      shape: () => ({ return: $return }),
+      handler: async (req) => {
+        const { tenant } = await owner(req);
+        const { balance, entries } = await paymentService.statement(
+          tenant._id,
+        );
+        return Response.json({
+          balance,
+          entries: entries.map((e) => ({
+            _id: String(e._id),
+            type: e.type,
+            amount: e.amount,
+            // Descriptions can be per-language maps; English for now.
+            description: typeof e.description === "string"
+              ? e.description
+              : e.description?.en ?? Object.values(e.description ?? {})[0],
+            purpose: e.purpose,
+            reference: e.reference,
+            createdAt: e.createdAt,
+          })),
+        });
+      },
+    };
+  });
+
+  router.post("/add-funds", function addFunds() {
+    const $body = z.object({
+      amount: z.number().int().positive().describe("Cents"),
+      // A fresh value per click; a repeat reuses the same charge.
+      nonce: z.string().min(8).max(64),
+    });
+    const $return = z.object({
+      status: z.enum(["completed", "pending"]),
+      topup: z.string(),
+      clientSecret: z.string().optional(),
+    });
+
+    return {
+      shape: () => ({ body: $body, return: $return }),
+      handler: async (req) => {
+        const { amount, nonce } = $body.parse(await bodyAsJson(req));
+        const { tenant } = await owner(req);
+        return Response.json(
+          await paymentService.addFunds(tenant._id, amount, nonce),
+        );
+      },
+    };
+  });
+
+  router.get("/topups/:id", function topupStatus() {
+    const $return = z.object({
+      status: z.string(),
+      amount: z.number(),
+      error: z.string().optional(),
+    });
+
+    return {
+      shape: () => ({ params: $params, return: $return }),
+      handler: async (req) => {
+        const { id } = $params.parse(paramsAsJson(req));
+        const { tenant } = await owner(req);
+        const row = await paymentService.topupStatus(tenant._id, id);
+        if (!row) throw Response.notFound("Top-up not found");
+        return Response.json({
+          status: row.status,
+          amount: row.amount,
+          error: row.error,
+        });
+      },
+    };
+  });
+
+  // The payment the bank wants confirmed (an off-session renewal).
+  router.get("/flagged", function flaggedCharge() {
+    const $return = z.object({
+      charge: z.object({
+        topup: z.string(),
+        amount: z.number(),
+        clientSecret: z.string(),
+        cardRef: z.string(),
+      }).nullable(),
+    });
+
+    return {
+      shape: () => ({ return: $return }),
+      handler: async (req) => {
+        const { tenant } = await owner(req);
+        return Response.json({
+          charge: await paymentService.flaggedCharge(tenant._id),
         });
       },
     };
@@ -131,8 +268,6 @@ export default new Router("/api", function payments(router) {
       },
     };
   });
-
-  const $params = z.object({ id: $objectId });
 
   router.post("/cards/:id/default", function setDefaultCard() {
     return {

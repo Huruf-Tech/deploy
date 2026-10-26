@@ -23,6 +23,106 @@ export const paymentsModule = (sdk) => {
                 return res;
             }, data);
         },
+        summary(data) {
+            return sdk.resolveAxiosResponse(async () => {
+                sdk.checkPermission("payments", "summary");
+                const method = "get";
+                const toPath = compile("payments/api/summary");
+                const requestPayload = {
+                    method,
+                    url: toPath(sdk.resolvePathParams(data?.params)),
+                    params: data?.query,
+                    data: data?.body,
+                    signal: data?.signal,
+                    ...(data?.axiosConfig
+                        ? sdk.resolveAxiosConfig(data.axiosConfig)
+                        : undefined),
+                };
+                sdk.log("Sending Request:", requestPayload);
+                const res = await sdk._axios.request(requestPayload);
+                return res;
+            }, data);
+        },
+        statement(data) {
+            return sdk.resolveAxiosResponse(async () => {
+                sdk.checkPermission("payments", "statement");
+                const method = "get";
+                const toPath = compile("payments/api/statement");
+                const requestPayload = {
+                    method,
+                    url: toPath(sdk.resolvePathParams(data?.params)),
+                    params: data?.query,
+                    data: data?.body,
+                    signal: data?.signal,
+                    ...(data?.axiosConfig
+                        ? sdk.resolveAxiosConfig(data.axiosConfig)
+                        : undefined),
+                };
+                sdk.log("Sending Request:", requestPayload);
+                const res = await sdk._axios.request(requestPayload);
+                return res;
+            }, data);
+        },
+        addFunds(data) {
+            return sdk.resolveAxiosResponse(async () => {
+                sdk.checkPermission("payments", "addFunds");
+                const method = "post";
+                const toPath = compile("payments/api/add-funds");
+                const requestPayload = {
+                    method,
+                    url: toPath(sdk.resolvePathParams(data?.params)),
+                    params: data?.query,
+                    data: data?.body,
+                    signal: data?.signal,
+                    ...(data?.axiosConfig
+                        ? sdk.resolveAxiosConfig(data.axiosConfig)
+                        : undefined),
+                };
+                sdk.log("Sending Request:", requestPayload);
+                const res = await sdk._axios.request(requestPayload);
+                return res;
+            }, data);
+        },
+        topupStatus(data) {
+            return sdk.resolveAxiosResponse(async () => {
+                sdk.checkPermission("payments", "topupStatus");
+                const method = "get";
+                const toPath = compile("payments/api/topups/:id");
+                const requestPayload = {
+                    method,
+                    url: toPath(sdk.resolvePathParams(data?.params)),
+                    params: data?.query,
+                    data: data?.body,
+                    signal: data?.signal,
+                    ...(data?.axiosConfig
+                        ? sdk.resolveAxiosConfig(data.axiosConfig)
+                        : undefined),
+                };
+                sdk.log("Sending Request:", requestPayload);
+                const res = await sdk._axios.request(requestPayload);
+                return res;
+            }, data);
+        },
+        flaggedCharge(data) {
+            return sdk.resolveAxiosResponse(async () => {
+                sdk.checkPermission("payments", "flaggedCharge");
+                const method = "get";
+                const toPath = compile("payments/api/flagged");
+                const requestPayload = {
+                    method,
+                    url: toPath(sdk.resolvePathParams(data?.params)),
+                    params: data?.query,
+                    data: data?.body,
+                    signal: data?.signal,
+                    ...(data?.axiosConfig
+                        ? sdk.resolveAxiosConfig(data.axiosConfig)
+                        : undefined),
+                };
+                sdk.log("Sending Request:", requestPayload);
+                const res = await sdk._axios.request(requestPayload);
+                return res;
+            }, data);
+        },
         cards(data) {
             return sdk.resolveAxiosResponse(async () => {
                 sdk.checkPermission("payments", "cards");
@@ -165,6 +265,11 @@ export const paymentsModule = (sdk) => {
         },
     };
     methods.config.__scope = "payments";
+    methods.summary.__scope = "payments";
+    methods.statement.__scope = "payments";
+    methods.addFunds.__scope = "payments";
+    methods.topupStatus.__scope = "payments";
+    methods.flaggedCharge.__scope = "payments";
     methods.cards.__scope = "payments";
     methods.setupCard.__scope = "payments";
     methods.finishCard.__scope = "payments";

@@ -4,10 +4,15 @@ import type { WithId } from "mongodb";
 import { Response } from "@/core/http/response.ts";
 import { Logger } from "@/core/utils/logger.ts";
 import {
+  TopupPendingError,
   type TWalletTopupRequest,
   type TWalletTopupResult,
   Wallet,
 } from "@/plugins/Huruf-Tech/thunder-core/lib/wallet.ts";
+import { walletModel } from "@/plugins/Huruf-Tech/thunder-core/schemas/wallet.ts";
+import { walletLedgerModel } from "@/plugins/Huruf-Tech/thunder-core/schemas/walletLedger.ts";
+import { readNumberSetting } from "@/lib/core/settings.ts";
+import type { RateLimiter } from "@/lib/core/rateLimiter.ts";
 import { walletTopupModel } from "@/plugins/Huruf-Tech/thunder-core/schemas/walletTopup.ts";
 import {
   billingAccountModel,
@@ -28,6 +33,8 @@ import type {
 /** Plans and wallets are in USD for now (PLAN §25.1). */
 export const PAYMENTS_CURRENCY = "usd";
 
+const dollars = (cents: number) => `$${(cents / 100).toFixed(2)}`;
+
 /** Events other than refunds and disputes are kept this long (PLAN §25.4). */
 const EVENT_TTL_MS = 90 * 24 * 60 * 60_000;
 
@@ -37,7 +44,12 @@ const EVENT_TTL_MS = 90 * 24 * 60 * 60_000;
  * session (the owner pressed a button) 3-D Secure is answered in the browser
  * with the client secret left here.
  */
-type TChargeContext = { offSession: boolean; clientSecret?: string };
+type TChargeContext = {
+  offSession: boolean;
+  clientSecret?: string;
+  /** The gateway's reason when it declined, for the owner to read. */
+  error?: string;
+};
 const chargeContext = new AsyncLocalStorage<TChargeContext>();
 
 /** A card still usable this month. */
@@ -55,7 +67,10 @@ export const cardIsValid = (
  * when a wallet is short; money always lands in the wallet first.
  */
 export class PaymentService {
-  constructor(private readonly gateways: PaymentGateway[]) {}
+  constructor(
+    private readonly gateways: PaymentGateway[],
+    private readonly limiter: Pick<RateLimiter, "hit">,
+  ) {}
 
   /** The gateway new cards go to; the only one for now. */
   get primary() {
@@ -144,6 +159,18 @@ export class PaymentService {
     if (card.customerRef !== account.customerRef) {
       throw Response.forbidden("That card belongs to another customer");
     }
+    // The same card added again: keep the one on file, drop the new copy.
+    const same = card.fingerprint
+      ? await paymentCardModel.findOne({
+        tenant: account.tenant,
+        fingerprint: card.fingerprint,
+        providerRef: { $ne: card.providerRef },
+      })
+      : null;
+    if (same) {
+      await this.gateway(account.gateway).removeCard(card.providerRef);
+      return same;
+    }
     const hasDefault = !!await paymentCardModel.findOne({
       tenant: account.tenant,
       isDefault: true,
@@ -156,6 +183,7 @@ export class PaymentService {
           last4: card.last4,
           expMonth: card.expMonth,
           expYear: card.expYear,
+          fingerprint: card.fingerprint,
         },
         $setOnInsert: {
           tenant: account.tenant,
@@ -224,8 +252,149 @@ export class PaymentService {
   /** Runs `fn` as the owner, present in the browser (PLAN §25.5). */
   async onSession<T>(fn: () => Promise<T>) {
     const context: TChargeContext = { offSession: false };
-    const result = await chargeContext.run(context, fn);
-    return { result, clientSecret: context.clientSecret };
+    try {
+      const result = await chargeContext.run(context, fn);
+      return { result, clientSecret: context.clientSecret };
+    } catch (error) {
+      // The gateway's own words beat "the fallback declined".
+      if (context.error && !(error instanceof TopupPendingError)) {
+        throw Response.badRequest(context.error);
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * "Add funds" (PLAN §25.5): an exact amount from the default card, with the
+   * owner present. A repeated `nonce` (a double click) reuses one charge.
+   */
+  async addFunds(tenant: ObjectId, amount: number, nonce: string) {
+    const [min, max, daily] = await Promise.all([
+      readNumberSetting("PAYMENTS_ADD_FUNDS_MIN", 500),
+      readNumberSetting("PAYMENTS_ADD_FUNDS_MAX", 100_000),
+      readNumberSetting("PAYMENTS_DAILY_CAP", 200_000),
+    ]);
+    if (!Number.isInteger(amount) || amount < min || amount > max) {
+      throw Response.badRequest(
+        `Add between ${dollars(min)} and ${dollars(max)}`,
+      );
+    }
+    if (!await this.hasValidCard(tenant)) {
+      throw Response.badRequest("Add a card first");
+    }
+    // Card testing (PLAN §25.6): a few attempts an hour, and a daily total.
+    if (!await this.limiter.hit(`addFunds:${tenant}`, 5, 3_600)) {
+      throw Response.json(
+        { message: "Too many attempts; try again in an hour" },
+        { status: 429 },
+      );
+    }
+    const since = new Date(Date.now() - 24 * 60 * 60_000);
+    const [today] = await walletTopupModel.aggregate<{ total: number }>([
+      {
+        $match: {
+          tenant,
+          createdAt: { $gte: since },
+          status: { $ne: "failed" },
+        },
+      },
+      { $group: { _id: null, total: { $sum: "$amount" } } },
+    ]).toArray();
+    if ((today?.total ?? 0) + amount > daily) {
+      throw Response.badRequest(
+        `That would pass the daily limit of ${dollars(daily)}`,
+      );
+    }
+
+    try {
+      const { result, clientSecret } = await this.onSession(() =>
+        Wallet.addBalance({
+          tenant,
+          currency: PAYMENTS_CURRENCY,
+          amount,
+          idempotencyKey: `add:${tenant}:${nonce}`,
+        })
+      );
+      return {
+        status: "completed" as const,
+        topup: String(result.topup?._id ?? ""),
+        clientSecret,
+      };
+    } catch (error) {
+      if (!(error instanceof TopupPendingError)) throw error;
+      // Waiting on the bank: the browser finishes 3-D Secure if asked.
+      const row = await walletTopupModel.findOne({ _id: error.topup });
+      const pending = row?.providerRef
+        ? await this.gateway(row.provider as TGatewayId ?? this.primary.id)
+          .readCharge(row.providerRef)
+        : undefined;
+      return {
+        status: "pending" as const,
+        topup: String(error.topup),
+        clientSecret: pending?.status === "action_required"
+          ? pending.clientSecret
+          : undefined,
+      };
+    }
+  }
+
+  /** A top-up of this tenant, for the browser waiting on a webhook. */
+  topupStatus(tenant: ObjectId, topup: ObjectId) {
+    return walletTopupModel.findOne(
+      { _id: topup, tenant },
+      { projection: { status: 1, amount: 1, error: 1 } },
+    );
+  }
+
+  /**
+   * The charge the bank wants the owner to confirm (an off-session renewal),
+   * with what the browser needs to confirm it on session.
+   */
+  async flaggedCharge(tenant: ObjectId) {
+    const account = await this.account(tenant);
+    if (!account?.actionRequired) return null;
+    const row = await walletTopupModel.findOne({
+      _id: account.actionRequired.topup,
+    });
+    const card = await paymentCardModel.findOne({ tenant, isDefault: true });
+    if (!row?.providerRef || !card) return null;
+    const charge = await this.gateway(account.gateway).readCharge(
+      row.providerRef,
+    );
+    if (!charge.clientSecret) return null;
+    return {
+      topup: String(row._id),
+      amount: row.amount,
+      clientSecret: charge.clientSecret,
+      // The gateway's id for the card, so the browser retries with it.
+      cardRef: card.providerRef,
+    };
+  }
+
+  /** The wallet's balance and its latest entries (PLAN §25.5, Billing page). */
+  async statement(tenant: ObjectId, limit = 100) {
+    const [wallet, entries] = await Promise.all([
+      walletModel.findOne(
+        { tenant, currency: PAYMENTS_CURRENCY },
+        { projection: { balance: 1 } },
+      ),
+      walletLedgerModel.find(
+        { tenant, currency: PAYMENTS_CURRENCY },
+        {
+          sort: { _id: -1 },
+          limit,
+          projection: {
+            type: 1,
+            amount: 1,
+            description: 1,
+            purpose: 1,
+            reference: 1,
+            createdAt: 1,
+          },
+        },
+      ).toArray(),
+    ]);
+    return { balance: wallet?.balance ?? 0, entries };
   }
 
   /**
@@ -283,7 +452,10 @@ export class PaymentService {
       });
       return { ...base, status: "pending" };
     }
-    if (result.status === "failed") return { ...base, status: "failed" };
+    if (result.status === "failed") {
+      context.error = result.error;
+      return { ...base, status: "failed" };
+    }
     return {
       ...base,
       status: result.status,

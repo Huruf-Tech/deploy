@@ -46,6 +46,8 @@ export const $paymentCard = z.object({
   last4: z.string().length(4),
   expMonth: z.number().int().min(1).max(12),
   expYear: z.number().int(),
+  /** Identifies the physical card, so it is saved once per tenant. */
+  fingerprint: z.string().optional(),
   isDefault: z.boolean(),
   createdAt: z.date(),
 });

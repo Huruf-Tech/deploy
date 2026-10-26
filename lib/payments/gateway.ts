@@ -10,6 +10,8 @@ export type TCardDetails = {
   last4: string;
   expMonth: number;
   expYear: number;
+  /** The same physical card always has the same fingerprint. */
+  fingerprint?: string;
 };
 
 /**

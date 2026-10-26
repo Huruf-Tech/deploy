@@ -4,6 +4,7 @@ import {
   IconBell,
   IconBox,
   IconCreditCard,
+  IconWallet,
   IconReceipt2,
   IconReportMoney,
   IconBucket,
@@ -34,6 +35,7 @@ import Registries from "@/pages/registries"
 import Storage from "@/pages/storage"
 import Billing from "@/pages/billing"
 import BillingAdmin from "@/pages/billing/Admin"
+import Payments from "@/pages/billing/Payments"
 import ControlPlane from "@/pages/admin/ControlPlane"
 import Network from "@/pages/network"
 import AlertRules from "@/pages/alerts"
@@ -71,7 +73,8 @@ export const routes: TRoutesOverride = {
   // Who is subscribed to which plan (admins); "Billing" read as their own bills.
   billingAdmin: {
     name: "Subscriptions",
-    path: "billing",
+    // Not "billing": Configuration → Billing owns that segment in breadcrumbs.
+    path: "subscriptions",
     group: "Admin",
     icon: IconReportMoney,
     display: () => ThunderSDK.isPermitted("billingAdmin", "subscriptions"),
@@ -95,6 +98,18 @@ export const routes: TRoutesOverride = {
     display: () => ThunderSDK.isPermitted("billing", "get"),
     Component: Billing,
   },
+  // Balance, cards, Add funds and transactions (PLAN §25, Phase 15b).
+  payments: {
+    name: "Billing",
+    path: "billing",
+    group: "Configuration",
+    icon: IconWallet,
+    priority: 11,
+    display: () => ThunderSDK.isPermitted("payments", "summary"),
+    Component: Payments,
+  },
+  // Billing shows the wallet (balance and transactions) instead.
+  wallet: { display: false },
 
   // Reached through the built-in wallet page, not navigation.
   wallets: { merge: true, display: false },
