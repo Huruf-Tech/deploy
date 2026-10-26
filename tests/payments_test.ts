@@ -668,6 +668,26 @@ Deno.test({
             status: "paid",
             providerRef: "pi_paid",
           });
+          // Without the funding tenant, crediting can't work: Settle says why
+          // (no 500) and leaves the row to settle again; nothing new is charged.
+          config.WALLET_TOPUP_TENANT = "";
+          const notSet = await refused(() => payments.settleStuck(paid));
+          assertEquals(notSet?.status, 400);
+          assert((await notSet!.text()).includes("WALLET_TOPUP_TENANT"));
+          assertEquals((await topups.findOne({ _id: paid }))?.status, "paid");
+          const charges = gateway.charges.length;
+          const short = (await balance()) + 5_000;
+          const unready = await refused(() =>
+            payments.fundNow({
+              tenant,
+              amount: short,
+              currency: "usd",
+              key: `fund:unready:${tenant}`,
+            })
+          );
+          assertEquals(unready?.status, 503);
+          assertEquals(gateway.charges.length, charges, "no card charged");
+          config.WALLET_TOPUP_TENANT = funding.tenantId.toHexString();
           assertEquals((await payments.settleStuck(paid)).status, "completed");
           assertEquals(await balance(), before + 950);
 

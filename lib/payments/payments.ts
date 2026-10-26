@@ -278,6 +278,33 @@ export class PaymentService {
     });
   }
 
+  /**
+   * Whether a charge can be credited: the wallet credits top-ups from the
+   * funding tenant (`WALLET_TOPUP_TENANT`). Without it a charged card stays
+   * uncredited (`paid`), so nothing is charged until it's set.
+   */
+  private async canCredit() {
+    try {
+      await Wallet.resolveTopupTenant();
+      return true;
+    } catch (error) {
+      Logger.error(
+        `Payments: ${error instanceof Error ? error.message : error}`,
+      );
+      return false;
+    }
+  }
+
+  /** On session: refuse up front rather than charge what can't be credited. */
+  private async assertCanCredit() {
+    if (await this.canCredit()) return;
+    throw Response.json({
+      code: "payments_not_ready",
+      message:
+        "Payments aren't fully set up yet, so nothing was charged. Please try again later.",
+    }, { status: 503 });
+  }
+
   /** Runs `fn` as the owner, present in the browser (PLAN §25.5). */
   async onSession<T>(fn: () => Promise<T>) {
     const context: TChargeContext = { offSession: false };
@@ -311,6 +338,7 @@ export class PaymentService {
     if (!await this.hasValidCard(tenant)) {
       throw Response.badRequest("Add a card first");
     }
+    await this.assertCanCredit();
     // Card testing (PLAN §25.6): a few attempts an hour, and a daily total.
     if (!await this.limiter.hit(`addFunds:${tenant}`, 5, 3_600)) {
       throw Response.json(
@@ -391,6 +419,7 @@ export class PaymentService {
       clientSecret?: string;
     }
   > {
+    await this.assertCanCredit();
     try {
       await this.onSession(() =>
         Wallet.ensureBalance({
@@ -549,6 +578,8 @@ export class PaymentService {
 
     const card = await paymentCardModel.findOne({ tenant, isDefault: true });
     if (!card || !cardIsValid(card)) return;
+    // A renewal mustn't charge what can't be credited either.
+    if (!await this.canCredit()) return;
 
     const gateway = this.gateway(account.gateway);
     const result: TChargeResult = await gateway.charge({
@@ -781,12 +812,23 @@ export class PaymentService {
         { $set: { provider: gateway.id, providerRef: charge.providerRef } },
       );
     }
-    const { topup: settled } = await Wallet.settleTopup({
-      topup: row._id,
-      status: charge.status,
-      amount: charge.status === "completed" ? charge.amount : undefined,
-      error: charge.error,
-    });
+    let settled;
+    try {
+      ({ topup: settled } = await Wallet.settleTopup({
+        topup: row._id,
+        status: charge.status,
+        amount: charge.status === "completed" ? charge.amount : undefined,
+        error: charge.error,
+      }));
+    } catch (error) {
+      // The card is charged but crediting failed again; the row stays `paid`
+      // for another Settle once the cause is fixed.
+      throw Response.badRequest(
+        `Charged but not credited: ${
+          error instanceof Error ? error.message : error
+        }`,
+      );
+    }
     await this.afterSettle(settled);
     return { outcome: "settled", status: settled.status, error: settled.error };
   }

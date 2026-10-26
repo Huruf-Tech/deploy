@@ -27,6 +27,10 @@ import {
   type TSubscription,
 } from "@/schemas/billing/subscription.ts";
 import { subscriptionPeriodModel } from "@/schemas/billing/subscriptionPeriod.ts";
+import {
+  TopupStatus,
+  walletTopupModel,
+} from "@/plugins/Huruf-Tech/thunder-core/schemas/walletTopup.ts";
 import { serverModel } from "@/schemas/infrastructure/server.ts";
 import { serverLeaseModel } from "@/schemas/infrastructure/serverLease.ts";
 import type { $partitionUsage } from "@/schemas/protocol/agent.ts";
@@ -242,6 +246,22 @@ export class RentalService implements TRentalHooks {
         return { result: "pending" as const, rental: String(_id), ...funded };
       }
     } catch (error) {
+      // Charged but not credited yet: the request stays, or a retry would
+      // charge again; the money lands when the top-up is settled.
+      const charged = await walletTopupModel.findOne({
+        idempotencyKey: `fund:rental:${_id}`,
+        status: {
+          $in: [
+            TopupStatus.Paid,
+            TopupStatus.Processing,
+            TopupStatus.Completed,
+          ],
+        },
+      }, { projection: { _id: 1 } });
+      if (charged) {
+        log(`request ${_id}: charged, not credited yet: ${error}`);
+        return { result: "requested" as const, rental: String(_id) };
+      }
       // Declined: no request is left behind.
       await subscriptionModel.deleteOne({ _id });
       if (choice.custom) await planModel.deleteOne({ _id: plan._id });
