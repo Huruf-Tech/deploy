@@ -236,6 +236,8 @@
   --font-heading: "Geist Variable", "Noto Sans Arabic Variable", sans-serif;
   --font-mono: "Geist Mono Variable", ui-monospace, monospace;
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  /* Core's page container (max-w-6xl) widened to ours, so core and custom pages line up. */
+  --container-6xl: 100rem;
   --color-brand-text: var(--brand-text);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);

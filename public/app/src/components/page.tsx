@@ -8,10 +8,8 @@ import { cn } from "@/lib/utils"
 export function Page({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div className="min-h-0 flex-1 overflow-y-auto">
-      <Container
-        className={cn("max-w-[1600px] px-4 pb-6 md:px-6", className)}
-        {...props}
-      />
+      {/* Core's Container: same width and padding as core's own pages. */}
+      <Container className={cn("pb-6", className)} {...props} />
     </div>
   )
 }

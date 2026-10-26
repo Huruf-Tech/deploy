@@ -83,7 +83,7 @@ Hues identify kinds of resources only where the kit says so: CPU, memory and dis
 - 4 px grid. Page gutters 16 px (mobile) / 24 px (desktop). Panel padding 12–16 px. Gaps 8 / 12 / 16.
 - Controls 32 px high (`h-8`); compact toolbar controls 28 px. Table rows 36 px. Touch targets are still 40 px on coarse pointers.
 - Radius: 6 (inputs, badges), 8 (buttons), 10 (panels), 12 (sheets and dialogs). Panels get a hairline border, not a shadow; shadows only on floating layers.
-- Content is full width, with readable maxima: forms 640 px, prose 720 px.
+- Content is centred up to 1600 px, the same for core's generated pages and ours: core's `Container` (`max-w-6xl`) is widened through `--container-6xl` in `index.css`, our `Page` uses that `Container`, and the shell adds the side gutter (`md:px-4` on `#main`) for every page. Never give a page its own width or side padding. Readable maxima inside: forms 640 px, prose 720 px.
 
 ### Elevation and depth
 
@@ -236,6 +236,7 @@ Each of these shipped, was caught after the redesign, and was fixed. Check new U
 - **`CommandDialog` needs a `<Command>` inside it** (this shadcn version doesn't add one); without it cmdk crashes on open.
 - **Clicks inside a portal bubble through React, not the DOM.** A menu opened from a table cell is portalled to `body`, yet its item clicks reached the row's `onClick` and opened the project (a 404 at `/projects/p1/p1`). `DataTable` rows now ignore events whose target isn't inside the row; any other clickable container holding a menu, dialog or popover needs the same `currentTarget.contains(target)` check.
 - **Menus must offer a way forward.** "Move to folder" with no folders showed a dead end; it now has "New folder…", which creates the folder and moves the projects into it. Hide actions that do nothing in the current state ("Take out of the folder" only inside a folder).
+- **One page frame for core and custom screens.** Our pages were 1600 px with 24 px sides while core's were 1152 px centred, so Servers looked indented next to Private network. Width comes from core's container token, gutters from the shell; pages set neither.
 - **Size overrides must match the primitive's selector.** `SelectTrigger` sets its height with `data-[size=sm]:h-8`, which beats a plain `h-7`; override with `data-[size=sm]:h-7` (same for radius and padding). In a 32–36 px bar, controls are 28 px (`h-7`) with `rounded-md`, never the default pill.
 - **Rounded containers clip their children** (`overflow-hidden`), or a sticky/colored header paints square corners over the border (it happened on every `DataTable`).
 - **Don't duplicate a control core already renders.** Core's list toolbar has its own cards/table toggle; a second toggle in our card override confused the page. Check what the core screen already shows before adding to it.

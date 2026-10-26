@@ -179,7 +179,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
         {/* SidebarInset is the page's <main>. */}
         <div
           id="main"
-          className="page-transition relative flex min-h-0 w-full flex-1 flex-col"
+          // One side gutter for every page, core's and ours (DESIGN §3).
+          className="page-transition relative flex min-h-0 w-full flex-1 flex-col md:px-4"
         >
           {children}
         </div>
