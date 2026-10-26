@@ -9,6 +9,7 @@ import { projectGroupsModule } from "./modules/projectGroups.js";
 import { projectsModule } from "./modules/projects.js";
 import { billingModule } from "./modules/billing.js";
 import { billingAdminModule } from "./modules/billingAdmin.js";
+import { paymentsModule } from "./modules/payments.js";
 import { plansModule } from "./modules/plans.js";
 import { aiModule } from "./modules/ai.js";
 import { gitIntegrationsModule } from "./modules/gitIntegrations.js";
@@ -43,6 +44,7 @@ import { tenantMembershipsModule } from "./modules/tenantMemberships.js";
 import { tenantsModule } from "./modules/tenants.js";
 import { usersModule } from "./modules/users.js";
 import { walletLedgersModule } from "./modules/walletLedgers.js";
+import { walletTopupsModule } from "./modules/walletTopups.js";
 import { walletsModule } from "./modules/wallets.js";
 import { essentialsEntry } from "./plugins/essentials/entry.js";
 export declare class ThunderSDK extends BaseSDK {
@@ -53,6 +55,7 @@ export declare class ThunderSDK extends BaseSDK {
     static projects: ReturnType<typeof projectsModule>;
     static billing: ReturnType<typeof billingModule>;
     static billingAdmin: ReturnType<typeof billingAdminModule>;
+    static payments: ReturnType<typeof paymentsModule>;
     static plans: ReturnType<typeof plansModule>;
     static ai: ReturnType<typeof aiModule>;
     static gitIntegrations: ReturnType<typeof gitIntegrationsModule>;
@@ -87,6 +90,7 @@ export declare class ThunderSDK extends BaseSDK {
     static tenants: ReturnType<typeof tenantsModule>;
     static users: ReturnType<typeof usersModule>;
     static walletLedgers: ReturnType<typeof walletLedgersModule>;
+    static walletTopups: ReturnType<typeof walletTopupsModule>;
     static wallets: ReturnType<typeof walletsModule>;
     static plugins: {
         essentials: typeof essentialsEntry;

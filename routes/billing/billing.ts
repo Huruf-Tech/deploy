@@ -6,6 +6,7 @@ import { Response } from "@/core/http/response.ts";
 import { $objectId } from "@/core/utils/createCRUD.ts";
 import { readNumberSetting, readTextSetting } from "@/lib/core/settings.ts";
 import { withTenant } from "@/plugins/Huruf-Tech/thunder-core/utils/withTenant.ts";
+import { tenantOwner } from "@/lib/billing/owner.ts";
 import { tenantMemberModel } from "@/plugins/Huruf-Tech/thunder-core/schemas/tenantMember.ts";
 import { walletModel } from "@/plugins/Huruf-Tech/thunder-core/schemas/wallet.ts";
 import { billing as billingService, entitlements } from "@/lib/services.ts";
@@ -78,13 +79,7 @@ export default new Router("/api", function billing(router) {
     _id: z.string(),
   });
 
-  const ownerOnly = async (req: Request) => {
-    const ctx = await withTenant(req);
-    if (!ctx.user._id.equals(ctx.owner._id)) {
-      throw Response.forbidden("Only the tenant owner can change its plan");
-    }
-    return ctx;
-  };
+  const ownerOnly = (req: Request) => tenantOwner(req, "change its plan");
 
   router.get("/", function get() {
     const $return = z.object({

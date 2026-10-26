@@ -1,6 +1,11 @@
 import { storageModel } from "@/schemas/infrastructure/storage.ts";
 import { subscriptionModel } from "@/schemas/billing/subscription.ts";
 import { planModel } from "@/schemas/billing/plan.ts";
+import {
+  billingAccountModel,
+  paymentCardModel,
+  paymentEventModel,
+} from "@/schemas/billing/payment.ts";
 import { alertEventModel, alertRuleModel } from "@/schemas/monitoring/alert.ts";
 import { subscriptionPeriodModel } from "@/schemas/billing/subscriptionPeriod.ts";
 import { keyringModel } from "@/schemas/crypto/keyring.ts";
@@ -63,6 +68,27 @@ export const syncDeployIndexes = async () => {
       { name: "uniqueOwner", unique: true },
     ),
     planModel.createIndex({ slug: 1 }, { name: "uniqueSlug", unique: true }),
+    // Payments (PLAN §25.4).
+    billingAccountModel.createIndex({ tenant: 1 }, {
+      name: "uniqueTenant",
+      unique: true,
+    }),
+    paymentCardModel.createIndex({ providerRef: 1 }, {
+      name: "uniqueProviderRef",
+      unique: true,
+    }),
+    paymentCardModel.createIndex({ tenant: 1, isDefault: -1 }, {
+      name: "tenantCards",
+    }),
+    paymentEventModel.createIndex({ eventId: 1 }, {
+      name: "uniqueEvent",
+      unique: true,
+    }),
+    // Refunds and disputes have no expiresAt and are kept.
+    paymentEventModel.createIndex(
+      { expiresAt: 1 },
+      { name: "ttl", expireAfterSeconds: 0 },
+    ),
     planModel.createIndex(
       { isFree: 1 },
       {

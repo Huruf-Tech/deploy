@@ -11,6 +11,7 @@ import { projectGroupsModule } from "./modules/projectGroups.js";
 import { projectsModule } from "./modules/projects.js";
 import { billingModule } from "./modules/billing.js";
 import { billingAdminModule } from "./modules/billingAdmin.js";
+import { paymentsModule } from "./modules/payments.js";
 import { plansModule } from "./modules/plans.js";
 import { aiModule } from "./modules/ai.js";
 import { gitIntegrationsModule } from "./modules/gitIntegrations.js";
@@ -45,6 +46,7 @@ import { tenantMembershipsModule } from "./modules/tenantMemberships.js";
 import { tenantsModule } from "./modules/tenants.js";
 import { usersModule } from "./modules/users.js";
 import { walletLedgersModule } from "./modules/walletLedgers.js";
+import { walletTopupsModule } from "./modules/walletTopups.js";
 import { walletsModule } from "./modules/wallets.js";
 
 import { essentialsEntry } from "./plugins/essentials/entry.js";
@@ -57,6 +59,7 @@ export class ThunderSDK extends BaseSDK {
         "projects",
         "billing",
         "billingAdmin",
+        "payments",
         "plans",
         "ai",
         "gitIntegrations",
@@ -91,6 +94,7 @@ export class ThunderSDK extends BaseSDK {
         "tenants",
         "users",
         "walletLedgers",
+        "walletTopups",
         "wallets",
     ];
     
@@ -99,6 +103,7 @@ export class ThunderSDK extends BaseSDK {
     static projects: ReturnType<typeof projectsModule> = projectsModule(this);
     static billing: ReturnType<typeof billingModule> = billingModule(this);
     static billingAdmin: ReturnType<typeof billingAdminModule> = billingAdminModule(this);
+    static payments: ReturnType<typeof paymentsModule> = paymentsModule(this);
     static plans: ReturnType<typeof plansModule> = plansModule(this);
     static ai: ReturnType<typeof aiModule> = aiModule(this);
     static gitIntegrations: ReturnType<typeof gitIntegrationsModule> = gitIntegrationsModule(this);
@@ -133,6 +138,7 @@ export class ThunderSDK extends BaseSDK {
     static tenants: ReturnType<typeof tenantsModule> = tenantsModule(this);
     static users: ReturnType<typeof usersModule> = usersModule(this);
     static walletLedgers: ReturnType<typeof walletLedgersModule> = walletLedgersModule(this);
+    static walletTopups: ReturnType<typeof walletTopupsModule> = walletTopupsModule(this);
     static wallets: ReturnType<typeof walletsModule> = walletsModule(this);
 
     static override plugins = {

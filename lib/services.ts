@@ -6,6 +6,9 @@ import { RateLimiter } from "@/lib/core/rateLimiter.ts";
 import { Entitlements } from "@/lib/billing/entitlements.ts";
 import { BillingService } from "@/lib/billing/billing.ts";
 import { GitHubApi } from "@/lib/github/githubApi.ts";
+import { PaymentService } from "@/lib/payments/payments.ts";
+import { StripeGateway } from "@/lib/payments/stripe.ts";
+import { Wallet } from "@/plugins/Huruf-Tech/thunder-core/lib/wallet.ts";
 import { keyringModel } from "@/schemas/crypto/keyring.ts";
 import {
   $planFeatures,
@@ -61,3 +64,13 @@ export const entitlements: Entitlements = new Entitlements({
 });
 
 export const billing: BillingService = new BillingService(entitlements);
+
+/**
+ * Payments (PLAN §25): one service over the enabled gateways. Every wallet
+ * short of funds asks it to charge the saved card (thunder-core's top-up
+ * hook), so wiring it here covers every caller, scripts and tests included.
+ */
+export const payments: PaymentService = new PaymentService([
+  new StripeGateway(),
+]);
+Wallet.onInsufficientBalance = (request) => payments.coverShortfall(request);

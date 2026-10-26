@@ -10,6 +10,7 @@ import { projectGroupsModule } from "./modules/projectGroups.js";
 import { projectsModule } from "./modules/projects.js";
 import { billingModule } from "./modules/billing.js";
 import { billingAdminModule } from "./modules/billingAdmin.js";
+import { paymentsModule } from "./modules/payments.js";
 import { plansModule } from "./modules/plans.js";
 import { aiModule } from "./modules/ai.js";
 import { gitIntegrationsModule } from "./modules/gitIntegrations.js";
@@ -44,6 +45,7 @@ import { tenantMembershipsModule } from "./modules/tenantMemberships.js";
 import { tenantsModule } from "./modules/tenants.js";
 import { usersModule } from "./modules/users.js";
 import { walletLedgersModule } from "./modules/walletLedgers.js";
+import { walletTopupsModule } from "./modules/walletTopups.js";
 import { walletsModule } from "./modules/wallets.js";
 import { essentialsEntry } from "./plugins/essentials/entry.js";
 export class ThunderSDK extends BaseSDK {
@@ -126,6 +128,7 @@ Object.defineProperty(ThunderSDK, "_moduleNames", {
         "projects",
         "billing",
         "billingAdmin",
+        "payments",
         "plans",
         "ai",
         "gitIntegrations",
@@ -160,6 +163,7 @@ Object.defineProperty(ThunderSDK, "_moduleNames", {
         "tenants",
         "users",
         "walletLedgers",
+        "walletTopups",
         "wallets",
     ]
 });
@@ -192,6 +196,12 @@ Object.defineProperty(ThunderSDK, "billingAdmin", {
     configurable: true,
     writable: true,
     value: billingAdminModule(_a)
+});
+Object.defineProperty(ThunderSDK, "payments", {
+    enumerable: true,
+    configurable: true,
+    writable: true,
+    value: paymentsModule(_a)
 });
 Object.defineProperty(ThunderSDK, "plans", {
     enumerable: true,
@@ -396,6 +406,12 @@ Object.defineProperty(ThunderSDK, "walletLedgers", {
     configurable: true,
     writable: true,
     value: walletLedgersModule(_a)
+});
+Object.defineProperty(ThunderSDK, "walletTopups", {
+    enumerable: true,
+    configurable: true,
+    writable: true,
+    value: walletTopupsModule(_a)
 });
 Object.defineProperty(ThunderSDK, "wallets", {
     enumerable: true,

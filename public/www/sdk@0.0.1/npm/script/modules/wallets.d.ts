@@ -63,6 +63,17 @@ export type transfer$return = {
         credit: string;
     };
 };
+export type addBalance$body = {
+    amount: number;
+    currency?: string | undefined;
+    idempotencyKey?: string | undefined;
+};
+export type addBalance$return = {
+    status: string;
+    balance: number;
+    toppedUp: number;
+    topup?: string | undefined;
+};
 export type updateOverdraftLimit$body = {
     userId?: string;
     tenantId?: string;
@@ -110,6 +121,8 @@ export declare const walletsModule: (sdk: typeof BaseSDK) => {
         signTransfer$return: signTransfer$return;
         transfer$body: transfer$body;
         transfer$return: transfer$return;
+        addBalance$body: addBalance$body;
+        addBalance$return: addBalance$return;
         updateOverdraftLimit$body: updateOverdraftLimit$body;
         getOverdraftLimit$query: getOverdraftLimit$query;
         getOverdraftLimit$return: getOverdraftLimit$return;
@@ -151,6 +164,17 @@ export declare const walletsModule: (sdk: typeof BaseSDK) => {
         then: <TResult1 = transfer$return, TResult2 = never>(onfulfilled?: ((value: transfer$return) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
         catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<transfer$return | TResult>;
         finally: (onfinally?: (() => void) | null | undefined) => Promise<transfer$return>;
+    };
+    readonly addBalance: (data: {
+        params?: undefined;
+        query?: undefined;
+        body: addBalance$body;
+    } & TRequestOptions<addBalance$return>) => {
+        readonly raw: Promise<import("axios").AxiosResponse<addBalance$return, any, {}, any>>;
+        readonly data: Promise<addBalance$return>;
+        then: <TResult1 = addBalance$return, TResult2 = never>(onfulfilled?: ((value: addBalance$return) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+        catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<addBalance$return | TResult>;
+        finally: (onfinally?: (() => void) | null | undefined) => Promise<addBalance$return>;
     };
     readonly updateOverdraftLimit: (data: {
         params?: undefined;

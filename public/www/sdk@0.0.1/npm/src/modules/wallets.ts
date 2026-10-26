@@ -70,6 +70,17 @@ export type transfer$return = {
         credit: string;
     };
 };
+export type addBalance$body = {
+    amount: number;
+    currency?: string | undefined;
+    idempotencyKey?: string | undefined;
+};
+export type addBalance$return = {
+    status: string;
+    balance: number;
+    toppedUp: number;
+    topup?: string | undefined;
+};
 export type updateOverdraftLimit$body = {
     userId?: string;
     tenantId?: string;
@@ -118,6 +129,8 @@ export const walletsModule = (sdk: typeof BaseSDK) => {
         signTransfer$return: signTransfer$return,
         transfer$body: transfer$body,
         transfer$return: transfer$return,
+        addBalance$body: addBalance$body,
+        addBalance$return: addBalance$return,
         updateOverdraftLimit$body: updateOverdraftLimit$body,
         getOverdraftLimit$query: getOverdraftLimit$query,
         getOverdraftLimit$return: getOverdraftLimit$return,
@@ -196,6 +209,34 @@ export const walletsModule = (sdk: typeof BaseSDK) => {
 
             const method = "post";
             const toPath = compile("wallets/api/transfer");
+            const requestPayload = {
+                method,
+                url: toPath(sdk.resolvePathParams(data?.params)),
+                params: data?.query,
+                data: data?.body,
+                signal: data?.signal,
+                ...(data?.axiosConfig
+                ? sdk.resolveAxiosConfig(data.axiosConfig)
+                : undefined),
+            };
+
+            sdk.log("Sending Request:", requestPayload);
+
+            const res = await sdk._axios!.request(requestPayload);
+
+            return res;
+        }, data);
+    },
+        addBalance(data: {
+        params?: undefined,
+        query?: undefined,
+        body: addBalance$body,
+    } & TRequestOptions<addBalance$return>) {
+        return sdk.resolveAxiosResponse(async () => {
+            sdk.checkPermission("wallets", "addBalance");
+
+            const method = "post";
+            const toPath = compile("wallets/api/add-balance");
             const requestPayload = {
                 method,
                 url: toPath(sdk.resolvePathParams(data?.params)),
@@ -331,13 +372,14 @@ export const walletsModule = (sdk: typeof BaseSDK) => {
     (methods.metadata as any).__scope = "wallets";
     (methods.signTransfer as any).__scope = "wallets";
     (methods.transfer as any).__scope = "wallets";
+    (methods.addBalance as any).__scope = "wallets";
     (methods.updateOverdraftLimit as any).__scope = "wallets";
     (methods.getOverdraftLimit as any).__scope = "wallets";
     (methods.count as any).__scope = "wallets";
     (methods.get as any).__scope = "wallets";
 
 
-    sdk["_moduleMetadata"].set(methods, {"crud":{"schema":{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","properties":{"currency":{"type":"string","minLength":3},"balance":{"default":0,"type":"integer","minimum":-9007199254740991,"maximum":9007199254740991},"overdraftLimit":{"default":0,"type":"integer","minimum":-9007199254740991,"maximum":9007199254740991},"previousBalance":{"default":0,"type":"integer","minimum":-9007199254740991,"maximum":9007199254740991},"lastRef":{"type":"string"},"user":{"tsType":"string"},"tenant":{"tsType":"string"},"negativeAt":{"anyOf":[{"type":"string","format":"date-time"},{"type":"null"}]},"createdAt":{"default":"2026-10-25T21:19:10.813Z","type":"string","format":"date-time"},"updatedAt":{"default":"2026-10-25T21:19:10.813Z","type":"string","format":"date-time"}},"required":["currency","balance","overdraftLimit","previousBalance","user","tenant","createdAt","updatedAt"],"additionalProperties":false}}});
+    sdk["_moduleMetadata"].set(methods, {"crud":{"schema":{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","properties":{"currency":{"type":"string","minLength":3},"balance":{"default":0,"type":"integer","minimum":-9007199254740991,"maximum":9007199254740991},"overdraftLimit":{"default":0,"type":"integer","minimum":-9007199254740991,"maximum":9007199254740991},"previousBalance":{"default":0,"type":"integer","minimum":-9007199254740991,"maximum":9007199254740991},"lastRef":{"type":"string"},"user":{"tsType":"string"},"tenant":{"tsType":"string"},"negativeAt":{"anyOf":[{"type":"string","format":"date-time"},{"type":"null"}]},"createdAt":{"default":"2026-10-26T09:49:05.509Z","type":"string","format":"date-time"},"updatedAt":{"default":"2026-10-26T09:49:05.509Z","type":"string","format":"date-time"}},"required":["currency","balance","overdraftLimit","previousBalance","user","tenant","createdAt","updatedAt"],"additionalProperties":false}}});
 
     return methods;
 };

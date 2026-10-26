@@ -14,6 +14,8 @@ export const syncDeployAccessControl = async () => {
   await ACManager.resolvePolicy("public", ["githubHooks"]);
   // Let's Encrypt and Traefik: challenges are public, the config needs a token.
   await ACManager.resolvePolicy("public", ["ingress"]);
+  // Payment gateway webhooks: verified by the gateway's signature inside (PLAN §25.6).
+  await ACManager.resolvePolicy("public", ["payments.webhook"]);
 
   const deploy = await ACManager.resolvePolicy("deploy", [
     "servers",
@@ -36,6 +38,8 @@ export const syncDeployAccessControl = async () => {
     "storages",
     // Everyone sees plan & usage; subscribe/cancel check for the owner.
     "billing",
+    // Cards and Add funds; every handler but config checks for the owner.
+    "payments",
     "networks",
     "alertRules",
     "alertEvents",

@@ -93,6 +93,7 @@
     "path-to-regexp": "npm:path-to-regexp@^8.3.0",
     "qs": "npm:qs@^6.14.1",
     "ssh2": "npm:ssh2@^1.17.0",
+    "stripe": "npm:stripe@^23.0.0",
     "typescript": "npm:typescript@^5.9.3",
     "vectra": "npm:vectra@^0.15.0",
     "zod": "npm:zod@^4.3.6",
