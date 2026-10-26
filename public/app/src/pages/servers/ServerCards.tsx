@@ -40,6 +40,8 @@ import { StatusPill } from "./StatusPill"
 import { LabelChips } from "./ServerLabels"
 import {
   gib,
+  isMachine,
+  isPartition,
   serverSchema,
   stateOf,
   type TLiveness,
@@ -61,14 +63,24 @@ function Chip({
   )
 }
 
-function SetupChips({
-  server,
-  setup,
-}: {
-  server: string
-  setup: TServer["setup"]
-}) {
+function SetupChips({ server: doc }: { server: TServer }) {
   const { t } = useTranslation()
+  const server = doc._id
+  const setup = doc.setup
+
+  // A machine hosts partitions; its own setup is theirs (PLAN §27).
+  if (isMachine(doc))
+    return (
+      <Chip>
+        {doc.pool?.status !== "ready"
+          ? t("Setting up for partitions")
+          : t("{{count}} partitions", {
+              count: (doc.resources?.partitions ?? []).filter(
+                (p) => !p.remainder
+              ).length,
+            })}
+      </Chip>
+    )
 
   if (!setup || setup.status === "pending")
     return (
@@ -313,13 +325,23 @@ function ServerCard({
             {inventory.arch}
           </Chip>
           <Chip>{gib(inventory.memory)}</Chip>
-          {server.status === "active" && (
-            <SetupChips server={server._id} setup={server.setup} />
-          )}
+          {isPartition(server) && <Chip>{t("Partition")}</Chip>}
+          {server.status === "active" && <SetupChips server={server} />}
         </div>
         <LabelChips labels={server.labels} onPick={onLabel} />
 
-        {server.setup?.status === "failed" && (
+        {isMachine(server) &&
+          server.pool?.status === "ready" &&
+          !server.resources?.partitions?.length && (
+            <Link
+              to={server._id}
+              state={{ name: server.name }}
+              className="text-xs font-medium text-primary underline-offset-2 hover:underline"
+            >
+              {t("Create a partition to deploy here")}
+            </Link>
+          )}
+        {!isMachine(server) && server.setup?.status === "failed" && (
           <SetupFailed
             server={server}
             canRetry={state === "online"}
@@ -412,9 +434,7 @@ function ServerTable({
       cell: (s) => (
         <div className="flex flex-col items-start gap-1">
           <StatusPill state={state(s)} />
-          {s.status === "active" && (
-            <SetupChips server={s._id} setup={s.setup} />
-          )}
+          {s.status === "active" && <SetupChips server={s} />}
         </div>
       ),
     },

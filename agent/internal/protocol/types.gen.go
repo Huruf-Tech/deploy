@@ -417,6 +417,9 @@ type DesiredSpec struct {
 
 	Alerts []AlertSpec `json:"alerts"`
 
+	// A machine's forwards into its partitions: public ports and each partition's mesh port
+	Forwards []PortForward `json:"forwards"`
+
 	// Run the tenant's built-in registry here (primary server)
 	Registry *DesiredSpecRegistry `json:"registry,omitempty"`
 
@@ -591,6 +594,19 @@ type AlertSpec struct {
 	Threshold float64 `json:"threshold"`
 
 	ForSec int64 `json:"forSec"`
+}
+
+type PortForward struct {
+	// One of: tcp, udp
+	Protocol string `json:"protocol"`
+
+	// On the machine
+	Port int64 `json:"port"`
+
+	Partition string `json:"partition"`
+
+	// In the partition
+	To int64 `json:"to"`
 }
 
 type DesiredSpecRegistry struct {
@@ -808,21 +824,21 @@ type RegistryDeletePayload struct {
 type HostCleanupPayload struct {
 	DryRun bool `json:"dryRun"`
 
-	PurgeData bool `json:"purgeData"`
-
-	Keep []string `json:"keep,omitempty"`
-
-	Remove []string `json:"remove,omitempty"`
+	RemoveSysbox bool `json:"removeSysbox"`
 }
 
 type PoolEnsurePayload struct {
+	// One of: machine, pool
+	Mode string `json:"mode"`
+
 	Reserve PoolEnsurePayloadReserve `json:"reserve"`
 
 	Volume PoolEnsurePayloadVolume `json:"volume"`
 
 	AllowIps []string `json:"allowIps"`
 
-	Docker PoolEnsurePayloadDocker `json:"docker"`
+	// Pool machines' host setup
+	Docker *PoolEnsurePayloadDocker `json:"docker,omitempty"`
 }
 
 type PoolEnsurePayloadReserve struct {
@@ -837,7 +853,7 @@ type PoolEnsurePayloadVolume struct {
 	// A block device for partition data; formatted XFS only when it has no filesystem
 	Device string `json:"device,omitempty"`
 
-	// Without a device: a loop file this size (tests, small machines)
+	// Without a device: a loop file this size; a machine's defaults to the free space (sparse)
 	LoopSizeGb *int64 `json:"loopSizeGb,omitempty"`
 }
 

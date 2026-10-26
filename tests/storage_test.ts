@@ -2,8 +2,8 @@ import { assert, assertEquals, assertMatch } from "@std/assert";
 import { ObjectId } from "mongodb";
 import handler from "@/serve.base.ts";
 import { mongodb } from "@/database.ts";
-import { acceptServer } from "@/lib/agents/servers.ts";
 import { createState, SimAgent } from "@/tools/agent-sim/agent.ts";
+import { joinAsPartition } from "./_partition.ts";
 import { testSession } from "./_session.ts";
 
 // Storage connections and S3 volumes (PLAN §16 Phase 9) with two simulated servers.
@@ -40,13 +40,7 @@ Deno.test({
             tenant,
             send: (req) => Promise.resolve(handler(req)),
           });
-          const { json } = await agent.hello();
-          await acceptServer({
-            server: new ObjectId(json.server),
-            tenant: tenantId,
-            user: { _id: user, emailVerified: true },
-            pairingCode: json.pairingCode!,
-          });
+          const { json } = await joinAsPartition(agent, tenantId, user);
           agents.push(agent);
           servers.push(json.server);
         }

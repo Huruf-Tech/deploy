@@ -31,8 +31,10 @@ export type get$return = {
         pairingExpiresAt?: Date | undefined;
         installMethod: "manual" | "ssh";
         provider: {
-            kind: "byo" | "rented";
+            kind: "machine" | "partition" | "rented" | "byo";
             host?: string | undefined;
+            partition?: string | undefined;
+            meshPort?: number | undefined;
             subscription?: string | undefined;
         };
         inventory: {
@@ -104,6 +106,7 @@ export type get$return = {
         } | undefined;
         pool?: {
             status: "pending" | "ready" | "failed";
+            mode?: ("machine" | "pool") | undefined;
             allocatable?: {
                 cpus: number;
                 memMb: number;
@@ -135,6 +138,36 @@ export type update$body = {
 };
 export type del$params = {
     id: string;
+};
+export type createPartition$params = {
+    id?: string;
+};
+export type createPartition$body = {
+    /** The server's name */
+    name?: string | undefined;
+    size: {
+        cpus: number;
+        memMb: number;
+        diskGb: number;
+    };
+};
+export type createPartition$return = {
+    name: string;
+};
+export type resizePartition$params = {
+    id?: string;
+    name: string;
+};
+export type resizePartition$body = {
+    size: {
+        cpus: number;
+        memMb: number;
+        diskGb: number;
+    };
+};
+export type removePartition$params = {
+    id?: string;
+    name: string;
 };
 export type agentRelease$return = {
     /** arch -> SHA-256 */
@@ -173,9 +206,7 @@ export type cleanup$params = {
 };
 export type cleanup$body = {
     dryRun: boolean;
-    purgeData: boolean;
-    keep?: string[] | undefined;
-    remove?: string[] | undefined;
+    removeSysbox?: boolean;
 };
 export type cleanup$return = {
     command: string;
@@ -233,6 +264,12 @@ export declare const serversModule: (sdk: typeof BaseSDK) => {
         update$params: update$params;
         update$body: update$body;
         del$params: del$params;
+        createPartition$params: createPartition$params;
+        createPartition$body: createPartition$body;
+        createPartition$return: createPartition$return;
+        resizePartition$params: resizePartition$params;
+        resizePartition$body: resizePartition$body;
+        removePartition$params: removePartition$params;
         agentRelease$return: agentRelease$return;
         updateAgent$params: updateAgent$params;
         accept$params: accept$params;
@@ -289,6 +326,39 @@ export declare const serversModule: (sdk: typeof BaseSDK) => {
     };
     readonly del: (data: {
         params: del$params;
+        query?: undefined;
+        body?: undefined;
+    } & TRequestOptions<unknown>) => {
+        readonly raw: Promise<import("axios").AxiosResponse<unknown, any, {}, any>>;
+        readonly data: Promise<unknown>;
+        then: <TResult1 = unknown, TResult2 = never>(onfulfilled?: ((value: unknown) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+        catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<unknown>;
+        finally: (onfinally?: (() => void) | null | undefined) => Promise<unknown>;
+    };
+    readonly createPartition: (data: {
+        params: createPartition$params;
+        query?: undefined;
+        body: createPartition$body;
+    } & TRequestOptions<createPartition$return>) => {
+        readonly raw: Promise<import("axios").AxiosResponse<createPartition$return, any, {}, any>>;
+        readonly data: Promise<createPartition$return>;
+        then: <TResult1 = createPartition$return, TResult2 = never>(onfulfilled?: ((value: createPartition$return) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+        catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<createPartition$return | TResult>;
+        finally: (onfinally?: (() => void) | null | undefined) => Promise<createPartition$return>;
+    };
+    readonly resizePartition: (data: {
+        params: resizePartition$params;
+        query?: undefined;
+        body: resizePartition$body;
+    } & TRequestOptions<unknown>) => {
+        readonly raw: Promise<import("axios").AxiosResponse<unknown, any, {}, any>>;
+        readonly data: Promise<unknown>;
+        then: <TResult1 = unknown, TResult2 = never>(onfulfilled?: ((value: unknown) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+        catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<unknown>;
+        finally: (onfinally?: (() => void) | null | undefined) => Promise<unknown>;
+    };
+    readonly removePartition: (data: {
+        params: removePartition$params;
         query?: undefined;
         body?: undefined;
     } & TRequestOptions<unknown>) => {

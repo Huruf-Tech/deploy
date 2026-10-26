@@ -1,6 +1,6 @@
 import * as React from "react"
 import z from "zod"
-import { useParams } from "react-router"
+import { Link, useNavigate, useParams } from "react-router"
 import { useTranslation } from "react-i18next"
 import { ThunderSDK } from "thunder-sdk"
 import {
@@ -15,6 +15,14 @@ import { Page } from "@/components/page"
 import { use } from "@/core/hooks/use"
 import { useBreadcrumbTitle } from "@/core/layouts/shared/breadcrumb"
 import { Button } from "@/components/ui/button"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Panel } from "@/components/console/panel"
@@ -39,7 +47,15 @@ import { RemoveServerDialog } from "./RemoveServerDialog"
 import { RentalPanel } from "@/pages/rentals/Rentals"
 import { PoolPanel } from "@/pages/rentals/PoolPanel"
 import { PageHeader } from "@/components/console/page-header"
-import { gib, serverSchema, stateOf, type TLiveness } from "./server"
+import {
+  gib,
+  isMachine,
+  serverSchema,
+  stateOf,
+  type TLiveness,
+  type TServer,
+} from "./server"
+import { MachinePanel } from "./MachinePanel"
 import { useFresh } from "@/hooks/use-fresh"
 
 /** 24 h of history plus ~30 min of live samples, bounded (PLAN §20.4). */
@@ -392,10 +408,12 @@ export default function ServerDetail() {
       .catch(() => {})
     // Host setup reports when it's done: follow it here, without reloading
     // the cached request (which would swap the page for a skeleton).
+    // A machine's own setup is `pool.status`; a partition's, `setup.status`.
+    const setup = server && isMachine(server) ? server.pool : server?.setup
     if (
       server?.status === "active" &&
-      server.setup?.status !== "ready" &&
-      server.setup?.status !== "failed"
+      setup?.status !== "ready" &&
+      setup?.status !== "failed"
     ) {
       ThunderSDK.servers
         .get({ params: { id }, query: {} })
@@ -460,12 +478,20 @@ export default function ServerDetail() {
           </>
         }
       />
-      <RemoveServerDialog
-        server={server}
-        online={state === "online"}
-        open={removing}
-        onOpenChange={setRemoving}
-      />
+      {server.provider?.kind === "partition" ? (
+        <RemovePartitionDialog
+          server={server}
+          open={removing}
+          onOpenChange={setRemoving}
+        />
+      ) : (
+        <RemoveServerDialog
+          server={server}
+          online={state === "online"}
+          open={removing}
+          onOpenChange={setRemoving}
+        />
+      )}
 
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="flex min-w-0 flex-col gap-4 lg:col-span-2">
@@ -487,6 +513,12 @@ export default function ServerDetail() {
         <div className="flex min-w-0 flex-col gap-4">
           {server.provider?.kind === "rented" && (
             <RentalPanel server={server._id} />
+          )}
+          {isMachine(server) && server.pool?.mode !== "pool" && (
+            <MachinePanel
+              server={server}
+              onChanged={() => request.invalidate()}
+            />
           )}
           <PoolPanel server={server} onChanged={() => request.invalidate()} />
           <Panel title={t("Machine")} bodyClassName="py-1">
@@ -510,6 +542,23 @@ export default function ServerDetail() {
                   ? [{ label: "Docker", value: server.setup.dockerVersion }]
                   : []),
                 { label: t("Agent"), value: inventory.agentVersion },
+                ...(server.provider?.kind === "partition" &&
+                server.provider.host
+                  ? [
+                      {
+                        label: t("Partition of"),
+                        value: (
+                          <Link
+                            to={`../${server.provider.host}`}
+                            relative="path"
+                            className="underline underline-offset-2"
+                          >
+                            {t("its machine")}
+                          </Link>
+                        ),
+                      },
+                    ]
+                  : []),
                 { label: t("Server ID"), value: server._id, copy: server._id },
               ]}
             />
@@ -521,11 +570,14 @@ export default function ServerDetail() {
               onSaved={() => request.invalidate()}
             />
           </Panel>
-          <HostSetup
-            server={server}
-            online={state === "online"}
-            onChanged={() => request.invalidate()}
-          />
+          {/* A machine runs no projects: its setup is in the Partitions panel. */}
+          {!isMachine(server) && (
+            <HostSetup
+              server={server}
+              online={state === "online"}
+              onChanged={() => request.invalidate()}
+            />
+          )}
         </div>
       </div>
 
@@ -540,5 +592,55 @@ export default function ServerDetail() {
         </React.Suspense>
       )}
     </Page>
+  )
+}
+
+/** A partition goes from its machine with its projects and data (PLAN §27.4). */
+function RemovePartitionDialog({
+  server,
+  open,
+  onOpenChange,
+}: {
+  server: TServer
+  open: boolean
+  onOpenChange: (open: boolean) => void
+}) {
+  const { t } = useTranslation()
+  const navigate = useNavigate()
+  const [busy, setBusy] = React.useState(false)
+  const remove = async () => {
+    setBusy(true)
+    try {
+      await ThunderSDK.servers.del({ params: { id: server._id } })
+      await ThunderSDK.forgetCache(["servers", server._id], { subKeys: true })
+      toast.success(t("Partition removed with its projects and data"))
+      onOpenChange(false)
+      navigate("..", { relative: "path" })
+    } catch (e) {
+      toast.error(errorMessage(e) ?? t("Could not remove it"))
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>
+            {t("Remove {{name}}", { name: server.name })}
+          </DialogTitle>
+          <DialogDescription>
+            {t(
+              "This partition is deleted from its machine with its projects' containers and data. The machine keeps running."
+            )}
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button variant="destructive" disabled={busy} onClick={remove}>
+            {t("Remove partition")}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }

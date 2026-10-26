@@ -37,9 +37,10 @@ export async function ensureMeshIndex(server: ObjectId, tenant: ObjectId) {
   const index = network!.nextIndex;
   if (index > MAX_MESH_INDEX) return undefined; // no address left: stays out of the mesh
 
+  // Field by field: a partition's endpoint (its machine's forwarded port) stays.
   const claimed = await serverModel.updateOne(
     { _id: server, "mesh.index": { $exists: false } },
-    { $set: { mesh: { index, enabled: true } } },
+    { $set: { "mesh.index": index, "mesh.enabled": true } },
   );
   if (claimed.modifiedCount) return index;
   // Another request set it first.

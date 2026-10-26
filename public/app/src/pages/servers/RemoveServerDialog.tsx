@@ -35,11 +35,11 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 /** Issues `host.cleanup` and waits for the agent's answer. */
 async function cleanup(
   server: string,
-  body: { dryRun: boolean; keep?: string[]; remove?: string[] }
+  body: { dryRun: boolean; removeSysbox?: boolean }
 ) {
   const { command } = await ThunderSDK.servers.cleanup({
     params: { id: server },
-    body: { purgeData: false, ...body },
+    body: { removeSysbox: false, ...body },
   })
   for (let i = 0; i < 60; i++) {
     await sleep(1_500)
@@ -55,11 +55,11 @@ async function cleanup(
 }
 
 /**
- * Remove server (PLAN §16): the agent plans what uninstalling removes and
- * keeps (other tools on the host, e.g. Dokploy, stay); checked items are
- * removed and the admin can change any optional one. Then the agent
- * uninstalls itself and the server leaves the dashboard. Offline servers get
- * the command to run.
+ * Remove a machine (PLAN §27.4): the agent lists what uninstalling removes
+ * (its partitions with their data, and what is ours by label and name) and
+ * keeps (Docker and anything another tool may use); Sysbox is the one
+ * choice. Then the agent uninstalls itself and the machine leaves the
+ * dashboard with its partitions. Offline machines get the command to run.
  */
 export function RemoveServerDialog({
   server,
@@ -78,7 +78,7 @@ export function RemoveServerDialog({
   const [chosen, setChosen] = React.useState<Record<string, boolean>>({})
   const [error, setError] = React.useState<string>()
   const [busy, setBusy] = React.useState(false)
-  const [purgeData, setPurgeData] = React.useState(false)
+  const [removeSysbox, setRemoveSysbox] = React.useState(false)
 
   React.useEffect(() => {
     if (!open || !online) return
@@ -106,14 +106,10 @@ export function RemoveServerDialog({
     setBusy(true)
     try {
       if (online && steps) {
-        // Only what differs from the plan travels.
-        const keep = steps
-          .filter((s) => s.remove && !chosen[s.id])
-          .map((s) => s.id)
-        const extra = steps
-          .filter((s) => !s.remove && chosen[s.id])
-          .map((s) => s.id)
-        await cleanup(server._id, { dryRun: false, keep, remove: extra })
+        await cleanup(server._id, {
+          dryRun: false,
+          removeSysbox: !!chosen.sysbox,
+        })
       }
       await forget()
       toast.success(
@@ -128,7 +124,7 @@ export function RemoveServerDialog({
     }
   }
 
-  const command = `sudo huruf-deploy-agent uninstall${purgeData ? " -remove data-volumes" : ""}`
+  const command = `sudo huruf-deploy-agent uninstall -yes${removeSysbox ? " -remove-sysbox" : ""}`
   const count = steps?.filter((s) => chosen[s.id]).length ?? 0
 
   return (
@@ -140,7 +136,7 @@ export function RemoveServerDialog({
           </DialogTitle>
           <DialogDescription>
             {t(
-              "The agent uninstalls itself and what it created. Checked items are removed; unchecked ones stay. Anything else on the server stays, Docker included."
+              "The agent uninstalls itself and removes its partitions with their projects and data. Docker and anything another tool may use stay."
             )}
           </DialogDescription>
         </DialogHeader>
@@ -151,23 +147,21 @@ export function RemoveServerDialog({
               <div className="flex flex-col gap-2">
                 <p className="text-muted-foreground">
                   {t(
-                    "The server is offline, so it can't clean up now. Over SSH, this shows the plan; add -yes to remove, and -keep / -remove with the ids it prints to change it:"
+                    "The machine is offline, so it can't clean up now. Run this over SSH (without -yes it only shows the plan):"
                   )}
                 </p>
                 <CodeBlock code={command} wrap lang="shell" />
               </div>
               <label className="flex items-start gap-2">
                 <Checkbox
-                  checked={purgeData}
-                  onCheckedChange={(on) => setPurgeData(!!on)}
+                  checked={removeSysbox}
+                  onCheckedChange={(on) => setRemoveSysbox(!!on)}
                   className="mt-0.5"
                 />
                 <span>
-                  {t("Also delete project data volumes")}
+                  {t("Also remove Sysbox")}
                   <span className="block text-xs text-muted-foreground">
-                    {t(
-                      "Databases and uploads stored on this server. This can't be undone."
-                    )}
+                    {t("Only if no other tool on the machine uses it.")}
                   </span>
                 </span>
               </label>

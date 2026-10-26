@@ -2,11 +2,11 @@ import { assert, assertEquals, assertMatch } from "@std/assert";
 import { ObjectId } from "mongodb";
 import handler from "@/serve.base.ts";
 import { mongodb } from "@/database.ts";
-import { acceptServer } from "@/lib/agents/servers.ts";
 import { shardOf, sweepShard } from "@/lib/agents/sweep.ts";
 import { deliverDueAlerts } from "@/lib/monitoring/alerts.ts";
 import { Mailer } from "@/plugins/Huruf-Tech/thunder-core/lib/mailer.ts";
 import { createState, SimAgent } from "@/tools/agent-sim/agent.ts";
+import { joinAsPartition } from "./_partition.ts";
 import { testSession } from "./_session.ts";
 
 // Alerts and autoscaling over the real handler with a simulated server (PLAN §16 Phase 8).
@@ -75,14 +75,8 @@ Deno.test({
 
     try {
       await t.step("a server joins", async () => {
-        const { json } = await agent.hello();
+        const { json } = await joinAsPartition(agent, tenantId, user);
         server = json.server;
-        await acceptServer({
-          server: new ObjectId(server),
-          tenant: tenantId,
-          user: { _id: user, emailVerified: true },
-          pairingCode: json.pairingCode!,
-        });
         await poll();
       });
 

@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/Huruf-Tech/huruf-deploy/agent/internal/protocol"
 )
 
 func freeAddr(t *testing.T) string {
@@ -101,5 +103,20 @@ func TestTarRoundTrip(t *testing.T) {
 	got, err := os.ReadFile(filepath.Join(dst, "docker", "volumes", "marker"))
 	if err != nil || string(got) != "data" {
 		t.Fatalf("copied marker = %q, %v", got, err)
+	}
+}
+
+// Forwards apply to traffic for the machine only, and skip partitions that
+// aren't running (no address yet).
+func TestForwardRulesMatchTheMachineOnly(t *testing.T) {
+	rules := forwardRules([]protocol.PortForward{
+		{Protocol: "udp", Port: 51821, Partition: "p1", To: 51820},
+		{Protocol: "tcp", Port: 8080, Partition: "p2", To: 8080},
+	}, map[string]string{"p1": "172.19.0.2"})
+	if !strings.Contains(rules, "fib daddr type local udp dport 51821 dnat to 172.19.0.2:51820") {
+		t.Fatalf("rules:\n%s", rules)
+	}
+	if strings.Contains(rules, "8080") {
+		t.Fatal("a stopped partition's forward was written")
 	}
 }

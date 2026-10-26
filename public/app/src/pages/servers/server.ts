@@ -21,11 +21,15 @@ export const serverSchema = z.object({
     agentSha256: z.string().nullish(),
   }),
   labels: z.record(z.string(), z.string()).nullish(),
-  /** `rented`: a partition of one of Huruf's pool machines (PLAN §26). */
+  /**
+   * PLAN §27: a `machine` hosts partitions, where projects run (`partition`,
+   * or `rented` on Huruf's pool machines, §26). `byo`: from before partitions.
+   */
   provider: z
     .object({
-      kind: z.enum(["byo", "rented"]),
+      kind: z.enum(["machine", "partition", "rented", "byo"]),
       host: z.string().nullish(),
+      partition: z.string().nullish(),
       subscription: z.string().nullish(),
     })
     .nullish(),
@@ -55,10 +59,11 @@ export const serverSchema = z.object({
         .nullish(),
     })
     .nullish(),
-  /** Pool machines (PLAN §26.5). */
+  /** Machines' host setup (PLAN §26.5, §27); `mode: "pool"` rents partitions out. */
   pool: z
     .object({
       status: z.enum(["pending", "ready", "failed"]),
+      mode: z.enum(["machine", "pool"]).nullish(),
       allocatable: z
         .object({ cpus: z.number(), memMb: z.number(), diskGb: z.number() })
         .nullish(),
@@ -100,3 +105,11 @@ export const stateOf = (server: TServer, live?: TLiveness): TServerState =>
       ? "online"
       : "offline"
     : server.status
+
+/** Hosts partitions, runs no projects itself (PLAN §27.2). */
+export const isMachine = (server: Pick<TServer, "provider">) =>
+  server.provider?.kind === "machine"
+
+/** A partition: its own (on the tenant's machine) or rented from Huruf. */
+export const isPartition = (server: Pick<TServer, "provider">) =>
+  server.provider?.kind === "partition" || server.provider?.kind === "rented"

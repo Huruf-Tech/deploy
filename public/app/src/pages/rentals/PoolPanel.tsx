@@ -137,7 +137,10 @@ function PoolDetails({
     }
   }
 
-  if (!pool) {
+  // Any machine has host setup (PLAN §27); renting needs the pool layout,
+  // which a machine only takes while it has no partitions.
+  if (!pool || pool.mode !== "pool") {
+    if (partitions.length) return null
     return (
       <Panel
         title={t("Pool machine")}

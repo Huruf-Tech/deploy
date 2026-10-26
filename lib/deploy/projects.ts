@@ -121,7 +121,7 @@ async function assertFits(opts: {
   const [servers, placed] = await Promise.all([
     serverModel.find(
       { _id: { $in: opts.servers }, tenant: opts.tenant, status: "active" },
-      { projection: { name: 1, inventory: 1 } },
+      { projection: { name: 1, inventory: 1, "provider.kind": 1 } },
     ).toArray(),
     projectModel.find(
       {
@@ -140,6 +140,13 @@ async function assertFits(opts: {
       },
     ).toArray(),
   ]);
+  // Projects run in partitions; a machine only hosts them (PLAN §27.2).
+  const machine = servers.find((s) => s.provider?.kind === "machine");
+  if (machine) {
+    throw Response.badRequest(
+      `${machine.name} is a machine: deploy to one of its partitions`,
+    );
+  }
   if (servers.length !== opts.servers.length) {
     throw Response.badRequest("Pick active servers of this tenant");
   }
@@ -190,15 +197,25 @@ async function assertPortFree(opts: {
       `${rented.name} is rented from Huruf: use a custom domain instead of a public port`,
     );
   }
+  // Partitions of one machine share its ports (PLAN §27.3).
+  const hosts = (await serverModel.find(
+    { _id: { $in: opts.servers }, "provider.host": { $exists: true } },
+    { projection: { "provider.host": 1 } },
+  ).toArray()).map((s) => s.provider.host!);
+  const siblings = hosts.length
+    ? (await serverModel.find({ "provider.host": { $in: hosts } }, {
+      projection: { _id: 1 },
+    }).toArray()).map((s) => s._id)
+    : [];
   const taken = await projectModel.findOne({
     tenant: opts.tenant,
-    servers: { $in: opts.servers },
+    servers: { $in: [...opts.servers, ...siblings] },
     publicPort: opts.port,
     ...(opts.except ? { _id: { $ne: opts.except } } : {}),
   }, { projection: { name: 1 } });
   if (taken) {
     throw Response.badRequest(
-      `${taken.name} already uses port ${opts.port} on one of these servers`,
+      `${taken.name} already uses port ${opts.port} on one of these servers or another partition of their machine`,
     );
   }
 }
@@ -684,7 +701,12 @@ export async function deleteProject(tenant: ObjectId, id: ObjectId) {
 /** Servers for the wizard, emptiest first (PLAN §7). */
 export async function placement(tenant: ObjectId) {
   const [servers, projects, leases] = await Promise.all([
-    serverModel.find({ tenant, status: "active" }, {
+    // Machines only host partitions (PLAN §27.2).
+    serverModel.find({
+      tenant,
+      status: "active",
+      "provider.kind": { $ne: "machine" },
+    }, {
       projection: { name: 1, inventory: 1, labels: 1, provider: 1 },
       limit: 200,
     }).toArray(),

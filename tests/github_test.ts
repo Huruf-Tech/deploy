@@ -1,12 +1,11 @@
 import { assert, assertEquals, assertMatch } from "@std/assert";
 import { createVerify, generateKeyPairSync } from "node:crypto";
-import { ObjectId } from "mongodb";
 import handler from "@/serve.base.ts";
 import { mongodb } from "@/database.ts";
 import { githubApi } from "@/lib/services.ts";
-import { acceptServer } from "@/lib/agents/servers.ts";
 import { gitIntegrationModel } from "@/schemas/build/gitIntegration.ts";
 import { createState, SimAgent } from "@/tools/agent-sim/agent.ts";
+import { joinAsPartition } from "./_partition.ts";
 import { testSession } from "./_session.ts";
 
 // Fake GitHub: the App's credentials, its installation, and one private repo.
@@ -218,13 +217,7 @@ Deno.test({
           tenant,
           send: (req) => Promise.resolve(handler(req)),
         });
-        const { json: hello } = await agent.hello();
-        await acceptServer({
-          server: new ObjectId(hello.server),
-          tenant: tenantId,
-          user: { _id: user, emailVerified: true },
-          pairingCode: hello.pairingCode!,
-        });
+        const { json: hello } = await joinAsPartition(agent, tenantId, user);
         const { json: templates } = await call("GET", "/templates/api");
         const created = await call("POST", "/projects/api", {
           name: "Shop",

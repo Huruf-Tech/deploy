@@ -55,7 +55,9 @@ type Agent struct {
 	}
 	// A pool machine's partitions, sent with the summary (PLAN §26.5); may be nil.
 	Partitions func(ctx context.Context) []protocol.PartitionUsage
-	Log        *slog.Logger
+	// Applies a machine's forwards into its partitions (PLAN §27.3); may be nil.
+	Forwards func(ctx context.Context, forwards []protocol.PortForward) error
+	Log      *slog.Logger
 
 	config        *protocol.AgentConfig
 	configVersion string
@@ -225,6 +227,11 @@ func (a *Agent) applyDesired(ctx context.Context, version int64, sealed string) 
 	if a.Network != nil {
 		// Errors are reported in mesh.status; workloads still run locally.
 		_ = a.Network.Apply(ctx, spec)
+	}
+	if a.Forwards != nil {
+		if err := a.Forwards(ctx, spec.Forwards); err != nil {
+			a.Log.Warn("forwarding ports into partitions", "error", err)
+		}
 	}
 	if a.Monitor != nil {
 		a.Monitor.SetSpec(spec)

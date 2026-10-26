@@ -7,6 +7,9 @@ import { forgetAgent } from "@/lib/agents/agentAuth.ts";
 import { shardOf } from "@/lib/agents/sweep.ts";
 import { getAgentConfig } from "@/lib/agents/config.ts";
 import { prepareHost, resumeHostSetup } from "@/lib/agents/commands.ts";
+import { setUpMachine } from "@/lib/pool/pool.ts";
+import { refreshSpecs } from "@/lib/deploy/specs.ts";
+import { agentCommandModel } from "@/schemas/infrastructure/agentCommand.ts";
 import { serverModel } from "@/schemas/infrastructure/server.ts";
 import { serverLeaseModel } from "@/schemas/infrastructure/serverLease.ts";
 import { bootstrapSessionModel } from "@/schemas/infrastructure/bootstrapSession.ts";
@@ -15,6 +18,7 @@ import { isPublicAddress } from "@/lib/agents/addresses.ts";
 import { createHash, SupportedHashAlg } from "@/core/utils/hash.ts";
 import { tenantModel } from "@/plugins/Huruf-Tech/thunder-core/schemas/tenant.ts";
 import type { THelloResponse, TInventory } from "@/schemas/protocol/agent.ts";
+import { MESH_PORT } from "@/schemas/infrastructure/network.ts";
 
 const PAIRING_TTL_MS = 15 * 60_000;
 
@@ -59,6 +63,8 @@ export const registerAgent = async (
         pairingExpiresAt: 1,
         "setup.status": 1,
         "inventory.agentSha256": 1,
+        "provider.kind": 1,
+        "pool.status": 1,
       },
     },
   );
@@ -76,15 +82,26 @@ export const registerAgent = async (
         });
       }
     }
-    // An agent that restarts mid-setup lost the running command: start it again.
-    if (existing.status === "active" && existing.setup?.status !== "ready") {
-      await resumeHostSetup(existing._id, existing.tenant);
+    const isMachine = existing.provider?.kind === "machine";
+    // A new agent binary (an update): host setup brings its dependencies up to date.
+    const updated = existing.status === "active" &&
+      !!existing.inventory?.agentSha256 && !!inventory.agentSha256 &&
+      existing.inventory.agentSha256 !== inventory.agentSha256;
+    if (isMachine && existing.status === "active") {
+      // An agent that restarts mid-setup lost the running command: start it again.
+      const waiting = await agentCommandModel.countDocuments({
+        server: existing._id,
+        type: "pool.ensure",
+        status: "pending",
+      });
+      if (updated || (existing.pool?.status !== "ready" && !waiting)) {
+        await setUpMachine(existing._id);
+      }
     } else if (
-      // A new agent binary (an update): host setup brings its dependencies up to date.
-      existing.status === "active" && existing.inventory?.agentSha256 &&
-      inventory.agentSha256 &&
-      existing.inventory.agentSha256 !== inventory.agentSha256
+      existing.status === "active" && existing.setup?.status !== "ready"
     ) {
+      await resumeHostSetup(existing._id, existing.tenant);
+    } else if (updated) {
       await prepareHost(existing._id, existing.tenant);
     }
     return {
@@ -151,7 +168,7 @@ export const registerAgent = async (
       pairingCode,
       pairingExpiresAt,
       installMethod: "manual",
-      provider: { kind: "byo" },
+      provider: { kind: "machine" },
       inventory,
       createdAt: now,
     });
@@ -186,7 +203,7 @@ const claimJoinToken = async (token: string, tenant: ObjectId) =>
       $set: { status: "registered" },
       $push: { steps: { at: new Date(), message: "Agent registered" } },
     },
-    { projection: { createdBy: 1, rental: 1 } },
+    { projection: { createdBy: 1, rental: 1, partition: 1 } },
   );
 
 const registerJoinedAgent = async (
@@ -196,6 +213,7 @@ const registerJoinedAgent = async (
   session: {
     _id: ObjectId;
     createdBy: ObjectId;
+    partition?: { host: ObjectId; name: string; label?: string };
     rental?: { host: ObjectId; subscription: ObjectId; name: string };
   },
 ): Promise<THelloResponse> => {
@@ -204,17 +222,22 @@ const registerJoinedAgent = async (
       $set: { status: "failed", error },
     });
 
-  // A rented partition (PLAN §26) was approved by an admin: no plan quota.
-  const { rental } = session;
-  if (!rental && !await acquireServerSlot(tenant)) {
+  // PLAN §27: an agent installed on a machine is its host and takes no plan
+  // slot; a partition's agent is a server, and a slot unless it's rented
+  // (approved by an admin, PLAN §26).
+  const { rental, partition } = session;
+  const kind = rental ? "rented" : partition ? "partition" : "machine";
+  if (kind === "partition" && !await acquireServerSlot(tenant)) {
     await failSession("Your plan's server limit is reached");
     throw Response.forbidden("Your plan's server limit is reached");
   }
+  const host = rental?.host ?? partition?.host;
+  const meshPort = host ? await nextMeshPort(host) : undefined;
 
   const now = new Date();
   const { insertedId } = await serverModel.insertOne({
     tenant,
-    name: rental?.name ?? hello.inventory.hostname,
+    name: rental?.name ?? partition?.label ?? hello.inventory.hostname,
     labels: {},
     status: "active",
     identity: {
@@ -223,9 +246,12 @@ const registerJoinedAgent = async (
       fingerprint,
     },
     installMethod: "ssh",
-    provider: rental
-      ? { kind: "rented", host: rental.host, subscription: rental.subscription }
-      : { kind: "byo" },
+    provider: {
+      kind,
+      ...(host ? { host, meshPort } : {}),
+      ...(partition ? { partition: partition.name } : {}),
+      ...(rental ? { subscription: rental.subscription } : {}),
+    },
     inventory: hello.inventory,
     acceptedBy: session.createdBy,
     acceptedAt: now,
@@ -241,13 +267,39 @@ const registerJoinedAgent = async (
       $set: { server: insertedId, updatedAt: now },
     });
   }
-  await prepareHost(insertedId, tenant, session.createdBy);
+  if (host) {
+    // Peers reach its private network through its machine's forwarded port.
+    const machine = await serverModel.findOne({ _id: host }, {
+      projection: { "inventory.publicIp": 1, "inventory.privateIp": 1 },
+    });
+    const ip = machine?.inventory?.publicIp || machine?.inventory?.privateIp;
+    if (ip) {
+      await serverModel.updateOne({ _id: insertedId }, {
+        $set: { "mesh.endpoint": `${ip}:${meshPort}` },
+      });
+    }
+    await prepareHost(insertedId, tenant, session.createdBy);
+    await refreshSpecs([host]);
+  } else {
+    await setUpMachine(insertedId, session.createdBy);
+  }
 
   return {
     server: insertedId.toString(),
     status: "active",
     ...await helloConfig(),
   };
+};
+
+/** The next UDP port a machine forwards to a partition's private network. */
+const nextMeshPort = async (host: ObjectId) => {
+  const [last] = await serverModel.find({ "provider.host": host }, {
+    projection: { "provider.meshPort": 1 },
+    sort: { "provider.meshPort": -1 },
+    limit: 1,
+  }).toArray();
+  // ponytail: two partitions registering at once could pick the same port; a unique index on (host, meshPort) if that happens.
+  return Math.max(MESH_PORT, last?.provider?.meshPort ?? MESH_PORT) + 1;
 };
 
 /** Gate for every way of adding a server (PLAN §20.3 safety limits). */
@@ -339,10 +391,6 @@ export const acceptServer = async (opts: {
     throw Response.badRequest("The pairing code does not match");
   }
 
-  if (!await acquireServerSlot(opts.tenant)) {
-    throw Response.forbidden("Your plan's server limit is reached");
-  }
-
   const now = new Date();
   const { modifiedCount } = await serverModel.updateOne(
     { _id: opts.server, status: "pending", pairingCode: server.pairingCode },
@@ -353,12 +401,11 @@ export const acceptServer = async (opts: {
   );
 
   if (!modifiedCount) {
-    await quotaGuard.release(opts.tenant, "servers");
     throw Response.badRequest("The server was accepted or removed meanwhile");
   }
 
   await openLease(opts.server, opts.tenant);
-  await prepareHost(opts.server, opts.tenant, opts.user._id);
+  await setUpMachine(opts.server, opts.user._id);
 
   // Earlier registrations of this machine (installed again since) can never
   // be accepted: their agents are gone. Reject them so they stop showing.
@@ -398,12 +445,17 @@ export const releaseServer = async (
 ) => {
   const doc = await serverModel.findOne(
     { _id: server, tenant },
-    { projection: { status: 1, "provider.kind": 1 }, session },
+    {
+      projection: { status: 1, "provider.kind": 1, "pool.status": 1 },
+      session,
+    },
   );
   if (doc?.status !== "active") return;
 
-  // A rented server never took a quota slot (PLAN §26.6 D).
-  if (doc.provider?.kind !== "rented") {
+  // Partitions take a slot; machines and rentals don't (PLAN §26.6 D, §27.2).
+  // A server from before partitions (`byo` without host setup) took one.
+  const kind = doc.provider?.kind;
+  if (kind === "partition" || (kind === "byo" && !doc.pool)) {
     await quotaGuard.release(tenant, "servers", session);
   }
   await serverLeaseModel.deleteOne({ _id: server }, { session });

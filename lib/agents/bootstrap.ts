@@ -116,6 +116,7 @@ export const createJoinToken = async (opts: {
   host: string;
   port: number;
   username: string;
+  partition?: { host: ObjectId; name: string; label?: string };
   rental?: { host: ObjectId; subscription: ObjectId; name: string };
 }) => {
   const token = encodeBase64Url(crypto.getRandomValues(new Uint8Array(32)));

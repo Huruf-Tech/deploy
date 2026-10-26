@@ -15,6 +15,7 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/dockerhost"
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/protocol"
@@ -61,38 +62,49 @@ func (Sysbox) Setup(ctx context.Context, p protocol.PoolEnsurePayload) (protocol
 	notes := []string{}
 	result := map[string]any{"notes": &notes}
 	none := protocol.PartitionSize{}
+	pool := p.Mode == "pool"
 
-	if _, err := run(ctx, "apt-get", "install", "-y", "-qq", "fuse3", "xfsprogs", "nftables", "kmod"); err != nil {
-		if _, err2 := run(ctx, "sh", "-c", "apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq fuse3 xfsprogs nftables kmod"); err2 != nil {
+	packages := "fuse3 xfsprogs nftables kmod conntrack"
+	if _, err := run(ctx, "sh", "-c", "DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "+packages); err != nil {
+		if _, err2 := run(ctx, "sh", "-c", "apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "+packages); err2 != nil {
 			return none, result, err2
 		}
+	}
+	if err := ensureDocker(ctx, &notes); err != nil {
+		return none, result, err
 	}
 	if err := ensureSysbox(ctx, &notes); err != nil {
 		return none, result, err
 	}
-	if err := ensureVolume(ctx, p.Volume, &notes); err != nil {
+	// Partitions' private network runs WireGuard, which needs the module here.
+	_, _ = run(ctx, "modprobe", "wireguard")
+	if err := ensureVolume(ctx, p.Volume, pool, &notes); err != nil {
 		return none, result, err
 	}
-	if err := ensureEngine(ctx, &notes); err != nil {
-		return none, result, err
+	if pool {
+		if err := ensureEngine(ctx, &notes); err != nil {
+			return none, result, err
+		}
 	}
-	// The usual host setup (edge proxy, project network), now on the pool layout.
-	host, err := dockerhost.Ensure(ctx, dockerhost.Payload{
-		LogMaxSize: p.Docker.LogMaxSize,
-		LogMaxFile: int(p.Docker.LogMaxFile),
-		EdgeImage:  p.Docker.EdgeImage,
-		Network:    p.Docker.Network,
-		Subnet:     p.Docker.Subnet,
-		MeshCidr:   p.Docker.MeshCidr,
-	})
-	result["host"] = host
-	if err != nil {
-		return none, result, err
+	if pool && p.Docker != nil {
+		// The usual host setup (edge proxy, project network), now on the pool layout.
+		host, err := dockerhost.Ensure(ctx, dockerhost.Payload{
+			LogMaxSize: p.Docker.LogMaxSize,
+			LogMaxFile: int(p.Docker.LogMaxFile),
+			EdgeImage:  p.Docker.EdgeImage,
+			Network:    p.Docker.Network,
+			Subnet:     p.Docker.Subnet,
+			MeshCidr:   p.Docker.MeshCidr,
+		})
+		result["host"] = host
+		if err != nil {
+			return none, result, err
+		}
 	}
 	if err := buildImage(ctx); err != nil {
 		return none, result, err
 	}
-	if err := applyRules(ctx, p.AllowIps); err != nil {
+	if err := applyRules(ctx, pool, p.AllowIps); err != nil {
 		return none, result, err
 	}
 	existing, _ := run(ctx, "docker", "ps", "-a", "--filter", "label=huruf.partition", "--format", `{{.Label "huruf.partition"}}`)
@@ -134,42 +146,165 @@ func memTotalMb() int64 {
 	return 0
 }
 
-// ensureSysbox installs Sysbox CE's latest release once and starts it.
+// ensureDocker installs Docker when the machine has none.
+func ensureDocker(ctx context.Context, notes *[]string) error {
+	if _, err := exec.LookPath("docker"); err == nil {
+		return nil
+	}
+	install, cancel := context.WithTimeout(ctx, 15*time.Minute)
+	defer cancel()
+	if _, err := run(install, "sh", "-c", "curl -fsSL https://get.docker.com | sh"); err != nil {
+		return fmt.Errorf("installing Docker: %w", err)
+	}
+	*notes = append(*notes, "Docker installed")
+	return nil
+}
+
+// ensureSysbox installs Sysbox CE's latest release once and starts it,
+// without restarting Docker: other tools' containers may run there.
+// Sysbox's installer restarts Docker for `bip` and `default-address-pools`
+// unless daemon.json has them, so they're written first with the values
+// Docker uses already, which changes nothing. Then it only reloads Docker.
 func ensureSysbox(ctx context.Context, notes *[]string) error {
 	if _, err := exec.LookPath("sysbox-runc"); err != nil {
+		if err := pinNetworkDefaults(ctx); err != nil {
+			return err
+		}
 		script := `set -e
 V=$(curl -fsSL https://api.github.com/repos/nestybox/sysbox/releases/latest | sed -n 's/.*"tag_name": *"\(v[^"]*\)".*/\1/p')
 A=$(dpkg --print-architecture)
 curl -fsSL -o /tmp/sysbox.deb "https://downloads.nestybox.com/sysbox/releases/$V/sysbox-ce_${V#v}-0.linux_$A.deb"
-DEBIAN_FRONTEND=noninteractive apt-get install -y -qq /tmp/sysbox.deb || true
+DEBIAN_FRONTEND=noninteractive apt-get install -y -qq /tmp/sysbox.deb
 rm -f /tmp/sysbox.deb`
 		if _, err := run(ctx, "sh", "-c", script); err != nil {
 			return fmt.Errorf("installing Sysbox: %w", err)
 		}
 		*notes = append(*notes, "Sysbox installed")
 	}
+	// Its installer registers the runtime and reloads Docker; make sure.
+	if out, _ := run(ctx, "docker", "info", "--format", "{{json .Runtimes}}"); !strings.Contains(out, "sysbox-runc") {
+		if err := addRuntime(); err != nil {
+			return err
+		}
+		if _, err := run(ctx, "systemctl", "reload", "docker"); err != nil {
+			return err
+		}
+	}
 	_, _ = run(ctx, "systemctl", "reset-failed", "sysbox", "sysbox-mgr", "sysbox-fs")
 	if _, err := run(ctx, "systemctl", "enable", "--now", "sysbox"); err != nil {
 		return err
+	}
+	// sysbox-mgr takes a few seconds to come up.
+	for range 30 {
+		if _, err := run(ctx, "systemctl", "is-active", "sysbox-mgr", "sysbox-fs"); err == nil {
+			return nil
+		}
+		time.Sleep(2 * time.Second)
 	}
 	_, err := run(ctx, "systemctl", "is-active", "sysbox-mgr", "sysbox-fs")
 	return err
 }
 
+const daemonJSON = "/etc/docker/daemon.json"
+
+// readDaemonConfig reads daemon.json; missing or empty is {}.
+func readDaemonConfig() (map[string]any, error) {
+	config := map[string]any{}
+	raw, err := os.ReadFile(daemonJSON)
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return nil, err
+	}
+	if len(bytes.TrimSpace(raw)) > 0 {
+		if err := json.Unmarshal(raw, &config); err != nil {
+			return nil, fmt.Errorf("%s is not valid JSON: %w", daemonJSON, err)
+		}
+	}
+	return config, nil
+}
+
+// writeDaemonConfig writes daemon.json indented: Sysbox's installer only
+// recognises keys on their own indented lines.
+func writeDaemonConfig(config map[string]any) error {
+	if err := os.MkdirAll("/etc/docker", 0o755); err != nil {
+		return err
+	}
+	out, _ := json.MarshalIndent(config, "", "  ")
+	return os.WriteFile(daemonJSON, append(out, '\n'), 0o644)
+}
+
+// pinNetworkDefaults writes `bip` (docker0's address now) and Docker's
+// built-in address pools when daemon.json doesn't set them.
+func pinNetworkDefaults(ctx context.Context) error {
+	config, err := readDaemonConfig()
+	if err != nil {
+		return err
+	}
+	_, hasBip := config["bip"]
+	_, hasPools := config["default-address-pools"]
+	if hasBip && hasPools {
+		return nil
+	}
+	if !hasBip {
+		bip := "172.17.0.1/16"
+		if f := strings.Fields(must(run(ctx, "ip", "-4", "-o", "addr", "show", "docker0"))); len(f) > 3 {
+			bip = f[3]
+		}
+		config["bip"] = bip
+	}
+	if !hasPools {
+		pools := []map[string]any{}
+		for n := 17; n <= 31; n++ {
+			pools = append(pools, map[string]any{"base": fmt.Sprintf("172.%d.0.0/16", n), "size": 16})
+		}
+		config["default-address-pools"] = append(pools, map[string]any{"base": "192.168.0.0/16", "size": 20})
+	}
+	return writeDaemonConfig(config)
+}
+
+func must(out string, _ error) string { return out }
+
+// addRuntime registers sysbox-runc in daemon.json.
+func addRuntime() error {
+	config, err := readDaemonConfig()
+	if err != nil {
+		return err
+	}
+	runtimes, _ := config["runtimes"].(map[string]any)
+	if runtimes == nil {
+		runtimes = map[string]any{}
+	}
+	runtimes["sysbox-runc"] = map[string]any{"path": "/usr/bin/sysbox-runc"}
+	config["runtimes"] = runtimes
+	return writeDaemonConfig(config)
+}
+
 // ensureVolume mounts the XFS volume with project quotas: a device (formatted
 // only when it has no filesystem) or a loop file.
-func ensureVolume(ctx context.Context, v protocol.PoolEnsurePayloadVolume, notes *[]string) error {
+func ensureVolume(ctx context.Context, v protocol.PoolEnsurePayloadVolume, pool bool, notes *[]string) error {
 	if _, err := run(ctx, "mountpoint", "-q", Root); err == nil {
 		return checkQuota(ctx)
 	}
 	source, options := v.Device, "defaults,prjquota"
 	if source == "" {
-		if v.LoopSizeGb == nil {
+		size := int64(0)
+		switch {
+		case v.LoopSizeGb != nil:
+			size = *v.LoopSizeGb
+		case pool:
 			return errors.New("give a device or loopSizeGb for the pool volume")
+		default:
+			// Sparse: it takes only what partitions write, up to today's free space.
+			var st syscall.Statfs_t
+			if err := syscall.Statfs(filepath.Dir(loopFile), &st); err != nil {
+				return err
+			}
+			if size = int64(st.Bavail) * st.Bsize >> 30; size < 10 {
+				return fmt.Errorf("only %d GB free on %s: partitions need at least 10", size, filepath.Dir(loopFile))
+			}
 		}
 		source, options = loopFile, "loop,prjquota"
 		if _, err := os.Stat(loopFile); errors.Is(err, os.ErrNotExist) {
-			if _, err := run(ctx, "truncate", "-s", fmt.Sprintf("%dG", *v.LoopSizeGb), loopFile); err != nil {
+			if _, err := run(ctx, "truncate", "-s", fmt.Sprintf("%dG", size), loopFile); err != nil {
 				return err
 			}
 		}
@@ -252,7 +387,10 @@ func ensureEngine(ctx context.Context, notes *[]string) error {
 
 	names, _ := run(ctx, "docker", "ps", "-a", "--format", "{{.Names}}")
 	for _, n := range strings.Fields(names) {
-		if !strings.HasPrefix(n, "huruf-") && !strings.HasPrefix(n, "partition-") {
+		if strings.HasPrefix(n, "partition-") {
+			return fmt.Errorf("partition %s runs on this machine: remove its partitions before making it a pool machine", strings.TrimPrefix(n, "partition-"))
+		}
+		if !strings.HasPrefix(n, "huruf-") {
 			return fmt.Errorf("container %s runs on this machine: a pool machine must start empty", n)
 		}
 	}
@@ -297,11 +435,17 @@ func memArgs(memMb int64) []string {
 	return []string{"--memory", fmt.Sprintf("%dm", memMb), "--memory-swap", fmt.Sprintf("%dm", memMb)}
 }
 
-// dataGb is what the quota allows: the size minus the partition's system files.
-func dataGb(size protocol.PartitionSize) int64 { return max(1, size.DiskGb-rootGb) }
+// dataGb is what the quota allows: on a pool machine the size minus the
+// partition's system files (capped separately); on a machine all of it.
+func dataGb(ctx context.Context, size protocol.PartitionSize) int64 {
+	if dockerOnVolume(ctx) {
+		return max(1, size.DiskGb-rootGb)
+	}
+	return size.DiskGb
+}
 
 func setQuota(ctx context.Context, name string, size protocol.PartitionSize) error {
-	_, err := run(ctx, "xfs_quota", "-x", "-c", fmt.Sprintf("limit -p bhard=%dg %s", dataGb(size), projectID(name)), Root)
+	_, err := run(ctx, "xfs_quota", "-x", "-c", fmt.Sprintf("limit -p bhard=%dg %s", dataGb(ctx, size), projectID(name)), Root)
 	return err
 }
 
@@ -337,12 +481,16 @@ func runPartition(ctx context.Context, name string, size protocol.PartitionSize,
 		}
 	}
 	args := []string{"run", "-d", "--runtime=sysbox-runc", "--name", container(name), "--hostname", name,
-		"--network", bridge(name), "--restart", "unless-stopped",
-		"--storage-opt", fmt.Sprintf("size=%dG", rootGb), "--pids-limit", "8192",
+		"--network", bridge(name), "--restart", "unless-stopped", "--pids-limit", "8192",
 		"-v", filepath.Join(d, "docker") + ":/var/lib/docker",
 		"-v", filepath.Join(d, "containerd") + ":/var/lib/containerd",
 		"-v", filepath.Join(d, "agent") + ":/var/lib/huruf-deploy-agent",
 		"--label", "huruf.partition=" + name}
+	// A pool machine's Docker is on the XFS volume, so system files get a cap;
+	// a machine's Docker stays where it was (PLAN §27.3) and can't cap them.
+	if dockerOnVolume(ctx) {
+		args = append(args, "--storage-opt", fmt.Sprintf("size=%dG", rootGb))
+	}
 	args = append(args, cpuArgs(size.Cpus, weight)...)
 	args = append(args, memArgs(size.MemMb)...)
 	if _, err := run(ctx, "docker", append(args, img)...); err != nil {

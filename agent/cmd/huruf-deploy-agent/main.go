@@ -17,7 +17,6 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
-	"strings"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -31,7 +30,6 @@ import (
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/edge"
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/host"
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/identity"
-	"github.com/Huruf-Tech/huruf-deploy/agent/internal/ledger"
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/mesh"
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/metrics"
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/monitor"
@@ -71,7 +69,6 @@ func main() {
 		fmt.Println(version)
 		return
 	}
-	ledger.Path = filepath.Join(*stateDir, "ledger.jsonl")
 	// Removed from the dashboard: wait for the scheduled uninstall to stop
 	// this service instead of polling (a poll would register it again).
 	if _, err := os.Stat(filepath.Join(*stateDir, uninstallingMarker)); err == nil {
@@ -169,6 +166,8 @@ func main() {
 		log.Warn("restoring partitions", "error", err)
 	}
 	a.Partitions = pools.Usage
+	// A machine's forwards into its partitions come with its desired state (PLAN §27.3).
+	a.Forwards = pools.ApplyForwards
 	a.Commands["pool.ensure"] = commands.Typed(pools.Ensure)
 	a.Commands["partition.create"] = commands.Sealed(id.Open, pools.Create)
 	a.Commands["partition.resize"] = commands.Typed(pools.Resize)
@@ -185,7 +184,7 @@ func main() {
 	// uninstall runs in its own unit, so stopping this service doesn't stop it.
 	a.Commands["host.cleanup"] = commands.Typed(func(ctx context.Context, p protocol.HostCleanupPayload) (map[string]any, error) {
 		steps := cleanup.Plan(ctx, cleanup.Options{
-			StateDir: *stateDir, Keep: p.Keep, Remove: p.Remove, PurgeData: p.PurgeData, Teardown: network.Teardown,
+			StateDir: *stateDir, RemoveSysbox: p.RemoveSysbox, Teardown: network.Teardown,
 		})
 		if p.DryRun {
 			return map[string]any{"steps": steps}, nil
@@ -197,14 +196,8 @@ func main() {
 		}
 		args := []string{"--unit", "huruf-deploy-uninstall", "--collect", "--on-active", "2",
 			cleanup.Binary, "uninstall", "-yes", "-state-dir", *stateDir}
-		if len(p.Keep) > 0 {
-			args = append(args, "-keep", strings.Join(p.Keep, ","))
-		}
-		if len(p.Remove) > 0 {
-			args = append(args, "-remove", strings.Join(p.Remove, ","))
-		}
-		if p.PurgeData {
-			args = append(args, "-purge-data")
+		if p.RemoveSysbox {
+			args = append(args, "-remove-sysbox")
 		}
 		if out, err := exec.CommandContext(ctx, "systemd-run", args...).CombinedOutput(); err != nil {
 			_ = os.Remove(filepath.Join(*stateDir, uninstallingMarker))

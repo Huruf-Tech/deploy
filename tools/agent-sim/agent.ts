@@ -130,6 +130,11 @@ export class SimAgent {
     },
   ) {}
 
+  /** Registers with this join token, e.g. as a partition (PLAN §27), not by pairing. */
+  joinWith(token: string) {
+    this.opts.joinToken = token;
+  }
+
   private boxKey?: CryptoKey;
 
   /** Opens a value the control plane sealed to this simulated agent. */

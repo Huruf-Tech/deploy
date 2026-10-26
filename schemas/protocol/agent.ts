@@ -157,10 +157,8 @@ export const $registryDeletePayload = z.object({
  */
 export const $hostCleanupPayload = z.object({
   dryRun: z.boolean(),
-  purgeData: z.boolean(),
-  /** Step ids to keep although planned, and to remove although kept. */
-  keep: z.array(z.string().max(40)).max(50).optional(),
-  remove: z.array(z.string().max(40)).max(50).optional(),
+  /** Sysbox too (PLAN §27.4); Docker and other packages are never removed. */
+  removeSysbox: z.boolean().default(false),
 });
 
 /** `agent.update`: replace the binary with a verified download, then restart. */
@@ -246,6 +244,12 @@ export const $dockerEnsurePayload = z.object({
  * For a fresh machine: it refuses when containers other than ours exist.
  */
 export const $poolEnsurePayload = z.object({
+  /**
+   * `machine`: any server (PLAN §27.3): Sysbox beside the Docker already
+   * there, partition data on a sparse XFS file. `pool`: a machine Huruf rents
+   * out (§26.5): Docker's data on the partition volume, isolation rules.
+   */
+  mode: z.enum(["machine", "pool"]).default("pool"),
   /** What the machine keeps for itself; the rest is allocatable. */
   reserve: z.object({
     cpus: z.number().min(0),
@@ -257,12 +261,12 @@ export const $poolEnsurePayload = z.object({
       "A block device for partition data; formatted XFS only when it has no filesystem",
     ),
     loopSizeGb: z.number().int().min(10).optional().describe(
-      "Without a device: a loop file this size (tests, small machines)",
+      "Without a device: a loop file this size; a machine's defaults to the free space (sparse)",
     ),
-  }),
+  }).default({}),
   /** Private addresses partitions may still reach (the control plane in the same VPC). */
   allowIps: z.array(z.string().max(64)).max(10).default([]),
-  docker: $dockerEnsurePayload,
+  docker: $dockerEnsurePayload.optional().describe("Pool machines' host setup"),
 });
 
 /**
@@ -484,6 +488,14 @@ export const $meshSpec = z.object({
 });
 
 /** Everything this server should run (PLAN §4.4). Precomputed and sealed when it changes. */
+/** A machine's port forwarded to one of its partitions (PLAN §27.3). */
+export const $portForward = z.object({
+  protocol: z.enum(["tcp", "udp"]),
+  port: z.number().int().min(1).max(65_535).describe("On the machine"),
+  partition: $partitionName,
+  to: z.number().int().min(1).max(65_535).describe("In the partition"),
+});
+
 export const $desiredSpec = z.object({
   version: z.number().int().min(1),
   network: z.string(),
@@ -498,6 +510,9 @@ export const $desiredSpec = z.object({
     "The private network (PLAN §8.2); absent means this server isn't in it",
   ),
   alerts: z.array($alertSpec).default([]),
+  forwards: z.array($portForward).max(1_000).default([]).describe(
+    "A machine's forwards into its partitions: public ports and each partition's mesh port",
+  ),
   registry: z.object({
     listen: z.string().describe("Mesh address and port, e.g. 10.209.0.1:5000"),
     username: z.string(),
@@ -718,4 +733,5 @@ export type TWorkload = z.output<typeof $workload>;
 export type TWorkloadRelease = z.output<typeof $workloadRelease>;
 export type TMeshSpec = z.output<typeof $meshSpec>;
 export type TAlertSpec = z.output<typeof $alertSpec>;
+export type TPortForward = z.output<typeof $portForward>;
 export type TCapacityReport = z.output<typeof $capacityReport>;

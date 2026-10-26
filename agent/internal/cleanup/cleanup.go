@@ -1,10 +1,10 @@
-// Package cleanup uninstalls the agent: what it created goes, what was on the
-// host before (or belongs to another tool, e.g. Dokploy) stays.
+// Package cleanup uninstalls the agent with one fixed rule (PLAN §27.4):
+// what is unambiguously ours goes, found by label and exact name; anything
+// another tool may use (Docker, WireGuard tools, daemon.json settings, base
+// images) stays. Sysbox goes only when asked.
 //
 // Docker objects are matched by the agent's labels and exact names, never by
 // a "huruf-" prefix: other tools' apps can be called huruf-tech-something.
-// Host changes come from the ledger (package ledger); a server set up before
-// the ledger existed gets conservative rules instead.
 package cleanup
 
 import (
@@ -18,7 +18,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/Huruf-Tech/huruf-deploy/agent/internal/ledger"
+	"github.com/Huruf-Tech/huruf-deploy/agent/internal/pool"
 )
 
 const (
@@ -27,12 +27,7 @@ const (
 	unitFile   = "/etc/systemd/system/huruf-deploy-agent.service"
 	configDir  = "/etc/huruf-deploy-agent"
 	secretsDir = "/run/huruf-deploy"
-	rcloneDir  = "/var/lib/docker-plugins/rclone"
 	daemonJSON = "/etc/docker/daemon.json"
-	swarmState = "/var/lib/docker/swarm/state.json"
-	// The private network's range (MESH_CIDR); servers set up before the
-	// ledger don't record it.
-	meshCIDR = "10.209.0.0/16"
 )
 
 // Volumes the agent creates by exact name: registry images and edge state.
@@ -42,42 +37,39 @@ var ownVolumes = []string{"huruf-registry-data", "huruf-edge-data", "huruf-edge-
 var projectVolume = regexp.MustCompile(`^huruf-[0-9a-f]{24}-`)
 
 type Step struct {
-	// Stable, for choosing: -keep / -remove and the dashboard's checkboxes.
 	ID   string `json:"id"`
 	Item string `json:"item"`
-	// Whether this run removes it: the plan's default, then the user's choice.
+	// Whether this run removes it.
 	Remove bool   `json:"remove"`
 	Reason string `json:"reason,omitempty"`
 	// Always removed (stopping the agent comes first, or it recreates things).
 	Required bool `json:"required,omitempty"`
-	// The user can flip it: it has an action and isn't required.
+	// The user can flip it: only Sysbox.
 	Choice bool `json:"choice"`
 	do     func(ctx context.Context) error
 }
 
 type Options struct {
 	StateDir string
-	// Ids to keep although planned, and to remove although kept.
-	Keep, Remove []string
-	// Same as Remove "data-volumes" (the -purge-data flag).
-	PurgeData bool
+	// Also remove Sysbox (the dashboard's one choice).
+	RemoveSysbox bool
 	// Teardown removes the private network (wg0, its rules, the key).
 	Teardown func(ctx context.Context) error
+	// RemovePartitions removes partitions and the host role's setup; tests
+	// replace it.
+	RemovePartitions func(ctx context.Context) (string, error)
 	// Run executes a command; tests replace it.
 	Run func(ctx context.Context, name string, args ...string) (string, error)
 }
 
-// Plan inspects the host and lists every step in run order, with the
-// user's choices applied.
+// Plan inspects the host and lists every step in run order.
 func Plan(ctx context.Context, o Options) []Step {
 	if o.Run == nil {
 		o.Run = run
 	}
-	if o.PurgeData {
-		o.Remove = append(o.Remove, "data-volumes")
+	if o.RemovePartitions == nil {
+		o.RemovePartitions = pool.RemoveAll
 	}
-	entries := ledger.Read()
-	tracked := ledger.Has(entries, "installed", "")
 	var steps []Step
 	add := func(s Step) { steps = append(steps, s) }
 
@@ -87,37 +79,52 @@ func Plan(ctx context.Context, o Options) []Step {
 		return nil
 	}})
 
-	_, dockerErr := o.Run(ctx, "docker", "info", "--format", "{{.ServerVersion}}")
-	if dockerErr == nil {
-		purge := slices.Contains(o.Remove, "data-volumes") && !slices.Contains(o.Keep, "data-volumes")
-		steps = append(steps, dockerSteps(ctx, o, entries, purge)...)
-		if s, ok := daemonStep(o, entries, tracked); ok {
-			add(s)
+	if _, err := o.Run(ctx, "docker", "info", "--format", "{{.ServerVersion}}"); err == nil {
+		if names := lines(ctx, o, "ps", "-a", "--filter", "label=huruf.partition", "--format", `{{.Label "huruf.partition"}}`); len(names) > 0 {
+			add(Step{
+				ID:     "partitions",
+				Item:   fmt.Sprintf("%s with their projects and data: %s", plural(len(names), "partition"), strings.Join(names, ", ")),
+				Remove: true,
+				do: func(ctx context.Context) error {
+					_, err := o.RemovePartitions(ctx)
+					return err
+				},
+			})
+		} else {
+			add(Step{ID: "partitions", Item: "The partition volume, image and network rules", Remove: true, do: func(ctx context.Context) error {
+				_, err := o.RemovePartitions(ctx)
+				return err
+			}})
 		}
+		steps = append(steps, dockerSteps(ctx, o)...)
 	} else {
-		add(Step{ID: "docker-objects", Item: "Docker objects", Reason: "Docker is not running, so its containers and volumes can't be listed; start it and run again"})
+		add(Step{ID: "docker-objects", Item: "Docker objects", Reason: "Docker is not running, so its containers can't be listed; start it and run again"})
 	}
 
 	if o.Teardown != nil {
 		add(Step{ID: "private-network", Item: "The private network (wg0, its firewall rules and key)", Remove: true, do: o.Teardown})
 	}
 
-	removeWireGuard := func(ctx context.Context) error {
-		_, err := o.Run(ctx, "sh", "-c", "DEBIAN_FRONTEND=noninteractive apt-get remove -y wireguard-tools")
-		return err
+	if _, err := exec.LookPath("sysbox-runc"); err == nil {
+		add(Step{
+			ID:     "sysbox",
+			Item:   "Sysbox",
+			Remove: o.RemoveSysbox,
+			Reason: "other tools may use it: removed only if you choose",
+			do: func(ctx context.Context) error {
+				if _, err := o.Run(ctx, "sh", "-c", "DEBIAN_FRONTEND=noninteractive apt-get remove -y sysbox-ce"); err != nil {
+					return err
+				}
+				// Its package leaves the runtime in daemon.json (spike 17a).
+				if changed, err := dropRuntime(); err != nil || !changed {
+					return err
+				}
+				_, err := o.Run(ctx, "systemctl", "reload", "docker")
+				return err
+			},
+		})
 	}
-	if ledger.Has(entries, "package", "wireguard-tools") {
-		add(Step{ID: "wireguard-tools", Item: "Package wireguard-tools (installed by the agent)", Remove: true, do: removeWireGuard})
-	} else if _, err := exec.LookPath("wg"); err == nil {
-		add(Step{ID: "wireguard-tools", Item: "Package wireguard-tools", Reason: reasonUntracked(tracked, "it was installed before the agent"), do: removeWireGuard})
-	}
-
-	// Never offered: other tools' containers (e.g. Dokploy) run on it.
-	if ledger.Has(entries, "docker", "") {
-		add(Step{ID: "docker", Item: "Docker", Reason: "installed by the agent, but other tools may use it: remove it yourself (apt-get purge docker-ce docker-ce-cli containerd.io) if nothing does"})
-	} else {
-		add(Step{ID: "docker", Item: "Docker", Reason: "it was there before the agent"})
-	}
+	add(Step{ID: "docker", Item: "Docker, WireGuard tools and Docker's settings", Reason: "other tools may use them"})
 
 	for _, f := range []struct{ id, item, path string }{
 		{"secrets", "Secrets in memory (" + secretsDir + ")", secretsDir},
@@ -143,33 +150,24 @@ func Plan(ctx context.Context, o Options) []Step {
 	}
 
 	for i := range steps {
-		s := &steps[i]
-		s.Choice = s.do != nil && !s.Required
-		switch {
-		case s.Required:
-			s.Remove = true
-		case !s.Choice:
-			s.Remove = false
-		case slices.Contains(o.Keep, s.ID):
-			s.Remove = false
-		case slices.Contains(o.Remove, s.ID):
-			s.Remove = true
-		}
+		steps[i].Choice = steps[i].ID == "sysbox"
 	}
 	return steps
 }
 
-func dockerSteps(ctx context.Context, o Options, entries []ledger.Entry, purge bool) []Step {
-	var steps []Step
-	lines := func(args ...string) []string {
-		out, err := o.Run(ctx, "docker", args...)
-		if err != nil {
-			return nil
-		}
-		return strings.Fields(out)
+func lines(ctx context.Context, o Options, args ...string) []string {
+	out, err := o.Run(ctx, "docker", args...)
+	if err != nil {
+		return nil
 	}
+	return strings.Fields(out)
+}
 
-	if names := lines("ps", "-a", "--filter", "label=deploy.huruf.managed=true", "--format", "{{.Names}}"); len(names) > 0 {
+// dockerSteps: what a server ran before partitions (projects on the host,
+// the edge proxy), all ours by label or exact name.
+func dockerSteps(ctx context.Context, o Options) []Step {
+	var steps []Step
+	if names := lines(ctx, o, "ps", "-a", "--filter", "label=deploy.huruf.managed=true", "--format", "{{.Names}}"); len(names) > 0 {
 		steps = append(steps, Step{
 			ID:     "containers",
 			Item:   fmt.Sprintf("%d containers: %s", len(names), strings.Join(names, ", ")),
@@ -181,40 +179,26 @@ func dockerSteps(ctx context.Context, o Options, entries []ledger.Entry, purge b
 		})
 	}
 
-	var own, data []string
-	rcloneLeft := false
-	out, _ := o.Run(ctx, "docker", "volume", "ls", "--format", "{{.Name}} {{.Driver}}")
-	for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
-		name, driver, _ := strings.Cut(line, " ")
-		switch {
-		case slices.Contains(ownVolumes, name):
-			own = append(own, name)
-		case projectVolume.MatchString(name):
-			data = append(data, name)
-			if driver == "rclone" && !purge {
-				rcloneLeft = true
-			}
+	var volumes []string
+	out, _ := o.Run(ctx, "docker", "volume", "ls", "--format", "{{.Name}}")
+	for _, name := range strings.Fields(out) {
+		if slices.Contains(ownVolumes, name) || projectVolume.MatchString(name) {
+			volumes = append(volumes, name)
 		}
 	}
-	rmVolumes := func(names []string) func(context.Context) error {
-		return func(ctx context.Context) error {
-			_, err := o.Run(ctx, "docker", append([]string{"volume", "rm", "-f"}, names...)...)
-			return err
-		}
-	}
-	if len(own) > 0 {
-		steps = append(steps, Step{ID: "registry-edge-volumes", Item: "Registry images and edge proxy state: " + strings.Join(own, ", "), Remove: true, do: rmVolumes(own)})
-	}
-	if len(data) > 0 {
+	if len(volumes) > 0 {
 		steps = append(steps, Step{
-			ID:     "data-volumes",
-			Item:   fmt.Sprintf("%d project data volumes: %s", len(data), strings.Join(data, ", ")),
-			Reason: "project data: kept unless you choose to delete it",
-			do:     rmVolumes(data),
+			ID:     "volumes",
+			Item:   fmt.Sprintf("%d volumes (project data, registry, edge proxy): %s", len(volumes), strings.Join(volumes, ", ")),
+			Remove: true,
+			do: func(ctx context.Context) error {
+				_, err := o.Run(ctx, "docker", append([]string{"volume", "rm", "-f"}, volumes...)...)
+				return err
+			},
 		})
 	}
 
-	if ids := unique(lines("images", "-q", "--filter", "label=deploy.huruf.project")); len(ids) > 0 {
+	if ids := unique(lines(ctx, o, "images", "-q", "--filter", "label=deploy.huruf.project")); len(ids) > 0 {
 		steps = append(steps, Step{
 			ID:     "project-images",
 			Item:   fmt.Sprintf("%d images built for projects", len(ids)),
@@ -225,7 +209,7 @@ func dockerSteps(ctx context.Context, o Options, entries []ledger.Entry, purge b
 			},
 		})
 	}
-	if ids := lines("network", "ls", "-q", "--filter", "label=deploy.huruf.managed=true"); len(ids) > 0 {
+	if ids := lines(ctx, o, "network", "ls", "-q", "--filter", "label=deploy.huruf.managed=true"); len(ids) > 0 {
 		steps = append(steps, Step{
 			ID:     "network",
 			Item:   "The project network (huruf-internal)",
@@ -236,126 +220,37 @@ func dockerSteps(ctx context.Context, o Options, entries []ledger.Entry, purge b
 			},
 		})
 	}
-
-	if _, err := o.Run(ctx, "docker", "plugin", "inspect", "rclone"); err == nil {
-		s := Step{ID: "rclone-plugin", Item: "The rclone volume plugin and its config", do: func(ctx context.Context) error {
-			_, _ = o.Run(ctx, "docker", "plugin", "disable", "-f", "rclone")
-			if _, err := o.Run(ctx, "docker", "plugin", "rm", "-f", "rclone"); err != nil {
-				return err
-			}
-			return os.RemoveAll(rcloneDir)
-		}}
-		switch {
-		case !ledger.Has(entries, "plugin", "rclone"):
-			s.Reason = "not recorded as the agent's"
-		case rcloneLeft:
-			s.Reason = "kept S3 volumes need it"
-		default:
-			s.Remove = true
-		}
-		steps = append(steps, s)
-	}
-
-	steps = append(steps, Step{
-		ID:     "base-images",
-		Item:   "Base images (caddy, registry, frpc) and the build cache",
-		Reason: "shared with other tools: removing clears every unused caddy/registry/frpc image and all build cache",
-		do: func(ctx context.Context) error {
-			// rmi without -f: an image a container still uses stays.
-			for _, id := range unique(lines("images", "-q", "--filter", "reference=caddy", "--filter", "reference=registry", "--filter", "reference=fatedier/frpc")) {
-				_, _ = o.Run(ctx, "docker", "rmi", id)
-			}
-			_, err := o.Run(ctx, "docker", "builder", "prune", "-af")
-			return err
-		},
-	})
 	return steps
 }
 
-// daemonStep restores daemon.json keys the agent set, then reloads Docker
-// (a reload, so no container stops).
-func daemonStep(o Options, entries []ledger.Entry, tracked bool) (Step, bool) {
+// dropRuntime removes sysbox-runc from daemon.json's runtimes.
+func dropRuntime() (bool, error) {
 	raw, err := os.ReadFile(daemonJSON)
-	if err != nil {
-		return Step{}, false
+	if errors.Is(err, os.ErrNotExist) {
+		return false, nil
+	} else if err != nil {
+		return false, err
 	}
-	restored, changes, err := RestoreDaemonConfig(raw, entries, tracked, exists(swarmState))
-	if err != nil || len(changes) == 0 {
-		return Step{}, false
-	}
-	return Step{
-		ID:     "daemon-json",
-		Item:   daemonJSON + ": " + strings.Join(changes, "; "),
-		Remove: true,
-		do: func(ctx context.Context) error {
-			if err := os.WriteFile(daemonJSON, restored, 0o644); err != nil {
-				return err
-			}
-			_, err := o.Run(ctx, "systemctl", "reload", "docker")
-			return err
-		},
-	}, true
-}
-
-// RestoreDaemonConfig undoes the agent's daemon.json changes. Untracked
-// servers lose only live-restore and the private network's registry range;
-// log settings stay, since they may have been there before.
-func RestoreDaemonConfig(raw []byte, entries []ledger.Entry, tracked, swarm bool) ([]byte, []string, error) {
 	config := map[string]json.RawMessage{}
 	if err := json.Unmarshal(raw, &config); err != nil {
-		return nil, nil, err
+		return false, err
 	}
-	var changes []string
-	recorded := map[string]bool{}
-	for _, e := range entries {
-		if e.Kind != "daemon-key" {
-			continue
-		}
-		recorded[e.Name] = true
-		switch {
-		case e.Absent:
-			if _, ok := config[e.Name]; ok {
-				delete(config, e.Name)
-				changes = append(changes, "remove "+e.Name)
-			}
-		case e.Name == "live-restore" && swarm:
-			// Docker won't start in swarm mode with it.
-		default:
-			config[e.Name] = e.Prev
-			changes = append(changes, "restore "+e.Name)
-		}
+	runtimes := map[string]json.RawMessage{}
+	_ = json.Unmarshal(config["runtimes"], &runtimes)
+	if _, ok := runtimes["sysbox-runc"]; !ok {
+		return false, nil
 	}
-	if !tracked && !recorded["live-restore"] {
-		if _, ok := config["live-restore"]; ok {
-			delete(config, "live-restore")
-			changes = append(changes, "remove live-restore")
-		}
+	delete(runtimes, "sysbox-runc")
+	if len(runtimes) == 0 {
+		delete(config, "runtimes")
+	} else {
+		config["runtimes"], _ = json.Marshal(runtimes)
 	}
-
-	ranges := []string{}
-	for _, e := range entries {
-		if e.Kind == "insecure-registry" {
-			ranges = append(ranges, e.Name)
-		}
-	}
-	if !tracked {
-		ranges = append(ranges, meshCIDR)
-	}
-	var registries []string
-	if err := json.Unmarshal(config["insecure-registries"], &registries); err == nil {
-		kept := slices.DeleteFunc(slices.Clone(registries), func(r string) bool { return slices.Contains(ranges, r) })
-		if len(kept) != len(registries) {
-			changes = append(changes, "remove the private network's registry range")
-			if len(kept) == 0 {
-				delete(config, "insecure-registries")
-			} else {
-				config["insecure-registries"], _ = json.Marshal(kept)
-			}
-		}
-	}
-
 	out, err := json.MarshalIndent(config, "", "  ")
-	return append(out, '\n'), changes, err
+	if err != nil {
+		return false, err
+	}
+	return true, os.WriteFile(daemonJSON, append(out, '\n'), 0o644)
 }
 
 // Execute runs the removals in order; a failure doesn't stop the rest.
@@ -374,11 +269,11 @@ func Execute(ctx context.Context, steps []Step, report func(Step, error)) error 
 	return errors.Join(failed...)
 }
 
-func reasonUntracked(tracked bool, reason string) string {
-	if tracked {
-		return reason
+func plural(n int, noun string) string {
+	if n == 1 {
+		return "1 " + noun
 	}
-	return "may have been there before the agent (installed before the ledger existed)"
+	return fmt.Sprintf("%d %ss", n, noun)
 }
 
 func unique(list []string) []string {

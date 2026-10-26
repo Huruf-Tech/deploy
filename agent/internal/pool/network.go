@@ -21,15 +21,15 @@ const (
 	nftablesConf = "/etc/nftables.conf"
 )
 
-func applyRules(ctx context.Context, allowIps []string) error {
+// applyRules loads the table: traffic counters on every machine, and on a
+// pool machine (`isolate`) the rules that keep rented partitions apart. A
+// customer's own partitions reach their network, as projects on a server do.
+func applyRules(ctx context.Context, isolate bool, allowIps []string) error {
 	allow := ""
 	for _, ip := range allowIps {
 		allow += fmt.Sprintf("    iifname \"hp-*\" ip daddr %s accept\n", ip)
 	}
-	rules := `table inet ` + table + `
-delete table inet ` + table + `
-table inet ` + table + ` {
-  chain forward {
+	isolation := `  chain forward {
     type filter hook forward priority -10; policy accept;
 ` + allow + `    # Partitions never reach each other, the cloud's metadata endpoint (the
     # machine's credentials), mail ports, or the machine's private network.
@@ -44,7 +44,14 @@ table inet ` + table + ` {
     iifname "hp-*" ct state established,related accept
     iifname "hp-*" drop
   }
-  chain count {
+`
+	if !isolate {
+		isolation = ""
+	}
+	rules := `table inet ` + table + `
+delete table inet ` + table + `
+table inet ` + table + ` {
+` + isolation + `  chain count {
     type filter hook forward priority -20; policy accept;
   }
 }

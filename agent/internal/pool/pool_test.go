@@ -17,6 +17,7 @@ type fake struct {
 	scripts []string
 
 	sendErr, receiveErr error
+	forwards, added     []protocol.PortForward
 }
 
 func newFake() *fake {
@@ -51,6 +52,10 @@ func (f *fake) Usage(_ context.Context, name string) (Usage, error) {
 }
 func (f *fake) Restore(context.Context, []string) error            { return nil }
 func (f *fake) Send(context.Context, string, string, string) error { return f.sendErr }
+func (f *fake) Forward(_ context.Context, forwards, added []protocol.PortForward) error {
+	f.forwards, f.added = forwards, added
+	return nil
+}
 func (f *fake) Receive(_ context.Context, name string, size protocol.PartitionSize, weight int, _, _ string) error {
 	if f.receiveErr != nil {
 		return f.receiveErr
@@ -235,5 +240,35 @@ func TestReceiveCarvesAndGivesBack(t *testing.T) {
 	big := protocol.PartitionSize{Cpus: 1, MemMb: 8000, DiskGb: 10}
 	if _, err := m.Receive(ctx, protocol.PartitionReceivePayload{Name: "ptoobig", Size: big}); err == nil {
 		t.Error("a partition that doesn't fit should be refused")
+	}
+}
+
+// Forwards are kept and only new ones count as added (their stale connection
+// tracking is cleared); agents that aren't machines ignore them.
+func TestForwardsAppliedOnMachinesOnly(t *testing.T) {
+	ctx := context.Background()
+	idle := &Manager{Driver: newFake(), Path: filepath.Join(t.TempDir(), "pool.json")}
+	if err := idle.ApplyForwards(ctx, []protocol.PortForward{{Protocol: "tcp", Port: 8080, Partition: "p1", To: 8080}}); err != nil {
+		t.Fatal(err)
+	}
+	if idle.Driver.(*fake).forwards != nil {
+		t.Error("a partition's agent shouldn't forward")
+	}
+
+	m, f := setup(t)
+	web := protocol.PortForward{Protocol: "tcp", Port: 8080, Partition: "huruf", To: 8080}
+	mesh := protocol.PortForward{Protocol: "udp", Port: 51821, Partition: "huruf", To: 51820}
+	if err := m.ApplyForwards(ctx, []protocol.PortForward{mesh}); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.ApplyForwards(ctx, []protocol.PortForward{mesh, web}); err != nil {
+		t.Fatal(err)
+	}
+	if len(f.forwards) != 2 || len(f.added) != 1 || f.added[0] != web {
+		t.Fatalf("forwards %v added %v", f.forwards, f.added)
+	}
+	f.forwards = nil
+	if err := m.ApplyForwards(ctx, []protocol.PortForward{mesh, web}); err != nil || f.forwards != nil {
+		t.Fatalf("unchanged forwards re-applied: %v", err)
 	}
 }

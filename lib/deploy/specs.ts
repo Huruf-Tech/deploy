@@ -16,6 +16,7 @@ import {
   type TServiceSpec,
 } from "@/schemas/applications/deployment.ts";
 import { serverModel } from "@/schemas/infrastructure/server.ts";
+import { MESH_PORT } from "@/schemas/infrastructure/network.ts";
 import { storageModel } from "@/schemas/infrastructure/storage.ts";
 import { AGENT_METRICS, alertRuleModel } from "@/schemas/monitoring/alert.ts";
 import { serverLeaseModel } from "@/schemas/infrastructure/serverLease.ts";
@@ -27,6 +28,7 @@ import { serverWakeups } from "@/lib/agents/wakeups.ts";
 import type {
   TAlertSpec,
   TDesiredSpec,
+  TPortForward,
   TWorkload,
   TWorkloadRelease,
 } from "@/schemas/protocol/agent.ts";
@@ -325,9 +327,49 @@ export async function computeSpec(
         ...new Set(workloads.map((w) => w.project)),
       ])
       : [],
+    forwards: serverDoc ? await forwardsFor(serverDoc._id) : [],
     ...(serverDoc ? await meshSpecFor(serverDoc) : {}),
     ...(serverDoc ? await ingressSpecFor(serverDoc) : {}),
   };
+}
+
+/**
+ * A machine's ports forwarded into its partitions (PLAN §27.3): each
+ * partition's private-network port, and the public ports of the projects on
+ * them. Empty for anything that isn't a machine.
+ */
+async function forwardsFor(machine: ObjectId): Promise<TPortForward[]> {
+  const partitions = await serverModel.find({
+    "provider.host": machine,
+    "provider.partition": { $exists: true },
+    status: "active",
+  }, { projection: { provider: 1 }, limit: 200 }).toArray();
+  if (!partitions.length) return [];
+  const projects = await projectModel.find({
+    servers: { $in: partitions.map((p) => p._id) },
+    publicPort: { $exists: true },
+  }, { projection: { servers: 1, publicPort: 1 }, limit: 2_000 }).toArray();
+  const forwards: TPortForward[] = [];
+  for (const p of partitions) {
+    const partition = p.provider.partition!;
+    if (p.provider.meshPort) {
+      forwards.push({
+        protocol: "udp",
+        port: p.provider.meshPort,
+        partition,
+        to: MESH_PORT,
+      });
+    }
+    for (const project of projects) {
+      if (project.servers.some((s) => s.equals(p._id))) {
+        const port = project.publicPort!;
+        forwards.push({ protocol: "tcp", port, partition, to: port });
+      }
+    }
+  }
+  return forwards.sort((a, b) =>
+    a.protocol.localeCompare(b.protocol) || a.port - b.port
+  );
 }
 
 /**
@@ -373,8 +415,16 @@ async function alertSpecsFor(
  */
 export async function refreshSpecs(servers: ObjectId[]) {
   const versions = new Map<string, number>();
+  // A partition's projects and private network change its machine's forwards.
+  const hosts = await serverModel.find({
+    _id: { $in: servers },
+    "provider.host": { $exists: true },
+  }, { projection: { "provider.host": 1 } }).toArray();
   const unique = [
-    ...new Map(servers.map((s) => [s.toHexString(), s])).values(),
+    ...new Map(
+      [...servers, ...hosts.map((h) => h.provider.host!)]
+        .map((s) => [s.toHexString(), s]),
+    ).values(),
   ];
 
   for (const server of unique) {

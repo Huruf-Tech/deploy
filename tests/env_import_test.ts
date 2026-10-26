@@ -2,8 +2,8 @@ import { assertEquals } from "@std/assert";
 import { ObjectId } from "mongodb";
 import handler from "@/serve.base.ts";
 import { mongodb } from "@/database.ts";
-import { acceptServer } from "@/lib/agents/servers.ts";
 import { createState, SimAgent } from "@/tools/agent-sim/agent.ts";
+import { joinAsPartition } from "./_partition.ts";
 import { testSession } from "./_session.ts";
 
 // Pasted or uploaded .env files: bulk import, and variables with a new project.
@@ -80,14 +80,8 @@ Deno.test({
           tenant,
           send: (req) => Promise.resolve(handler(req)),
         });
-        const { json } = await agent.hello();
+        const { json } = await joinAsPartition(agent, tenantId, user);
         server = json.server;
-        await acceptServer({
-          server: new ObjectId(server),
-          tenant: tenantId,
-          user: { _id: user, emailVerified: true },
-          pairingCode: json.pairingCode!,
-        });
         const created = await call("POST", "/projects/api", {
           name: "web",
           slug: "web",

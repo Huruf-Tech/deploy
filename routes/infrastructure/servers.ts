@@ -17,6 +17,12 @@ import {
   prepareHost,
 } from "@/lib/agents/commands.ts";
 import { $hostCleanupPayload } from "@/schemas/protocol/agent.ts";
+import {
+  createOwnPartition,
+  onServerDeleted,
+  removeOwnPartition,
+  resizeOwnPartition,
+} from "@/lib/pool/partitions.ts";
 import { subscriptionModel } from "@/schemas/billing/subscription.ts";
 import type { ObjectId } from "mongodb";
 import { latestAgent, requestAgentUpdate } from "@/lib/agents/updates.ts";
@@ -83,9 +89,79 @@ export default new Router("/api", function servers(router) {
       beforeDel: async ({ _id, session }, req) => {
         const tenant = (await withTenant(req)).tenant._id;
         await assertRemovable(_id, tenant);
+        await onServerDeleted(_id, tenant);
         await releaseServer(_id, tenant, session);
       },
     },
+  });
+
+  // A machine's partitions (PLAN §27.2): the part of it Huruf Deploy gets.
+  const $size = z.object({
+    cpus: z.number().min(0.5).max(512),
+    memMb: z.number().int().min(512),
+    diskGb: z.number().int().min(5),
+  });
+  const $partitionParams = z.object({
+    id: $objectId,
+    name: z.string().regex(/^p[0-9a-f]{11}$/),
+  });
+
+  router.post("/:id/partitions", function createPartition() {
+    const $body = z.object({
+      name: z.string().max(64).optional().describe("The server's name"),
+      size: $size,
+    });
+    const $return = z.object({ name: z.string() });
+
+    return {
+      shape: () => ({ params: $params, body: $body, return: $return }),
+      handler: async (req) => {
+        const { id } = $params.parse(paramsAsJson(req));
+        const body = $body.parse(await bodyAsJson(req));
+        const { tenant, user } = await withTenant(req);
+        return Response.json(
+          await createOwnPartition({
+            tenant: tenant._id,
+            machine: id,
+            user: user._id,
+            label: body.name,
+            size: body.size,
+          }),
+        );
+      },
+    };
+  });
+
+  router.patch("/:id/partitions/:name", function resizePartition() {
+    const $body = z.object({ size: $size });
+
+    return {
+      shape: () => ({ params: $partitionParams, body: $body }),
+      handler: async (req) => {
+        const { id, name } = $partitionParams.parse(paramsAsJson(req));
+        const { size } = $body.parse(await bodyAsJson(req));
+        const { tenant } = await withTenant(req);
+        await resizeOwnPartition({
+          tenant: tenant._id,
+          machine: id,
+          name,
+          size,
+        });
+        return Response.json({ ok: true });
+      },
+    };
+  });
+
+  router.del("/:id/partitions/:name", function removePartition() {
+    return {
+      shape: () => ({ params: $partitionParams }),
+      handler: async (req) => {
+        const { id, name } = $partitionParams.parse(paramsAsJson(req));
+        const { tenant } = await withTenant(req);
+        await removeOwnPartition({ tenant: tenant._id, machine: id, name });
+        return Response.json({ ok: true });
+      },
+    };
   });
 
   // The published agent per architecture, to tell which servers can update.

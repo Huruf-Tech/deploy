@@ -38,8 +38,10 @@ export type get$return = {
         pairingExpiresAt?: Date | undefined;
         installMethod: "manual" | "ssh";
         provider: {
-            kind: "byo" | "rented";
+            kind: "machine" | "partition" | "rented" | "byo";
             host?: string | undefined;
+            partition?: string | undefined;
+            meshPort?: number | undefined;
             subscription?: string | undefined;
         };
         inventory: {
@@ -111,6 +113,7 @@ export type get$return = {
         } | undefined;
         pool?: {
             status: "pending" | "ready" | "failed";
+            mode?: ("machine" | "pool") | undefined;
             allocatable?: {
                 cpus: number;
                 memMb: number;
@@ -142,6 +145,36 @@ export type update$body = {
 };
 export type del$params = {
     id: string;
+};
+export type createPartition$params = {
+    id?: string;
+};
+export type createPartition$body = {
+    /** The server's name */
+    name?: string | undefined;
+    size: {
+        cpus: number;
+        memMb: number;
+        diskGb: number;
+    };
+};
+export type createPartition$return = {
+    name: string;
+};
+export type resizePartition$params = {
+    id?: string;
+    name: string;
+};
+export type resizePartition$body = {
+    size: {
+        cpus: number;
+        memMb: number;
+        diskGb: number;
+    };
+};
+export type removePartition$params = {
+    id?: string;
+    name: string;
 };
 export type agentRelease$return = {
     /** arch -> SHA-256 */
@@ -180,9 +213,7 @@ export type cleanup$params = {
 };
 export type cleanup$body = {
     dryRun: boolean;
-    purgeData: boolean;
-    keep?: string[] | undefined;
-    remove?: string[] | undefined;
+    removeSysbox?: boolean;
 };
 export type cleanup$return = {
     command: string;
@@ -241,6 +272,12 @@ export const serversModule = (sdk: typeof BaseSDK) => {
         update$params: update$params,
         update$body: update$body,
         del$params: del$params,
+        createPartition$params: createPartition$params,
+        createPartition$body: createPartition$body,
+        createPartition$return: createPartition$return,
+        resizePartition$params: resizePartition$params,
+        resizePartition$body: resizePartition$body,
+        removePartition$params: removePartition$params,
         agentRelease$return: agentRelease$return,
         updateAgent$params: updateAgent$params,
         accept$params: accept$params,
@@ -359,6 +396,90 @@ export const serversModule = (sdk: typeof BaseSDK) => {
 
             const method = "delete";
             const toPath = compile("servers/api/:id");
+            const requestPayload = {
+                method,
+                url: toPath(sdk.resolvePathParams(data?.params)),
+                params: data?.query,
+                data: data?.body,
+                signal: data?.signal,
+                ...(data?.axiosConfig
+                ? sdk.resolveAxiosConfig(data.axiosConfig)
+                : undefined),
+            };
+
+            sdk.log("Sending Request:", requestPayload);
+
+            const res = await sdk._axios!.request(requestPayload);
+
+            return res;
+        }, data);
+    },
+        createPartition(data: {
+        params: createPartition$params,
+        query?: undefined,
+        body: createPartition$body,
+    } & TRequestOptions<createPartition$return>) {
+        return sdk.resolveAxiosResponse(async () => {
+            sdk.checkPermission("servers", "createPartition");
+
+            const method = "post";
+            const toPath = compile("servers/api/:id/partitions");
+            const requestPayload = {
+                method,
+                url: toPath(sdk.resolvePathParams(data?.params)),
+                params: data?.query,
+                data: data?.body,
+                signal: data?.signal,
+                ...(data?.axiosConfig
+                ? sdk.resolveAxiosConfig(data.axiosConfig)
+                : undefined),
+            };
+
+            sdk.log("Sending Request:", requestPayload);
+
+            const res = await sdk._axios!.request(requestPayload);
+
+            return res;
+        }, data);
+    },
+        resizePartition(data: {
+        params: resizePartition$params,
+        query?: undefined,
+        body: resizePartition$body,
+    } & TRequestOptions<unknown>) {
+        return sdk.resolveAxiosResponse(async () => {
+            sdk.checkPermission("servers", "resizePartition");
+
+            const method = "patch";
+            const toPath = compile("servers/api/:id/partitions/:name");
+            const requestPayload = {
+                method,
+                url: toPath(sdk.resolvePathParams(data?.params)),
+                params: data?.query,
+                data: data?.body,
+                signal: data?.signal,
+                ...(data?.axiosConfig
+                ? sdk.resolveAxiosConfig(data.axiosConfig)
+                : undefined),
+            };
+
+            sdk.log("Sending Request:", requestPayload);
+
+            const res = await sdk._axios!.request(requestPayload);
+
+            return res;
+        }, data);
+    },
+        removePartition(data: {
+        params: removePartition$params,
+        query?: undefined,
+        body?: undefined,
+    } & TRequestOptions<unknown>) {
+        return sdk.resolveAxiosResponse(async () => {
+            sdk.checkPermission("servers", "removePartition");
+
+            const method = "delete";
+            const toPath = compile("servers/api/:id/partitions/:name");
             const requestPayload = {
                 method,
                 url: toPath(sdk.resolvePathParams(data?.params)),
@@ -719,6 +840,9 @@ export const serversModule = (sdk: typeof BaseSDK) => {
     (methods.get as any).__scope = "servers";
     (methods.update as any).__scope = "servers";
     (methods.del as any).__scope = "servers";
+    (methods.createPartition as any).__scope = "servers";
+    (methods.resizePartition as any).__scope = "servers";
+    (methods.removePartition as any).__scope = "servers";
     (methods.agentRelease as any).__scope = "servers";
     (methods.updateAgent as any).__scope = "servers";
     (methods.accept as any).__scope = "servers";
@@ -734,7 +858,7 @@ export const serversModule = (sdk: typeof BaseSDK) => {
 
     sdk["_moduleGroup"].set(methods, "Infrastructure");
 
-    sdk["_moduleMetadata"].set(methods, {"crud":{"schema":{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","properties":{"name":{"type":"string","minLength":1,"maxLength":60,"canFilter":true},"labels":{"default":{},"description":"Free-form key/value tags, e.g. region=eu, builder=true","type":"object","propertyNames":{"type":"string","maxLength":40},"additionalProperties":{"type":"string","maxLength":80}},"tenant":{"tsType":"string","ref":"tenants"},"status":{"type":"string","enum":["pending","active","rejected"],"canFilter":true},"identity":{"type":"object","properties":{"signPublicKey":{"type":"string"},"boxPublicKey":{"type":"string"},"fingerprint":{"type":"string"}},"required":["signPublicKey","boxPublicKey","fingerprint"],"additionalProperties":false},"pairingCode":{"type":"string"},"pairingExpiresAt":{"type":"string","format":"date-time"},"installMethod":{"default":"manual","canFilter":true,"type":"string","enum":["manual","ssh"]},"provider":{"default":{"kind":"byo"},"type":"object","properties":{"kind":{"type":"string","enum":["byo","rented"]},"host":{"tsType":"string","ref":"servers"},"subscription":{"tsType":"string"}},"required":["kind"],"additionalProperties":false},"inventory":{"type":"object","properties":{"hostname":{"type":"string","maxLength":255,"canFilter":true},"os":{"type":"string","maxLength":100,"canFilter":true},"arch":{"type":"string","enum":["amd64","arm64"],"canFilter":true},"cpuCores":{"type":"number","minimum":0.1},"memory":{"type":"integer","minimum":0,"maximum":9007199254740991,"description":"Bytes"},"disk":{"type":"integer","minimum":0,"maximum":9007199254740991,"description":"Bytes"},"publicIp":{"canFilter":true,"type":"string","maxLength":64},"privateIp":{"type":"string","maxLength":64},"dockerVersion":{"type":"string","maxLength":50},"agentVersion":{"type":"string","maxLength":50,"canFilter":true},"agentSha256":{"description":"SHA-256 of the running agent binary: compared with the published one for updates","type":"string","maxLength":64}},"required":["hostname","os","arch","cpuCores","memory","disk","agentVersion"],"additionalProperties":false},"resources":{"type":"object","properties":{"cpu":{"type":"number","minimum":0,"maximum":1,"description":"Used fraction"},"memFree":{"type":"integer","minimum":0,"maximum":9007199254740991},"diskFree":{"type":"integer","minimum":0,"maximum":9007199254740991},"partitions":{"description":"Pool machines only (PLAN §26)","maxItems":200,"type":"array","items":{"type":"object","properties":{"name":{"type":"string","pattern":"^[a-z0-9]{1,12}$"},"remainder":{"type":"boolean"},"state":{"type":"string","description":"Docker state: running, exited…"},"size":{"type":"object","properties":{"cpus":{"type":"number","minimum":0,"maximum":512},"memMb":{"type":"integer","minimum":256,"maximum":9007199254740991},"diskGb":{"type":"integer","minimum":5,"maximum":9007199254740991}},"required":["cpus","memMb","diskGb"],"additionalProperties":false},"cpuMicros":{"type":"integer","minimum":0,"maximum":9007199254740991,"description":"CPU time used since it started"},"memUsed":{"type":"integer","minimum":0,"maximum":9007199254740991,"description":"Bytes it can't give back"},"diskUsed":{"type":"integer","minimum":0,"maximum":9007199254740991},"rxBytes":{"type":"integer","minimum":0,"maximum":9007199254740991,"description":"Traffic in since it was created"},"txBytes":{"type":"integer","minimum":0,"maximum":9007199254740991,"description":"Traffic out since it was created"}},"required":["name","remainder","state","size","cpuMicros","memUsed","diskUsed","rxBytes","txBytes"],"additionalProperties":false}},"reportedAt":{"type":"string","format":"date-time"}},"required":["cpu","memFree","diskFree","reportedAt"],"additionalProperties":false},"setup":{"type":"object","properties":{"status":{"type":"string","enum":["pending","ready","failed"]},"dockerVersion":{"type":"string"},"checks":{"type":"array","items":{"type":"object","properties":{"name":{"type":"string"},"ok":{"type":"boolean"},"detail":{"type":"string"}},"required":["name","ok","detail"],"additionalProperties":false}},"notes":{"type":"array","items":{"type":"string"}},"error":{"type":"string"},"updatedAt":{"type":"string","format":"date-time"}},"required":["status","updatedAt"],"additionalProperties":false},"mesh":{"type":"object","properties":{"index":{"type":"integer","minimum":1,"maximum":9007199254740991},"enabled":{"default":true,"type":"boolean"},"publicKey":{"type":"string"},"endpoint":{"type":"string"},"peers":{"type":"object","propertyNames":{"type":"string"},"additionalProperties":{"type":"boolean"}},"error":{"type":"string"},"reportedAt":{"type":"string","format":"date-time"}},"required":["index","enabled"],"additionalProperties":false},"pool":{"type":"object","properties":{"status":{"type":"string","enum":["pending","ready","failed"]},"allocatable":{"type":"object","properties":{"cpus":{"type":"number","minimum":0,"maximum":512},"memMb":{"type":"integer","minimum":256,"maximum":9007199254740991},"diskGb":{"type":"integer","minimum":5,"maximum":9007199254740991}},"required":["cpus","memMb","diskGb"],"additionalProperties":false},"sysbox":{"type":"string"},"notes":{"type":"array","items":{"type":"string"}},"error":{"type":"string"},"updatedAt":{"type":"string","format":"date-time"},"class":{"tsType":"string","ref":"serverClasses"},"accepting":{"type":"boolean"},"monthlyCost":{"type":"integer","minimum":0,"maximum":9007199254740991}},"required":["status","updatedAt"],"additionalProperties":false},"tunnelPort":{"type":"integer","minimum":1,"maximum":65535},"acceptedBy":{"tsType":"string","ref":"users"},"acceptedAt":{"type":"string","format":"date-time"},"createdAt":{"canFilter":true,"type":"string","format":"date-time"}},"required":["name","labels","tenant","status","identity","installMethod","provider","inventory","createdAt"],"additionalProperties":false},"updateSchema":{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","properties":{"name":{"type":"string","minLength":1,"maxLength":60,"canFilter":true},"labels":{"default":{},"description":"Free-form key/value tags, e.g. region=eu, builder=true","type":"object","propertyNames":{"type":"string","maxLength":40},"additionalProperties":{"type":"string","maxLength":80}}},"required":["name"]}}});
+    sdk["_moduleMetadata"].set(methods, {"crud":{"schema":{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","properties":{"name":{"type":"string","minLength":1,"maxLength":60,"canFilter":true},"labels":{"default":{},"description":"Free-form key/value tags, e.g. region=eu, builder=true","type":"object","propertyNames":{"type":"string","maxLength":40},"additionalProperties":{"type":"string","maxLength":80}},"tenant":{"tsType":"string","ref":"tenants"},"status":{"type":"string","enum":["pending","active","rejected"],"canFilter":true},"identity":{"type":"object","properties":{"signPublicKey":{"type":"string"},"boxPublicKey":{"type":"string"},"fingerprint":{"type":"string"}},"required":["signPublicKey","boxPublicKey","fingerprint"],"additionalProperties":false},"pairingCode":{"type":"string"},"pairingExpiresAt":{"type":"string","format":"date-time"},"installMethod":{"default":"manual","canFilter":true,"type":"string","enum":["manual","ssh"]},"provider":{"default":{"kind":"machine"},"type":"object","properties":{"kind":{"type":"string","enum":["machine","partition","rented","byo"]},"host":{"tsType":"string","ref":"servers","canFilter":true},"partition":{"type":"string"},"meshPort":{"type":"integer","minimum":1,"maximum":65535},"subscription":{"tsType":"string"}},"required":["kind"],"additionalProperties":false},"inventory":{"type":"object","properties":{"hostname":{"type":"string","maxLength":255,"canFilter":true},"os":{"type":"string","maxLength":100,"canFilter":true},"arch":{"type":"string","enum":["amd64","arm64"],"canFilter":true},"cpuCores":{"type":"number","minimum":0.1},"memory":{"type":"integer","minimum":0,"maximum":9007199254740991,"description":"Bytes"},"disk":{"type":"integer","minimum":0,"maximum":9007199254740991,"description":"Bytes"},"publicIp":{"canFilter":true,"type":"string","maxLength":64},"privateIp":{"type":"string","maxLength":64},"dockerVersion":{"type":"string","maxLength":50},"agentVersion":{"type":"string","maxLength":50,"canFilter":true},"agentSha256":{"description":"SHA-256 of the running agent binary: compared with the published one for updates","type":"string","maxLength":64}},"required":["hostname","os","arch","cpuCores","memory","disk","agentVersion"],"additionalProperties":false},"resources":{"type":"object","properties":{"cpu":{"type":"number","minimum":0,"maximum":1,"description":"Used fraction"},"memFree":{"type":"integer","minimum":0,"maximum":9007199254740991},"diskFree":{"type":"integer","minimum":0,"maximum":9007199254740991},"partitions":{"description":"Pool machines only (PLAN §26)","maxItems":200,"type":"array","items":{"type":"object","properties":{"name":{"type":"string","pattern":"^[a-z0-9]{1,12}$"},"remainder":{"type":"boolean"},"state":{"type":"string","description":"Docker state: running, exited…"},"size":{"type":"object","properties":{"cpus":{"type":"number","minimum":0,"maximum":512},"memMb":{"type":"integer","minimum":256,"maximum":9007199254740991},"diskGb":{"type":"integer","minimum":5,"maximum":9007199254740991}},"required":["cpus","memMb","diskGb"],"additionalProperties":false},"cpuMicros":{"type":"integer","minimum":0,"maximum":9007199254740991,"description":"CPU time used since it started"},"memUsed":{"type":"integer","minimum":0,"maximum":9007199254740991,"description":"Bytes it can't give back"},"diskUsed":{"type":"integer","minimum":0,"maximum":9007199254740991},"rxBytes":{"type":"integer","minimum":0,"maximum":9007199254740991,"description":"Traffic in since it was created"},"txBytes":{"type":"integer","minimum":0,"maximum":9007199254740991,"description":"Traffic out since it was created"}},"required":["name","remainder","state","size","cpuMicros","memUsed","diskUsed","rxBytes","txBytes"],"additionalProperties":false}},"reportedAt":{"type":"string","format":"date-time"}},"required":["cpu","memFree","diskFree","reportedAt"],"additionalProperties":false},"setup":{"type":"object","properties":{"status":{"type":"string","enum":["pending","ready","failed"]},"dockerVersion":{"type":"string"},"checks":{"type":"array","items":{"type":"object","properties":{"name":{"type":"string"},"ok":{"type":"boolean"},"detail":{"type":"string"}},"required":["name","ok","detail"],"additionalProperties":false}},"notes":{"type":"array","items":{"type":"string"}},"error":{"type":"string"},"updatedAt":{"type":"string","format":"date-time"}},"required":["status","updatedAt"],"additionalProperties":false},"mesh":{"type":"object","properties":{"index":{"type":"integer","minimum":1,"maximum":9007199254740991},"enabled":{"default":true,"type":"boolean"},"publicKey":{"type":"string"},"endpoint":{"type":"string"},"peers":{"type":"object","propertyNames":{"type":"string"},"additionalProperties":{"type":"boolean"}},"error":{"type":"string"},"reportedAt":{"type":"string","format":"date-time"}},"required":["index","enabled"],"additionalProperties":false},"pool":{"type":"object","properties":{"status":{"type":"string","enum":["pending","ready","failed"]},"mode":{"type":"string","enum":["machine","pool"]},"allocatable":{"type":"object","properties":{"cpus":{"type":"number","minimum":0,"maximum":512},"memMb":{"type":"integer","minimum":256,"maximum":9007199254740991},"diskGb":{"type":"integer","minimum":5,"maximum":9007199254740991}},"required":["cpus","memMb","diskGb"],"additionalProperties":false},"sysbox":{"type":"string"},"notes":{"type":"array","items":{"type":"string"}},"error":{"type":"string"},"updatedAt":{"type":"string","format":"date-time"},"class":{"tsType":"string","ref":"serverClasses"},"accepting":{"type":"boolean"},"monthlyCost":{"type":"integer","minimum":0,"maximum":9007199254740991}},"required":["status","updatedAt"],"additionalProperties":false},"tunnelPort":{"type":"integer","minimum":1,"maximum":65535},"acceptedBy":{"tsType":"string","ref":"users"},"acceptedAt":{"type":"string","format":"date-time"},"createdAt":{"canFilter":true,"type":"string","format":"date-time"}},"required":["name","labels","tenant","status","identity","installMethod","provider","inventory","createdAt"],"additionalProperties":false},"updateSchema":{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","properties":{"name":{"type":"string","minLength":1,"maxLength":60,"canFilter":true},"labels":{"default":{},"description":"Free-form key/value tags, e.g. region=eu, builder=true","type":"object","propertyNames":{"type":"string","maxLength":40},"additionalProperties":{"type":"string","maxLength":80}}},"required":["name"]}}});
 
     return methods;
 };

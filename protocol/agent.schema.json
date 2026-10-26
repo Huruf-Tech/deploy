@@ -1805,6 +1805,47 @@
             "additionalProperties": false
           }
         },
+        "forwards": {
+          "default": [],
+          "description": "A machine's forwards into its partitions: public ports and each partition's mesh port",
+          "maxItems": 1000,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "protocol": {
+                "type": "string",
+                "enum": [
+                  "tcp",
+                  "udp"
+                ]
+              },
+              "port": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 65535,
+                "description": "On the machine"
+              },
+              "partition": {
+                "type": "string",
+                "pattern": "^[a-z0-9]{1,12}$"
+              },
+              "to": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 65535,
+                "description": "In the partition"
+              }
+            },
+            "required": [
+              "protocol",
+              "port",
+              "partition",
+              "to"
+            ],
+            "additionalProperties": false
+          }
+        },
         "registry": {
           "description": "Run the tenant's built-in registry here (primary server)",
           "type": "object",
@@ -1888,7 +1929,8 @@
         "drainMs",
         "workloads",
         "keepImages",
-        "alerts"
+        "alerts",
+        "forwards"
       ],
       "additionalProperties": false
     },
@@ -2375,29 +2417,14 @@
         "dryRun": {
           "type": "boolean"
         },
-        "purgeData": {
+        "removeSysbox": {
+          "default": false,
           "type": "boolean"
-        },
-        "keep": {
-          "maxItems": 50,
-          "type": "array",
-          "items": {
-            "type": "string",
-            "maxLength": 40
-          }
-        },
-        "remove": {
-          "maxItems": 50,
-          "type": "array",
-          "items": {
-            "type": "string",
-            "maxLength": 40
-          }
         }
       },
       "required": [
         "dryRun",
-        "purgeData"
+        "removeSysbox"
       ],
       "additionalProperties": false
     },
@@ -2405,6 +2432,14 @@
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "object",
       "properties": {
+        "mode": {
+          "default": "pool",
+          "type": "string",
+          "enum": [
+            "machine",
+            "pool"
+          ]
+        },
         "reserve": {
           "type": "object",
           "properties": {
@@ -2431,6 +2466,7 @@
           "additionalProperties": false
         },
         "volume": {
+          "default": {},
           "type": "object",
           "properties": {
             "device": {
@@ -2439,7 +2475,7 @@
               "maxLength": 100
             },
             "loopSizeGb": {
-              "description": "Without a device: a loop file this size (tests, small machines)",
+              "description": "Without a device: a loop file this size; a machine's defaults to the free space (sparse)",
               "type": "integer",
               "minimum": 10,
               "maximum": 9007199254740991
@@ -2457,6 +2493,7 @@
           }
         },
         "docker": {
+          "description": "Pool machines' host setup",
           "type": "object",
           "properties": {
             "logMaxSize": {
@@ -2495,10 +2532,10 @@
         }
       },
       "required": [
+        "mode",
         "reserve",
         "volume",
-        "allowIps",
-        "docker"
+        "allowIps"
       ],
       "additionalProperties": false
     },

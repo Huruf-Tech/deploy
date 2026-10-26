@@ -23,7 +23,6 @@ import (
 	"time"
 
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/cgroup"
-	"github.com/Huruf-Tech/huruf-deploy/agent/internal/ledger"
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/protocol"
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/reconcile"
 )
@@ -467,7 +466,6 @@ func (d *Docker) ensureRclone(ctx context.Context) error {
 			"args=-v", "--alias", "rclone", "--grant-all-permissions"); err != nil {
 			return fmt.Errorf("installing the rclone volume plugin (needs FUSE on the server): %w", err)
 		}
-		_ = ledger.Record(ledger.Entry{Kind: "plugin", Name: "rclone"})
 	} else {
 		_, _ = run(ctx, nil, "docker", "plugin", "enable", "rclone") // already enabled is fine
 	}

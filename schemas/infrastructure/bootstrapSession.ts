@@ -16,6 +16,13 @@ export const $bootstrapSession = z.object({
   tokenHash: z.string(),
   server: $objectId.meta({ ref: "servers" }).optional(),
   /** A rented partition (PLAN §26): the server it creates is `rented`, named so. */
+  /** A partition's agent (PLAN §27): the machine and the partition's name. */
+  partition: z.object({
+    host: $objectId.meta({ ref: "servers" }),
+    name: z.string(),
+    /** The server's name in the dashboard. */
+    label: z.string().optional(),
+  }).optional(),
   rental: z.object({
     host: $objectId.meta({ ref: "servers" }),
     subscription: $objectId.meta({ ref: "subscriptions" }),

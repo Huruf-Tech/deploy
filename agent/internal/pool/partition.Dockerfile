@@ -11,5 +11,13 @@ RUN apt-get update \
   && systemctl mask systemd-resolved.service getty@tty1.service \
     sys-kernel-config.mount sys-kernel-debug.mount sys-kernel-tracing.mount
 
+# Its Docker stays out of 172.16.0.0/12, where its default would swallow
+# replies to peers there: other machines' Docker networks, AWS's default VPC
+# (spike 17a). Clear of the private network's 10.209/10.210 too.
+RUN mkdir -p /etc/docker && printf '%s\n' '{' \
+    '  "bip": "10.212.0.1/24",' \
+    '  "default-address-pools": [{ "base": "10.213.0.0/16", "size": 24 }]' \
+    '}' > /etc/docker/daemon.json
+
 STOPSIGNAL SIGRTMIN+3
 CMD ["/sbin/init", "--log-level=err"]

@@ -4,6 +4,9 @@
 > Product: **Huruf Deploy**. Reference product: Dokploy (inspiration, not a clone).
 > Every phase in §16 ends with a review checkpoint before the next one starts.
 
+**v4.7:**
+- **Partitions on every server** (D48, §27, Phase 17): every agent is a host and the customer sizes a partition after install, leaving the rest to other tools; uninstall no longer relies on a log of what the agent installed.
+
 **v4.6:**
 - **Shared resources** (D47, §26, Phase 16): customers rent partitions of Huruf's pool machines (Sysbox system containers running our agent, joining the customer's tenant); Huruf's remainder partition uses whatever isn't rented. Sizes or custom amounts from a per-class rate card, paid monthly upfront. Consent for platform-run capacity (D42) is given with it.
 
@@ -119,6 +122,7 @@ A free-to-use SaaS that deploys and operates apps on **the user's own machines**
 | D44 | **Long polling, not WebSockets (Phase 13):** an agent's poll waits at the control plane until there's something for it (a command, a new spec, terminal input) or a time limit passes. This keeps the polling protocol, adds no dependency to the agent (Go's standard library has no WebSocket client) and keeps old agents working unchanged. WebSockets may come later between the browser and the control plane only, for terminals. |
 | D45 | **AI template assistant (Phase 12):** the platform's own Anthropic key, offered as a plan feature with a monthly limit. It drafts templates (from a GitHub repo or a description) and fixes failed builds and rollouts; a person always reviews and saves. |
 | D47 | **Shared resources (Phase 16, §26):** Huruf's pool machines are split into partitions (Sysbox system containers, behind a `PartitionDriver`), each running our normal agent; a rented partition joins the customer's tenant as an ordinary server, and Huruf's own remainder partition holds everything not rented (CPU uncapped at lowest priority), so nothing sits idle. Sizes are plans and a rental is a subscription (existing mechanisms, refactored where needed), priced from a rate card per class and paid monthly upfront from the wallet. Admins approve requests for now; custom domains only. |
+| D48 | **Partitions on every server (Phase 17, §27):** every agent is a host; after install the customer creates a partition of the size they choose and leaves the rest of the machine to other tools. Partitions are servers and can be added, resized and removed later. Uninstall removes partitions and our own objects by label and name, never shared packages (Sysbox only on request), so the install log goes. |
 | D46 | **Payments through Stripe, saved cards first (Phase 15, §25):** customers save a card on a Billing page (Stripe Elements; card data never touches us) and are charged later, off session, when a renewal or payment is short, and on demand through "Add funds". Money always lands in the thunder-core wallet first (`Wallet.ensureBalance` / `addBalance` / `settleTopup`), and every charge still goes through `BillingService`. USD only for now. Gateways sit behind one `PaymentGateway` interface, so more can join the same Billing page later. |
 | D42 | **Managed servers (optional, needs owner consent):** provision EC2 instances on the platform's AWS account and bill plan + metered usage from the wallet. The MVP only prepares the seams (§24). |
 
@@ -1416,7 +1420,63 @@ Not started; the owner says go per stage. Each stage ends with a review. Built o
      - An unpaid rental is suspended after 3 days and released after 14 more, with the emails; paying before release resumes it.
   5. **Resize:** an approved resize up applies in place without a restart and charges with proration once. One that doesn't fit is moved by an admin, and her server, projects and domains stay the same.
   6. **Nothing else changes:** workspace plans, BYO servers and existing billing behave as before (existing tests green).
-- **Phase 17 (later):** pool machines provisioned and retired on AWS automatically (`ServerProvisioner`, §24), and automatic approval when a class has room.
+- **Phase 18 (later):** pool machines provisioned and retired on AWS automatically (`ServerProvisioner`, §24), and automatic approval when a class has room.
+
+### Phase 17 — Partitions on every server (built, pending review, D48, §27)
+The owner said go for all stages (2026-10-27). Every agent is a host; after install the customer creates a partition of the size they choose, and projects run in partitions. Uninstall no longer needs the install log.
+- **17b–17d status: built (pending review).**
+  - **Agent:**
+    - Every agent is a host. `pool.ensure` has two modes:
+      - `machine`: Docker installed if missing, Sysbox installed without restarting Docker (17a), a sparse partition volume, counters only;
+      - `pool`: Phase 16's setup.
+    - Forwards come with the machine's desired state (`forwards`): a `huruf_forward` nftables table plus the `DOCKER-USER` accept rule. They're re-applied when a partition starts and after a reboot, and stale connection tracking is cleared for added ports only.
+    - The partition image moves its own Docker to `10.212.0.1/24` and pools in `10.213.0.0/16`.
+    - Uninstall (`cleanup`) follows one fixed rule; `ledger` is gone, and the installer no longer starts it.
+  - **Control plane:**
+    - A server's `provider.kind` is `machine`, `partition`, `rented` or `byo` (from before partitions, reinstall it).
+    - An agent joining without a partition claim is a machine: host setup runs, and it takes no plan slot. Pairing makes machines too.
+    - A partition's join token names its machine and partition. It joins with a plan slot (rentals without), its machine's next UDP port (`provider.meshPort`, from 51821) and `mesh.endpoint` at the machine's address.
+    - Projects can't target machines. A public port must be free across a machine's partitions.
+    - Spec refreshes include the partitions' machines. `POST/PATCH/DELETE /servers/api/:id/partitions[/:name]` let the machine's tenant create, resize and remove partitions. Deleting a partition removes it from its machine; deleting a machine deletes its partitions' servers.
+  - **Dashboard:**
+    - A machine's page shows its Partitions panel: setup, free capacity, partitions with Resize and Remove, and "Create a partition" while it has none.
+    - Cards and the table say "N partitions" or "Setting up for partitions". A partition links to its machine and is removed with a confirmation.
+    - Removing a machine shows the agent's plan with one Sysbox checkbox.
+  - **Found and fixed in the end-to-end run:**
+    - Forwards matched every packet to the port, so a partition's own connection to another machine's forwarded 51821 was sent back into itself. They now match only traffic for the machine (`fib daddr type local`).
+    - On a machine, a partition's data quota is its whole disk size (its system files have no cap there), and its agent reports that size, not the host's disk.
+    - The Partitions panel's lookup needed a typed ObjectId filter.
+  - **Verified locally** on a machine whose other tool's container was never restarted:
+    - The machine joined and set itself up (908 GB sparse volume, 455 MB on disk; Docker's data untouched).
+    - A partition was created from the dashboard and joined as a server.
+    - A project with public port 8080 deployed and answered another machine (HTTP 200).
+    - The private network handshaked with a rented partition on another (pool) machine through forwards on both.
+    - A live resize to 3 vCPU and 3 GB applied without a restart, and the project kept serving.
+    - "Remove" uninstalled everything of ours and Sysbox, and deleted the machine's and partition's records; the other tool kept running. A running Docker keeps listing the removed Sysbox runtime until its next restart; it's harmless, and restarting Docker would stop other tools.
+  - **Needs the next agent release** before machines can be added this way. Partitions created before 17 keep their own Docker's old `172.17.0.0/16` range.
+- **17a status: done, GO (2026-10-27).** On a test machine whose Docker ran another tool's container, which was never restarted:
+  1. **Sysbox beside a busy Docker:** Sysbox's installer refuses (it wants to restart Docker for its network keys) unless `daemon.json` already has `bip` and `default-address-pools`. Writing them with the values Docker uses now (`docker0`'s address, Docker's built-in pools) makes it only reload Docker. The real package is installed with `apt`. **Never extract a package onto `/`**: `dpkg-deb -x` replaced the `/lib` symlink with a directory.
+  2. **Disk:** a 100 GB sparse XFS file took 65 MB on disk; a partition's 5 GB quota held. Docker's data stayed where it was.
+  3. **Private network:** WireGuard ran inside a partition through a forwarded UDP port, once three things were in place:
+     - the host accepts traffic it forwarded to partition bridges in `DOCKER-USER` (Docker 29 drops routed traffic to ports it didn't publish);
+     - stale connection tracking for the port is cleared when a forward is added;
+     - the partition's own Docker uses `10.212.0.1/24` and pools in `10.213.0.0/16`, since its default `172.17.0.0/16` swallowed replies to peers there (AWS's default VPC, 172.31.0.0/16, is in Docker's default pools too).
+  4. **Public port:** a host port forwarded to a partition reached a project's container (HTTP 200 from another machine).
+  5. **Uninstall:** removing partitions, forwards, the volume and the image left the other tool running. `apt-get remove sysbox-ce` didn't restart Docker but left the runtime in `daemon.json`, so removing Sysbox removes that entry too.
+- **17a Spike** (local test machines; go/no-go):
+  1. Sysbox added to a Docker that runs other containers: runtimes reloaded with `SIGHUP`, nothing restarted, Docker's data where it was.
+  2. A partition with its data on a sparse XFS file and a quota, its system files in the host's Docker.
+  3. WireGuard inside a partition through a forwarded UDP port, meshing with another server.
+  4. A `publicPort` forwarded from the host to a partition's edge proxy.
+  5. Uninstall leaves another tool's containers running.
+- **17b Agent:** host setup on every machine (the pool-only steps behind the pool flag); port forwarding for public ports and the mesh; the new uninstall; `ledger` and the old cleanup rules removed.
+- **17c Control plane:** install registers the machine and runs its host setup; partitions created, resized and removed by the machine's tenant (not only admins); quota on partitions; forwarded ports in specs.
+- **17d Dashboard:** after install, "Create a partition" with the machine's free capacity; the machine page with its partitions (the Partitions panel, opened to its owner); Remove machine with the Sysbox checkbox.
+- **Done when:**
+  1. A fresh Ubuntu machine is added with the wizard; the customer creates a partition; a project deploys to it with a custom domain, a public port and the private network.
+  2. On a machine that also runs Dokploy, the customer gives us part of it; Dokploy keeps running, and removing ours later leaves it running.
+  3. A second partition is added and the first resized live.
+  4. Pool machines and rentals behave as before (Phase 16 tests green).
 
 ### Phase 14 — Backlog (after MVP)
 - Ability to upgrade already installed agent along with its deps — **done (pending review):**
@@ -1434,7 +1494,7 @@ Not started; the owner says go per stage. Each stage ends with a review. Built o
 - PR preview deployments (consent needed)
 - macOS agent (consent needed)
 - **More roles** (owner agrees): viewer (read-only), developer (projects and variables only), billing manager, and per-project access.
-- Managed servers on our AWS account (D42, §24): now Phase 17, after shared resources (D47, §26)
+- Managed servers on our AWS account (D42, §24): now Phase 18, after shared resources (D47, §26)
 
 ---
 
@@ -1853,7 +1913,7 @@ Each axis of variation is an interface with one class per variant. Adding a vari
 
 ## 24. Managed servers (optional, D42)
 
-> **Folded into shared resources (D47, §26).** The owner consented to platform-run capacity with Phase 16: pool machines are added manually there, and the AWS provisioning below becomes Phase 17, feeding the pool. Per-hour billing (§24.2) is replaced by monthly upfront allocations (§26.7); hourly blocks remain a later option.
+> **Folded into shared resources (D47, §26).** The owner consented to platform-run capacity with Phase 16: pool machines are added manually there, and the AWS provisioning below becomes Phase 18, feeding the pool. Per-hour billing (§24.2) is replaced by monthly upfront allocations (§26.7); hourly blocks remain a later option.
 
 **Idea:** the user provisions an EC2 instance from the dashboard on the platform's AWS account. The tenant pays the plan subscription plus metered machine usage per hour.
 
@@ -2002,7 +2062,7 @@ Example:
 - the screens.
 
 **Later:**
-- AWS provisioning and automatic approval (Phase 17);
+- AWS provisioning and automatic approval (Phase 18);
 - backups of partitions;
 - yearly prepay.
 
@@ -2255,7 +2315,7 @@ Needed for a resize that doesn't fit, or for draining a machine. An admin action
 14. **The customer pays the partition overhead,** at the class's memory rate.
 10. **Terms of service and data processing:** on the website, later.
 11. **Reuse first:** build on existing mechanisms and refactor them where needed.
-12. **Consent for platform-run capacity** (D42): given with this feature; AWS provisioning follows in Phase 17.
+12. **Consent for platform-run capacity** (D42): given with this feature; AWS provisioning follows in Phase 18.
 
 **Open:**
 1. Final rates, once the Partitions panel shows real costs.
@@ -2297,3 +2357,44 @@ Needed for a resize that doesn't fit, or for draining a machine. An admin action
 - inventory from cgroups and a default memory limit for containers on rented partitions (16b);
 - `docker-buildx` and `wireguard-tools` in the partition image;
 - usage read from cgroup files rather than `docker stats` (which misreports partitions).
+
+## 27. Partitions on every server (D48, Phase 17)
+
+### 27.1 Why (owner)
+
+- **The install log (`ledger.jsonl`) is unreliable.** Uninstall undoes what the agent installed, but another tool (Dokploy, a database) may come to rely on it after we installed it. Removing it then breaks that tool. The log can't know.
+- **Partitions make every server the same, with what Phase 16 already built.** No customer projects run yet (owner, 2026-10-27), so the code can be refactored freely and existing servers reinstalled.
+
+### 27.2 The model
+
+- **Every agent is a host** (§26.5): installed on a machine, it runs no projects itself.
+- **After install, the customer creates a partition** and decides its size: vCPU, memory and disk. What they don't give us stays free for anything else on the machine (Dokploy, databases). Admins do the same on their machines.
+- **A partition is a server:** its agent joins the tenant, and projects, metrics, terminal and alerts work as today. The server quota counts partitions; machines don't count.
+- **Changing partitions later is allowed:** add more, resize live, remove. These are Phase 16's commands (`partition.create`, `resize`, `remove`), with the same refusal to shrink below what a partition uses.
+- **Pool machines** stay as in Phase 16: the admin prepares them for rentals, they get a class, and Huruf's remainder partition is optional there.
+
+### 27.3 On a customer's machine
+
+- **Docker stays where it is.** Sysbox is added as a runtime and Docker reloads its runtimes on `SIGHUP`, so other tools' containers keep running. Moving Docker's data and requiring an empty machine stay for pool machines only.
+- **Disk:** partition data lives on an XFS volume in a sparse file (`/var/lib/huruf-pool.img`, the loop file of §26.5), so it takes only the space actually written, with a quota per partition of its whole disk size. A partition's own system files stay in the host's Docker, without a size cap. The file can't take more than the host's disk has free when written to, since it's sparse.
+- **CPU and memory limits** apply as on pool machines.
+- **Isolation rules** (no reaching other partitions, the host, private ranges, port 25) stay for pool machines. A customer's partitions reach their own network, as their projects do today.
+- **Reaching a partition:**
+  - Custom domains: unchanged. The agent inside opens its outbound tunnel (§14), already checked in 16c.
+  - Public ports (`publicPort`): the host forwards the port to the partition running the project, only for traffic addressed to the machine itself. Rented partitions still refuse them.
+  - Private network: each partition gets a UDP port on the host (51820, 51821, …), forwarded to it and advertised as its `mesh.endpoint`.
+- **Overhead:** each partition runs its own agent and Docker, about 128 MB of memory (§26.13).
+
+### 27.4 Install and uninstall
+
+- **Install:** the wizard installs the agent. The machine registers and its host setup runs (Sysbox, the partition image, the volume), then the dashboard asks for the first partition, showing what the machine has free. The server appears once the partition's agent is online.
+- **Uninstall** (one fixed rule, no log):
+  1. Stop and remove every partition with its data.
+  2. Remove our own objects, found by label and exact name: forwards and rules, bridges, the partition image and moved images, the volume and its file, the agent's binary, unit, configuration and state.
+  3. **Opt-in checkbox:** also remove Sysbox, marked as possibly breaking other tools. Docker, WireGuard tools and other packages are never removed.
+- **Removed code:** `agent/internal/ledger`, the ledger and pre-ledger rules in `agent/internal/cleanup`, and their records in host setup. The dashboard's per-item choices become the one Sysbox checkbox.
+
+### 27.5 Requirements
+
+- Sysbox's: Ubuntu 22.04+ (the OS check today), amd64 or arm64, kernel 5.12+ for ID-mapped mounts (else shiftfs). Host setup checks them before installing anything.
+- WireGuard's kernel module on the host (§26.13).

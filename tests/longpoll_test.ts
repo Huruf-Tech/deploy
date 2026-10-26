@@ -4,7 +4,6 @@ import { testSession } from "./_session.ts";
 import handler from "@/serve.base.ts";
 import { ObjectId } from "mongodb";
 import { mongodb } from "@/database.ts";
-import { acceptServer } from "@/lib/agents/servers.ts";
 import { issueCommand } from "@/lib/agents/commands.ts";
 import { longPollOptions } from "@/lib/agents/poll.ts";
 import { readStream } from "@/lib/agents/streams.ts";
@@ -12,6 +11,7 @@ import { stopWatching } from "@/lib/agents/wakeups.ts";
 import { flush, INSTANCE } from "@/lib/monitoring/controlPlane.ts";
 import { controlPlaneSampleModel } from "@/schemas/monitoring/controlPlane.ts";
 import { createState, SimAgent } from "@/tools/agent-sim/agent.ts";
+import { joinAsPartition } from "./_partition.ts";
 
 // Long polling (PLAN Phase 13): held polls and reads, woken by new work.
 
@@ -41,14 +41,8 @@ Deno.test({
       tenant,
       send: (req) => Promise.resolve(handler(req)),
     });
-    const { json } = await agent.hello();
+    const { json } = await joinAsPartition(agent, tenantId, user);
     const server = new ObjectId(json.server);
-    await acceptServer({
-      server,
-      tenant: tenantId,
-      user: { _id: user, emailVerified: true },
-      pairingCode: json.pairingCode!,
-    });
     // Catch up: host setup and the first spec arrive on the first polls.
     for (let i = 0; i < 3; i++) {
       await sleep(120);

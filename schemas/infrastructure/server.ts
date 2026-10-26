@@ -30,15 +30,22 @@ export const $server = $serverUpdate.extend({
     canFilter: true,
   }),
   /**
-   * `byo`: the customer's own machine. `rented`: a partition of one of Huruf's
-   * pool machines (`host`), paid by `subscription` (PLAN §26).
+   * PLAN §27: `machine`: where our agent runs as a host, with no projects of
+   * its own. `partition`: one of a machine's partitions (`host`), where
+   * projects run. `rented`: a partition of one of Huruf's pool machines,
+   * paid by `subscription` (§26). `byo`: a server from before partitions,
+   * running projects itself (reinstall it).
    */
   provider: z.object({
-    kind: z.enum(["byo", "rented"]),
-    host: $objectId.meta({ ref: "servers" }).optional(),
+    kind: z.enum(["machine", "partition", "rented", "byo"]),
+    host: $objectId.meta({ ref: "servers", canFilter: true }).optional(),
+    /** The partition's name on its machine (`p` + 11 hex). */
+    partition: z.string().optional(),
+    /** The machine's UDP port forwarded to its private-network port. */
+    meshPort: z.number().int().min(1).max(65_535).optional(),
     // No ref: core resolves refs as modules, and subscriptions have none.
     subscription: $objectId.optional(),
-  }).default({ kind: "byo" }),
+  }).default({ kind: "machine" }),
   // The dashboard's list filters (the agent protocol schema stays as is).
   inventory: $inventory.extend({
     hostname: $inventory.shape.hostname.meta({ canFilter: true }),
@@ -70,9 +77,11 @@ export const $server = $serverUpdate.extend({
     error: z.string().optional(),
     reportedAt: z.date().optional(),
   }).optional(),
-  /** Pool machines (PLAN §26.5): what `pool.ensure` reported. */
+  /** Machines (PLAN §26.5, §27): what host setup (`pool.ensure`) reported. */
   pool: z.object({
     status: z.enum(["pending", "ready", "failed"]),
+    /** `pool`: a machine Huruf rents out (§26.5); otherwise any machine (§27.3). */
+    mode: z.enum(["machine", "pool"]).optional(),
     /** What partitions may use in all, after the machine's reserve. */
     allocatable: $partitionSize.optional(),
     sysbox: z.string().optional(),

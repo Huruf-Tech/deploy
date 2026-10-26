@@ -90,24 +90,30 @@ Deno.test({
           user,
           pairingCode: json.pairingCode!,
         });
+        // A machine hosts partitions and takes no plan slot (PLAN §27.2).
         const usage = await tenantUsageModel.findOne({ tenant });
-        assertEquals(usage?.servers, 1);
+        assertEquals(usage?.servers ?? 0, 0);
       });
 
       await t.step(
-        "accepting prepares the host with docker.ensure",
+        "accepting sets the machine up for partitions",
         async () => {
           const { json } = await poll({ summary: true });
           const [command] = json.commands as {
             type: string;
             payload: Record<string, unknown>;
           }[];
-          assertEquals(command.type, "docker.ensure");
-          assertEquals(command.payload.network, "huruf-internal");
+          assertEquals(command.type, "pool.ensure");
+          assertEquals(command.payload.mode, "machine");
+          assertEquals(
+            command.payload.docker,
+            undefined,
+            "no projects run on it",
+          );
 
           const doc = await serverModel.findOne({ _id: server });
-          assertEquals(doc?.setup?.status, "ready");
-          assertEquals(doc?.inventory.dockerVersion, "27.0.0-sim");
+          assertEquals(doc?.provider.kind, "machine");
+          assertEquals(doc?.pool?.mode, "machine");
         },
       );
 

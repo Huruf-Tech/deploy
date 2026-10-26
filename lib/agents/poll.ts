@@ -365,13 +365,16 @@ const ingestCommandResults = async (
       if (type === "pool.ensure") {
         await recordPoolSetup(identity.server, event.data);
       }
-      const host = type === "pool.ensure"
-        ? {
+      // A machine (PLAN §27) runs no projects: only a pool machine's setup
+      // carries the usual host setup.
+      if (type === "docker.ensure") {
+        await recordHostSetup(identity.server, event.data);
+      } else if (event.data.result?.host) {
+        await recordHostSetup(identity.server, {
           ...event.data,
-          result: event.data.result?.host as typeof event.data.result,
-        }
-        : event.data;
-      await recordHostSetup(identity.server, host);
+          result: event.data.result.host as typeof event.data.result,
+        });
+      }
       // A prepared host gets its spec, private network included (PLAN §8.2).
       if (event.data.ok) await refreshSpecs([identity.server]);
     } else await onBuildResult(identity.server, seq, event.data);

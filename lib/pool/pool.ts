@@ -38,22 +38,83 @@ async function platformTenant() {
   return new ObjectId(id);
 }
 
-/** An active server of the platform tenant, optionally prepared as a pool machine. */
+/** An active machine (PLAN §27), optionally one whose host setup is done. */
 async function machine(server: ObjectId, prepared: boolean) {
   const doc = await serverModel.findOne(
     { _id: server, status: "active" },
-    { projection: { tenant: 1, name: 1, identity: 1, pool: 1, mesh: 1 } },
+    {
+      projection: {
+        tenant: 1,
+        name: 1,
+        identity: 1,
+        pool: 1,
+        mesh: 1,
+        provider: 1,
+      },
+    },
   );
   if (!doc) throw Response.notFound("No active server with this id");
-  if (!doc.tenant.equals(await platformTenant())) {
-    throw Response.forbidden(
-      "Only the platform's own servers can be pool machines",
-    );
+  if (doc.provider?.kind === "partition" || doc.provider?.kind === "rented") {
+    throw Response.badRequest("This server is a partition, not a machine");
   }
   if (prepared && doc.pool?.status !== "ready") {
-    throw Response.badRequest("This server isn't a ready pool machine");
+    throw Response.badRequest("This machine isn't set up for partitions yet");
   }
   return doc;
+}
+
+/** What host setup leaves out of partitions' reach, from settings. */
+const reserve = async () => ({
+  cpus: await readNumberSetting("POOL_RESERVE_CPUS", 0.25),
+  memMb: await readNumberSetting("POOL_RESERVE_MEM_MB", 512),
+  diskGb: await readNumberSetting("POOL_RESERVE_DISK_GB", 10),
+});
+
+/**
+ * Host setup on any machine (PLAN §27.3): Sysbox beside the Docker already
+ * there, partition data on a sparse XFS file. Runs at install and again
+ * after an agent update; a pool machine re-runs its own setup.
+ */
+export async function setUpMachine(server: ObjectId, createdBy?: ObjectId) {
+  const doc = await machine(server, false);
+  if (doc.pool?.mode === "pool") {
+    return await issuePoolEnsure(doc, "pool", {}, createdBy);
+  }
+  return await issuePoolEnsure(doc, "machine", {}, createdBy);
+}
+
+async function issuePoolEnsure(
+  doc: Awaited<ReturnType<typeof machine>>,
+  mode: "machine" | "pool",
+  volume: z.input<typeof $poolEnsurePayload>["volume"],
+  createdBy?: ObjectId,
+) {
+  await serverModel.updateOne({ _id: doc._id }, {
+    $set: {
+      "pool.status": "pending",
+      "pool.mode": mode,
+      "pool.updatedAt": new Date(),
+    },
+    $unset: { "pool.error": "" },
+  });
+  const pool = mode === "pool";
+  const payload: z.input<typeof $poolEnsurePayload> = {
+    mode,
+    reserve: await reserve(),
+    volume,
+    allowIps: pool
+      ? (await readTextSetting("POOL_ALLOW_IPS", "")).split(/[\s,]+/)
+        .filter(Boolean)
+      : [],
+    ...(pool ? { docker: await hostSetupPayload(doc._id, doc.tenant) } : {}),
+  };
+  return await issueCommand({
+    server: doc._id,
+    tenant: doc.tenant,
+    type: "pool.ensure",
+    payload,
+    createdBy,
+  });
 }
 
 /**
@@ -67,29 +128,12 @@ export async function makePoolMachine(opts: {
   createdBy?: ObjectId;
 }) {
   const doc = await machine(opts.server, false);
-  await serverModel.updateOne({ _id: doc._id }, {
-    $set: { "pool.status": "pending", "pool.updatedAt": new Date() },
-    $unset: { "pool.error": "" },
-  });
-  const allowIps = (await readTextSetting("POOL_ALLOW_IPS", ""))
-    .split(/[\s,]+/).filter(Boolean);
-  const payload: z.input<typeof $poolEnsurePayload> = {
-    reserve: {
-      cpus: await readNumberSetting("POOL_RESERVE_CPUS", 0.25),
-      memMb: await readNumberSetting("POOL_RESERVE_MEM_MB", 512),
-      diskGb: await readNumberSetting("POOL_RESERVE_DISK_GB", 10),
-    },
-    volume: opts.volume,
-    allowIps,
-    docker: await hostSetupPayload(doc._id, doc.tenant),
-  };
-  return await issueCommand({
-    server: doc._id,
-    tenant: doc.tenant,
-    type: "pool.ensure",
-    payload,
-    createdBy: opts.createdBy,
-  });
+  if (!doc.tenant.equals(await platformTenant())) {
+    throw Response.forbidden(
+      "Only the platform's own machines can be pool machines",
+    );
+  }
+  return await issuePoolEnsure(doc, "pool", opts.volume, opts.createdBy);
 }
 
 /** Records a finished `pool.ensure` on the server document. */
@@ -118,7 +162,7 @@ export async function recordPoolSetup(
 }
 
 /**
- * A partition on a pool machine, with our agent inside joining `tenant`
+ * A partition on a machine, with our agent inside joining `tenant`
  * through a one-time join token (`partition.create`, sealed: it carries the
  * token). The remainder is sized by the machine; a rental needs `size`.
  */
@@ -131,6 +175,8 @@ export async function createPartition(opts: {
   createdBy: ObjectId;
   /** A rental: the server its agent creates is `rented`, named so (PLAN §26). */
   rental?: { subscription: ObjectId; name: string };
+  /** The server's name in the dashboard (PLAN §27). */
+  label?: string;
 }) {
   const doc = await machine(opts.host, true);
   const { token } = await createJoinToken({
@@ -139,6 +185,11 @@ export async function createPartition(opts: {
     host: `${doc.name}/${opts.name}`,
     port: 0,
     username: "partition",
+    partition: {
+      host: doc._id,
+      name: opts.name,
+      ...(opts.label ? { label: opts.label } : {}),
+    },
     ...(opts.rental ? { rental: { host: doc._id, ...opts.rental } } : {}),
   });
   const { controlPlaneUrl, downloadBase } = await agentEndpoints();

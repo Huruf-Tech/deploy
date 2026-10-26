@@ -72,6 +72,7 @@ const SHARED: Array<[string, z.ZodType]> = [
   ["ResourceSummary", protocol.$resourceSummary],
   ["PartitionSize", protocol.$partitionSize],
   ["PartitionUsage", protocol.$partitionUsage],
+  ["PortForward", protocol.$portForward],
   ["Command", protocol.$command],
   ["TerminalInput", protocol.$terminalInput],
   ["Workload", protocol.$workload],

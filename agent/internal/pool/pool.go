@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -52,6 +53,9 @@ type Driver interface {
 	Send(ctx context.Context, name, listen, token string) error
 	// Receive pulls a partition from `from` and starts it here.
 	Receive(ctx context.Context, name string, size protocol.PartitionSize, weight int, from, token string) error
+	// Forward replaces the machine's ports forwarded into partitions (PLAN
+	// §27.3); `added` are new since the last call.
+	Forward(ctx context.Context, forwards, added []protocol.PortForward) error
 }
 
 // Entry is one partition in the machine's state file.
@@ -63,6 +67,8 @@ type Entry struct {
 type state struct {
 	Allocatable protocol.PartitionSize `json:"allocatable"`
 	Partitions  map[string]Entry       `json:"partitions"`
+	// From the desired state; re-applied when a partition (re)starts.
+	Forwards []protocol.PortForward `json:"forwards,omitempty"`
 }
 
 // Manager serializes partition changes (commands run concurrently) and keeps
@@ -280,6 +286,7 @@ func (m *Manager) Create(ctx context.Context, p protocol.PartitionCreatePayload)
 		if err := m.save(); err != nil {
 			return nil, err
 		}
+		_ = m.Driver.Forward(ctx, s.Forwards, nil)
 	}
 
 	out, err := m.Driver.Exec(ctx, p.Name, installScript(p.Install))
@@ -349,7 +356,13 @@ func (m *Manager) Stop(ctx context.Context, p protocol.PartitionNamePayload) (ma
 }
 
 func (m *Manager) Start(ctx context.Context, p protocol.PartitionNamePayload) (map[string]any, error) {
-	return m.simple(ctx, p.Name, m.Driver.Start)
+	return m.simple(ctx, p.Name, func(ctx context.Context, name string) error {
+		if err := m.Driver.Start(ctx, name); err != nil {
+			return err
+		}
+		// Its address may have changed.
+		return m.Driver.Forward(ctx, m.state.Forwards, nil)
+	})
 }
 
 func (m *Manager) simple(ctx context.Context, name string, fn func(context.Context, string) error) (map[string]any, error) {
@@ -467,6 +480,9 @@ func (m *Manager) Receive(ctx context.Context, p protocol.PartitionReceivePayloa
 	// A canceled move removed it meanwhile: its source runs again, so this copy mustn't.
 	m.mu.Lock()
 	_, kept := s.Partitions[p.Name]
+	if kept {
+		_ = m.Driver.Forward(ctx, s.Forwards, nil)
+	}
 	m.mu.Unlock()
 	if !kept {
 		_ = m.Driver.Remove(context.WithoutCancel(ctx), p.Name)
@@ -487,7 +503,36 @@ func (m *Manager) Restore(ctx context.Context) error {
 	for name := range s.Partitions {
 		names = append(names, name)
 	}
-	return m.Driver.Restore(ctx, names)
+	if err := m.Driver.Restore(ctx, names); err != nil {
+		return err
+	}
+	// Forwards and their firewall rule live in memory: a reboot lost them.
+	return m.Driver.Forward(ctx, s.Forwards, nil)
+}
+
+// ApplyForwards takes the machine's forwards from its desired state. Agents
+// that aren't machines (partitions, servers before PLAN §27) have none.
+func (m *Manager) ApplyForwards(ctx context.Context, forwards []protocol.PortForward) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	s, err := m.load()
+	if err != nil || s.Allocatable.MemMb == 0 {
+		return err
+	}
+	var added []protocol.PortForward
+	for _, f := range forwards {
+		if !slices.Contains(s.Forwards, f) {
+			added = append(added, f)
+		}
+	}
+	if len(added) == 0 && len(forwards) == len(s.Forwards) {
+		return nil
+	}
+	if err := m.Driver.Forward(ctx, forwards, added); err != nil {
+		return err
+	}
+	s.Forwards = forwards
+	return m.save()
 }
 
 // Usage reports every partition for the poll summary; nil on other servers.
