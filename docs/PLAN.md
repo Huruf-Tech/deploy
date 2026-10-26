@@ -1198,13 +1198,14 @@ Found while using the platform; each is in the section it belongs to, and listed
 - **Server metrics:** besides the 24-hour history at 1-minute resolution, the agent keeps the last 15 minutes at 5-second resolution (180 samples) and sends both when a metrics stream opens, so the server chart starts with recent detail instead of empty. Needs the updated agent ("Update agent"); older agents still send the minute history only. Both buffers live in agent memory, so an agent restart starts them over.
 
 ### Phase 15 — Payments: Stripe, saved cards and Add funds (planned, D46, §25)
-Waiting for the owner's review of §25. No code before "go".
+Owner's decisions recorded (§25.10). No code before "go".
 - **15a Foundations:** the `PaymentGateway` interface and `StripeGateway`; `billingAccounts` (Stripe customer per tenant, saved cards); settings and the webhook route; wallets switched to USD; thunder-core hooks (`onInsufficientBalance`, top-up settlement) wired to the gateway.
-- **15b Billing page:** Configuration → Billing (replaces the core Wallet entry): balance, saved cards (add with the Payment Element, set default, remove), "Pay automatically when the balance is short" switch, Add funds, and a transactions list (top-ups, plan charges, receipts).
+- **15b Billing page:** Configuration → Billing (replaces the core Wallet entry in the sidebar): balance, saved cards (add with the Payment Element, set default, remove), "Pay automatically when the balance is short" switch, Add funds, and a transactions list (top-ups, plan charges, receipts).
 - **15c Charging:** subscribe/upgrade and lazy renewal call `Wallet.ensureBalance` outside their transaction; 3-D Secure handled on session ("Confirm payment") and off session (past-due banner, email, a link to authenticate); the webhook settles top-ups and wakes the renewal.
 - **15d Operations:** Admin → Payments (top-ups by status, stuck `initiated`/`paid`/`processing` rows with Settle and Abandon), refunds and disputes recorded from webhooks for the admin to act on.
 - **Done when:**
-  1. A customer saves a card (including one that needs 3-D Secure) without leaving the dashboard, and removes it again.
+  1. A customer saves a card (including one that needs 3-D Secure) without leaving the dashboard, and removes it again (refused while it's the last card and a paid plan renews).
+  1b. Subscribing to a paid plan without a saved card is refused (server side) and the dialog leads to Add card.
   2. Add funds $20 credits the wallet once, even with a double click, a slow webhook or a duplicated webhook.
   3. A renewal with an empty wallet and a saved card charges exactly the shortfall once (5 concurrent attempts tested) and the period starts; with a declined card the tenant goes past due and is emailed.
   4. A renewal card that needs authentication leaves the tenant past due with a "Confirm payment" action that completes it on session.
@@ -1718,7 +1719,7 @@ interface PaymentGateway {
   - `succeeded` → credited immediately, shown at once;
   - `requires_action` (3-D Secure) → the top-up stays `pending`, the browser completes it with the returned client secret, and the webhook settles it;
   - declined → the Stripe message is shown, nothing is credited.
-- **Subscribe / upgrade (on session):** before today's transaction, `Wallet.ensureBalance(price, key "sub:…")` with autoPay on; `requires_action` returns the client secret to the confirm dialog ("Confirm payment"), then the subscribe call is retried with the same key.
+- **Subscribe / upgrade (on session):** a paid plan needs a saved card (§25.10, 4); without one the plan dialog sends the owner to Billing → Add card first. Before today's transaction, `Wallet.ensureBalance(price, key "sub:…")` with autoPay on; `requires_action` returns the client secret to the confirm dialog ("Confirm payment"), then the subscribe call is retried with the same key.
 - **Lazy renewal (off session):** when a period has ended, `ensureBalance(price, key "renew:<sub>:<periodEnd>:<attempt>")` runs before the renewal transaction; `attempt` is the hourly retry count, so a declined card can be retried next hour without reusing a failed charge.
   - Success → the renewal proceeds as today.
   - Pending (bank processing) → past due until the webhook settles; on settlement our webhook sets `nextRenewalAttemptAt = now` so the next entitlement check renews.
@@ -1751,8 +1752,8 @@ interface PaymentGateway {
 - Against Stripe test mode: test cards for success, decline, insufficient funds and 3-D Secure (`4000 0025 0000 3155`), `stripe listen --forward-to localhost:8000/payments/api/webhook/stripe`.
 - Browser: save, remove and default cards, Add funds with 3-D Secure, the subscribe confirm with authentication; light, dark, phone and Arabic.
 
-### 25.10 Open questions for the owner
-1. **Stripe account:** which entity and country, and the live/test keys (§CONTEXT 4).
-2. **Billing replaces the core Wallet nav entry?** Proposed yes: one place for balance, cards and history.
-3. **Add funds limits:** $5 minimum, $1,000 maximum and the daily cap, OK?
-4. **Card required for paid plans?** Proposed no: a funded wallet is enough; autoPay is optional.
+### 25.10 Owner's decisions
+1. **Stripe account:** the owner's LLC. The owner enters the keys in the platform settings (§25.8).
+2. **Billing replaces the core Wallet entry** in the sidebar (the core Wallet route is hidden; its data is shown on Billing).
+3. **Add funds limits:** $5 minimum, $1,000 maximum, and a daily cap, as proposed.
+4. **A saved card is mandatory for paid plans**, to keep fake accounts out: subscribing or upgrading to a plan with a price needs a saved, unexpired card (checked server side), even when the wallet could pay. Renewals still charge the wallet first and the card only for the shortfall. Removing the last card is refused while a paid plan renews; the owner cancels or adds another card first. Free and complimentary plans need no card.
