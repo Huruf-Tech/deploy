@@ -21,6 +21,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 import { RefSelect } from "@/core/custom/RefSelect"
+import { use } from "@/core/hooks/use"
 import type { TField } from "@/core/lib/jsonSchemaToFields"
 import { getLocalPath } from "@/core/lib/utils"
 import { errorMessage } from "@/lib/utils"
@@ -67,6 +68,10 @@ type TPlanDraft = {
   isFree: boolean
   active: boolean
   sortOrder: number
+  /** `server`: a rentable size (PLAN §26.6 A) with a class and resources. */
+  kind: "workspace" | "server"
+  class?: string
+  resources: { vcpu: number; memMb: number; diskGb: number; trafficGb: number }
 }
 
 const blank = (): TPlanDraft => ({
@@ -87,6 +92,8 @@ const blank = (): TPlanDraft => ({
   isFree: false,
   active: true,
   sortOrder: 0,
+  kind: "workspace",
+  resources: { vcpu: 1, memMb: 2048, diskGb: 25, trafficGb: 100 },
 })
 
 const slugify = (s: string) =>
@@ -95,6 +102,13 @@ const slugify = (s: string) =>
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "")
     .slice(0, 50)
+
+const classField = {
+  name: "class",
+  type: "text",
+  ref: "serverClasses",
+  refLabel: "name",
+} as TField
 
 const tenantsField = {
   name: "allowedTenants",
@@ -136,6 +150,9 @@ export default function PlanForm() {
           allowedTenants: (found.allowedTenants ?? []).map(String),
           limits: { ...base.limits, ...found.limits },
           features: { ...base.features, ...found.features },
+          kind: found.kind ?? "workspace",
+          class: found.class ? String(found.class) : undefined,
+          resources: { ...base.resources, ...found.resources },
         })
       })
       .catch((e) => {
@@ -157,11 +174,22 @@ export default function PlanForm() {
     event.preventDefault()
     setBusy(true)
     // isFree is set by setup only; the API refuses changes to it.
-    const { isFree: _, ...body } = {
+    const {
+      isFree: _,
+      class: cls,
+      resources,
+      ...rest
+    } = {
       ...plan,
       description: plan.description.trim() || undefined,
       allowedTenants: plan.visibility === "private" ? plan.allowedTenants : [],
     }
+    if (plan.kind === "server" && !cls) {
+      setBusy(false)
+      return toast.error(t("Pick the size's class"))
+    }
+    const body =
+      plan.kind === "server" ? { ...rest, class: cls, resources } : rest
     try {
       if (id) await ThunderSDK.plans.update({ params: { id }, body })
       else await ThunderSDK.plans.create({ body })
@@ -235,6 +263,39 @@ export default function PlanForm() {
           </div>
         </Panel>
 
+        {!plan.isFree && (
+          <Panel title={t("Kind")} bodyClassName="flex flex-col gap-2">
+            <Select
+              items={[
+                {
+                  value: "workspace",
+                  label: t("Workspace plan: quotas and features"),
+                },
+                {
+                  value: "server",
+                  label: t("Server size: a rentable partition"),
+                },
+              ]}
+              value={plan.kind}
+              onValueChange={(v) => set({ kind: v as TPlanDraft["kind"] })}
+            >
+              <SelectTrigger aria-label={t("Kind")} className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="workspace">
+                  {t("Workspace plan: quotas and features")}
+                </SelectItem>
+                <SelectItem value="server">
+                  {t("Server size: a rentable partition")}
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </Panel>
+        )}
+
+        {plan.kind === "server" && <ServerSize plan={plan} set={set} />}
+
         <Panel title={t("Price")} bodyClassName="grid gap-4 sm:grid-cols-3">
           <div className="flex flex-col gap-2">
             <Label htmlFor="plan-amount">{t("Amount")}</Label>
@@ -300,49 +361,55 @@ export default function PlanForm() {
           </div>
         </Panel>
 
-        <Panel
-          title={t("Limits")}
-          bodyClassName="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"
-        >
-          {LIMITS.map(([key, label]) => (
-            <div key={key} className="flex flex-col gap-2">
-              <Label htmlFor={`limit-${key}`}>{t(label)}</Label>
-              <Input
-                id={`limit-${key}`}
-                type="number"
-                min={key === "releasesKept" ? 1 : 0}
-                step={1}
-                required
-                value={plan.limits[key]}
-                onChange={(e) =>
-                  set({
-                    limits: {
-                      ...plan.limits,
-                      [key]: Math.trunc(Number(e.target.value)),
-                    },
-                  })
-                }
-              />
-            </div>
-          ))}
-        </Panel>
-
-        <Panel title={t("Features")} bodyClassName="grid gap-3 sm:grid-cols-2">
-          {FEATURES.map(([key, label]) => (
-            <label
-              key={key}
-              className="flex items-center justify-between gap-3 rounded-lg border px-3 py-2 text-[13px]"
-            >
-              {t(label)}
-              <Switch
-                checked={plan.features[key]}
-                onCheckedChange={(on) =>
-                  set({ features: { ...plan.features, [key]: on } })
-                }
-              />
-            </label>
-          ))}
-        </Panel>
+        {plan.kind !== "server" && (
+          <Panel
+            title={t("Limits")}
+            bodyClassName="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"
+          >
+            {LIMITS.map(([key, label]) => (
+              <div key={key} className="flex flex-col gap-2">
+                <Label htmlFor={`limit-${key}`}>{t(label)}</Label>
+                <Input
+                  id={`limit-${key}`}
+                  type="number"
+                  min={key === "releasesKept" ? 1 : 0}
+                  step={1}
+                  required
+                  value={plan.limits[key]}
+                  onChange={(e) =>
+                    set({
+                      limits: {
+                        ...plan.limits,
+                        [key]: Math.trunc(Number(e.target.value)),
+                      },
+                    })
+                  }
+                />
+              </div>
+            ))}
+          </Panel>
+        )}
+        {plan.kind !== "server" && (
+          <Panel
+            title={t("Features")}
+            bodyClassName="grid gap-3 sm:grid-cols-2"
+          >
+            {FEATURES.map(([key, label]) => (
+              <label
+                key={key}
+                className="flex items-center justify-between gap-3 rounded-lg border px-3 py-2 text-[13px]"
+              >
+                {t(label)}
+                <Switch
+                  checked={plan.features[key]}
+                  onCheckedChange={(on) =>
+                    set({ features: { ...plan.features, [key]: on } })
+                  }
+                />
+              </label>
+            ))}
+          </Panel>
+        )}
 
         <Panel
           title={t("Availability")}
@@ -434,5 +501,98 @@ export default function PlanForm() {
         </div>
       </form>
     </Page>
+  )
+}
+
+/** A server size's class and resources, with the rate card's price (PLAN §26.8). */
+function ServerSize({
+  plan,
+  set,
+}: {
+  plan: TPlanDraft
+  set: (patch: Partial<TPlanDraft>) => void
+}) {
+  const { t } = useTranslation()
+  const r = plan.resources
+  const suggested = use(
+    ThunderSDK.useCaching(
+      [
+        "rentals",
+        "quote",
+        plan.class ?? "",
+        String(r.vcpu),
+        String(r.memMb),
+        String(r.diskGb),
+      ],
+      async ({ signal }) =>
+        plan.class
+          ? await ThunderSDK.rentals
+              .quote({
+                query: {
+                  class: plan.class,
+                  vcpu: r.vcpu,
+                  memMb: r.memMb,
+                  diskGb: r.diskGb,
+                },
+                signal,
+              })
+              .then((q) => q.price)
+              .catch(() => undefined)
+          : undefined
+    )
+  ).data
+  const field = (
+    key: keyof TPlanDraft["resources"],
+    label: string,
+    scale = 1,
+    step = 1
+  ) => (
+    <div className="flex flex-col gap-2">
+      <Label htmlFor={`size-${key}`}>{label}</Label>
+      <Input
+        id={`size-${key}`}
+        type="number"
+        min={0}
+        step={step}
+        required
+        value={r[key] / scale}
+        onChange={(e) =>
+          set({ resources: { ...r, [key]: Number(e.target.value) * scale } })
+        }
+      />
+    </div>
+  )
+  return (
+    <Panel title={t("Size")} bodyClassName="grid gap-4 sm:grid-cols-2">
+      <div className="flex flex-col gap-2 sm:col-span-2">
+        <Label htmlFor="size-class">{t("Class")}</Label>
+        <RefSelect
+          id="size-class"
+          field={classField}
+          value={plan.class ?? null}
+          onValueChange={(v) => set({ class: v ? String(v) : undefined })}
+        />
+      </div>
+      {field("vcpu", t("vCPU"), 1, 0.5)}
+      {field("memMb", t("Memory (GB)"), 1024, 0.5)}
+      {field("diskGb", t("Disk (GB)"), 1, 5)}
+      {field("trafficGb", t("Traffic included (GB a month)"))}
+      {typeof suggested === "number" && (
+        <p className="flex items-center gap-2 text-[13px] text-muted-foreground sm:col-span-2">
+          {t("The rate card says {{price}} a month.", {
+            price: `\u2066$${(suggested / 100).toFixed(2)}\u2069`,
+          })}
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="h-7"
+            onClick={() => set({ price: { ...plan.price, amount: suggested } })}
+          >
+            {t("Use it")}
+          </Button>
+        </p>
+      )}
+    </Panel>
   )
 }

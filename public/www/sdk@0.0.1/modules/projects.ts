@@ -137,6 +137,7 @@ export type create$return = {
 export type placementInfo$return = {
     server: string;
     name: string;
+    rented: boolean;
     labels: {
         [K in string]: string;
     };

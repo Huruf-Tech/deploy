@@ -60,12 +60,22 @@ export type rejectResize$body = {
 export type recreatePartition$params = {
     id?: string;
 };
-export type ensurePool$params = {
+export type pool$params = {
     id?: string;
 };
-export type ensurePool$body = {
-    device?: string | undefined;
-    loopSizeGb?: number | undefined;
+export type pool$return = {
+    platform: boolean;
+    rentals: {
+        _id: string;
+        partition?: string | undefined;
+        tenantName?: string | undefined;
+        plan?: string | undefined;
+        /** Cents per month */
+        price: number;
+        status: string;
+    }[];
+    /** Cents per month from live rentals */
+    revenue: number;
 };
 export type updatePool$params = {
     id?: string;
@@ -74,6 +84,13 @@ export type updatePool$body = {
     class?: string | undefined;
     accepting?: boolean | undefined;
     monthlyCost?: number | undefined;
+};
+export type ensurePool$params = {
+    id?: string;
+};
+export type ensurePool$body = {
+    device?: string | undefined;
+    loopSizeGb?: number | undefined;
 };
 export type createRemainder$params = {
     id?: string;
@@ -92,10 +109,12 @@ export const rentalsAdminModule = (sdk: typeof BaseSDK) => {
         rejectResize$params: rejectResize$params,
         rejectResize$body: rejectResize$body,
         recreatePartition$params: recreatePartition$params,
-        ensurePool$params: ensurePool$params,
-        ensurePool$body: ensurePool$body,
+        pool$params: pool$params,
+        pool$return: pool$return,
         updatePool$params: updatePool$params,
         updatePool$body: updatePool$body,
+        ensurePool$params: ensurePool$params,
+        ensurePool$body: ensurePool$body,
         createRemainder$params: createRemainder$params,
     };
 
@@ -297,16 +316,16 @@ export const rentalsAdminModule = (sdk: typeof BaseSDK) => {
             return res;
         }, data);
     },
-        ensurePool(data: {
-        params: ensurePool$params,
+        pool(data: {
+        params: pool$params,
         query?: undefined,
-        body: ensurePool$body,
-    } & TRequestOptions<unknown>) {
+        body?: undefined,
+    } & TRequestOptions<pool$return>) {
         return sdk.resolveAxiosResponse(async () => {
-            sdk.checkPermission("rentalsAdmin", "ensurePool");
+            sdk.checkPermission("rentalsAdmin", "pool");
 
-            const method = "post";
-            const toPath = compile("rentalsAdmin/api/pool/:id/ensure");
+            const method = "get";
+            const toPath = compile("rentalsAdmin/api/pool/:id");
             const requestPayload = {
                 method,
                 url: toPath(sdk.resolvePathParams(data?.params)),
@@ -335,6 +354,34 @@ export const rentalsAdminModule = (sdk: typeof BaseSDK) => {
 
             const method = "patch";
             const toPath = compile("rentalsAdmin/api/pool/:id");
+            const requestPayload = {
+                method,
+                url: toPath(sdk.resolvePathParams(data?.params)),
+                params: data?.query,
+                data: data?.body,
+                signal: data?.signal,
+                ...(data?.axiosConfig
+                ? sdk.resolveAxiosConfig(data.axiosConfig)
+                : undefined),
+            };
+
+            sdk.log("Sending Request:", requestPayload);
+
+            const res = await sdk._axios!.request(requestPayload);
+
+            return res;
+        }, data);
+    },
+        ensurePool(data: {
+        params: ensurePool$params,
+        query?: undefined,
+        body: ensurePool$body,
+    } & TRequestOptions<unknown>) {
+        return sdk.resolveAxiosResponse(async () => {
+            sdk.checkPermission("rentalsAdmin", "ensurePool");
+
+            const method = "post";
+            const toPath = compile("rentalsAdmin/api/pool/:id/ensure");
             const requestPayload = {
                 method,
                 url: toPath(sdk.resolvePathParams(data?.params)),
@@ -390,8 +437,9 @@ export const rentalsAdminModule = (sdk: typeof BaseSDK) => {
     (methods.approveResize as any).__scope = "rentalsAdmin";
     (methods.rejectResize as any).__scope = "rentalsAdmin";
     (methods.recreatePartition as any).__scope = "rentalsAdmin";
-    (methods.ensurePool as any).__scope = "rentalsAdmin";
+    (methods.pool as any).__scope = "rentalsAdmin";
     (methods.updatePool as any).__scope = "rentalsAdmin";
+    (methods.ensurePool as any).__scope = "rentalsAdmin";
     (methods.createRemainder as any).__scope = "rentalsAdmin";
 
     sdk["_moduleGroup"].set(methods, "Admin");

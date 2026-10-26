@@ -9,6 +9,7 @@ export type create$body = {
         diskGb: number;
         trafficGb: number;
     } | undefined;
+    custom?: boolean | undefined;
     class?: string | undefined;
     slug: string;
     description?: string | undefined;
@@ -73,6 +74,7 @@ export type get$return = {
             diskGb: number;
             trafficGb: number;
         } | undefined;
+        custom?: boolean | undefined;
         class?: string | undefined;
         slug: string;
         description?: string | undefined;
@@ -127,6 +129,7 @@ export type update$body = {
         diskGb: number;
         trafficGb: number;
     } | undefined) | undefined) | undefined;
+    custom?: ((boolean | undefined) | undefined) | undefined;
     class?: ((string | undefined) | undefined) | undefined;
     slug?: (string | undefined) | undefined;
     description?: ((string | undefined) | undefined) | undefined;

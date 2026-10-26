@@ -489,7 +489,14 @@ export default function BillingPage() {
                 header: t("Plan"),
                 sortValue: (p) => p.planName,
                 cell: (p) => (
-                  <span className="font-medium">{p.planName ?? "—"}</span>
+                  <div>
+                    <div className="font-medium">{p.planName ?? "—"}</div>
+                    {p.scope === "server" && (
+                      <div className="text-xs text-muted-foreground">
+                        {t("Rented server")}
+                      </div>
+                    )}
+                  </div>
                 ),
               },
               {

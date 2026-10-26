@@ -278,6 +278,17 @@ Deno.test({
             `/servers/api/${server._id}`,
           );
           assertEquals(del.status, 400, JSON.stringify(del.json));
+          // Its ports are the pool machine's: custom domains only.
+          const exposed = await customer.call("POST", "/projects/api", {
+            name: "web",
+            slug: "web",
+            source: { type: "image", image: "nginx:1.27" },
+            runtime: { port: 80 },
+            publicPort: 8080,
+            servers: [server._id.toString()],
+          });
+          assertEquals(exposed.status, 400, JSON.stringify(exposed.json));
+          assert(JSON.stringify(exposed.json).includes("custom domain"));
         },
       );
 

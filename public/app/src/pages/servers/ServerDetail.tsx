@@ -36,6 +36,8 @@ import { StatusPill } from "./StatusPill"
 import { ServerLabels, ServerName } from "./ServerLabels"
 import { HostSetup } from "./HostSetup"
 import { RemoveServerDialog } from "./RemoveServerDialog"
+import { RentalPanel } from "@/pages/rentals/Rentals"
+import { PoolPanel } from "@/pages/rentals/PoolPanel"
 import { PageHeader } from "@/components/console/page-header"
 import { gib, serverSchema, stateOf, type TLiveness } from "./server"
 import { useFresh } from "@/hooks/use-fresh"
@@ -443,16 +445,18 @@ export default function ServerDetail() {
                   <IconTerminal2 aria-hidden /> {t("Terminal")}
                 </Button>
               )}
-            {ThunderSDK.isPermitted("servers", "del") && (
-              <Button
-                size="sm"
-                variant="outline"
-                className="text-destructive-foreground"
-                onClick={() => setRemoving(true)}
-              >
-                <IconTrash aria-hidden /> {t("Remove")}
-              </Button>
-            )}
+            {/* A rented server goes with its rental (PLAN §26.9). */}
+            {ThunderSDK.isPermitted("servers", "del") &&
+              server.provider?.kind !== "rented" && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="text-destructive-foreground"
+                  onClick={() => setRemoving(true)}
+                >
+                  <IconTrash aria-hidden /> {t("Remove")}
+                </Button>
+              )}
           </>
         }
       />
@@ -481,6 +485,10 @@ export default function ServerDetail() {
           )}
         </div>
         <div className="flex min-w-0 flex-col gap-4">
+          {server.provider?.kind === "rented" && (
+            <RentalPanel server={server._id} />
+          )}
+          <PoolPanel server={server} onChanged={() => request.invalidate()} />
           <Panel title={t("Machine")} bodyClassName="py-1">
             <KeyValue
               items={[

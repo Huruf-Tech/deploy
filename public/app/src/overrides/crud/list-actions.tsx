@@ -1,6 +1,6 @@
 import type { TListActionsOverride } from "@/core/types"
-import { AddServerButton } from "@/pages/servers/AddServerButton"
+import { ServerActions } from "@/pages/servers/ServerActions"
 
 export const listActions: TListActionsOverride = {
-  servers: AddServerButton,
+  servers: ServerActions,
 }

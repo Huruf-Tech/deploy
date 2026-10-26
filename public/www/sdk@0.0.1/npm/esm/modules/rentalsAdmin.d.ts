@@ -55,12 +55,22 @@ export type rejectResize$body = {
 export type recreatePartition$params = {
     id?: string;
 };
-export type ensurePool$params = {
+export type pool$params = {
     id?: string;
 };
-export type ensurePool$body = {
-    device?: string | undefined;
-    loopSizeGb?: number | undefined;
+export type pool$return = {
+    platform: boolean;
+    rentals: {
+        _id: string;
+        partition?: string | undefined;
+        tenantName?: string | undefined;
+        plan?: string | undefined;
+        /** Cents per month */
+        price: number;
+        status: string;
+    }[];
+    /** Cents per month from live rentals */
+    revenue: number;
 };
 export type updatePool$params = {
     id?: string;
@@ -69,6 +79,13 @@ export type updatePool$body = {
     class?: string | undefined;
     accepting?: boolean | undefined;
     monthlyCost?: number | undefined;
+};
+export type ensurePool$params = {
+    id?: string;
+};
+export type ensurePool$body = {
+    device?: string | undefined;
+    loopSizeGb?: number | undefined;
 };
 export type createRemainder$params = {
     id?: string;
@@ -86,10 +103,12 @@ export declare const rentalsAdminModule: (sdk: typeof BaseSDK) => {
         rejectResize$params: rejectResize$params;
         rejectResize$body: rejectResize$body;
         recreatePartition$params: recreatePartition$params;
-        ensurePool$params: ensurePool$params;
-        ensurePool$body: ensurePool$body;
+        pool$params: pool$params;
+        pool$return: pool$return;
         updatePool$params: updatePool$params;
         updatePool$body: updatePool$body;
+        ensurePool$params: ensurePool$params;
+        ensurePool$body: ensurePool$body;
         createRemainder$params: createRemainder$params;
     };
     readonly queue: (data?: {
@@ -169,10 +188,21 @@ export declare const rentalsAdminModule: (sdk: typeof BaseSDK) => {
         catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<unknown>;
         finally: (onfinally?: (() => void) | null | undefined) => Promise<unknown>;
     };
-    readonly ensurePool: (data: {
-        params: ensurePool$params;
+    readonly pool: (data: {
+        params: pool$params;
         query?: undefined;
-        body: ensurePool$body;
+        body?: undefined;
+    } & TRequestOptions<pool$return>) => {
+        readonly raw: Promise<import("axios").AxiosResponse<pool$return, any, {}, any>>;
+        readonly data: Promise<pool$return>;
+        then: <TResult1 = pool$return, TResult2 = never>(onfulfilled?: ((value: pool$return) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+        catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<pool$return | TResult>;
+        finally: (onfinally?: (() => void) | null | undefined) => Promise<pool$return>;
+    };
+    readonly updatePool: (data: {
+        params: updatePool$params;
+        query?: undefined;
+        body: updatePool$body;
     } & TRequestOptions<unknown>) => {
         readonly raw: Promise<import("axios").AxiosResponse<unknown, any, {}, any>>;
         readonly data: Promise<unknown>;
@@ -180,10 +210,10 @@ export declare const rentalsAdminModule: (sdk: typeof BaseSDK) => {
         catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<unknown>;
         finally: (onfinally?: (() => void) | null | undefined) => Promise<unknown>;
     };
-    readonly updatePool: (data: {
-        params: updatePool$params;
+    readonly ensurePool: (data: {
+        params: ensurePool$params;
         query?: undefined;
-        body: updatePool$body;
+        body: ensurePool$body;
     } & TRequestOptions<unknown>) => {
         readonly raw: Promise<import("axios").AxiosResponse<unknown, any, {}, any>>;
         readonly data: Promise<unknown>;

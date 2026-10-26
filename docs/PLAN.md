@@ -1251,6 +1251,17 @@ Owner's decisions recorded (§25.10). 15a–15d built; the owner tested the paym
 
 ### Phase 16 — Shared resources: rent partitions of Huruf's machines (planned, D47, §26)
 Not started; the owner says go per stage. Each stage ends with a review. Built on the existing mechanisms, refactoring them where needed (§26.6).
+- **16e status: built (pending review).** The screens for 16d.
+  - **Customer:**
+    - "Rent a server" next to "Add server": class, then a size or custom amounts, a live price (traffic allowance, overage rate, the partition overhead noted), then the request funded in the dialog.
+    - "Rented servers on the way" above the servers list: requests (with Withdraw), approved ones still being set up, and refusals with their reason for two weeks.
+    - The rented server's page: a Rental panel (size, resources bought, price, renewal or end date, a pending resize) with Resize (the same dialog) and Cancel; Remove is hidden. The list shows what they bought, not the partition with its overhead.
+    - `publicPort` is refused on projects placed on a rented server (custom domains only), and the project forms disable the field with the reason.
+    - Billing history marks a rental's lines "Rented server".
+  - **Admin:**
+    - Admin → Rentals: the queue (requests and resizes), approve with placement (pool machines of the class, room, the remainder's memory warning), reject with a reason.
+    - A pool machine's Pool panel: make a pool machine, allocatable vs rented, earns vs costs a month, class, cost and accepting, Huruf's partition, and partitions with their usage.
+    - Admin → Server classes (rate card), and the plan form's Kind: a server size with its class, resources, traffic and the rate card's suggested price. Custom plans (`custom: true`) stay out of the catalog.
 - **16d status: built (pending review).** Rentals on the backend; the screens are 16e.
   - **Classes and sizes:** `serverClasses` (rate card, included traffic per vCPU, CPU overcommit, maximum per rental; root CRUD `serverClasses`). Sizes are server plans with a `class`. `deno task setup` seeds the launch classes and sizes (§26.8), never overwriting edits. `priceOf` (rate card + the partition overhead at the memory rate, rounded up to whole dollars) prices seeds and custom requests.
   - **Requests** (`rentals` router, members see, the owner rents, a saved card required):

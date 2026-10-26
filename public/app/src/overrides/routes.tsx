@@ -9,6 +9,8 @@ import {
   IconReportMoney,
   IconBucket,
   IconCash,
+  IconServerBolt,
+  IconServerCog,
   IconHistory,
   IconBraces,
   IconBrandGithub,
@@ -38,6 +40,7 @@ import Billing from "@/pages/billing"
 import BillingAdmin from "@/pages/billing/Admin"
 import Payments from "@/pages/billing/Payments"
 import PaymentsAdmin from "@/pages/billing/PaymentsAdmin"
+import RentalsAdmin from "@/pages/admin/Rentals"
 import ControlPlane from "@/pages/admin/ControlPlane"
 import Network from "@/pages/network"
 import AlertRules from "@/pages/alerts"
@@ -91,6 +94,19 @@ export const routes: TRoutesOverride = {
     display: () => ThunderSDK.isPermitted("paymentsAdmin", "topups"),
     Component: PaymentsAdmin,
   },
+  // Rentals waiting for approval (PLAN §26.8).
+  rentalsAdmin: {
+    name: "Rentals",
+    path: "rentals",
+    group: "Admin",
+    icon: IconServerBolt,
+    display: () => ThunderSDK.isPermitted("rentalsAdmin", "queue"),
+    Component: RentalsAdmin,
+  },
+  // Rate cards of rentable capacity: generated list, our form.
+  serverClasses: { merge: true, name: "Server classes", icon: IconServerCog },
+  // The customer's rentals live on the Servers page.
+  rentals: { display: false },
   controlPlane: {
     name: "Control plane",
     path: "controlPlane",

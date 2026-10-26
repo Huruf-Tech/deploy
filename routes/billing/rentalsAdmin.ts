@@ -167,6 +167,68 @@ export default new Router("/api", function rentalsAdmin(router) {
     };
   });
 
+  // A server's pool state for its page (PLAN §26.8): whether it can be one
+  // (the platform's servers only), and the rentals on it with their prices.
+  router.get("/pool/:id", function pool() {
+    const $return = z.object({
+      platform: z.boolean(),
+      rentals: z.array(z.object({
+        _id: z.string(),
+        partition: z.string().optional(),
+        tenantName: z.string().optional(),
+        plan: z.string().optional(),
+        price: z.number().describe("Cents per month"),
+        status: z.string(),
+      })),
+      revenue: z.number().describe("Cents per month from live rentals"),
+    });
+
+    return {
+      shape: () => ({ params: $params, return: $return }),
+      handler: async (req) => {
+        const { id } = $params.parse(paramsAsJson(req));
+        const server = await serverModel.findOne({ _id: id }, {
+          projection: { tenant: 1 },
+        });
+        if (!server) throw Response.notFound("Server not found");
+        const platform = server.tenant.toHexString() ===
+          await readTextSetting("PLATFORM_TENANT", "");
+        const subs = platform
+          ? await subscriptionModel.find({
+            kind: "server",
+            "rental.host": id,
+            status: { $in: ["active", "pastDue", "suspended"] },
+          }, { limit: 200 }).toArray()
+          : [];
+        const [tenants, plans] = await Promise.all([
+          tenantModel.find({ _id: { $in: subs.map((s) => s.tenant) } }, {
+            projection: { name: 1 },
+          }).toArray(),
+          planModel.find({ _id: { $in: subs.map((s) => s.plan) } }, {
+            projection: { name: 1, price: 1 },
+          }).toArray(),
+        ]);
+        const rows = subs.map((s) => {
+          const plan = plans.find((p) => p._id.equals(s.plan));
+          return {
+            _id: s._id,
+            partition: s.rental?.partition,
+            tenantName: tenants.find((t) => t._id.equals(s.tenant))?.name,
+            plan: plan?.name,
+            price: plan?.price.amount ?? 0,
+            status: s.status,
+          };
+        });
+        return Response.json({
+          platform,
+          rentals: rows,
+          revenue: rows.filter((r) => r.status !== "suspended")
+            .reduce((sum, r) => sum + r.price, 0),
+        });
+      },
+    };
+  });
+
   // Pool machines (PLAN §26.5): prepare one, set its class, add Huruf's partition.
   router.post("/pool/:id/ensure", function ensurePool() {
     const $body = z.object({

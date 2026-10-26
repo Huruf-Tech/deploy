@@ -180,6 +180,16 @@ async function assertPortFree(opts: {
   if (RESERVED_PORTS.includes(opts.port)) {
     throw Response.badRequest(`Port ${opts.port} is reserved on servers`);
   }
+  // A partition shares its machine's ports: custom domains only (PLAN §26 D).
+  const rented = await serverModel.findOne({
+    _id: { $in: opts.servers },
+    "provider.kind": "rented",
+  }, { projection: { name: 1 } });
+  if (rented) {
+    throw Response.badRequest(
+      `${rented.name} is rented from Huruf: use a custom domain instead of a public port`,
+    );
+  }
   const taken = await projectModel.findOne({
     tenant: opts.tenant,
     servers: { $in: opts.servers },
@@ -675,7 +685,7 @@ export async function deleteProject(tenant: ObjectId, id: ObjectId) {
 export async function placement(tenant: ObjectId) {
   const [servers, projects, leases] = await Promise.all([
     serverModel.find({ tenant, status: "active" }, {
-      projection: { name: 1, inventory: 1, labels: 1 },
+      projection: { name: 1, inventory: 1, labels: 1, provider: 1 },
       limit: 200,
     }).toArray(),
     projectModel.find({ tenant }, {
@@ -708,6 +718,7 @@ export async function placement(tenant: ObjectId) {
     const lease = leases.find((l) => l._id.equals(server._id));
     return {
       server: server._id,
+      rented: server.provider?.kind === "rented",
       name: server.name,
       labels: server.labels,
       online: !!lease && lease.aliveUntil.getTime() > now,

@@ -204,6 +204,7 @@ export default new Router("/api", function billing(router) {
         kind: true,
         note: true,
         ledgerReference: true,
+        scope: true,
       }).extend({ _id: z.string(), planName: z.string().optional() }),
     );
 

@@ -27,6 +27,16 @@ const planSchema = z.object({
     projects: z.number(),
     members: z.number(),
   }),
+  /** Server sizes (PLAN §26.6 A) show resources instead of quotas. */
+  kind: z.enum(["workspace", "server"]).nullish(),
+  resources: z
+    .object({
+      vcpu: z.number(),
+      memMb: z.number(),
+      diskGb: z.number(),
+      trafficGb: z.number(),
+    })
+    .nullish(),
   isFree: z.boolean().optional(),
   active: z.boolean(),
 })
@@ -46,6 +56,9 @@ export function PlanCards(props: TCardProps) {
         badges: (
           <>
             {plan.isFree && <StatusBadge tone="info" label={t("Default")} />}
+            {plan.kind === "server" && (
+              <StatusBadge tone="info" label={t("Server size")} />
+            )}
             {plan.visibility === "private" && (
               <StatusBadge
                 tone="neutral"
@@ -71,17 +84,28 @@ export function PlanCards(props: TCardProps) {
                 </span>
               )}
             </p>
-            <div className="flex flex-wrap gap-1.5">
-              <Chip>
-                {t("{{n}} servers", { n: limit(plan.limits.servers) })}
-              </Chip>
-              <Chip>
-                {t("{{n}} projects", { n: limit(plan.limits.projects) })}
-              </Chip>
-              <Chip>
-                {t("{{n}} members", { n: limit(plan.limits.members) })}
-              </Chip>
-            </div>
+            {plan.kind === "server" && plan.resources ? (
+              <div className="flex flex-wrap gap-1.5">
+                <Chip>{t("{{n}} vCPU", { n: plan.resources.vcpu })}</Chip>
+                <Chip>{`${plan.resources.memMb / 1024} GB`}</Chip>
+                <Chip>{t("{{n}} GB disk", { n: plan.resources.diskGb })}</Chip>
+                <Chip>
+                  {t("{{n}} GB traffic", { n: plan.resources.trafficGb })}
+                </Chip>
+              </div>
+            ) : (
+              <div className="flex flex-wrap gap-1.5">
+                <Chip>
+                  {t("{{n}} servers", { n: limit(plan.limits.servers) })}
+                </Chip>
+                <Chip>
+                  {t("{{n}} projects", { n: limit(plan.limits.projects) })}
+                </Chip>
+                <Chip>
+                  {t("{{n}} members", { n: limit(plan.limits.members) })}
+                </Chip>
+              </div>
+            )}
           </div>
         ),
       })}

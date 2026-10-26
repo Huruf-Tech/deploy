@@ -146,11 +146,11 @@ const rentalsAdminModule = (sdk) => {
                 return res;
             }, data);
         },
-        ensurePool(data) {
+        pool(data) {
             return sdk.resolveAxiosResponse(async () => {
-                sdk.checkPermission("rentalsAdmin", "ensurePool");
-                const method = "post";
-                const toPath = (0, path_to_regexp_1.compile)("rentalsAdmin/api/pool/:id/ensure");
+                sdk.checkPermission("rentalsAdmin", "pool");
+                const method = "get";
+                const toPath = (0, path_to_regexp_1.compile)("rentalsAdmin/api/pool/:id");
                 const requestPayload = {
                     method,
                     url: toPath(sdk.resolvePathParams(data?.params)),
@@ -171,6 +171,26 @@ const rentalsAdminModule = (sdk) => {
                 sdk.checkPermission("rentalsAdmin", "updatePool");
                 const method = "patch";
                 const toPath = (0, path_to_regexp_1.compile)("rentalsAdmin/api/pool/:id");
+                const requestPayload = {
+                    method,
+                    url: toPath(sdk.resolvePathParams(data?.params)),
+                    params: data?.query,
+                    data: data?.body,
+                    signal: data?.signal,
+                    ...(data?.axiosConfig
+                        ? sdk.resolveAxiosConfig(data.axiosConfig)
+                        : undefined),
+                };
+                sdk.log("Sending Request:", requestPayload);
+                const res = await sdk._axios.request(requestPayload);
+                return res;
+            }, data);
+        },
+        ensurePool(data) {
+            return sdk.resolveAxiosResponse(async () => {
+                sdk.checkPermission("rentalsAdmin", "ensurePool");
+                const method = "post";
+                const toPath = (0, path_to_regexp_1.compile)("rentalsAdmin/api/pool/:id/ensure");
                 const requestPayload = {
                     method,
                     url: toPath(sdk.resolvePathParams(data?.params)),
@@ -214,8 +234,9 @@ const rentalsAdminModule = (sdk) => {
     methods.approveResize.__scope = "rentalsAdmin";
     methods.rejectResize.__scope = "rentalsAdmin";
     methods.recreatePartition.__scope = "rentalsAdmin";
-    methods.ensurePool.__scope = "rentalsAdmin";
+    methods.pool.__scope = "rentalsAdmin";
     methods.updatePool.__scope = "rentalsAdmin";
+    methods.ensurePool.__scope = "rentalsAdmin";
     methods.createRemainder.__scope = "rentalsAdmin";
     sdk["_moduleGroup"].set(methods, "Admin");
     return methods;

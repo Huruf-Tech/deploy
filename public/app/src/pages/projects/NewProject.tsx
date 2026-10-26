@@ -397,6 +397,10 @@ export default function NewProject() {
       async ({ signal }) => await ThunderSDK.projects.placementInfo({ signal })
     )
   )
+  // Partitions share their machine's ports: custom domains only (PLAN §26 D).
+  const rentedOn = placement.data?.find(
+    (p) => p.rented && servers.includes(p.server)
+  )
   const projects = use(
     ThunderSDK.useCaching(
       ["projects"],
@@ -552,7 +556,9 @@ export default function NewProject() {
             },
             servers,
             replicasPerServer: replicas,
-            ...(publicPort ? { publicPort: Number(publicPort) } : {}),
+            ...(publicPort && !rentedOn
+              ? { publicPort: Number(publicPort) }
+              : {}),
             // Compose files and one-click services declare their own volumes.
             volumes: composeLike ? [] : volumes,
             variables,
@@ -887,7 +893,16 @@ export default function NewProject() {
                 value={publicPort}
                 onChange={(e) => setPublicPort(e.target.value)}
                 placeholder={t("Private")}
+                disabled={!!rentedOn}
               />
+              {rentedOn && (
+                <FieldDescription>
+                  {t(
+                    "{{server}} is rented from Huruf: it shares its machine's ports, so reach it through a custom domain.",
+                    { server: rentedOn.name }
+                  )}
+                </FieldDescription>
+              )}
             </Field>
             {kind !== "template" && kind !== "compose" && (
               <Field>

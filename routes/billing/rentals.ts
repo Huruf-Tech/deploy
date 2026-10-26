@@ -139,7 +139,7 @@ export default new Router("/api", function rentals(router) {
         const plans = await planModel.find({
           _id: { $in: subs.map((s) => s.plan) },
         }, {
-          projection: { name: 1 },
+          projection: { name: 1, resources: 1 },
         }).toArray();
         return Response.json(subs.map((s) => {
           const plan = plans.find((p) => p._id.equals(s.plan));
@@ -152,7 +152,14 @@ export default new Router("/api", function rentals(router) {
             startedAt: s.startedAt,
             server: s.server,
             plan: plan && { _id: plan._id, name: plan.name },
-            size: s.rental!.size,
+            // What they bought; the partition adds its overhead on top.
+            size: plan?.resources
+              ? {
+                cpus: plan.resources.vcpu,
+                memMb: plan.resources.memMb,
+                diskGb: plan.resources.diskGb,
+              }
+              : s.rental!.size,
             pendingChange: s.rental!.pendingChange?.plan,
             rejectedReason: s.rental!.rejectedReason,
             suspendedAt: s.rental!.suspendedAt,

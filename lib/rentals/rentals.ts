@@ -118,7 +118,7 @@ export class RentalService implements TRentalHooks {
     ]);
     return {
       classes,
-      sizes: sizes.filter((p) => p.class && p.resources),
+      sizes: sizes.filter((p) => p.class && p.resources && !p.custom),
       overheadMb: await this.overheadMb(),
     };
   }
@@ -164,6 +164,7 @@ export class RentalService implements TRentalHooks {
         r.memMb / 1024
       } GB memory, ${r.diskGb} GB disk`,
       kind: "server",
+      custom: true,
       class: cls._id,
       resources: { ...r, trafficGb },
       visibility: "private",

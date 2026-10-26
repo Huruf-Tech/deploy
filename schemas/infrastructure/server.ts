@@ -36,7 +36,8 @@ export const $server = $serverUpdate.extend({
   provider: z.object({
     kind: z.enum(["byo", "rented"]),
     host: $objectId.meta({ ref: "servers" }).optional(),
-    subscription: $objectId.meta({ ref: "subscriptions" }).optional(),
+    // No ref: core resolves refs as modules, and subscriptions have none.
+    subscription: $objectId.optional(),
   }).default({ kind: "byo" }),
   // The dashboard's list filters (the agent protocol schema stays as is).
   inventory: $inventory.extend({

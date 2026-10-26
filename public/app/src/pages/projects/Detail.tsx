@@ -373,6 +373,10 @@ function Settings({
   const [publicPort, setPublicPort] = React.useState(
     project.publicPort ? String(project.publicPort) : ""
   )
+  // Partitions share their machine's ports: custom domains only (PLAN §26 D).
+  const rentedOn = placement.data?.find(
+    (p) => p.rented && servers.includes(p.server)
+  )
   const [strategy, setStrategy] = React.useState<TStrategy>(
     project.deployStrategy
   )
@@ -421,7 +425,7 @@ function Settings({
                 cooldownSec: Number(cooldown),
               }
             : null,
-          publicPort: publicPort ? Number(publicPort) : null,
+          publicPort: publicPort && !rentedOn ? Number(publicPort) : null,
           deployStrategy: strategy,
           acknowledgeVolumeRisk: strategy !== project.deployStrategy,
           autoDeploy,
@@ -552,7 +556,16 @@ function Settings({
                 value={publicPort}
                 onChange={(e) => setPublicPort(e.target.value)}
                 placeholder={t("Private")}
+                disabled={!!rentedOn}
               />
+              {rentedOn && (
+                <FieldDescription>
+                  {t(
+                    "{{server}} is rented from Huruf: it shares its machine's ports, so reach it through a custom domain.",
+                    { server: rentedOn.name }
+                  )}
+                </FieldDescription>
+              )}
             </Field>
             <Field>
               <FieldLabel>{t("Deploy strategy")}</FieldLabel>

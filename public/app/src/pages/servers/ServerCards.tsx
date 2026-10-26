@@ -34,6 +34,7 @@ import { use } from "@/core/hooks/use"
 import { cn } from "@/lib/utils"
 import { AcceptServerDialog } from "./AcceptServerDialog"
 import { AddServerButton } from "./AddServerButton"
+import { RentalRequests, RentServerButton } from "@/pages/rentals/Rentals"
 import { isAddServerOpen, onServersChanged } from "./events"
 import { StatusPill } from "./StatusPill"
 import { LabelChips } from "./ServerLabels"
@@ -634,7 +635,12 @@ function AddServerHint() {
       description={t(
         "Connect a machine over SSH, or run a one-line install on it. Your projects will run there."
       )}
-      action={<AddServerButton />}
+      action={
+        <div className="flex flex-wrap justify-center gap-2">
+          <AddServerButton />
+          <RentServerButton />
+        </div>
+      }
     />
   )
 }
@@ -748,6 +754,7 @@ export default function ServerCards({
           </span>
         </div>
       )}
+      <RentalRequests />
       <BulkAgentUpdate
         servers={servers}
         selectedIds={selectedIds}

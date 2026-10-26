@@ -65,6 +65,7 @@ export type plans$return = {
         diskGb: number;
         trafficGb: number;
     } | undefined;
+    custom?: boolean | undefined;
     class?: string | undefined;
     slug: string;
     description?: string | undefined;
@@ -112,6 +113,7 @@ export type periods$return = {
     kind: "paid" | "complimentary";
     note?: string | undefined;
     ledgerReference?: string | undefined;
+    scope?: ("workspace" | "server") | undefined;
     _id: string;
     planName?: string | undefined;
 }[];

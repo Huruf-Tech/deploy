@@ -182,6 +182,7 @@ export default new Router("/api", function projects(router) {
     const $return = z.array(z.object({
       server: z.string(),
       name: z.string(),
+      rented: z.boolean(),
       labels: z.record(z.string(), z.string()),
       online: z.boolean(),
       cpuCores: z.number(),
