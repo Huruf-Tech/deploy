@@ -43,6 +43,11 @@ Background from the planning conversation that is **not** in [PLAN.md](PLAN.md).
 | Footprints stored on our side, platform-wide usage averages | Footprints stay on agents; cross-customer averages dropped. |
 | Automatic rescheduling to other servers | Users pick servers explicitly ("self-hosted AWS"), so dead servers raise alerts only. |
 | Separate agent repo | Monorepo chosen. The agent uses the same license. |
+| One shared agent per pool machine with per-customer slices (the first D47 design) | Replaced by partitions: each rented partition runs our normal agent and joins the customer's tenant, so every server feature works unchanged. |
+| gVisor for partitions | The owner chose Sysbox: our agent needs Docker, BuildKit and systemd inside the partition, which Sysbox supports fully. gVisor stays possible behind `PartitionDriver`. |
+| Keeping unrented capacity free on pool machines | The owner doesn't want idle capacity: Huruf's remainder partition uses whatever isn't rented and shrinks when a rental is carved out. |
+| One small VM per renting customer instead of sharing | Shared resources (D47): the owner wants to share a machine between small customers; dedicated machines can still be offered as a large size. |
+| Free subdomains for customers without a domain | The owner keeps D43: custom domains only, also on rented servers. |
 
 ## 4. Things the owner still has to provide (not decided in the plan)
 
@@ -69,7 +74,7 @@ Background from the planning conversation that is **not** in [PLAN.md](PLAN.md).
    - Run **`deno task setup`**. **Never `deno task init`**, which resets git history.
    - Restore the `.env` files.
    - Run `npm install` in `public/app`, then `deno task generate:sdk -v 0.0.1 --overwrite` and `npm run build`.
-   - Run `deno task dev`.
+   - Run the server with `ENV_TYPE=test deno serve -A --port=8132 serve.ts`. **Not `deno task dev`:** that task sets `ENV_TYPE=development` itself, so it runs on the root `.env`, which points at production.
 4. **Claude memory doesn't travel** (it is stored per machine). Its contents are in §1 of this file, which CLAUDE.md links to.
 
 ## 6. Where things stand
@@ -87,7 +92,7 @@ Background from the planning conversation that is **not** in [PLAN.md](PLAN.md).
   - No audit logs for now.
   - Volume backups are skipped for now.
   - S3 credentials live in storage connections.
-  - Managed servers are not built without explicit consent.
+  - Managed servers are not built without explicit consent. **Consent given 2026-10-26 with shared resources** (D47, PLAN §26): customers rent slices of Huruf's pool machines; partitions (Sysbox) running our agent, with Huruf's remainder partition using whatever isn't rented; sizes and custom amounts from a per-class rate card; admin approval for now (resizes too); custom domains only; Free tenants can rent; no fixed cap (as many as admins approve); 3 days past due before suspending, 14 suspended before release; an uptime promise (target to be set); terms of service later on the website. **Build on existing mechanisms and refactor them, never a parallel copy:** sizes are plans, a rented server is a subscription plus a server record (PLAN §26.3).
 - **Open items for the owner:**
   - Framework (thunder-ui core, not editable here):
     - `src/core/crud/ViewPage.tsx` redirects `<id>` to `form/<id>` with a path that already contains the base, so the router adds `/app` twice. Our cards avoid it by opening `form/<id>`; core's own users or links through `<id>` still hit it.

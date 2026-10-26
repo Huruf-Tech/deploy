@@ -4,6 +4,9 @@
 > Product: **Huruf Deploy**. Reference product: Dokploy (inspiration, not a clone).
 > Every phase in §16 ends with a review checkpoint before the next one starts.
 
+**v4.6:**
+- **Shared resources** (D47, §26, Phase 16): customers rent partitions of Huruf's pool machines (Sysbox system containers running our agent, joining the customer's tenant); Huruf's remainder partition uses whatever isn't rented. Sizes or custom amounts from a per-class rate card, paid monthly upfront. Consent for platform-run capacity (D42) is given with it.
+
 **v4.5:**
 - **Managed servers** (D42, §24): optional future option, implemented only with the owner's explicit consent. The structural seams are prepared now.
 - §20.3: safety limits are read through a cached `Settings` wrapper (the DB-backed env fallback is uncached).
@@ -115,6 +118,7 @@ A free-to-use SaaS that deploys and operates apps on **the user's own machines**
 | D43 | **Built-in ingress (Phase 11):** Traefik ships in the control plane package (one per instance) and balances each project's custom domains evenly across its healthy servers. Routes come from the control plane (Traefik HTTP provider, no redeploys); certificates are Let's Encrypt via HTTP-01, issued once by the control plane, stored encrypted in MongoDB and synced to every instance. No AWS or Cloudflare dependency; instances are stateless, so more can be added behind any TCP load balancer. Custom domains only: user apps are never served under the platform's own domain (§14). |
 | D44 | **Long polling, not WebSockets (Phase 13):** an agent's poll waits at the control plane until there's something for it (a command, a new spec, terminal input) or a time limit passes. This keeps the polling protocol, adds no dependency to the agent (Go's standard library has no WebSocket client) and keeps old agents working unchanged. WebSockets may come later between the browser and the control plane only, for terminals. |
 | D45 | **AI template assistant (Phase 12):** the platform's own Anthropic key, offered as a plan feature with a monthly limit. It drafts templates (from a GitHub repo or a description) and fixes failed builds and rollouts; a person always reviews and saves. |
+| D47 | **Shared resources (Phase 16, §26):** Huruf's pool machines are split into partitions (Sysbox system containers, behind a `PartitionDriver`), each running our normal agent; a rented partition joins the customer's tenant as an ordinary server, and Huruf's own remainder partition holds everything not rented (CPU uncapped at lowest priority), so nothing sits idle. Sizes are plans and a rental is a subscription (existing mechanisms, refactored where needed), priced from a rate card per class and paid monthly upfront from the wallet. Admins approve requests for now; custom domains only. |
 | D46 | **Payments through Stripe, saved cards first (Phase 15, §25):** customers save a card on a Billing page (Stripe Elements; card data never touches us) and are charged later, off session, when a renewal or payment is short, and on demand through "Add funds". Money always lands in the thunder-core wallet first (`Wallet.ensureBalance` / `addBalance` / `settleTopup`), and every charge still goes through `BillingService`. USD only for now. Gateways sit behind one `PaymentGateway` interface, so more can join the same Billing page later. |
 | D42 | **Managed servers (optional, needs owner consent):** provision EC2 instances on the platform's AWS account and bill plan + metered usage from the wallet. The MVP only prepares the seams (§24). |
 
@@ -1195,10 +1199,10 @@ Found while using the platform; each is in the section it belongs to, and listed
   - Project tabs scroll on narrow screens.
 - **Long polling:** wakes fire after the command or spec document is written, never on the lease counters bumped before it (a poll woken early would have waited out the full hold).
 - **Operations:** every deploy that changes access control or indexes needs `deno task setup:prod` afterwards.
-- **Server metrics:** besides the 24-hour history at 1-minute resolution, the agent keeps the last 15 minutes at 5-second resolution (180 samples) and sends both when a metrics stream opens, so the server chart starts with recent detail instead of empty. Needs the updated agent ("Update agent"); older agents still send the minute history only. Both buffers live in agent memory, so an agent restart starts them over.
+- **Server metrics** (agent v0.0.20, rolled out by the owner 2026-10-26): besides the 24-hour history at 1-minute resolution, the agent keeps the last 15 minutes at 5-second resolution (180 samples) and sends both when a metrics stream opens, so the server chart starts with recent detail instead of empty. Needs the updated agent ("Update agent"); older agents still send the minute history only. Both buffers live in agent memory, so an agent restart starts them over.
 
-### Phase 15 — Payments: Stripe, saved cards and Add funds (planned, D46, §25)
-Owner's decisions recorded (§25.10). 15a–15d built (pending review); left to verify with `stripe listen`: the 3-D Secure paths end to end.
+### Phase 15 — Payments: Stripe, saved cards and Add funds (done, D46, §25)
+Owner's decisions recorded (§25.10). 15a–15d built; the owner tested the payments flows, 3-D Secure included, on 2026-10-26.
 - **15a status (built, pending review):**
   - `lib/payments/`: `PaymentGateway` (`gateway.ts`), `StripeGateway` (`stripe.ts`, `npm:stripe` v23 on the 2026-09-30 API, fetch client, 8 s timeout, keys read per call from settings), `PaymentService` (`payments.ts`).
   - Wired in `lib/services.ts`: `Wallet.onInsufficientBalance` → `payments.coverShortfall`, so every short wallet (renewals, Add funds, `ensureBalance`) charges the default card. Off session it needs autoPay; on session (`payments.onSession`) 3-D Secure returns a client secret for the browser.
@@ -1245,6 +1249,60 @@ Owner's decisions recorded (§25.10). 15a–15d built (pending review); left to 
   6. No card number, CVC or full card data is ever sent to or stored by the control plane (only Stripe ids, brand, last 4, expiry).
   7. Everything works against Stripe test mode with `stripe listen` forwarding webhooks locally.
 
+### Phase 16 — Shared resources: rent partitions of Huruf's machines (planned, D47, §26)
+Not started; the owner says go per stage. Each stage ends with a review. Built on the existing mechanisms, refactoring them where needed (§26.6).
+- **16a status: done, recommendation GO** (details §26.13; scripts in `tools/pool-spike/`: `setup-host.sh`, `partition.sh`, `network.sh`, `partition/Dockerfile`).
+- **16a Spike (go/no-go):** one pool machine (Ubuntu 24.04) with Sysbox.
+  - A partition image with systemd, Docker and our agent; our agent inside, joining a tenant through `/bootstrap`.
+  - Inside the partition: a deploy, a BuildKit build, self-update, the ingress tunnel, WireGuard.
+  - Live resize of CPU, memory and the disk quota; the remainder partition yielding CPU under load.
+  - Isolation: the metadata endpoint, port 25, and partitions reaching each other or the host.
+  - Traffic counters.
+  - **Measure:** idle memory, CPU and disk overhead per partition, start time, and image duplication.
+  - Report before 16b.
+- **16b Refactors (no new feature yet):**
+  - Subscriptions per subject (`kind`, partial unique indexes, migration of existing rows), with `BillingService` per subscription and per-tenant wrappers.
+  - Proration in `chargePeriod`.
+  - `plans.kind`; `provider.kind: "rented"` with `host` and `subscription`.
+  - The fit function shared by the browser and the server.
+  - `notifyOwner`.
+  - Agent inventory from cgroup limits and the disk quota.
+  - Removal of the unused `managedServers` limit and feature.
+  - Existing tests stay green, plus tests for the new shapes.
+- **16c Host role in the agent:**
+  - `PartitionDriver` with the Sysbox implementation.
+  - `partition.create/resize/stop/start/remove` commands.
+  - The remainder partition recomputed on every change.
+  - Per-partition limits, network isolation and the metadata/port 25 block.
+  - Usage and traffic in `summary`.
+- **16d Rentals:**
+  - `serverClasses`; server plans and custom requests.
+  - `requested` subscriptions funded on session.
+  - Approval with placement (Admin → Subscriptions → Requests) creating the partition and its join token.
+  - Renewal with traffic overage.
+  - Past due → suspended → released.
+  - Resize up and down; cancel.
+- **16e Screens:**
+  - "Rent a server" (class → size or custom → price → request), and pending requests.
+  - The rented server's page: period, Resize and Cancel in place of Uninstall; `publicPort` hidden with a reason.
+  - Billing lines.
+  - The Partitions panel on pool machines.
+  - Emails.
+- **16f Operations:** moving a partition between machines, draining, cost vs revenue, spare capacity per class, measured uptime per rented server.
+- **Done when:**
+  1. **Renting:** Salha (on Free) requests 1 vCPU / 2 GB / 25 GB and funds it in the dashboard (3-D Secure included). An admin approves it on a 2 vCPU / 8 GB pool machine. "Huruf · Small" appears in her servers and her developer deploys a website with a custom domain.
+  2. **No idle capacity:** before Salha's rental, Huruf's remainder partition could use all 8 GB and both vCPUs. After it, the remainder has 8 GB minus Salha's 2 GB minus the reserve, and still uses Salha's idle CPU. Under load Salha gets her full vCPU.
+  3. **Isolation:**
+     - Salha's partition can't use more than it paid for.
+     - It can't reach other partitions, the host, the metadata endpoint or port 25.
+     - A second customer is unaffected by her load (stress test).
+  4. **Billing:**
+     - Renewal charges the month plus traffic overage once (5 concurrent attempts).
+     - An unpaid rental is suspended after 3 days and released after 14 more, with the emails; paying before release resumes it.
+  5. **Resize:** an approved resize up applies in place without a restart and charges with proration once. One that doesn't fit is moved by an admin, and her server, projects and domains stay the same.
+  6. **Nothing else changes:** workspace plans, BYO servers and existing billing behave as before (existing tests green).
+- **Phase 17 (later):** pool machines provisioned and retired on AWS automatically (`ServerProvisioner`, §24), and automatic approval when a class has room.
+
 ### Phase 14 — Backlog (after MVP)
 - Ability to upgrade already installed agent along with its deps — **done (pending review):**
   - Agents report the SHA-256 of their binary. The control plane compares it with the `SHA256SUMS` the installer uses (`AGENT_DOWNLOAD_BASE`; optional `AGENT_CHECKSUMS_BASE` when the control plane reaches that host under another address), cached 5 minutes.
@@ -1254,14 +1312,14 @@ Owner's decisions recorded (§25.10). 15a–15d built (pending review); left to 
 - **Standby servers and auto-placement** (owner likes it; plan as its own phase): the control plane picks servers by free capacity and labels, and spare servers take over a dead server's projects. Projects with local volumes can't move.
 - Mesh relay for NAT'd servers
 - More payment gateways on the Billing page (after Phase 15's Stripe)
-- **Proration on upgrade** (owner agrees, about a day): the unused part of the current period is credited against the new plan, as a wallet ledger entry shown in the confirm dialog. Open: on a downgrade, credit the wallet, or switch at the period's end.
+- **Proration on upgrade** (owner: always; built with Phase 16b, §26.6 B): the unused part of the current period is credited against the new plan, as a wallet ledger entry shown in the confirm dialog. Downgrades switch at the period's end, so they need none.
 - AWS ECR registry (token refresh)
 - **GitHub Actions as builder, including Android builds of Thunder apps** (the owner's next target after Phase 12): builds that don't run on the servers, with Android signing keys.
 - GitLab/Bitbucket (consent needed)
 - PR preview deployments (consent needed)
 - macOS agent (consent needed)
 - **More roles** (owner agrees): viewer (read-only), developer (projects and variables only), billing manager, and per-project access.
-- Managed servers on our AWS account (D42, §24), only with the owner's explicit consent
+- Managed servers on our AWS account (D42, §24): now Phase 17, after shared resources (D47, §26)
 
 ---
 
@@ -1551,7 +1609,7 @@ Subscriptions are **per tenant**, because thunder-core wallets are per `{tenant,
 - **Subscribe / upgrade** (tenant owner only):
   - `Wallet.transfer({ fromTenant: tenant, toTenant: PLATFORM_TENANT, amount, currency, idempotencyKey: "sub:<subscription>:<periodStart>", foreignRefType: "subscriptionPeriod", purpose: "subscription" })`.
   - The new `subscriptionPeriods` entry is inserted **in the same Mongo transaction** (`databaseSession`), so a charge always has its log entry and vice versa.
-  - **Upgrade:** the new plan starts immediately with a fresh period. No proration in the MVP; the UI states this before confirming.
+  - **Upgrade:** the new plan starts immediately with a fresh period. No proration in the MVP; the UI states this before confirming. **Changing:** proration is always required (owner, 2026-10-26), added in Phase 16b for plans and rentals alike.
   - **Downgrade or cancel:** takes effect at the period end (`cancelAtPeriodEnd`).
 - **Lazy renewal.** When entitlements are resolved (on a mutation or dashboard load), the tenant has `autoRenew` and the last period has ended:
   1. The same request attempts the renewal charge. The idempotency key prevents double charges under concurrency.
@@ -1680,7 +1738,7 @@ Each axis of variation is an interface with one class per variant. Adding a vari
 
 ## 24. Managed servers (optional, D42)
 
-> **Not scheduled.** Implemented only with the owner's explicit consent. Until then, only the seams below exist.
+> **Folded into shared resources (D47, §26).** The owner consented to platform-run capacity with Phase 16: pool machines are added manually there, and the AWS provisioning below becomes Phase 17, feeding the pool. Per-hour billing (§24.2) is replaced by monthly upfront allocations (§26.7); hourly blocks remain a later option.
 
 **Idea:** the user provisions an EC2 instance from the dashboard on the platform's AWS account. The tenant pays the plan subscription plus metered machine usage per hour.
 
@@ -1797,3 +1855,327 @@ interface PaymentGateway {
    - **Exempt:** tenants on a complimentary or admin-granted plan (e.g. Unlimited), and the platform's own tenants (`PLATFORM_TENANT`, `WALLET_TOPUP_TENANT`).
    - Removing the last card is refused while the tenant has servers; the owner removes them (or adds another card) first.
    - Renewals still charge the wallet first and the card only for the shortfall.
+
+---
+
+## 26. Shared resources: rent partitions of Huruf's machines (D47, Phase 16)
+
+> **Planned, not started.** Owner's decisions are in §26.12. No code until the owner says go.
+> **Rule for this phase (owner):** build on the existing mechanisms and refactor them where needed. Never a parallel copy.
+
+### 26.1 Goal and scope
+
+Customers who can't buy and connect their own servers rent capacity from Huruf instead. Huruf keeps a **pool** of machines (added by an admin now; provisioned on AWS automatically later, §24). Each pool machine is split into **partitions**: isolated system containers (Sysbox), each running our normal agent with its own Docker. A rented partition joins the **customer's** tenant as an ordinary server. Customers request resources, an admin approves, and they pay monthly upfront from the wallet.
+
+Example:
+1. Huruf adds a 2 vCPU / 8 GB machine to the pool. It starts with one partition, Huruf's own, which uses the whole machine.
+2. Salha requests 1 vCPU / 2 GB / 25 GB, and an admin approves it.
+3. The host shrinks Huruf's partition by 2 GB of memory and 25 GB of disk, and creates a new partition with those.
+4. The agent installs inside it with a join token for Salha's tenant, and "Huruf · Small" appears in her servers.
+5. Her developer deploys to it like to any server.
+6. When she needs more, she requests a resize. It grows in place if the machine has room; otherwise it moves to another machine.
+
+**In scope:**
+- pool machines and partitions;
+- the host role of the agent;
+- classes and a rate card;
+- sizes and custom requests;
+- admin approval;
+- monthly upfront billing: renewal, resize, past due, suspend, release;
+- traffic metering;
+- moving partitions;
+- the screens.
+
+**Later:**
+- AWS provisioning and automatic approval (Phase 17);
+- backups of partitions;
+- yearly prepay.
+
+**Not planned:** free subdomains (D43 stands).
+
+### 26.2 Why partitions (each one is just a server)
+
+A partition is a complete small machine for our agent, so everything built for servers works in it unchanged:
+- deploys and builds;
+- metrics, logs, events and alerts;
+- container and host shells (the "host" is the customer's own partition);
+- autoscaling within the partition;
+- custom domains through the agent's own ingress tunnel;
+- agent self-update;
+- the capacity hints, based on the inventory the partition's agent reports.
+
+The control plane doesn't need to know a server is shared, except for billing and the host it runs on.
+
+### 26.3 Partition technology: Sysbox (owner's choice)
+
+- **Sysbox** runs "system containers": unprivileged containers (root inside is mapped to an ordinary user on the host through user namespaces) that can run systemd and their own Docker daemon. So our agent installs and runs exactly as on a VM, including self-update through systemd and BuildKit builds.
+- **Kernel requirement:** Sysbox needs a recent kernel (Ubuntu 22.04/24.04 on the pool machine).
+- **Docker's maintenance of Sysbox has slowed** since it acquired Nestybox, so the technology sits behind one interface, `PartitionDriver` (`create`, `resize`, `stop`, `start`, `remove`, `usage`; D41 strategy). gVisor or microVMs can replace it later without touching the rest.
+- **Isolation:**
+  - The kernel is shared, unlike gVisor or VMs: weaker if a kernel bug is found, accepted by the owner for compatibility.
+  - Hardened on top: user namespaces, a network per partition, partitions can't reach each other or the host, the metadata endpoint (`169.254.169.254`) and outbound port 25 blocked, and resource limits per partition.
+- **Overhead per partition (measured in the 16a spike, §26.13):**
+  - **Memory:**
+    - About **40 MB** for a bare partition (systemd, Docker, containerd, idle).
+    - About **110 MB** with our agent running, before the customer's apps: Docker and containerd ~85 MB, the agent ~5 MB, the edge proxy and tunnel ~13 MB.
+    - Page cache comes on top but is reclaimable.
+  - **Host:** Sysbox's own daemons, once per machine.
+  - **CPU:** native (containers run on the host kernel).
+  - **Disk:**
+    - Images aren't shared between partitions (each has its own Docker), so the same image is stored once per partition, inside that partition's quota.
+    - The partition image itself is shared (one copy per machine).
+  - **Start:** a new partition is ready in about **4 seconds** (systemd up in ~3 s).
+  - **The customer pays the overhead (owner):** a partition gets the size's memory plus `PARTITION_OVERHEAD_MB` (**128**, from the measurement), charged at the class's memory rate. The size shows what the customer's apps get; the price line shows the overhead separately.
+- **What Sysbox doesn't hide:** inside a partition, `free`, `nproc` and `/proc/meminfo` show the whole machine. Two consequences:
+  1. **Inventory:** the agent reads its limits from the partition's own cgroup files (`/sys/fs/cgroup/memory.max`, `cpu.max`, both correct inside a partition) and its disk from `df` (the quota shows as the size).
+  2. **Memory sizing of apps:** the agent gives every container on a rented partition a memory limit (the project's own, or the partition's size when it sets none), so runtimes that size their heap from cgroup limits (Node, Java, Go) see the real limit instead of the machine's memory.
+
+**Pool machine layout (from the spike):**
+- **Outer Docker** uses the classic `overlay2` driver (containerd snapshotter off) with its data on an **XFS volume mounted with `prjquota`**, so `--storage-opt size=` caps each partition's own system files (apt, logs, `/tmp`): 3 GB, part of the partition's disk size.
+- **Each partition's** `/var/lib/docker`, `/var/lib/containerd` (where Docker 29 keeps images) and the agent's state are bind-mounted from one directory on that volume under one **XFS project quota** (the rest of the disk size). Sysbox mounts them ID-mapped, so the partition's root user owns them without owning anything on the host.
+- **Project IDs:** our project IDs come from a reserved range kept apart from the IDs Docker assigns for `--storage-opt`; production may also put the two on separate volumes.
+- **The partition image:** Ubuntu 24.04 with systemd, `docker.io`, `docker-buildx` (the agent builds with BuildKit) and `wireguard-tools`, with the kernel-debug mounts masked.
+- **Host packages:** `kmod` is required by Sysbox's preflight; WireGuard needs the host kernel module loaded.
+
+### 26.4 The remainder partition (no idle capacity)
+
+Owner's requirement: capacity nobody has rented yet must not sit idle while Huruf's own apps could use it. Each pool machine therefore has one **remainder partition**, Huruf's own (platform tenant). It always holds whatever isn't rented:
+
+| Resource | Rented partition | Remainder partition |
+|---|---|---|
+| CPU | Guaranteed share and a hard cap at what was paid (`cpu.max`), unless the class allows bursting. | **No cap, lowest priority** (`cpu.weight`): it uses every CPU cycle the rented partitions leave idle and yields at once when they need it. |
+| Memory | Fixed (`memory.max`, with `memory.min` protecting it). | Allocatable minus everything rented; shrinks when a rental is carved out. |
+| Disk | Fixed quota. | The rest of the quota-managed disk. |
+
+- **Carving a rental:**
+  1. The host agent lowers the remainder's memory and disk limits live (cgroup and XFS quota updates, no restart).
+  2. It creates the new partition.
+- **Shrinking below what a partition uses makes the kernel kill its largest process** (measured: the partition survives, the app dies). So the host agent compares the remainder's real memory use (anonymous memory; page cache is reclaimable and doesn't count) with the new limit first, and refuses rather than shrink.
+- **If the remainder already uses more than it would keep,** the admin sees it before approving ("Huruf's partition uses 6.5 GB; 5.5 GB would remain"). The admin then frees memory there (moves or scales down Huruf's apps), or places the rental on another machine. Nothing is killed automatically.
+- **Releasing a rental** gives its memory and disk back to the remainder.
+- **No separate autoscaler is needed:** the remainder is recomputed on every partition change by the same host agent.
+
+### 26.5 The host role (the "higher-level agent")
+
+Not a new program: the **same agent binary** in a host role (`--pool` at install), so the release, update and command mechanisms are reused.
+- **Install and placement in the tenants:**
+  - The pool machine itself is a server of the platform tenant, installed and accepted by an admin like any server. It shows the whole machine, partitions included.
+  - Huruf's remainder partition is a second server of the platform tenant, used for Huruf's own apps.
+- **Commands** (existing command channel, signed like every command):
+  - `partition.create {size, joinToken}` installs the agent inside with a join token issued for the customer's tenant. This is the SSH wizard's existing `/bootstrap` path, so the partition's agent joins and is activated without pairing.
+  - `partition.resize`, `partition.stop`, `partition.start`, `partition.remove`.
+- **Reports** in the existing poll `summary`:
+  - each partition's usage;
+  - each partition's **traffic** (counted on its network link with nftables), added with `$inc` to the rental's current billing period.
+- **Inventory inside a partition:** the agent reads the partition's cgroup limits (`cpu.max`, `memory.max`) and its disk quota instead of the host's totals. This is a small agent refactor that also corrects inventory for any agent running in a limited container.
+
+### 26.6 What is reused, and the refactors it needs
+
+**A. Sizes are plans.**
+- `plans` gets `kind: "workspace" | "server"`; existing plans become `workspace`.
+- A server plan carries `class` and `resources {vcpu, memMb, diskGb, trafficGb}`.
+- Admin → Plans, private plans with `allowedTenants` (custom requests become one on approval) and price snapshots work as they are.
+- `available(tenant)` filters by kind.
+- The unused `limits.managedServers` and `features.managedServers` are removed.
+
+**B. A rented partition is a subscription.**
+- `subscriptions` become one per subject:
+  - `kind` (`workspace`/`server`) and `server?`;
+  - the unique (tenant) index becomes partial on `workspace`, plus unique (server).
+- `BillingService` works per subscription: `subscribe`, `cancel`, `renewIfDue`, `chargePeriod`. The current per-tenant calls become thin wrappers.
+- Reused unchanged: idempotency keys, `fundNow`/`fundRenewal`, the hourly retry, past due and its email.
+- `subscriptionPeriods` stays the payment log, with `resourcesSnapshot` and `usage.trafficBytes` for server periods.
+- **Renewal stays lazy:** `renewIfDue` runs for each due subscription when a tenant's entitlements resolve, and also from the pool machine's polls, so an idle customer still renews.
+- **Proration:**
+  - **Resize up and plan upgrades:** proration added to the shared `chargePeriod`, for rentals and workspace plans alike (owner: always). The unused part of the old period is credited against the new charge, so a customer only ever pays for time they get.
+  - **Resize down:** the existing `nextPlan`, applied at the period end.
+
+**C. Requests and approval:**
+- Status `requested` on the subscription.
+- Funded on session first (`fundNow`, 3-D Secure in the browser); the money stays in the customer's wallet until approval.
+- Admin → Subscriptions gets a **Requests** filter.
+- Approve opens placement (§26.7), runs `chargePeriod`, then sends `partition.create`. Reject records a reason.
+- Resizes (up and down) are requests too (owner).
+
+**D. The rented server is an ordinary server.**
+- The partition's agent joins the customer's tenant through `/bootstrap`.
+- Its record gets `provider.kind: "rented"` (replacing the unused `managed`), `host` (the pool machine) and `subscription`.
+- Rented servers don't count toward the plan's server quota: `acquireServerSlot` skips them, because admin approval is their gate (owner: as many as approved).
+- What changes for the customer on a rented server:
+  - **Uninstall and remove are replaced by Cancel.**
+  - **`publicPort` is refused** (custom domains only; host ports are shared by partitions).
+  - **Private network:** works if WireGuard works inside Sysbox (spike); otherwise hidden with a reason.
+
+**E. Suspend and release use the partition.**
+- **Suspend:** `partition.stop`. Everything stops, and data is kept.
+- **Resume:** `partition.start`.
+- **Release:** `partition.remove` (data deleted), then the existing server removal.
+- Deploys to a suspended server are refused through the same check as `throttled` servers (§22.5).
+
+**F. Admins use existing screens.**
+- Pool machines and remainder partitions are platform-tenant servers: server pages, host shell, agent updates and the **existing alert rules** (offline, disk full) work for admins.
+- The pool machine's page gains a **Partitions** panel: class, allocatable vs rented, each partition with its customer and usage, cost vs revenue, accepting rentals or not.
+- Requests are in Admin → Subscriptions, sizes in Admin → Plans, classes in a generated CRUD (`serverClasses`, the only new collection).
+
+**G. Emails:** `notifyPastDue` generalizes to `notifyOwner(tenant, subject, body)` for approved, rejected, past due, suspended and release warnings.
+
+### 26.7 Placement and capacity
+
+- On approval, placement lists pool machines of the class:
+  - **fits now:** the rental fits in the remainder's free memory and disk;
+  - **fits after freeing:** the remainder would have to give back memory it uses.
+- Fullest machines come first (bin-packing).
+- The fit rules reuse the capacity code's (`fitsIn`: memory and disk are hard limits, CPU may overcommit if the class allows), moved to a module shared by the browser and the server.
+- **Overcommit:**
+  - **Never for memory or disk.**
+  - **CPU** per class (`cpuOvercommit`, default 1.0): rented guarantees never add up to more than the machine.
+- **Draining:** a machine can stop accepting rentals. It can't be removed while rented partitions live on it.
+
+### 26.8 Pricing
+
+**What others charge (October 2026, list prices):**
+
+| Provider | 1 vCPU / 2 GB | Model | Traffic |
+|---|---|---|---|
+| DigitalOcean Droplet (Basic) | $12 (50 GB disk) | Fixed sizes, a bare VM | 2 TB included, then $0.01/GB |
+| AWS Lightsail | $12 (2 GB, 60 GB disk) | Fixed sizes, a bare VM | 3 TB included, then $0.09/GB |
+| Render (Standard) | $25 (no disk) | Fixed sizes, a managed platform | — |
+| Railway | ~$40 (1 vCPU × $20 + 2 GB × $10) | Per resource, billed by the minute | $0.05/GB |
+
+Huruf is a managed platform (deploys, domains, monitoring, a server of your own) running on AWS, whose on-demand prices are higher than DigitalOcean's or Hetzner's. A fair place is **between a bare VM and Render**.
+
+**Cost basis (for the rate card):**
+- An on-demand t3.large (2 vCPU, 8 GB) costs about $61/month; a t3.medium (2 vCPU, 4 GB) about $30.
+- Disk (gp3) is about $0.08/GB-month; traffic out is about $0.09/GB.
+- Reserved instances or Savings Plans cut compute by roughly 30–40%.
+
+**Proposed launch rate card** (admin-editable; a starting point, not a decision):
+
+| Class | Per vCPU | Per GB memory | Per GB disk | Fixed per rental | Traffic included | Beyond it |
+|---|---|---|---|---|---|---|
+| **Shared CPU** (t3/t4g family, CPU shared between rentals, `cpuOvercommit` 2.0) | $8 | $4 | $0.12 | $2 | 100 GB per vCPU | $0.10/GB |
+| **Dedicated CPU** (m7i/c7i family, no CPU overcommit) | $20 | $5 | $0.12 | $2 | 200 GB per vCPU | $0.10/GB |
+
+**Launch sizes (Shared CPU):** the price includes the 128 MB partition overhead (measured, §26.13) at the memory rate, and is rounded.
+
+| Size | vCPU | Memory | Disk | Traffic | Price/month |
+|---|---|---|---|---|---|
+| Nano | 0.5 | 1 GB | 10 GB | 50 GB | $10 |
+| Small | 1 | 2 GB | 25 GB | 100 GB | $22 |
+| Medium | 2 | 4 GB | 50 GB | 200 GB | $43 |
+| Large | 4 | 8 GB | 100 GB | 400 GB | $84 |
+
+The Dedicated CPU class offers Medium and Large only (Medium about $67).
+
+**Notes:**
+- **Traffic allowances are deliberately smaller than DigitalOcean's:** AWS charges us ~$0.09/GB, so a 2 TB allowance would cost more than the rental. Overage is just above that cost.
+- **Margins depend on the machine:** the Partitions panel shows cost vs revenue per machine, so the rates can be tuned with real numbers. Moving the pool to reserved instances or a cheaper provider later allows prices closer to DigitalOcean's.
+- **Custom requests** use the same rates (sliders within the class's maximum per rental).
+- **Prices are snapshotted** in each period.
+
+**How the price is computed:**
+
+```
+monthly price = fixed fee + vCPU × rate + (memory GB + overhead GB) × rate + disk GB × rate
+traffic beyond the size's allowance = extra GB × traffic rate   (charged at the next renewal)
+```
+
+### 26.9 Lifecycle
+
+| Event | What happens |
+|---|---|
+| Request | `fundNow` on session; subscription `requested`; nothing charged. |
+| Approve | Placement → `chargePeriod` → `partition.create` → the agent joins the customer's tenant; the server appears. |
+| Reject | Reason recorded; the funds stay in the customer's wallet. |
+| Renewal | Monthly, lazy: the next month plus last month's traffic overage. |
+| Not paid | Past due (hourly retry, banner, email; still running) → **suspended** after 3 days (`partition.stop`, data kept) → **released** after 14 more days (`partition.remove`), with emails 7 days and 1 day before. Paying before release resumes it. |
+| Resize up | A request. On approval: `partition.resize` in place if the remainder has room (no restart for CPU and memory, disk quota raised live), else a move (§26.10). Charged with proration. |
+| Resize down | A request. Applied at the period end, if usage fits. |
+| Cancel | At the period end; no refund for the current month. |
+
+**Plans and rentals:**
+- Tenants on Free can rent.
+- Rented servers don't count toward the server quota.
+- The other plan quotas still apply.
+
+### 26.10 Moving a partition
+
+Needed for a resize that doesn't fit, or for draining a machine.
+1. The host agents stop the partition.
+2. They copy its disk host to host (over the private network or the control plane's relay).
+3. They start it on the new machine.
+
+- The partition's agent keeps its identity, so the customer's server, projects and domains stay the same.
+- The downtime is shown first. It's an admin action in Phase 16.
+
+### 26.11 Uptime and performance
+
+- **Uptime promise (owner): 99% a month**, at most about 7 h 18 min of downtime a month per rented server.
+  - Realistic on single machines: AWS's own commitment for a single EC2 instance is 99.5%, and our own failures are covered by the alerts and moves below.
+  - Credits for a missed month are set with the terms of service.
+  - Admins are alerted through the existing alert rules on pool machines.
+  - Each class keeps spare machines' worth of capacity (setting `POOL_SPARE_PERCENT`) to move partitions off a failed machine.
+  - Monthly uptime per rented server comes from its existing offline history.
+- **Performance (§20):**
+  - Every partition polls like any server; a 2 vCPU machine with three partitions makes four agents' polls, already budgeted per server.
+  - Traffic and usage ride on the host's existing `summary`.
+  - The price and fit functions are pure and shared.
+  - BYO servers' paths don't change.
+
+### 26.12 Owner's decisions
+
+1. **Partitions:** a pool machine is split into partitions, each running our agent; a rented partition joins the customer's tenant. This replaces the earlier design of one shared agent with per-customer slices.
+2. **Sysbox** for partitions (chosen over gVisor for compatibility), behind a `PartitionDriver` interface.
+3. **No idle capacity:** Huruf's remainder partition holds everything not rented (CPU uncapped at lowest priority).
+4. **Pricing:** ready sizes and custom requests from a per-class rate card. Launch rates as proposed in §26.8 until the owner changes them.
+5. **Approval:** an admin approves every request and resize, up and down; automatic approval may come later.
+6. **Web addresses:** custom domains only (D43 stands).
+7. **Free plan tenants can rent;** no fixed limit on rented servers (as many as admins approve).
+8. **Grace and retention:** 3 days past due, then suspended; 14 days suspended, then released.
+9. **Uptime promise:** 99% a month for rented servers.
+13. **Proration always:** upgrades and resizes up are prorated, for plans and rentals.
+14. **The customer pays the partition overhead,** at the class's memory rate.
+10. **Terms of service and data processing:** on the website, later.
+11. **Reuse first:** build on existing mechanisms and refactor them where needed.
+12. **Consent for platform-run capacity** (D42): given with this feature; AWS provisioning follows in Phase 17.
+
+**Open:**
+1. Final rates, once the Partitions panel shows real costs.
+2. Credits for a month below 99% (terms of service).
+
+### 26.13 Spike results (Phase 16a, 2026-10-26)
+
+**Where it ran:** a privileged Ubuntu 24.04 container with its own cgroup namespace standing in for a pool machine (Docker Desktop, WSL2 kernel 6.6, cgroup v2, 12 CPUs, 15.5 GB). Sysbox CE 0.7.1, Docker 29.1.3; our agent v0.0.20 unmodified, installed with the normal installer.
+
+| Check | Result |
+|---|---|
+| Sysbox install | Works (needs `kmod`). With the host's cgroup namespace shared (`--cgroupns=host`, a test-container artefact), systemd couldn't start in a partition; a real machine owns its cgroup tree. |
+| systemd in a partition | Boots in ~3 s; three kernel-debug mounts fail (masked in the image). |
+| Our agent in a partition | Joined the tenant through the existing `/bootstrap` + join token, went online, ran host setup (`docker.ensure`), started its edge proxy, ingress tunnel and `.internal` DNS. |
+| Deploy | An nginx project created through the API deployed into the partition and answered 200. |
+| BuildKit build (with a cache mount) | Works once `docker-buildx` is installed (added to the image). |
+| WireGuard in a partition | Creating a `wireguard` interface works (host module loaded). |
+| Agent restart under systemd | Works (self-update's path; a full update needs a newer release). |
+| CPU guarantee | All 12 cores saturated by the remainder while Salha (1 vCPU cap, higher weight) wanted 2: Salha got **1.01 vCPU**, the remainder 10.9. With Salha idle, the remainder used **11.84 of 12**. |
+| Memory cap | A process asking for 3 GB in a 2.25 GB partition was killed by the kernel; the partition, its agent and Docker kept running. |
+| Shrinking below use | The kernel kills the largest process. The driver must check first (§26.4). |
+| Live carve | The remainder shrank from 7 GB to 4.75 GB (and its disk quota) while running; Salha's partition was created next to it. |
+| Disk | Docker data, images and agent state capped by the XFS project quota (a 2 GB write over the limit refused; raising the quota live took effect at once); the partition's system files capped at 3 GB by `--storage-opt`. Inside, `df` shows the quota as the disk size. |
+| Network isolation | Control plane and internet reachable; the host, other partitions and the metadata address blocked (the host check also run without the rules to confirm the rule is what blocks it; Docker already separates partition networks too). |
+| Traffic counters | nftables counters per partition (in and out) work; read by the host agent. |
+| Overhead | See §26.3: ~110 MB per partition with the agent; ~4 s to start. |
+
+**Not proven locally (to check on the first real pool machine):**
+- outbound port 25 (Docker Desktop's network already blocks it, so our rule couldn't be shown to be the cause);
+- the AWS metadata endpoint on a real EC2 instance;
+- performance on AWS instance types;
+- a custom domain end to end through the partition's tunnel;
+- a full agent self-update to a newer release.
+
+**Recommendation: GO.** Sysbox runs our agent unchanged, and the remainder partition does exactly what the owner asked: nothing sits idle, and a rented partition still gets its full share. Changes the spike adds to the plan:
+- the pool machine layout (§26.3);
+- the 128 MB overhead;
+- the memory check before shrinking (§26.4);
+- inventory from cgroups and a default memory limit for containers on rented partitions (16b);
+- `docker-buildx` and `wireguard-tools` in the partition image;
+- usage read from cgroup files rather than `docker stats` (which misreports partitions).
