@@ -1513,6 +1513,7 @@ Subscriptions are **per tenant**, because thunder-core wallets are per `{tenant,
 ### 22.4 Private plans and complimentary access
 
 - **Private plans:** `visibility: "private"` plans are listed only to tenants in `allowedTenants`. The admin creates tailored plans for specific customers.
+- **Built-in Unlimited plan:** seeded beside Free (`deno task setup:prod`), private with no tenants, so only admins see it; every quota is `UNLIMITED` (1,000,000, shown as "Unlimited"), kept releases stay at 20 and managed servers off. Admins grant it from Admin > Subscriptions ("Grant a plan") or by adding tenants to it.
 - **Complimentary periods:** the admin can also grant any plan directly as a `complimentary` period (amount 0, no ledger entry, with a reason), for partners, trials or support cases.
 
 ### 22.5 When a tenant is over its limits (after a fallback or downgrade)
