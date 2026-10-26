@@ -1204,8 +1204,8 @@ Owner's decisions recorded (§25.10). No code before "go".
 - **15c Charging:** subscribe/upgrade and lazy renewal call `Wallet.ensureBalance` outside their transaction; 3-D Secure handled on session ("Confirm payment") and off session (past-due banner, email, a link to authenticate); the webhook settles top-ups and wakes the renewal.
 - **15d Operations:** Admin → Payments (top-ups by status, stuck `initiated`/`paid`/`processing` rows with Settle and Abandon), refunds and disputes recorded from webhooks for the admin to act on.
 - **Done when:**
-  1. A customer saves a card (including one that needs 3-D Secure) without leaving the dashboard, and removes it again (refused while it's the last card and a paid plan renews).
-  1b. Subscribing to a paid plan without a saved card is refused (server side) and the dialog leads to Add card.
+  1. A customer saves a card (including one that needs 3-D Secure) without leaving the dashboard and without being charged, and removes it again (refused while it's the last card and servers exist).
+  1b. A new tenant without a card can browse but can't add a server, create a project or subscribe (refused server side, with a link to Add card); an existing tenant keeps everything running and sees a banner; a tenant on Unlimited or another granted plan is exempt.
   2. Add funds $20 credits the wallet once, even with a double click, a slow webhook or a duplicated webhook.
   3. A renewal with an empty wallet and a saved card charges exactly the shortfall once (5 concurrent attempts tested) and the period starts; with a declined card the tenant goes past due and is emailed.
   4. A renewal card that needs authentication leaves the tenant past due with a "Confirm payment" action that completes it on session.
@@ -1719,7 +1719,8 @@ interface PaymentGateway {
   - `succeeded` → credited immediately, shown at once;
   - `requires_action` (3-D Secure) → the top-up stays `pending`, the browser completes it with the returned client secret, and the webhook settles it;
   - declined → the Stripe message is shown, nothing is credited.
-- **Subscribe / upgrade (on session):** a paid plan needs a saved card (§25.10, 4); without one the plan dialog sends the owner to Billing → Add card first. Before today's transaction, `Wallet.ensureBalance(price, key "sub:…")` with autoPay on; `requires_action` returns the client secret to the confirm dialog ("Confirm payment"), then the subscribe call is retried with the same key.
+- **The card gate (§25.10, 4):** a tenant without a valid card can't add a server, create a project or subscribe; the refused action explains why and links to Billing → Add card ("We won't charge you").
+- **Subscribe / upgrade (on session):** before today's transaction, `Wallet.ensureBalance(price, key "sub:…")` with autoPay on; `requires_action` returns the client secret to the confirm dialog ("Confirm payment"), then the subscribe call is retried with the same key.
 - **Lazy renewal (off session):** when a period has ended, `ensureBalance(price, key "renew:<sub>:<periodEnd>:<attempt>")` runs before the renewal transaction; `attempt` is the hourly retry count, so a declined card can be retried next hour without reusing a failed charge.
   - Success → the renewal proceeds as today.
   - Pending (bank processing) → past due until the webhook settles; on settlement our webhook sets `nextRenewalAttemptAt = now` so the next entitlement check renews.
@@ -1756,4 +1757,11 @@ interface PaymentGateway {
 1. **Stripe account:** the owner's LLC. The owner enters the keys in the platform settings (§25.8).
 2. **Billing replaces the core Wallet entry** in the sidebar (the core Wallet route is hidden; its data is shown on Billing).
 3. **Add funds limits:** $5 minimum, $1,000 maximum, and a daily cap, as proposed.
-4. **A saved card is mandatory for paid plans**, to keep fake accounts out: subscribing or upgrading to a plan with a price needs a saved, unexpired card (checked server side), even when the wallet could pay. Renewals still charge the wallet first and the card only for the shortfall. Removing the last card is refused while a paid plan renews; the owner cancels or adds another card first. Free and complimentary plans need no card.
+4. **A saved card is mandatory for every tenant, Free included**, to keep fake accounts out. The UI says so plainly: "We won't charge you. A card verifies your account; Free stays free, and you're only charged if you choose a paid plan or add funds."
+   - **What it gates (server side, one check `requireCard(tenant)`):** adding or accepting a server, creating a project, and subscribing to any plan. Reading the dashboard, Billing and account settings stays open, so a new owner can always reach Add card.
+   - **Saving a card never charges it.** Stripe's SetupIntent may ask the bank for a verification (3-D Secure or a temporary authorization that is released); no money is taken.
+   - **The card must be valid:** saved and unexpired. An expired default card counts as none (a banner 30 days before expiry).
+   - **Existing tenants:** nothing stops; servers and projects keep running. They see a banner and the gates above apply to new servers, projects and plans until a card is saved.
+   - **Exempt:** tenants on a complimentary or admin-granted plan (e.g. Unlimited), and the platform's own tenants (`PLATFORM_TENANT`, `WALLET_TOPUP_TENANT`).
+   - Removing the last card is refused while the tenant has servers; the owner removes them (or adds another card) first.
+   - Renewals still charge the wallet first and the card only for the shortfall.
