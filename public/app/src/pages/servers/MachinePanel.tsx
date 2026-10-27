@@ -3,7 +3,7 @@ import { Link } from "react-router"
 import { useTranslation } from "react-i18next"
 import { ThunderSDK } from "thunder-sdk"
 import { toast } from "sonner"
-import { IconPlus } from "@tabler/icons-react"
+import { IconLoader2, IconPlus } from "@tabler/icons-react"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -21,15 +21,11 @@ import { KeyValue } from "@/components/console/key-value"
 import { DataTable } from "@/components/console/data-table"
 import { StatusBadge, StatusDot } from "@/components/console/status"
 import { usePolling } from "@/hooks/use-polling"
-import { errorMessage } from "@/lib/utils"
+import { cn, errorMessage } from "@/lib/utils"
 import type { TServer } from "./server"
 
 type TSize = { cpus: number; memMb: number; diskGb: number }
-type TPartitionServer = {
-  name: string
-  server?: { _id: string; name: string }
-  joining: boolean
-}
+type TRow = Awaited<ReturnType<typeof ThunderSDK.servers.partitions>>[number]
 
 const gbOfMb = (mb: number) => Math.floor((mb / 1024) * 2) / 2
 const gb = (bytes: number) => `${(bytes / 2 ** 30).toFixed(1)} GB`
@@ -50,10 +46,17 @@ export function MachinePanel({
 }) {
   const { t } = useTranslation()
   const pool = server.pool
-  const partitions = (server.resources?.partitions ?? []).filter(
-    (p) => !p.remainder
-  )
-  const [servers, setServers] = React.useState<TPartitionServer[]>()
+  const [rows, setRows] = React.useState<TRow[]>()
+  // Until the list loads, what the page has; then the list, which is fresh.
+  const all =
+    rows ??
+    (server.resources?.partitions ?? [])
+      .filter((p) => !p.remainder)
+      .map((p) => ({ ...p, joining: false }) as TRow)
+  const partitions = all.filter((p) => !p.creating) as (TRow & {
+    size: TSize
+  })[]
+  const pending = all.filter((p) => p.creating)
   const [creating, setCreating] = React.useState(false)
   const [resizing, setResizing] = React.useState<{
     name: string
@@ -65,21 +68,17 @@ export function MachinePanel({
   const load = React.useCallback(() => {
     ThunderSDK.servers
       .partitions({ params: { id: server._id } })
-      .then(setServers)
+      .then(setRows)
       .catch(() => {})
   }, [server._id])
   React.useEffect(load, [load])
-  // A new partition's server appears once its agent joins.
+  // Followed while one is being created or its server joins.
   usePolling(() => {
-    if (
-      servers?.some((s) => s.joining) ||
-      partitions.length !== servers?.length
-    )
-      load()
+    if (rows?.some((r) => r.joining || (r.creating && !r.error))) load()
   }, 5_000)
 
   if (!pool) return null
-  const all = pool.allocatable
+  const allocatable = pool.allocatable
   const used = partitions.reduce(
     (u, p) => ({
       cpus: u.cpus + p.size.cpus,
@@ -88,10 +87,10 @@ export function MachinePanel({
     }),
     { cpus: 0, memMb: 0, diskGb: 0 }
   )
-  const free = all && {
-    cpus: all.cpus,
-    memMb: all.memMb - used.memMb,
-    diskGb: all.diskGb - used.diskGb,
+  const free = allocatable && {
+    cpus: allocatable.cpus,
+    memMb: allocatable.memMb - used.memMb,
+    diskGb: allocatable.diskGb - used.diskGb,
   }
 
   const remove = async (name: string) => {
@@ -170,12 +169,52 @@ export function MachinePanel({
       {pool.status === "ready" && free && (
         <KeyValue
           items={[
-            { label: t("For partitions"), value: all && sizeText(all) },
+            {
+              label: t("For partitions"),
+              value: allocatable && sizeText(allocatable),
+            },
             { label: t("Free"), value: sizeText(free) },
           ]}
         />
       )}
-      {pool.status === "ready" && !partitions.length && (
+      {pending.map((p) => (
+        <div
+          key={p.name}
+          role="status"
+          className={cn(
+            "flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border px-3 py-2 text-[13px]",
+            p.error && "border-destructive/40"
+          )}
+        >
+          {!p.error && (
+            <IconLoader2
+              className="size-4 text-muted-foreground motion-safe:animate-spin"
+              aria-hidden
+            />
+          )}
+          <span className="font-medium">{p.label ?? p.name}</span>
+          <span className="text-muted-foreground">
+            {p.error
+              ? t("Couldn't create it")
+              : t("Creating: its server appears in a minute or two")}
+          </span>
+          {p.error && (
+            <span className="basis-full text-xs text-destructive-foreground">
+              {p.error}
+            </span>
+          )}
+          {p.error && canChange && (
+            <button
+              type="button"
+              className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
+              onClick={() => remove(p.name)}
+            >
+              {t("Dismiss")}
+            </button>
+          )}
+        </div>
+      ))}
+      {pool.status === "ready" && !partitions.length && !pending.length && (
         <div className="flex flex-col items-start gap-2 rounded-lg border border-dashed px-3 py-3">
           <p className="text-[13px]">
             {t(
@@ -199,7 +238,7 @@ export function MachinePanel({
               id: "name",
               header: t("Partition"),
               cell: (p) => {
-                const row = servers?.find((x) => x.name === p.name)
+                const row = rows?.find((x) => x.name === p.name)
                 const s = row?.server
                 return (
                   <div className="min-w-0">
@@ -258,10 +297,10 @@ export function MachinePanel({
               cell: (p) => (
                 <div dir="ltr" className="text-end rtl:text-start">
                   <div>
-                    {gb(p.memUsed)} / {gbOfMb(p.size.memMb)} GB
+                    {gb(p.memUsed ?? 0)} / {gbOfMb(p.size.memMb)} GB
                   </div>
                   <div className="text-muted-foreground">
-                    {gb(p.diskUsed)} / {p.size.diskGb} GB
+                    {gb(p.diskUsed ?? 0)} / {p.size.diskGb} GB
                   </div>
                 </div>
               ),
@@ -292,6 +331,7 @@ export function MachinePanel({
               body: { size, ...(name ? { name } : {}) },
             })
             toast.success(t("Creating the partition: its server appears soon"))
+            load()
             onChanged()
           }}
         />

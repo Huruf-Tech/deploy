@@ -144,12 +144,27 @@ export type partitions$params = {
 };
 export type partitions$return = {
     name: string;
+    /** Reported by the machine */
+    size?: {
+        cpus: number;
+        memMb: number;
+        diskGb: number;
+    } | undefined;
+    state?: string | undefined;
+    memUsed?: number | undefined;
+    diskUsed?: number | undefined;
     server?: {
         _id: string;
         name: string;
     } | undefined;
     /** Its agent hasn't joined yet */
     joining: boolean;
+    /** The machine doesn't report it yet */
+    creating?: boolean | undefined;
+    /** Why creating it failed */
+    error?: string | undefined;
+    /** Its server's name to be */
+    label?: string | undefined;
 }[];
 export type createPartition$params = {
     id?: string;

@@ -22,6 +22,8 @@ export const $bootstrapSession = z.object({
     name: z.string(),
     /** The server's name in the dashboard. */
     label: z.string().optional(),
+    /** The machine's `partition.create`: its result says how creating went. */
+    command: $objectId.meta({ ref: "agentCommands" }).optional(),
   }).optional(),
   rental: z.object({
     host: $objectId.meta({ ref: "servers" }),

@@ -16,6 +16,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/protocol"
 )
@@ -81,6 +82,10 @@ type Manager struct {
 	mu     sync.Mutex
 	state  *state
 	loaded bool
+
+	// The last usage report, for polls while a change holds mu.
+	lastMu sync.Mutex
+	last   []protocol.PartitionUsage
 }
 
 func (m *Manager) load() (*state, error) {
@@ -244,58 +249,72 @@ func quote(s string) string {
 // it. A rented partition takes its memory and disk from the remainder first;
 // re-running for an existing partition only re-runs the install.
 func (m *Manager) Create(ctx context.Context, p protocol.PartitionCreatePayload) (map[string]any, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	s, err := m.load()
+	size, err := m.createPartition(ctx, p)
 	if err != nil {
 		return nil, err
 	}
+	// Outside the lock: installing waits for the partition's systemd and a
+	// download, and polls read usage meanwhile (they'd stall the agent).
+	install, cancel := context.WithTimeout(ctx, 10*time.Minute)
+	defer cancel()
+	out, err := m.Driver.Exec(install, p.Name, installScript(p.Install))
+	result := map[string]any{"name": p.Name, "size": size}
+	if err != nil {
+		return result, fmt.Errorf("installing the agent in %s: %w: %s", p.Name, err, tail(out, 600))
+	}
+	result["install"] = tail(out, 600)
+	return result, nil
+}
+
+// createPartition makes the partition's container (once; re-running only
+// re-installs) and returns its size.
+func (m *Manager) createPartition(ctx context.Context, p protocol.PartitionCreatePayload) (protocol.PartitionSize, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	none := protocol.PartitionSize{}
+	s, err := m.load()
+	if err != nil {
+		return none, err
+	}
 	if s.Allocatable.MemMb == 0 {
-		return nil, errors.New("this machine isn't a pool machine yet (pool.ensure)")
+		return none, errors.New("this machine isn't a pool machine yet (pool.ensure)")
 	}
 
 	if _, exists := s.Partitions[p.Name]; !exists {
 		var entry Entry
 		if p.Remainder {
 			if other, ok := s.remainder(); ok {
-				return nil, fmt.Errorf("the remainder partition is %s already", other)
+				return none, fmt.Errorf("the remainder partition is %s already", other)
 			}
 			left, err := s.free("", nil)
 			if err != nil {
-				return nil, err
+				return none, err
 			}
 			entry = Entry{Size: protocol.PartitionSize{MemMb: left.MemMb, DiskGb: left.DiskGb}, Remainder: true}
 		} else {
 			if p.Size == nil {
-				return nil, errors.New("a rented partition needs a size")
+				return none, errors.New("a rented partition needs a size")
 			}
 			left, err := s.free(p.Name, p.Size)
 			if err != nil {
-				return nil, err
+				return none, err
 			}
 			// The remainder gives up what the new partition takes, first.
 			if err := m.sizeRemainder(ctx, s, left); err != nil {
-				return nil, err
+				return none, err
 			}
 			entry = Entry{Size: *p.Size}
 		}
 		if err := m.Driver.Create(ctx, p.Name, entry.Size, weight(entry)); err != nil {
-			return nil, err
+			return none, err
 		}
 		s.Partitions[p.Name] = entry
 		if err := m.save(); err != nil {
-			return nil, err
+			return none, err
 		}
 		_ = m.Driver.Forward(ctx, s.Forwards, nil)
 	}
-
-	out, err := m.Driver.Exec(ctx, p.Name, installScript(p.Install))
-	result := map[string]any{"name": p.Name, "size": s.Partitions[p.Name].Size}
-	if err != nil {
-		return result, fmt.Errorf("installing the agent in %s: %w: %s", p.Name, err, tail(out, 600))
-	}
-	result["install"] = tail(out, 600)
-	return result, nil
+	return s.Partitions[p.Name].Size, nil
 }
 
 func tail(s string, n int) string {
@@ -537,20 +556,29 @@ func (m *Manager) ApplyForwards(ctx context.Context, forwards []protocol.PortFor
 
 // Usage reports every partition for the poll summary; nil on other servers.
 func (m *Manager) Usage(ctx context.Context) []protocol.PartitionUsage {
-	m.mu.Lock()
-	defer m.mu.Unlock()
+	// A change in progress (host setup, a resize) holds the lock: the poll
+	// gets the last report rather than waiting on it.
+	if !m.mu.TryLock() {
+		m.lastMu.Lock()
+		defer m.lastMu.Unlock()
+		return m.last
+	}
 	s, err := m.load()
 	if err != nil || len(s.Partitions) == 0 {
+		m.mu.Unlock()
 		return nil
 	}
+	entries := make(map[string]Entry, len(s.Partitions))
 	names := make([]string, 0, len(s.Partitions))
-	for name := range s.Partitions {
+	for name, e := range s.Partitions {
+		entries[name] = e
 		names = append(names, name)
 	}
+	m.mu.Unlock()
 	sort.Strings(names)
 	out := make([]protocol.PartitionUsage, 0, len(names))
 	for _, name := range names {
-		e := s.Partitions[name]
+		e := entries[name]
 		u, err := m.Driver.Usage(ctx, name)
 		if err != nil {
 			u = Usage{State: "unknown"}
@@ -561,5 +589,8 @@ func (m *Manager) Usage(ctx context.Context) []protocol.PartitionUsage {
 			RxBytes: u.RxBytes, TxBytes: u.TxBytes,
 		})
 	}
+	m.lastMu.Lock()
+	m.last = out
+	m.lastMu.Unlock()
 	return out
 }

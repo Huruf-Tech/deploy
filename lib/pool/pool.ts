@@ -6,6 +6,7 @@ import { hostSetupPayload, issueCommand } from "@/lib/agents/commands.ts";
 import { agentEndpoints, createJoinToken } from "@/lib/agents/bootstrap.ts";
 import { sealTo } from "@/lib/agents/sealing.ts";
 import { serverModel } from "@/schemas/infrastructure/server.ts";
+import { bootstrapSessionModel } from "@/schemas/infrastructure/bootstrapSession.ts";
 import { encodeHex } from "@std/encoding/hex";
 import { meshIpOf } from "@/schemas/infrastructure/network.ts";
 import {
@@ -179,7 +180,7 @@ export async function createPartition(opts: {
   label?: string;
 }) {
   const doc = await machine(opts.host, true);
-  const { token } = await createJoinToken({
+  const { session, token } = await createJoinToken({
     tenant: opts.tenant,
     createdBy: opts.createdBy,
     host: `${doc.name}/${opts.name}`,
@@ -204,7 +205,7 @@ export async function createPartition(opts: {
       downloadBase,
     },
   };
-  return await issueCommand({
+  const issued = await issueCommand({
     server: doc._id,
     tenant: doc.tenant,
     type: "partition.create",
@@ -213,6 +214,10 @@ export async function createPartition(opts: {
     },
     createdBy: opts.createdBy,
   });
+  await bootstrapSessionModel.updateOne({ _id: session }, {
+    $set: { "partition.command": issued.command },
+  });
+  return issued;
 }
 
 const partitionCommand = (

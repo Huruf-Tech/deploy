@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/protocol"
 )
@@ -271,4 +272,27 @@ func TestForwardsAppliedOnMachinesOnly(t *testing.T) {
 	if err := m.ApplyForwards(ctx, []protocol.PortForward{mesh, web}); err != nil || f.forwards != nil {
 		t.Fatalf("unchanged forwards re-applied: %v", err)
 	}
+}
+
+// A change holding the lock (host setup, installing an agent) mustn't stall
+// the poll: usage comes from the last report meanwhile.
+func TestUsageNeverWaitsOnAChange(t *testing.T) {
+	m, _ := setup(t)
+	ctx := context.Background()
+	first := m.Usage(ctx)
+	if len(first) == 0 {
+		t.Fatal("no usage")
+	}
+	m.mu.Lock()
+	done := make(chan []protocol.PartitionUsage, 1)
+	go func() { done <- m.Usage(ctx) }()
+	select {
+	case got := <-done:
+		if len(got) != len(first) || got[0].Name != first[0].Name {
+			t.Fatalf("usage while locked = %+v", got)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("Usage waited on the lock")
+	}
+	m.mu.Unlock()
 }

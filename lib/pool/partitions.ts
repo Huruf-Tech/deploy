@@ -11,6 +11,7 @@ import {
 } from "@/lib/pool/pool.ts";
 import { serverModel } from "@/schemas/infrastructure/server.ts";
 import { bootstrapSessionModel } from "@/schemas/infrastructure/bootstrapSession.ts";
+import { agentCommandModel } from "@/schemas/infrastructure/agentCommand.ts";
 import { subscriptionModel } from "@/schemas/billing/subscription.ts";
 import { detachServer } from "@/lib/deploy/projects.ts";
 import type { $partitionSize } from "@/schemas/protocol/agent.ts";
@@ -156,7 +157,14 @@ export async function removeOwnPartition(opts: {
   const reported = machine.resources?.partitions?.some((p) =>
     p.name === opts.name && !p.remainder
   );
-  if (!doc && !reported) {
+  // Being created (or failed to be): its join token goes, so it can't join later.
+  const { modifiedCount: creating } = await bootstrapSessionModel.updateMany({
+    tenant: opts.tenant,
+    "partition.host": opts.machine,
+    "partition.name": opts.name,
+    status: "installing",
+  }, { $set: { status: "failed", error: "Removed" } });
+  if (!doc && !reported && !creating) {
     throw Response.notFound("No partition with this name on this machine");
   }
   const { command } = await removePartition(opts.machine, opts.name);
@@ -202,9 +210,10 @@ export async function onServerDeleted(id: ObjectId, tenant: ObjectId) {
 }
 
 /**
- * The partitions a machine reports, each with its server, or whether it's
- * still joining (its join token waits to be used). Neither means its server
- * is gone and the partition only takes room: remove it.
+ * A machine's partitions: those it reports, each with its server or whether
+ * it's still joining (its join token waits), and those being created that it
+ * doesn't report yet, with the machine's error if creating failed. A
+ * reported one with neither has lost its server: remove it.
  */
 export async function partitionsOf(tenant: ObjectId, machine: ObjectId) {
   const doc = await serverModel.findOne(
@@ -215,7 +224,7 @@ export async function partitionsOf(tenant: ObjectId, machine: ObjectId) {
   const reported = (doc.resources?.partitions ?? []).filter((p) =>
     !p.remainder
   );
-  const [servers, joining] = await Promise.all([
+  const [servers, sessions] = await Promise.all([
     serverModel.find({ tenant, "provider.host": machine }, {
       projection: { name: 1, "provider.partition": 1 },
     }).toArray(),
@@ -224,16 +233,56 @@ export async function partitionsOf(tenant: ObjectId, machine: ObjectId) {
       "partition.host": machine,
       status: "installing",
       expiresAt: { $gt: new Date() },
-    }, { projection: { "partition.name": 1 } }).toArray(),
+    }, { projection: { partition: 1, createdAt: 1 } }).toArray(),
   ]);
-  return reported.map((p) => {
-    const server = servers.find((s) => s.provider?.partition === p.name);
+  const commands = await agentCommandModel.find({
+    _id: { $in: sessions.flatMap((s) => s.partition?.command ?? []) },
+  }, { projection: { status: 1, error: 1 } }).toArray();
+  const serverOf = (name: string) =>
+    servers.find((s) => s.provider?.partition === name);
+  type TRow = {
+    name: string;
+    size?: TSize;
+    state?: string;
+    memUsed?: number;
+    diskUsed?: number;
+    server?: { _id: string; name: string };
+    joining: boolean;
+    creating?: boolean;
+    error?: string;
+    label?: string;
+  };
+  const rows: TRow[] = reported.map((p) => {
+    const server = serverOf(p.name);
     return {
       name: p.name,
+      size: p.size,
+      state: p.state,
+      memUsed: p.memUsed,
+      diskUsed: p.diskUsed,
       ...(server
         ? { server: { _id: String(server._id), name: server.name } }
         : {}),
-      joining: !server && joining.some((j) => j.partition?.name === p.name),
+      joining: !server && sessions.some((s) => s.partition?.name === p.name),
     };
   });
+  for (const session of sessions) {
+    const name = session.partition!.name;
+    if (reported.some((p) => p.name === name) || serverOf(name)) continue;
+    const command = commands.find((c) =>
+      c._id.equals(session.partition!.command ?? new ObjectId())
+    );
+    rows.push(
+      {
+        name,
+        joining: command?.status !== "failed",
+        creating: true,
+        ...(command?.status === "failed"
+          ? { error: command.error ?? "The machine couldn't create it" }
+          : {}),
+        label: session.partition!.label,
+      },
+    );
+  }
+  return rows;
 }

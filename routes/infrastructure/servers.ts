@@ -110,8 +110,21 @@ export default new Router("/api", function servers(router) {
   router.get("/:id/partitions", function partitions() {
     const $return = z.array(z.object({
       name: z.string(),
+      size: z.object({
+        cpus: z.number(),
+        memMb: z.number(),
+        diskGb: z.number(),
+      }).optional().describe("Reported by the machine"),
+      state: z.string().optional(),
+      memUsed: z.number().optional(),
+      diskUsed: z.number().optional(),
       server: z.object({ _id: z.string(), name: z.string() }).optional(),
       joining: z.boolean().describe("Its agent hasn't joined yet"),
+      creating: z.boolean().optional().describe(
+        "The machine doesn't report it yet",
+      ),
+      error: z.string().optional().describe("Why creating it failed"),
+      label: z.string().optional().describe("Its server's name to be"),
     }));
 
     return {

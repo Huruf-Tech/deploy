@@ -111,6 +111,20 @@ Deno.test({
         });
         assertEquals(res.status, 200, JSON.stringify(res.json));
         firstName = res.json.name;
+        // Shown at once, before the machine reports it.
+        const creating = await call(
+          "GET",
+          `/servers/api/${machine}/partitions`,
+        );
+        assertEquals(
+          creating.json.map((p: Record<string, unknown>) => [
+            p.name,
+            p.creating,
+            p.joining,
+            p.label,
+          ]),
+          [[firstName, true, true, "apps"]],
+        );
         const create = await last(machine, "partition.create");
         const payload = JSON.parse(
           await openSealed(
@@ -363,6 +377,34 @@ Deno.test({
           assertEquals(unknown.status, 404);
         },
       );
+
+      await t.step("a failed creation shows why and is dismissed", async () => {
+        const res = await call("POST", `/servers/api/${machine}/partitions`, {
+          name: "broken",
+          size: { cpus: 1, memMb: 1024, diskGb: 10 },
+        });
+        assertEquals(res.status, 200, JSON.stringify(res.json));
+        const create = await last(machine, "partition.create");
+        await agentCommandModel.updateOne({ _id: create._id }, {
+          $set: { status: "failed", error: "installing the agent: timed out" },
+        });
+        const failed = (await call("GET", `/servers/api/${machine}/partitions`))
+          .json.find((p: { name: string }) => p.name === res.json.name);
+        assertEquals(
+          [failed.creating, failed.joining, failed.error],
+          [true, false, "installing the agent: timed out"],
+        );
+        const dismissed = await call(
+          "DELETE",
+          `/servers/api/${machine}/partitions/${res.json.name}`,
+        );
+        assertEquals(dismissed.status, 200, JSON.stringify(dismissed.json));
+        assert(
+          !(await call("GET", `/servers/api/${machine}/partitions`)).json.some(
+            (p: { name: string }) => p.name === res.json.name,
+          ),
+        );
+      });
 
       await t.step("deleting the machine takes its partitions", async () => {
         const res = await call("DELETE", `/servers/api/${machine}`);
