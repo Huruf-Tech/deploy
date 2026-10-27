@@ -64,6 +64,26 @@ export function RentalRequests() {
       // Approved, partition still on its way.
       (r.status === "active" && !r.server)
   )
+  // Approval happens elsewhere: check again while something is on the way.
+  const waiting = shown.filter((r) => r.status !== "rejected").length
+  const refetch = React.useRef(reload)
+  refetch.current = reload
+  React.useEffect(() => {
+    if (!waiting) return
+    const check = () => refetch.current()
+    const timer = setInterval(check, 20_000)
+    window.addEventListener("focus", check)
+    return () => {
+      clearInterval(timer)
+      window.removeEventListener("focus", check)
+    }
+  }, [waiting])
+  // One arrived: it's a server now.
+  const before = React.useRef(waiting)
+  React.useEffect(() => {
+    if (waiting < before.current) notifyServersChanged()
+    before.current = waiting
+  }, [waiting])
   if (!shown.length) return null
 
   const withdraw = async (id: string) => {
