@@ -23,14 +23,12 @@ import {
   type TFinding,
   type TOverview,
 } from "./control-plane"
+import { mb } from "@/lib/format"
 
 /*
  * Admin > Control plane at a glance (PLAN §20.2): one verdict, then bars
  * that turn amber or red at the same thresholds as the findings.
  */
-
-const gb = (mb: number) =>
-  mb >= 1024 ? `${num(mb / 1024)} GB` : `${num(Math.round(mb))} MB`
 
 /** ≥ warn is a warning, ≥ crit critical. */
 const level = (value: number, warn: number, crit: number): TLevel =>
@@ -219,7 +217,7 @@ export function ClusterMeters({ o }: { o: TOverview }) {
       <MeterPanel
         icon={IconDatabase}
         label={t("Database")}
-        title={cluster.db.storageMb == null ? "—" : gb(cluster.db.storageMb)}
+        title={cluster.db.storageMb == null ? "—" : mb(cluster.db.storageMb)}
         detail={
           cluster.db.objects == null
             ? undefined
@@ -328,14 +326,14 @@ export function InstanceMeters({ o }: { o: TOverview }) {
               <MeterPanel
                 icon={IconStack2}
                 label={t("Memory")}
-                title={s ? gb(s.memTotalMb) : gb(i.process.rssMb)}
+                title={s ? mb(s.memTotalMb) : mb(i.process.rssMb)}
               >
                 {s && (
                   <Meter
                     label={t("Host memory used")}
                     value={memUsed}
                     total={s.memTotalMb}
-                    text={`${gb(memUsed)} · ${num(memPct)}%`}
+                    text={`${mb(memUsed)} · ${num(memPct)}%`}
                     hue="violet"
                     level={level(memPct, 85, 95)}
                   />
@@ -344,7 +342,7 @@ export function InstanceMeters({ o }: { o: TOverview }) {
                   label={t("Control plane process")}
                   value={i.process.rssMb}
                   total={s?.memTotalMb ?? i.process.rssMb}
-                  text={gb(i.process.rssMb)}
+                  text={mb(i.process.rssMb)}
                   hue="violet"
                   level="ok"
                 />

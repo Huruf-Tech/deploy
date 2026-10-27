@@ -36,6 +36,12 @@ const TONES: Record<string, TTone> = {
 export const toneOf = (state?: string): TTone =>
   TONES[state?.toLowerCase() ?? ""] ?? "neutral"
 
+/** A state's translation key: "pastDue" reads "Past due". */
+export const stateLabel = (state: string) => {
+  const words = state.replace(/([a-z])([A-Z])/g, "$1 $2").toLowerCase()
+  return words.charAt(0).toUpperCase() + words.slice(1)
+}
+
 const DOT: Record<TTone, string> = {
   success: "bg-success",
   warning: "bg-warning",
@@ -70,7 +76,7 @@ export function StatusDot({
       className={cn(
         "inline-block size-2 shrink-0 rounded-full",
         DOT[tone],
-        state && LIVE.has(state) && "motion-safe:animate-pulse",
+        state && LIVE.has(state.toLowerCase()) && "motion-safe:animate-pulse",
         className
       )}
     />
@@ -99,8 +105,7 @@ export function StatusBadge({
       )}
     >
       <StatusDot state={state} tone={tone} className="size-1.5" />
-      {label ??
-        (state ? t(state.charAt(0).toUpperCase() + state.slice(1)) : null)}
+      {label ?? (state ? t(stateLabel(state)) : null)}
     </span>
   )
 }

@@ -104,7 +104,7 @@ Deno.test({
             payload: Record<string, unknown>;
           }[];
           assertEquals(command.type, "pool.ensure");
-          assertEquals(Object.keys(command.payload), ["reserve"]);
+          assertEquals(Object.keys(command.payload), ["reserve", "isolated"]);
 
           const doc = await serverModel.findOne({ _id: server });
           assertEquals(doc?.provider.kind, "machine");

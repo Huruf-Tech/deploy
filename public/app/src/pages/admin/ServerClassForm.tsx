@@ -14,6 +14,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Switch } from "@/components/ui/switch"
 import { getLocalPath } from "@/core/lib/utils"
 import { errorMessage } from "@/lib/utils"
+import { toCents, toDollars } from "@/lib/format"
 
 type TClassDraft = {
   name: string
@@ -200,9 +201,8 @@ export default function ServerClassForm() {
             number(
               `rate-${key}`,
               t(label),
-              draft.rates[key] / 100,
-              (n) =>
-                set({ rates: { ...draft.rates, [key]: Math.round(n * 100) } }),
+              toDollars(draft.rates[key]),
+              (n) => set({ rates: { ...draft.rates, [key]: toCents(n) } }),
               "0.01"
             )
           )}

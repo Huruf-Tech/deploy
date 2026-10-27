@@ -17,7 +17,8 @@ import { Timeline, type TTimelineItem } from "@/components/console/timeline"
 import { usePolling } from "@/hooks/use-polling"
 import { useStream, type TStreamChunk } from "@/hooks/use-stream"
 import { errorMessage } from "@/lib/utils"
-import { ago, DeploymentStatus, duration, isLive, shortSha } from "./shared"
+import { ago } from "@/lib/format"
+import { DeploymentStatus, duration, isLive, shortSha } from "./shared"
 import { AiFixButton } from "./AiFix"
 
 type TDeployment = Awaited<ReturnType<typeof ThunderSDK.projects.deployment>>

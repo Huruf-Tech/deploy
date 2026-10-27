@@ -3,7 +3,6 @@ import { ThunderSDK } from "thunder-sdk"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
 
-import { use } from "@/core/hooks/use"
 import { Page } from "@/components/page"
 import { Button } from "@/components/ui/button"
 import {
@@ -17,16 +16,15 @@ import { PageHeader } from "@/components/console/page-header"
 import { DataTable } from "@/components/console/data-table"
 import { StatusBadge } from "@/components/console/status"
 import { Toolbar } from "@/components/console/toolbar"
-import { useFresh } from "@/hooks/use-fresh"
+import { dateTime } from "@/lib/format"
 import { money } from "@/lib/plans"
 import { errorMessage } from "@/lib/utils"
+import { useCached } from "@/hooks/use-cached"
+import { queries } from "@/lib/queries"
 
 type TFilter = NonNullable<
   Parameters<typeof ThunderSDK.paymentsAdmin.topups>[0]["query"]
 >["status"]
-
-const when = (date?: string | Date) =>
-  date ? new Date(date).toLocaleString() : "—"
 
 /**
  * Admin → Payments (PLAN §25.5, Phase 15d): card top-ups across tenants,
@@ -38,22 +36,10 @@ export default function PaymentsAdmin() {
   const [filter, setFilter] = React.useState<TFilter | "all">("all")
   const [busy, setBusy] = React.useState<string>()
 
-  const topupsRequest = ThunderSDK.useCaching(
-    ["paymentsAdmin", "topups", filter],
-    async ({ signal }) =>
-      await ThunderSDK.paymentsAdmin.topups({
-        query: filter === "all" ? {} : { status: filter },
-        signal,
-      })
-  )
-  const eventsRequest = ThunderSDK.useCaching(
-    ["paymentsAdmin", "events"],
-    async ({ signal }) =>
-      await ThunderSDK.paymentsAdmin.events({ query: {}, signal })
-  )
-  useFresh(topupsRequest)
-  const topups = use(topupsRequest).data
-  const events = use(eventsRequest).data
+  const topupsQuery = useCached(queries.topups(filter))
+  const eventsQuery = useCached(queries.paymentEvents())
+  const topups = topupsQuery.data
+  const events = eventsQuery.data
 
   const run = async (id: string, action: () => Promise<void>) => {
     setBusy(id)
@@ -63,7 +49,7 @@ export default function PaymentsAdmin() {
       toast.error(errorMessage(e) ?? t("Something went wrong"))
     } finally {
       setBusy(undefined)
-      topupsRequest.invalidate()
+      topupsQuery.reload()
     }
   }
 
@@ -240,7 +226,7 @@ export default function PaymentsAdmin() {
                 sortValue: (r) =>
                   r.createdAt ? new Date(r.createdAt).getTime() : 0,
                 className: "whitespace-nowrap tabular-nums text-xs",
-                cell: (r) => when(r.createdAt),
+                cell: (r) => dateTime(r.createdAt),
               },
               {
                 id: "actions",
@@ -347,7 +333,7 @@ export default function PaymentsAdmin() {
                 header: t("Date"),
                 sortValue: (e) => new Date(e.processedAt).getTime(),
                 className: "whitespace-nowrap tabular-nums text-xs",
-                cell: (e) => when(e.processedAt),
+                cell: (e) => dateTime(e.processedAt),
               },
               {
                 id: "handled",
@@ -367,7 +353,7 @@ export default function PaymentsAdmin() {
                           await ThunderSDK.paymentsAdmin.markHandled({
                             params: { id: e._id },
                           })
-                          eventsRequest.invalidate()
+                          eventsQuery.reload()
                         })
                       }
                     >

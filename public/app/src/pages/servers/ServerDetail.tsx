@@ -12,17 +12,9 @@ import {
 } from "@tabler/icons-react"
 
 import { Page } from "@/components/page"
-import { use } from "@/core/hooks/use"
 import { useBreadcrumbTitle } from "@/core/layouts/shared/breadcrumb"
 import { Button } from "@/components/ui/button"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
+import { ConfirmDialog } from "@/components/confirm-dialog"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Panel } from "@/components/console/panel"
@@ -35,6 +27,7 @@ import { TimeSeries } from "@/components/charts/presets"
 import { usePolling } from "@/hooks/use-polling"
 import { useStream, type TStreamChunk } from "@/hooks/use-stream"
 import { errorMessage } from "@/lib/utils"
+import { bytes } from "@/lib/format"
 import { toast } from "sonner"
 import { LogsSheet } from "./LogsSheet"
 
@@ -48,7 +41,6 @@ import { RentalPanel } from "@/pages/rentals/Rentals"
 import { PoolPanel } from "@/pages/rentals/PoolPanel"
 import { PageHeader } from "@/components/console/page-header"
 import {
-  gib,
   isMachine,
   serverSchema,
   stateOf,
@@ -56,7 +48,8 @@ import {
   type TServer,
 } from "./server"
 import { MachinePanel } from "./MachinePanel"
-import { useFresh } from "@/hooks/use-fresh"
+import { useCached } from "@/hooks/use-cached"
+import { queries } from "@/lib/queries"
 
 /** 24 h of history plus ~30 min of live samples, bounded (PLAN §20.4). */
 const MAX_SAMPLES = 2_400
@@ -176,14 +169,14 @@ function LiveMetrics({
           value={percent(
             latest.memTotal ? latest.memUsed / latest.memTotal : 0
           )}
-          hint={`${gib(latest.memUsed)} / ${gib(latest.memTotal)}`}
+          hint={`${bytes(latest.memUsed)} / ${bytes(latest.memTotal)}`}
         />
         <Stat
           label={t("Disk")}
           value={percent(
             latest.diskTotal ? latest.diskUsed / latest.diskTotal : 0
           )}
-          hint={`${gib(latest.diskUsed)} / ${gib(latest.diskTotal)}`}
+          hint={`${bytes(latest.diskUsed)} / ${bytes(latest.diskTotal)}`}
         />
         <Stat
           label={t("Network")}
@@ -340,12 +333,7 @@ function AgentUpdate({
   }
 }) {
   const { t } = useTranslation()
-  const { data } = use(
-    ThunderSDK.useCaching(
-      ["servers", "agentRelease"],
-      async ({ signal }) => await ThunderSDK.servers.agentRelease({ signal })
-    )
-  )
+  const { data } = useCached(queries.agentRelease())
   const [busy, setBusy] = React.useState(false)
   const latest = data?.sums[server.inventory.arch]
   if (!latest || latest === server.inventory.agentSha256) return null
@@ -381,16 +369,7 @@ export default function ServerDetail() {
     container: string | null
   } | null>(null)
 
-  // Same pattern as core's ListPage: cached request at the top level, read with use().
-  const request = ThunderSDK.useCaching(
-    ["servers", id],
-    async ({ signal }) =>
-      (await ThunderSDK.servers.get({ signal, params: { id }, query: {} })) as {
-        results: unknown[]
-      }
-  )
-  const { data } = use(request)
-  useFresh(request)
+  const { data, reload } = useCached(queries.server(id))
   // Newer copy fetched while host setup runs (see the polling below).
   const [latest, setLatest] = React.useState<unknown>()
   const server = React.useMemo(() => {
@@ -438,11 +417,7 @@ export default function ServerDetail() {
     <Page className="flex flex-col gap-4 py-5">
       <PageHeader
         title={
-          <ServerName
-            server={server._id}
-            name={server.name}
-            onSaved={() => request.invalidate()}
-          />
+          <ServerName server={server._id} name={server.name} onSaved={reload} />
         }
         status={<StatusPill state={state} />}
         description={
@@ -515,12 +490,9 @@ export default function ServerDetail() {
             <RentalPanel server={server._id} />
           )}
           {isMachine(server) && (
-            <MachinePanel
-              server={server}
-              onChanged={() => request.invalidate()}
-            />
+            <MachinePanel server={server} onChanged={reload} />
           )}
-          <PoolPanel server={server} onChanged={() => request.invalidate()} />
+          <PoolPanel server={server} onChanged={reload} />
           <Panel title={t("Machine")} bodyClassName="py-1">
             <KeyValue
               items={[
@@ -536,8 +508,8 @@ export default function ServerDetail() {
                     t("{{cores}} CPU", { cores: inventory.cpuCores }) +
                     ` · ${inventory.arch}`,
                 },
-                { label: t("Memory"), value: gib(inventory.memory) },
-                { label: t("Disk"), value: gib(inventory.disk) },
+                { label: t("Memory"), value: bytes(inventory.memory) },
+                { label: t("Disk"), value: bytes(inventory.disk) },
                 ...(server.setup?.dockerVersion
                   ? [{ label: "Docker", value: server.setup.dockerVersion }]
                   : []),
@@ -567,7 +539,7 @@ export default function ServerDetail() {
             <ServerLabels
               server={server._id}
               labels={server.labels}
-              onSaved={() => request.invalidate()}
+              onSaved={reload}
             />
           </Panel>
           {/* A machine runs no projects: its setup is in the Partitions panel. */}
@@ -575,7 +547,7 @@ export default function ServerDetail() {
             <HostSetup
               server={server}
               online={state === "online"}
-              onChanged={() => request.invalidate()}
+              onChanged={reload}
             />
           )}
         </div>
@@ -607,9 +579,7 @@ function RemovePartitionDialog({
 }) {
   const { t } = useTranslation()
   const navigate = useNavigate()
-  const [busy, setBusy] = React.useState(false)
   const remove = async () => {
-    setBusy(true)
     try {
       await ThunderSDK.servers.del({ params: { id: server._id } })
       await ThunderSDK.forgetCache(["servers", server._id], { subKeys: true })
@@ -618,29 +588,18 @@ function RemovePartitionDialog({
       navigate("..", { relative: "path" })
     } catch (e) {
       toast.error(errorMessage(e) ?? t("Could not remove it"))
-    } finally {
-      setBusy(false)
     }
   }
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>
-            {t("Remove {{name}}", { name: server.name })}
-          </DialogTitle>
-          <DialogDescription>
-            {t(
-              "This partition is deleted from its machine with its projects' containers and data. The machine keeps running."
-            )}
-          </DialogDescription>
-        </DialogHeader>
-        <DialogFooter>
-          <Button variant="destructive" disabled={busy} onClick={remove}>
-            {t("Remove partition")}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    <ConfirmDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title={t("Remove {{name}}", { name: server.name })}
+      description={t(
+        "This partition is deleted from its machine with its projects' containers and data. The machine keeps running."
+      )}
+      confirmLabel={t("Remove partition")}
+      onConfirm={remove}
+    />
   )
 }

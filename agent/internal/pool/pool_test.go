@@ -216,6 +216,27 @@ func TestResizeKeepsIsolation(t *testing.T) {
 	}
 }
 
+func TestSetupIsolatesTheNamedRentals(t *testing.T) {
+	m, f := setup(t)
+	ctx := context.Background()
+	// Made by an older agent: not recorded as a rental.
+	create(t, m, "prent", protocol.PartitionSize{Cpus: 1, MemMb: 1024, DiskGb: 10}, false)
+	create(t, m, "pown", protocol.PartitionSize{Cpus: 1, MemMb: 1024, DiskGb: 10}, false)
+	if _, err := m.Ensure(ctx, protocol.PoolEnsurePayload{Isolated: []string{"prent", "pgone"}}); err != nil {
+		t.Fatal(err)
+	}
+	if len(f.isolated) != 1 || f.isolated[0] != "prent" {
+		t.Fatalf("isolated after setup = %v", f.isolated)
+	}
+	// Kept: a later setup that doesn't name it never opens it up.
+	if _, err := m.Ensure(ctx, protocol.PoolEnsurePayload{}); err != nil {
+		t.Fatal(err)
+	}
+	if len(f.isolated) != 1 || f.isolated[0] != "prent" {
+		t.Fatalf("isolated after a second setup = %v", f.isolated)
+	}
+}
+
 func TestUsageAndState(t *testing.T) {
 	m, f := setup(t)
 	small := protocol.PartitionSize{Cpus: 0.5, MemMb: 1024, DiskGb: 10}

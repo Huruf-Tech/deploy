@@ -2451,10 +2451,20 @@
             "diskGb"
           ],
           "additionalProperties": false
+        },
+        "isolated": {
+          "default": [],
+          "maxItems": 500,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9]{1,12}$"
+          }
         }
       },
       "required": [
-        "reserve"
+        "reserve",
+        "isolated"
       ],
       "additionalProperties": false
     },

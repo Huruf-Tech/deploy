@@ -12,7 +12,6 @@ import {
   type TablerIcon,
 } from "@tabler/icons-react"
 
-import { use } from "@/core/hooks/use"
 import { getLocalPath } from "@/core/lib/utils"
 import { useTheme } from "@/components/theme-provider"
 import {
@@ -24,6 +23,8 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command"
+import { useCached } from "@/hooks/use-cached"
+import { queries } from "@/lib/queries"
 
 export type TNavGroup = {
   title: string
@@ -124,21 +125,8 @@ export function CommandMenu({
 /** Projects and servers, read when the palette opens (cached with the pages'). */
 function Resources({ onGo }: { onGo: (path: string) => void }) {
   const { t } = useTranslation()
-  const canProjects = ThunderSDK.isPermitted("projects", "list")
-  const projectsRequest = ThunderSDK.useCaching(
-    ["projects"],
-    async ({ signal }) =>
-      canProjects ? await ThunderSDK.projects.list({ signal }) : []
-  )
-  const serversRequest = ThunderSDK.useCaching(
-    ["projects", "placement"],
-    async ({ signal }) =>
-      ThunderSDK.isPermitted("projects", "placementInfo")
-        ? await ThunderSDK.projects.placementInfo({ signal })
-        : []
-  )
-  const { data: projects } = use(projectsRequest)
-  const { data: servers } = use(serversRequest)
+  const { data: projects } = useCached(queries.projects())
+  const { data: servers } = useCached(queries.placement())
 
   return (
     <>

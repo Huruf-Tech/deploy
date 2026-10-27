@@ -10,8 +10,6 @@ import {
   IconX,
 } from "@tabler/icons-react"
 
-import { use } from "@/core/hooks/use"
-import { useFresh } from "@/hooks/use-fresh"
 import { Page } from "@/components/page"
 import { Button } from "@/components/ui/button"
 import {
@@ -52,6 +50,8 @@ import { StatusBadge } from "@/components/console/status"
 import { Toolbar } from "@/components/console/toolbar"
 import { errorMessage } from "@/lib/utils"
 import { METRICS } from "./metrics"
+import { useCached } from "@/hooks/use-cached"
+import { queries } from "@/lib/queries"
 
 type TRule = Awaited<ReturnType<typeof ThunderSDK.alertRules.list>>[number]
 type TMetric = TRule["metric"]
@@ -115,25 +115,8 @@ function RuleDialog({
   onSaved: () => void
 }) {
   const { t } = useTranslation()
-  const servers = use(
-    ThunderSDK.useCaching(
-      ["projects", "placement"],
-      async ({ signal }) => await ThunderSDK.projects.placementInfo({ signal })
-    )
-  ).data
-  const projects = use(
-    ThunderSDK.useCaching(
-      ["projects"],
-      async ({ signal }) => await ThunderSDK.projects.list({ signal })
-    )
-  ).data
-  // The server list must be current: invalidating "projects" also refreshes "projects:placement".
-  useFresh(
-    ThunderSDK.useCaching(
-      ["projects"],
-      async ({ signal }) => await ThunderSDK.projects.list({ signal })
-    )
-  )
+  const servers = useCached(queries.placement()).data
+  const projects = useCached(queries.projects()).data
   const [name, setName] = React.useState("")
   const [kind, setKind] = React.useState<TKind>("server")
   const [ref, setRef] = React.useState("all")
@@ -422,11 +405,7 @@ function RuleDialog({
 /** Monitoring → Alert rules (PLAN §13). */
 export default function AlertRules() {
   const { t } = useTranslation()
-  const request = ThunderSDK.useCaching(
-    ["alertRules"],
-    async ({ signal }) => await ThunderSDK.alertRules.list({ signal })
-  )
-  const { data } = use(request)
+  const { data, reload } = useCached(queries.alertRules())
   const [editing, setEditing] = React.useState<TRule | null>(null)
   const [open, setOpen] = React.useState(false)
   const selection = useSelection()
@@ -439,7 +418,7 @@ export default function AlertRules() {
     if (!confirm(t("Delete the rule {{name}}?", { name: rule.name }))) return
     try {
       await ThunderSDK.alertRules.del({ params: { id: rule._id } })
-      request.invalidate()
+      reload()
     } catch (e) {
       toast.error(errorMessage(e) ?? t("Could not delete it"))
     }
@@ -598,7 +577,7 @@ export default function AlertRules() {
       <SelectionBar
         selection={selection}
         remove={(id) => ThunderSDK.alertRules.del({ params: { id } })}
-        onDone={() => request.invalidate()}
+        onDone={reload}
         canDelete={ThunderSDK.isPermitted("alertRules", "del")}
       />
 
@@ -606,7 +585,7 @@ export default function AlertRules() {
         rule={editing}
         open={open}
         onOpenChange={setOpen}
-        onSaved={() => request.invalidate()}
+        onSaved={reload}
       />
     </Page>
   )

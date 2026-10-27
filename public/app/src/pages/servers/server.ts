@@ -23,11 +23,11 @@ export const serverSchema = z.object({
   labels: z.record(z.string(), z.string()).nullish(),
   /**
    * PLAN §27: a `machine` hosts partitions, where projects run (`partition`,
-   * or `rented` on Huruf's pool machines, §26). `byo`: from before partitions.
+   * or `rented` on one of Huruf's machines, §26).
    */
   provider: z
     .object({
-      kind: z.enum(["machine", "partition", "rented", "byo"]),
+      kind: z.enum(["machine", "partition", "rented"]),
       host: z.string().nullish(),
       partition: z.string().nullish(),
       subscription: z.string().nullish(),
@@ -38,12 +38,11 @@ export const serverSchema = z.object({
       cpu: z.number(),
       memFree: z.number(),
       diskFree: z.number(),
-      /** Pool machines: their partitions (PLAN §26.5). */
+      /** Machines: their partitions (PLAN §27.2). */
       partitions: z
         .array(
           z.object({
             name: z.string(),
-            remainder: z.boolean(),
             state: z.string(),
             size: z.object({
               cpus: z.number(),
@@ -59,15 +58,13 @@ export const serverSchema = z.object({
         .nullish(),
     })
     .nullish(),
-  /** Machines' host setup (PLAN §26.5, §27); `mode: "pool"` rents partitions out. */
+  /** Machines' host setup (PLAN §27); a `class` puts the machine up for rent (§28). */
   pool: z
     .object({
       status: z.enum(["pending", "ready", "failed"]),
-      mode: z.enum(["machine", "pool"]).nullish(),
       allocatable: z
         .object({ cpus: z.number(), memMb: z.number(), diskGb: z.number() })
         .nullish(),
-      sysbox: z.string().nullish(),
       error: z.string().nullish(),
       class: z.string().nullish(),
       accepting: z.boolean().nullish(),
@@ -96,8 +93,6 @@ export type TLiveness = Awaited<
   ReturnType<typeof ThunderSDK.servers.liveness>
 >[number]
 export type TServerState = "pending" | "online" | "offline" | "rejected"
-
-export const gib = (bytes: number) => `${(bytes / 2 ** 30).toFixed(1)} GiB`
 
 export const stateOf = (server: TServer, live?: TLiveness): TServerState =>
   server.status === "active"

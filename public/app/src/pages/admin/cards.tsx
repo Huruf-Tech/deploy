@@ -8,6 +8,7 @@ import { StatusBadge } from "@/components/console/status"
 import { Button } from "@/components/ui/button"
 import { Chip, RecordCards } from "@/components/record-cards"
 import { isUnlimited, money } from "@/lib/plans"
+import { gbOfMb } from "@/lib/format"
 
 /* Card views for the admin modules (thunder-ui card overrides). */
 
@@ -87,7 +88,7 @@ export function PlanCards(props: TCardProps) {
             {plan.kind === "server" && plan.resources ? (
               <div className="flex flex-wrap gap-1.5">
                 <Chip>{t("{{n}} vCPU", { n: plan.resources.vcpu })}</Chip>
-                <Chip>{`${plan.resources.memMb / 1024} GB`}</Chip>
+                <Chip>{`${gbOfMb(plan.resources.memMb)} GB`}</Chip>
                 <Chip>{t("{{n}} GB disk", { n: plan.resources.diskGb })}</Chip>
                 <Chip>
                   {t("{{n}} GB traffic", { n: plan.resources.trafficGb })}

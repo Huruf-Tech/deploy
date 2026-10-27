@@ -219,6 +219,14 @@ func (m *Manager) Ensure(ctx context.Context, p protocol.PoolEnsurePayload) (map
 		return result, err
 	}
 	s.Allocatable = allocatable
+	// The control plane names its rentals: an older agent may not have
+	// recorded them as isolated. Never the other way round.
+	for _, name := range p.Isolated {
+		if e, ok := s.Partitions[name]; ok && !e.Isolated {
+			e.Isolated = true
+			s.Partitions[name] = e
+		}
+	}
 	if err := m.save(); err != nil {
 		return result, err
 	}

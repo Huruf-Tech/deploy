@@ -1,25 +1,17 @@
 import { ThunderSDK } from "thunder-sdk"
 
-import { use } from "@/core/hooks/use"
 import type { TTone } from "@/components/console/status"
+import { useCached } from "@/hooks/use-cached"
+import { queries } from "@/lib/queries"
 
 export type TRental = Awaited<
   ReturnType<typeof ThunderSDK.rentals.list>
 >[number]
 
-export const sizeText = (r: TRental) =>
-  `${r.size.cpus} vCPU · ${Math.round((r.size.memMb / 1024) * 10) / 10} GB · ${r.size.diskGb} GB`
-
 /** The tenant's rentals, shared by the servers list and a rented server's page. */
 export function useRentals() {
-  const request = ThunderSDK.useCaching(
-    ["rentals", "list"],
-    async ({ signal }) =>
-      ThunderSDK.isPermitted("rentals", "list")
-        ? await ThunderSDK.rentals.list({ signal })
-        : []
-  )
-  return { rentals: use(request).data, reload: () => request.invalidate() }
+  const { data, reload } = useCached(queries.rentals())
+  return { rentals: data, reload }
 }
 
 /** How a rental's status reads (PLAN §26.9), with text, not color alone. */
@@ -46,18 +38,13 @@ export function rentalStatus(
   }
 }
 
-/** A pool machine a rental could be placed on or moved to (PLAN §26.7). */
-export type TMachineSpot = {
-  server: string
-  name: string
-  free: { memMb: number; diskGb: number }
-  cpuRoom: number
-  fits: boolean
-  remainderShort: boolean
-  remainderUsesMb?: number
-  /** Moves only: over the private network. */
-  reachable?: boolean
-}
+/** A machine a rental could be placed on, or moved to (PLAN §26.7). */
+export type TMachineSpot =
+  | Awaited<ReturnType<typeof ThunderSDK.rentalsAdmin.placement>>[number]
+  | Awaited<
+      ReturnType<typeof ThunderSDK.rentalsAdmin.moveTargets>
+    >["targets"][number]
 
+/** It has room and, for a move, the private network reaches it. */
 export const usable = (m: TMachineSpot) =>
-  m.fits && !m.remainderShort && m.reachable !== false
+  m.fits && (!("reachable" in m) || m.reachable)

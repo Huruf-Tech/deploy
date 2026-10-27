@@ -66,10 +66,9 @@ export type poll$body = {
         cpu: number;
         memFree: number;
         diskFree: number;
-        /** Pool machines only (PLAN §26) */
+        /** Machines only (PLAN §27) */
         partitions?: {
             name: string;
-            remainder: boolean;
             /** Docker state: running, exited… */
             state: string;
             size: {
@@ -98,7 +97,7 @@ export type poll$return = {
     configVersion: string;
     commands: {
         seq: number;
-        type: "ping" | "docker.ensure" | "stream.open" | "stream.close" | "build.run" | "server.prune" | "agent.update" | "registry.delete" | "host.cleanup" | "pool.ensure" | "partition.create" | "partition.resize" | "partition.stop" | "partition.start" | "partition.remove" | "partition.send" | "partition.receive";
+        type: "ping" | "docker.ensure" | "stream.open" | "stream.close" | "build.run" | "agent.update" | "registry.delete" | "host.cleanup" | "pool.ensure" | "partition.create" | "partition.resize" | "partition.stop" | "partition.start" | "partition.remove" | "partition.send" | "partition.receive";
         payload: {
             [K in string]: unknown;
         };

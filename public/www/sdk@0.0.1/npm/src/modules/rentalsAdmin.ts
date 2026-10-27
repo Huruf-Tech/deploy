@@ -33,8 +33,6 @@ export type placement$return = {
     };
     cpuRoom: number;
     fits: boolean;
-    remainderShort: boolean;
-    remainderUsesMb?: number | undefined;
 }[];
 export type approve$params = {
     id?: string;
@@ -89,8 +87,6 @@ export type moveTargets$return = {
         };
         cpuRoom: number;
         fits: boolean;
-        remainderShort: boolean;
-        remainderUsesMb?: number | undefined;
         /** Over the private network */
         reachable: boolean;
     }[];

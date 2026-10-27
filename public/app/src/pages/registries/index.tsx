@@ -9,7 +9,6 @@ import { PageHeader } from "@/components/console/page-header"
 import { DataTable, type TColumn } from "@/components/console/data-table"
 import { EmptyState } from "@/components/console/empty-state"
 import { StatusBadge } from "@/components/console/status"
-import { use } from "@/core/hooks/use"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -36,7 +35,8 @@ import {
   useSelection,
 } from "@/components/selection-bar"
 import { errorMessage } from "@/lib/utils"
-import { useFresh } from "@/hooks/use-fresh"
+import { useCached } from "@/hooks/use-cached"
+import { queries } from "@/lib/queries"
 
 type TRegistry = Awaited<ReturnType<typeof ThunderSDK.registries.list>>[number]
 
@@ -191,18 +191,13 @@ function AddRegistryDialog({
 export default function RegistriesPage() {
   const { t } = useTranslation()
   const [adding, setAdding] = React.useState(false)
-  const request = ThunderSDK.useCaching(
-    ["registries"],
-    async ({ signal }) => await ThunderSDK.registries.list({ signal })
-  )
-  const { data, isLoading } = use(request)
-  useFresh(request)
+  const { data, isLoading, reload } = useCached(queries.registries())
   const selection = useSelection()
 
   const act = async (fn: () => PromiseLike<unknown>, failure: string) => {
     try {
       await fn()
-      request.invalidate()
+      reload()
     } catch (e) {
       toast.error(errorMessage(e) ?? failure)
     }
@@ -342,14 +337,14 @@ export default function RegistriesPage() {
       <SelectionBar
         selection={selection}
         remove={(id) => ThunderSDK.registries.del({ params: { id } })}
-        onDone={() => request.invalidate()}
+        onDone={reload}
         canDelete={ThunderSDK.isPermitted("registries", "del")}
       />
 
       <AddRegistryDialog
         open={adding}
         onOpenChange={setAdding}
-        onAdded={() => request.invalidate()}
+        onAdded={reload}
       />
     </Page>
   )

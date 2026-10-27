@@ -4,24 +4,19 @@ import { ThunderSDK } from "thunder-sdk"
 import { toast } from "sonner"
 import { IconServerBolt } from "@tabler/icons-react"
 
-import { use } from "@/core/hooks/use"
 import { Button } from "@/components/ui/button"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
+import { ConfirmDialog } from "@/components/confirm-dialog"
 import { Panel } from "@/components/console/panel"
 import { KeyValue } from "@/components/console/key-value"
 import { StatusBadge } from "@/components/console/status"
-import { errorMessage } from "@/lib/utils"
+import { useCached } from "@/hooks/use-cached"
+import { day, sizeText } from "@/lib/format"
 import { money } from "@/lib/plans"
+import { queries } from "@/lib/queries"
+import { errorMessage } from "@/lib/utils"
 import { notifyServersChanged } from "@/pages/servers/events"
 import { RentDialog } from "./RentDialog"
-import { rentalStatus, sizeText, useRentals } from "./rental"
+import { rentalStatus, useRentals } from "./rental"
 
 /** "Rent a server", next to "Add server" (PLAN §26.6). */
 export function RentServerButton() {
@@ -66,18 +61,16 @@ export function RentalRequests() {
   )
   // Approval happens elsewhere: check again while something is on the way.
   const waiting = shown.filter((r) => r.status !== "rejected").length
-  const refetch = React.useRef(reload)
-  refetch.current = reload
   React.useEffect(() => {
     if (!waiting) return
-    const check = () => refetch.current()
+    const check = () => void reload()
     const timer = setInterval(check, 20_000)
     window.addEventListener("focus", check)
     return () => {
       clearInterval(timer)
       window.removeEventListener("focus", check)
     }
-  }, [waiting])
+  }, [waiting, reload])
   // One arrived: it's a server now.
   const before = React.useRef(waiting)
   React.useEffect(() => {
@@ -114,7 +107,7 @@ export function RentalRequests() {
                 dir="ltr"
                 className="font-mono text-xs text-muted-foreground"
               >
-                {sizeText(r)}
+                {sizeText(r.size)}
               </span>
               <StatusBadge tone={status.tone} label={status.label} />
               {r.rejectedReason && (
@@ -148,22 +141,13 @@ export function RentalPanel({ server }: { server: string }) {
   const rental = rentals?.find((r) => r.server === server)
   const [resizing, setResizing] = React.useState(false)
   const [canceling, setCanceling] = React.useState(false)
-  const [busy, setBusy] = React.useState(false)
-  const catalog = use(
-    ThunderSDK.useCaching(
-      ["rentals", "catalog"],
-      async ({ signal }) => await ThunderSDK.rentals.catalog({ signal })
-    )
-  ).data
+  const catalog = useCached(queries.catalog()).data
   if (!rental) return null
   const status = rentalStatus(t, rental)
   const plan = catalog?.sizes.find((s) => s._id === rental.plan?._id)
   const resizeTo = catalog?.sizes.find((s) => s._id === rental.pendingChange)
-  const day = (d?: string | Date | null) =>
-    d ? new Date(d).toLocaleDateString() : "—"
 
   const cancel = async () => {
-    setBusy(true)
     try {
       await ThunderSDK.rentals.cancel({ params: { id: rental._id } })
       toast.success(
@@ -173,8 +157,6 @@ export function RentalPanel({ server }: { server: string }) {
       reload()
     } catch (e) {
       toast.error(errorMessage(e) ?? t("Could not cancel"))
-    } finally {
-      setBusy(false)
     }
   }
 
@@ -187,7 +169,7 @@ export function RentalPanel({ server }: { server: string }) {
       <KeyValue
         items={[
           { label: t("Size"), value: rental.plan?.name ?? "—" },
-          { label: t("Resources"), value: sizeText(rental) },
+          { label: t("Resources"), value: sizeText(rental.size) },
           ...(plan
             ? [
                 {
@@ -269,24 +251,17 @@ export function RentalPanel({ server }: { server: string }) {
           resize={{ rental: rental._id, class: plan.class, plan: plan._id }}
         />
       )}
-      <Dialog open={canceling} onOpenChange={setCanceling}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{t("Cancel this rental?")}</DialogTitle>
-            <DialogDescription>
-              {t(
-                "It keeps running until {{date}}, then it's deleted with everything on it. This month isn't refunded.",
-                { date: day(rental.currentPeriodEnd) }
-              )}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="destructive" onClick={cancel} disabled={busy}>
-              {t("Cancel rental")}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ConfirmDialog
+        open={canceling}
+        onOpenChange={setCanceling}
+        title={t("Cancel this rental?")}
+        description={t(
+          "It keeps running until {{date}}, then it's deleted with everything on it. This month isn't refunded.",
+          { date: day(rental.currentPeriodEnd) }
+        )}
+        confirmLabel={t("Cancel rental")}
+        onConfirm={cancel}
+      />
     </Panel>
   )
 }

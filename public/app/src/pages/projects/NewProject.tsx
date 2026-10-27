@@ -13,8 +13,6 @@ import {
 } from "@tabler/icons-react"
 
 import { Page } from "@/components/page"
-import { use } from "@/core/hooks/use"
-import { useFresh } from "@/hooks/use-fresh"
 import { useBreadcrumbTitle } from "@/core/layouts/shared/breadcrumb"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
@@ -50,6 +48,8 @@ import { classFootprints, fitsIn, roomOf } from "@/lib/capacity"
 import { cn, errorMessage } from "@/lib/utils"
 import { InputField } from "@/pages/templates/Detail"
 import { slugify, TemplateIcon } from "@/pages/templates/shared"
+import { useCached } from "@/hooks/use-cached"
+import { queries } from "@/lib/queries"
 
 type TSourceKind = "github" | "git" | "image" | "compose" | "template"
 type TBuildMode = "template" | "dockerfile" | "compose"
@@ -149,12 +149,7 @@ export function GitHubPicker({
   }) => void
 }) {
   const { t } = useTranslation()
-  const integrations = use(
-    ThunderSDK.useCaching(
-      ["gitIntegrations"],
-      async ({ signal }) => await ThunderSDK.gitIntegrations.list({ signal })
-    )
-  )
+  const integrations = useCached(queries.gitIntegrations())
   const [repos, setRepos] = React.useState<TRepository[]>()
   const [filter, setFilter] = React.useState("")
   const [branches, setBranches] = React.useState<string[]>()
@@ -385,31 +380,9 @@ export default function NewProject() {
   const [error, setError] = React.useState<string | null>(null)
   const [busy, setBusy] = React.useState(false)
 
-  const templates = use(
-    ThunderSDK.useCaching(
-      ["templates"],
-      async ({ signal }) => await ThunderSDK.templates.list({ signal })
-    )
-  )
-  const placement = use(
-    ThunderSDK.useCaching(
-      ["projects", "placement"],
-      async ({ signal }) => await ThunderSDK.projects.placementInfo({ signal })
-    )
-  )
-  const projects = use(
-    ThunderSDK.useCaching(
-      ["projects"],
-      async ({ signal }) => await ThunderSDK.projects.list({ signal })
-    )
-  )
-  // The server list must be current: invalidating "projects" also refreshes "projects:placement".
-  useFresh(
-    ThunderSDK.useCaching(
-      ["projects"],
-      async ({ signal }) => await ThunderSDK.projects.list({ signal })
-    )
-  )
+  const templates = useCached(queries.templates())
+  const placement = useCached(queries.placement())
+  const projects = useCached(queries.projects())
   const onlineServers = React.useMemo(
     () => (placement.data ?? []).filter((s) => s.online).map((s) => s.server),
     [placement.data]

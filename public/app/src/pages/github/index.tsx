@@ -17,7 +17,6 @@ import { PageHeader } from "@/components/console/page-header"
 import { Panel } from "@/components/console/panel"
 import { EmptyState } from "@/components/console/empty-state"
 import { StatusBadge } from "@/components/console/status"
-import { use } from "@/core/hooks/use"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -47,7 +46,8 @@ import {
 } from "@/components/selection-bar"
 import { cn, errorMessage } from "@/lib/utils"
 import { RepositoriesSheet, type TRepoTarget } from "./RepositoriesSheet"
-import { useFresh } from "@/hooks/use-fresh"
+import { useCached } from "@/hooks/use-cached"
+import { queries } from "@/lib/queries"
 
 type TIntegration = Awaited<
   ReturnType<typeof ThunderSDK.gitIntegrations.list>
@@ -387,12 +387,7 @@ export default function GitHubPage() {
   const [connecting, setConnecting] = React.useState(false)
   const [browsing, setBrowsing] = React.useState<TRepoTarget | null>(null)
 
-  const request = ThunderSDK.useCaching(
-    ["gitIntegrations"],
-    async ({ signal }) => await ThunderSDK.gitIntegrations.list({ signal })
-  )
-  const { data, isLoading } = use(request)
-  useFresh(request)
+  const { data, isLoading, reload } = useCached(queries.gitIntegrations())
   const selection = useSelection()
   const owned = (data ?? []).filter((i) => i.isOwner).map((i) => i._id)
 
@@ -409,10 +404,10 @@ export default function GitHubPage() {
       toast.error(messages[error] ?? t("The GitHub connection didn't finish."))
     }
     if (params.has("connected") || error) {
-      request.invalidate()
+      reload()
       setParams({}, { replace: true })
     }
-  }, [params, setParams, request, t])
+  }, [params, setParams, reload, t])
 
   const connect = (
     <Button size="sm" onClick={() => setConnecting(true)}>
@@ -462,7 +457,7 @@ export default function GitHubPage() {
               <IntegrationCard
                 key={integration._id}
                 integration={integration}
-                onChanged={() => request.invalidate()}
+                onChanged={reload}
                 onBrowse={setBrowsing}
                 selection={selection}
               />
@@ -474,7 +469,7 @@ export default function GitHubPage() {
       <SelectionBar
         selection={selection}
         remove={(id) => ThunderSDK.gitIntegrations.del({ params: { id } })}
-        onDone={() => request.invalidate()}
+        onDone={reload}
         canDelete={ThunderSDK.isPermitted("gitIntegrations", "del")}
       />
 

@@ -1,11 +1,9 @@
 import * as React from "react"
 import { ThunderSDK } from "thunder-sdk"
 import { useTranslation } from "react-i18next"
-import { format } from "date-fns"
 import { IconHeartbeat } from "@tabler/icons-react"
 
 import { Page } from "@/components/page"
-import { use } from "@/core/hooks/use"
 import { Skeleton } from "@/components/ui/skeleton"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { PageHeader } from "@/components/console/page-header"
@@ -20,13 +18,10 @@ import {
   HealthHero,
   InstanceMeters,
 } from "./ControlPlaneHealth"
-import {
-  findings,
-  num,
-  type TOverview,
-  type TPoint,
-  type TRange,
-} from "./control-plane"
+import { findings, num, type TPoint, type TRange } from "./control-plane"
+import { useCached } from "@/hooks/use-cached"
+import { queries } from "@/lib/queries"
+import { dateTime } from "@/lib/format"
 
 /** Charts draw at most this many points; older buckets are thinned out. */
 const CHART_POINTS = 240
@@ -119,16 +114,8 @@ function describeCommand(command: string, t: (key: string) => string): string {
 export default function ControlPlane() {
   const { t } = useTranslation()
   const [range, setRange] = React.useState<TRange>("1h")
-  const request = ThunderSDK.useCaching(
-    ["controlPlane", range],
-    async ({ signal }) =>
-      (await ThunderSDK.controlPlane.overview({
-        signal,
-        query: { range },
-      })) as unknown as TOverview
-  )
-  const { data, isLoading } = use(request)
-  usePolling(() => request.invalidate(), 30_000)
+  const { data, isLoading, reload } = useCached(queries.controlPlane(range))
+  usePolling(reload, 30_000)
 
   const o = data
   const list = o ? findings(o, t) : []
@@ -319,7 +306,13 @@ export default function ControlPlane() {
                       cell: (q) => (
                         <div className="text-xs text-muted-foreground">
                           <span className="block whitespace-nowrap tabular-nums">
-                            {format(new Date(q.at), "MMM d, HH:mm")}
+                            {dateTime(q.at, {
+                              month: "short",
+                              day: "numeric",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                              hourCycle: "h23",
+                            })}
                           </span>
                           <span dir="ltr" className="block font-mono">
                             {q.host}

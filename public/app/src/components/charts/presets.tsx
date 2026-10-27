@@ -6,7 +6,6 @@ import { Grid } from "./grid"
 import { XAxis } from "./x-axis"
 import { YAxis } from "./y-axis"
 import { ChartTooltip } from "./tooltip"
-import { AreaSparkline } from "./sparkline"
 
 /**
  * Our defaults over bklit (DESIGN §6): compact margins, a short first draw
@@ -100,28 +99,5 @@ export function TimeSeries({
         }
       />
     </LineChart>
-  )
-}
-
-/** A KPI sparkline (for `Stat`'s chart slot). Not interactive. */
-export function Spark<T extends Record<string, unknown>>({
-  data,
-  dataKey,
-  color = "var(--chart-2)",
-}: {
-  data: readonly T[]
-  dataKey: keyof T & string
-  color?: string
-}) {
-  const still = useReducedMotion()
-  return (
-    <AreaSparkline
-      data={data}
-      dataKey={dataKey}
-      color={color}
-      interactive={false}
-      animate={!still}
-      className="size-full"
-    />
   )
 }

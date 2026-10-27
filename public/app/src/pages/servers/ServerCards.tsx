@@ -2,7 +2,6 @@ import * as React from "react"
 import { useTranslation } from "react-i18next"
 import { Link } from "react-router"
 import { ThunderSDK } from "thunder-sdk"
-import { formatDistanceToNow } from "date-fns"
 import { toast } from "sonner"
 import {
   IconActivityHeartbeat,
@@ -27,10 +26,9 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { EmptyState } from "@/components/console/empty-state"
 import { DataTable, type TColumn } from "@/components/console/data-table"
 import { Skeleton } from "@/components/ui/skeleton"
-import { ResourceBar } from "@/components/resource-bar"
+import { Meter } from "@/components/console/meter"
 import { usePolling } from "@/hooks/use-polling"
-import { useFresh } from "@/hooks/use-fresh"
-import { use } from "@/core/hooks/use"
+import { ago, bytes, dateTime } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import { AcceptServerDialog } from "./AcceptServerDialog"
 import { AddServerButton } from "./AddServerButton"
@@ -39,7 +37,6 @@ import { isAddServerOpen, onServersChanged } from "./events"
 import { StatusPill } from "./StatusPill"
 import { LabelChips } from "./ServerLabels"
 import {
-  gib,
   grouped,
   isMachine,
   isPartition,
@@ -49,6 +46,8 @@ import {
   type TLiveness,
   type TServer,
 } from "./server"
+import { useCached } from "@/hooks/use-cached"
+import { queries } from "@/lib/queries"
 
 function Chip({
   icon: Icon,
@@ -77,9 +76,7 @@ function SetupChips({ server: doc }: { server: TServer }) {
         {doc.pool?.status !== "ready"
           ? t("Setting up for partitions")
           : t("{{count}} partitions", {
-              count: (doc.resources?.partitions ?? []).filter(
-                (p) => !p.remainder
-              ).length,
+              count: doc.resources?.partitions?.length ?? 0,
             })}
       </Chip>
     )
@@ -131,9 +128,7 @@ function PendingNote({ server }: { server: TServer }) {
         {server.pairingExpiresAt && (
           <span className="mt-0.5 block font-medium">
             {t("Code expires {{when}}", {
-              when: formatDistanceToNow(server.pairingExpiresAt, {
-                addSuffix: true,
-              }),
+              when: ago(server.pairingExpiresAt),
             })}
           </span>
         )}
@@ -183,13 +178,11 @@ function LastSeen({
   return (
     <span
       className="truncate text-xs text-muted-foreground"
-      title={live ? new Date(live.lastSeenAt).toLocaleString() : undefined}
+      title={live ? dateTime(live.lastSeenAt) : undefined}
     >
       {state === "offline" && live
         ? t("Last seen {{when}}", {
-            when: formatDistanceToNow(new Date(live.lastSeenAt), {
-              addSuffix: true,
-            }),
+            when: ago(live.lastSeenAt),
           })
         : t("Agent {{version}}", { version: server.inventory.agentVersion })}
     </span>
@@ -301,26 +294,29 @@ function ServerCard({
           <PendingNote server={server} />
         ) : resources ? (
           <>
-            <ResourceBar
+            <Meter
+              layout="row"
               label={t("CPU")}
               hue="sky"
-              used={resources.cpu}
+              value={resources.cpu}
               total={1}
-              detail={`${Math.round(resources.cpu * 100)}%`}
+              text={`${Math.round(resources.cpu * 100)}%`}
             />
-            <ResourceBar
+            <Meter
+              layout="row"
               label={t("Memory")}
               hue="violet"
-              used={inventory.memory - resources.memFree}
+              value={inventory.memory - resources.memFree}
               total={inventory.memory}
-              detail={`${gib(inventory.memory - resources.memFree)} / ${gib(inventory.memory)}`}
+              text={`${bytes(inventory.memory - resources.memFree)} / ${bytes(inventory.memory)}`}
             />
-            <ResourceBar
+            <Meter
+              layout="row"
               label={t("Disk")}
               hue="emerald"
-              used={inventory.disk - resources.diskFree}
+              value={inventory.disk - resources.diskFree}
               total={inventory.disk}
-              detail={`${gib(inventory.disk - resources.diskFree)} / ${gib(inventory.disk)}`}
+              text={`${bytes(inventory.disk - resources.diskFree)} / ${bytes(inventory.disk)}`}
             />
           </>
         ) : (
@@ -335,7 +331,7 @@ function ServerCard({
             {t("{{cores}} CPU", { cores: inventory.cpuCores })} ·{" "}
             {inventory.arch}
           </Chip>
-          <Chip>{gib(inventory.memory)}</Chip>
+          <Chip>{bytes(inventory.memory)}</Chip>
           {isPartition(server) && <Chip>{t("Partition")}</Chip>}
           {server.status === "active" && <SetupChips server={server} />}
         </div>
@@ -467,13 +463,13 @@ function ServerTable({
       sortValue: (s) => s.resources?.cpu ?? -1,
       cell: (s) =>
         s.resources ? (
-          <ResourceBar
-            compact
+          <Meter
+            layout="compact"
             label={t("CPU on {{name}}", { name: s.name })}
             hue="sky"
-            used={s.resources.cpu}
+            value={s.resources.cpu}
             total={1}
-            detail={`${Math.round(s.resources.cpu * 100)}%`}
+            text={`${Math.round(s.resources.cpu * 100)}%`}
           />
         ) : (
           <span className="text-muted-foreground">—</span>
@@ -487,16 +483,16 @@ function ServerTable({
         s.resources ? 1 - s.resources.memFree / s.inventory.memory : -1,
       cell: (s) =>
         s.resources ? (
-          <ResourceBar
-            compact
+          <Meter
+            layout="compact"
             label={
               t("Memory on {{name}}", { name: s.name }) +
-              `: ${gib(s.inventory.memory - s.resources.memFree)} / ${gib(s.inventory.memory)}`
+              `: ${bytes(s.inventory.memory - s.resources.memFree)} / ${bytes(s.inventory.memory)}`
             }
             hue="violet"
-            used={s.inventory.memory - s.resources.memFree}
+            value={s.inventory.memory - s.resources.memFree}
             total={s.inventory.memory}
-            detail={pct(
+            text={pct(
               s.inventory.memory - s.resources.memFree,
               s.inventory.memory
             )}
@@ -513,16 +509,16 @@ function ServerTable({
         s.resources ? 1 - s.resources.diskFree / s.inventory.disk : -1,
       cell: (s) =>
         s.resources ? (
-          <ResourceBar
-            compact
+          <Meter
+            layout="compact"
             label={
               t("Disk on {{name}}", { name: s.name }) +
-              `: ${gib(s.inventory.disk - s.resources.diskFree)} / ${gib(s.inventory.disk)}`
+              `: ${bytes(s.inventory.disk - s.resources.diskFree)} / ${bytes(s.inventory.disk)}`
             }
             hue="emerald"
-            used={s.inventory.disk - s.resources.diskFree}
+            value={s.inventory.disk - s.resources.diskFree}
             total={s.inventory.disk}
-            detail={pct(
+            text={pct(
               s.inventory.disk - s.resources.diskFree,
               s.inventory.disk
             )}
@@ -605,12 +601,7 @@ function BulkAgentUpdate({
   liveness: Map<string, TLiveness>
 }) {
   const { t } = useTranslation()
-  const release = ThunderSDK.useCaching(
-    ["servers", "agentRelease"],
-    async ({ signal }) => await ThunderSDK.servers.agentRelease({ signal })
-  )
-  useFresh(release)
-  const { data } = use(release)
+  const { data } = useCached(queries.agentRelease())
   const [busy, setBusy] = React.useState(false)
 
   const selected = servers.filter((s) => selectedIds.includes(s._id))

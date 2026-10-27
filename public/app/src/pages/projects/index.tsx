@@ -12,10 +12,8 @@ import {
 } from "@tabler/icons-react"
 
 import { Page } from "@/components/page"
-import { use } from "@/core/hooks/use"
 import { Button } from "@/components/ui/button"
 import { usePolling } from "@/hooks/use-polling"
-import { useFresh } from "@/hooks/use-fresh"
 import { PageHeader } from "@/components/console/page-header"
 import { StatusBadge } from "@/components/console/status"
 import { Toolbar } from "@/components/console/toolbar"
@@ -27,8 +25,8 @@ import {
   SelectionBar,
   useSelection,
 } from "@/components/selection-bar"
+import { ago } from "@/lib/format"
 import {
-  ago,
   DeploymentStatus,
   isLive,
   shortSha,
@@ -41,24 +39,20 @@ import {
   FolderDialog,
   MoveMenu,
   moveProjects,
-  useFolders,
   type TFolder,
 } from "./folders"
+import { useCached } from "@/hooks/use-cached"
+import { queries } from "@/lib/queries"
 
 /** Projects (PLAN §15.6): what runs, where, and how the last deploy went. */
 export default function ProjectsPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
-  const request = ThunderSDK.useCaching(
-    ["projects"],
-    async ({ signal }) => await ThunderSDK.projects.list({ signal })
-  )
-  useFresh(request)
-  const { data, isLoading } = use(request)
+  const { data, isLoading, reload } = useCached(queries.projects())
   const selection = useSelection()
   const [search, setSearch] = React.useState("")
-  const foldersRequest = useFolders()
-  const folders = use(foldersRequest).data ?? []
+  const foldersQuery = useCached(queries.folders())
+  const folders = foldersQuery.data ?? []
   // The open folder lives in the URL, so back/forward and links work.
   const [params, setParams] = useSearchParams()
   const open = folders.find((f) => f._id === params.get("folder"))
@@ -74,16 +68,16 @@ export default function ProjectsPage() {
     setParams(id ? { folder: id } : {})
   }
   const refresh = () => {
-    request.invalidate()
-    foldersRequest.invalidate()
+    reload()
+    foldersQuery.reload()
   }
   const folderOf = (p: TProjectSummary) =>
     folders.some((f) => f._id === p.group) ? p.group : undefined
 
-  // Refresh while something is building or deploying.
+  // Refresh the list (only) while something is building or deploying.
   usePolling(() => {
     if (data?.some((p) => isLive(p.lastDeployment?.status)))
-      request.invalidate()
+      queries.projects().invalidate({ stopPropagation: true })
   }, 4_000)
 
   const q = search.trim().toLowerCase()
@@ -444,7 +438,7 @@ export default function ProjectsPage() {
         selection={selection}
         canDelete={ThunderSDK.isPermitted("projects", "del")}
         remove={(id) => ThunderSDK.projects.del({ params: { id } })}
-        onDone={() => request.invalidate()}
+        onDone={reload}
       />
     </Page>
   )

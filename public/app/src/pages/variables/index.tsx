@@ -22,7 +22,6 @@ import { Toolbar } from "@/components/console/toolbar"
 import { DataTable, type TColumn } from "@/components/console/data-table"
 import { EmptyState } from "@/components/console/empty-state"
 import { CodeBlock } from "@/components/console/code-block"
-import { use } from "@/core/hooks/use"
 import { getAuthUrl } from "@/core/lib/utils"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -45,8 +44,9 @@ import {
 import { errorMessage } from "@/lib/utils"
 import { VariableDialog, type TScope, type TVariable } from "./VariableDialog"
 import { ImportEnvDialog } from "./ImportEnvDialog"
-import { useFresh } from "@/hooks/use-fresh"
-import { ago } from "@/pages/projects/shared"
+import { ago } from "@/lib/format"
+import { useCached } from "@/hooks/use-cached"
+import { queries } from "@/lib/queries"
 
 function SecretValue({
   variable,
@@ -163,14 +163,7 @@ export function VariableTable({
   const [importing, setImporting] = React.useState(false)
   const [filter, setFilter] = React.useState("")
 
-  const request = ThunderSDK.useCaching(
-    ["variables", scope.scope, scope.project ?? ""],
-    async ({ signal }) =>
-      await ThunderSDK.variables.list({ signal, query: scope })
-  )
-  const { data, isLoading } = use(request)
-  useFresh(request)
-  const reload = () => request.invalidate()
+  const { data, isLoading, reload } = useCached(queries.variables(scope))
   const selection = useSelection()
 
   const stageLabel = {

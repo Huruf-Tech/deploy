@@ -1,9 +1,9 @@
 import { Link, useLocation } from "react-router"
 import { useTranslation } from "react-i18next"
-import { ThunderSDK } from "thunder-sdk"
 import { IconShieldCheck } from "@tabler/icons-react"
 
-import { use } from "@/core/hooks/use"
+import { useCached } from "@/hooks/use-cached"
+import { queries } from "@/lib/queries"
 import { getLocalPath } from "@/core/lib/utils"
 import { Button } from "@/components/ui/button"
 
@@ -15,14 +15,7 @@ import { Button } from "@/components/ui/button"
 export function CardBanner() {
   const { t } = useTranslation()
   const { pathname } = useLocation()
-  const request = ThunderSDK.useCaching(
-    ["payments", "summary"],
-    async ({ signal }) =>
-      ThunderSDK.isPermitted("payments", "summary")
-        ? await ThunderSDK.payments.summary({ signal })
-        : null
-  )
-  const summary = use(request).data
+  const summary = useCached(queries.paymentsSummary()).data
   if (!summary?.cardRequired || pathname.endsWith("/configuration/billing")) {
     return null
   }

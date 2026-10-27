@@ -9,7 +9,6 @@ import {
   IconReceipt,
 } from "@tabler/icons-react"
 
-import { use } from "@/core/hooks/use"
 import { Page } from "@/components/page"
 import { Button } from "@/components/ui/button"
 import {
@@ -26,10 +25,12 @@ import { Panel } from "@/components/console/panel"
 import { Meter } from "@/components/console/meter"
 import { StatusBadge } from "@/components/console/status"
 import { DataTable } from "@/components/console/data-table"
-import { useFresh } from "@/hooks/use-fresh"
 import { cn, errorMessage } from "@/lib/utils"
+import { day } from "@/lib/format"
 import { isUnlimited, money } from "@/lib/plans"
 import { confirmPayment } from "./stripe"
+import { useCached } from "@/hooks/use-cached"
+import { queries } from "@/lib/queries"
 
 type TOverview = Awaited<ReturnType<typeof ThunderSDK.billing.get>>
 type TPlan = Awaited<ReturnType<typeof ThunderSDK.billing.plans>>[number]
@@ -44,8 +45,6 @@ const QUOTAS: { key: keyof TOverview["limits"]; label: string }[] = [
   { key: "registries", label: "Registries" },
   { key: "domains", label: "Custom domains" },
 ]
-
-const day = (d?: string | Date) => (d ? new Date(d).toLocaleDateString() : "—")
 
 function Usage({ overview }: { overview: TOverview }) {
   const { t } = useTranslation()
@@ -121,16 +120,9 @@ function ConfirmDialog({
     (w) => w.currency === plan?.price.currency
   )
   // What the change costs now, unused time credited (PLAN §26.6 B).
-  const quote = use(
-    ThunderSDK.useCaching(
-      ["billing", "quote", plan?._id ?? ""],
-      async ({ signal }) =>
-        plan && !plan.isFree && current?.isOwner
-          ? await ThunderSDK.billing.quote({
-              query: { plan: plan._id },
-              signal,
-            })
-          : null
+  const quote = useCached(
+    queries.billingQuote(
+      plan && !plan.isFree && current?.isOwner ? plan._id : undefined
     )
   ).data
   const cost = (amount: number) => money(amount, plan?.price.currency ?? "usd")
@@ -256,26 +248,12 @@ function ConfirmDialog({
 /** Plan & usage (PLAN §22.6): quotas, the current period, plans and history. */
 export default function BillingPage() {
   const { t } = useTranslation()
-  const overviewRequest = ThunderSDK.useCaching(
-    ["billing"],
-    async ({ signal }) => await ThunderSDK.billing.get({ signal })
-  )
-  const plansRequest = ThunderSDK.useCaching(
-    ["billing", "plans"],
-    async ({ signal }) => await ThunderSDK.billing.plans({ signal })
-  )
-  const periodsRequest = ThunderSDK.useCaching(
-    ["billing", "periods"],
-    async ({ signal }) => await ThunderSDK.billing.periods({ signal })
-  )
-  // Invalidating "billing" refreshes the plans and periods too.
-  useFresh(overviewRequest)
-  const { data: overview } = use(overviewRequest)
-  const { data: plans } = use(plansRequest)
-  const { data: periods } = use(periodsRequest)
+  // Reloading "billing" refreshes the plans and periods too.
+  const { data: overview, reload: refresh } = useCached(queries.billing())
+  const { data: plans } = useCached(queries.billingPlans())
+  const { data: periods } = useCached(queries.billingPeriods())
   const [choosing, setChoosing] = React.useState<TPlan | null>(null)
 
-  const refresh = () => overviewRequest.invalidate()
   const cancel = async () => {
     if (
       !confirm(

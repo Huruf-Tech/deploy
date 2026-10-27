@@ -11,7 +11,6 @@ import {
   IconX,
 } from "@tabler/icons-react"
 
-import { use } from "@/core/hooks/use"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -34,6 +33,8 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Switch } from "@/components/ui/switch"
 import { usePolling } from "@/hooks/use-polling"
 import { errorMessage } from "@/lib/utils"
+import { useCached } from "@/hooks/use-cached"
+import { queries } from "@/lib/queries"
 
 // React Flow loads with this panel only (PLAN §15.5 per-route bundles).
 const ReachGraph = React.lazy(() => import("./ReachGraph"))
@@ -180,17 +181,13 @@ function Matrix({ network }: { network: TNetwork }) {
 export default function NetworkPage() {
   const { t } = useTranslation()
   const [editing, setEditing] = React.useState<TMember | null>(null)
-  const request = ThunderSDK.useCaching(
-    ["networks"],
-    async ({ signal }) => await ThunderSDK.networks.get({ signal })
-  )
-  const { data } = use(request)
-  usePolling(() => request.invalidate(), 15_000)
+  const { data, reload } = useCached(queries.networks())
+  usePolling(reload, 15_000)
 
   const act = async (fn: () => PromiseLike<unknown>, failure: string) => {
     try {
       await fn()
-      request.invalidate()
+      reload()
     } catch (e) {
       toast.error(errorMessage(e) ?? failure)
     }
@@ -464,7 +461,7 @@ export default function NetworkPage() {
       <EndpointDialog
         server={editing}
         onOpenChange={(o) => !o && setEditing(null)}
-        onSaved={() => request.invalidate()}
+        onSaved={reload}
       />
     </Page>
   )

@@ -3,7 +3,6 @@ import { useTranslation } from "react-i18next"
 import { ThunderSDK } from "thunder-sdk"
 import { toast } from "sonner"
 
-import { use } from "@/core/hooks/use"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -16,9 +15,11 @@ import {
 import { errorMessage } from "@/lib/utils"
 import { MachinePicker } from "./MachinePicker"
 import { usable } from "./rental"
+import { useCached } from "@/hooks/use-cached"
+import { queries } from "@/lib/queries"
 
 /**
- * Moves a rental to another pool machine of its class (PLAN §26.10), after
+ * Moves a rental to another machine of its class (PLAN §26.10), after
  * saying how long it's offline: the copy runs over the private network.
  */
 export function MoveDialog({
@@ -34,16 +35,7 @@ export function MoveDialog({
   onDone: () => void
 }) {
   const { t } = useTranslation()
-  const info = use(
-    ThunderSDK.useCaching(
-      ["rentalsAdmin", "move", rental],
-      async ({ signal }) =>
-        await ThunderSDK.rentalsAdmin.moveTargets({
-          params: { id: rental },
-          signal,
-        })
-    )
-  ).data
+  const info = useCached(queries.moveTargets(rental)).data
   const [host, setHost] = React.useState<string>()
   const pick = host ?? info?.targets.find(usable)?.server
   const [busy, setBusy] = React.useState(false)
@@ -91,7 +83,7 @@ export function MoveDialog({
           ) : (
             <p className="text-sm text-muted-foreground">
               {t(
-                "No other pool machine of this class takes rentals. Add one, or let one take rentals again."
+                "No other machine of this class takes rentals. Give a machine this class on its page, or let one take rentals again."
               )}
             </p>
           ))}

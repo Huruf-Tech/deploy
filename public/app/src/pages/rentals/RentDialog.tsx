@@ -4,7 +4,6 @@ import { ThunderSDK } from "thunder-sdk"
 import { toast } from "sonner"
 import { IconCheck } from "@tabler/icons-react"
 
-import { use } from "@/core/hooks/use"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -26,6 +25,9 @@ import { Label } from "@/components/ui/label"
 import { money } from "@/lib/plans"
 import { cn, errorMessage } from "@/lib/utils"
 import { confirmPayment } from "@/pages/billing/stripe"
+import { useCached } from "@/hooks/use-cached"
+import { queries } from "@/lib/queries"
+import { gbOfMb } from "@/lib/format"
 
 type TResources = { vcpu: number; memMb: number; diskGb: number }
 
@@ -40,7 +42,7 @@ const describe = (
 ) =>
   t("{{vcpu}} vCPU · {{mem}} GB · {{disk}} GB disk", {
     vcpu: r.vcpu,
-    mem: r.memMb / 1024,
+    mem: gbOfMb(r.memMb),
     disk: r.diskGb,
   }) +
   (r.trafficGb !== undefined
@@ -65,12 +67,7 @@ export function RentDialog({
   resize?: { rental: string; class: string; plan?: string }
 }) {
   const { t } = useTranslation()
-  const catalog = use(
-    ThunderSDK.useCaching(
-      ["rentals", "catalog"],
-      async ({ signal }) => await ThunderSDK.rentals.catalog({ signal })
-    )
-  ).data
+  const catalog = useCached(queries.catalog()).data
   const classes = catalog?.classes ?? []
   const [cls, setCls] = React.useState<string>()
   const current = resize?.class ?? cls ?? classes[0]?._id
@@ -87,23 +84,9 @@ export function RentDialog({
   })
   const [busy, setBusy] = React.useState(false)
 
-  const quote = use(
-    ThunderSDK.useCaching(
-      [
-        "rentals",
-        "quote",
-        current ?? "",
-        picked === "custom" ? "custom" : "size",
-        String(custom.vcpu),
-        String(custom.memMb),
-        String(custom.diskGb),
-      ],
-      async ({ signal }) =>
-        current && picked === "custom"
-          ? await ThunderSDK.rentals
-              .quote({ query: { class: current, ...custom }, signal })
-              .catch(() => null)
-          : null
+  const quote = useCached(
+    queries.rentalQuote(
+      current && picked === "custom" ? { class: current, ...custom } : undefined
     )
   ).data
   const size = sizes.find((s) => s._id === picked)
@@ -268,7 +251,7 @@ export function RentDialog({
                       "memMb",
                       t("Memory"),
                       steps(512, max.memMb, 512),
-                      (v: number) => `${v / 1024} GB`,
+                      (v: number) => `${gbOfMb(v)} GB`,
                     ],
                     [
                       "diskGb",

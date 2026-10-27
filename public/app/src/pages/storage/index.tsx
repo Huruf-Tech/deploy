@@ -9,7 +9,6 @@ import { PageHeader } from "@/components/console/page-header"
 import { DataTable, type TColumn } from "@/components/console/data-table"
 import { EmptyState } from "@/components/console/empty-state"
 import { StatusBadge } from "@/components/console/status"
-import { use } from "@/core/hooks/use"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -34,7 +33,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { useFresh } from "@/hooks/use-fresh"
 import {
   SelectAllCheckbox,
   SelectCheckbox,
@@ -42,6 +40,8 @@ import {
   useSelection,
 } from "@/components/selection-bar"
 import { errorMessage } from "@/lib/utils"
+import { useCached } from "@/hooks/use-cached"
+import { queries } from "@/lib/queries"
 
 type TStorage = Awaited<ReturnType<typeof ThunderSDK.storages.list>>[number]
 type TProvider = TStorage["provider"]
@@ -252,12 +252,7 @@ export default function StoragePage() {
     open: boolean
     storage: TStorage | null
   }>({ open: false, storage: null })
-  const request = ThunderSDK.useCaching(
-    ["storages"],
-    async ({ signal }) => await ThunderSDK.storages.list({ signal })
-  )
-  useFresh(request)
-  const { data: cached, isLoading } = use(request)
+  const { data: cached, isLoading, reload } = useCached(queries.storages())
   // The cache keeps whatever came back; anything but a list is stale.
   const data = Array.isArray(cached) ? cached : undefined
   const selection = useSelection()
@@ -265,7 +260,7 @@ export default function StoragePage() {
   const remove = async (s: TStorage) => {
     try {
       await ThunderSDK.storages.del({ params: { id: s._id } })
-      request.invalidate()
+      reload()
     } catch (e) {
       toast.error(errorMessage(e) ?? t("Could not remove it"))
     }
@@ -393,7 +388,7 @@ export default function StoragePage() {
       <SelectionBar
         selection={selection}
         remove={(id) => ThunderSDK.storages.del({ params: { id } })}
-        onDone={() => request.invalidate()}
+        onDone={reload}
         canDelete={ThunderSDK.isPermitted("storages", "del")}
       />
 
@@ -401,7 +396,7 @@ export default function StoragePage() {
         storage={dialog.storage}
         open={dialog.open}
         onOpenChange={(open) => setDialog((d) => ({ ...d, open }))}
-        onSaved={() => request.invalidate()}
+        onSaved={reload}
       />
     </Page>
   )

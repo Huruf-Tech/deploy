@@ -6,8 +6,8 @@ A short map of the system. The full specification, with numbers and budgets, is 
 
 | Component | Where | Role |
 |---|---|---|
-| Control plane | this repo (`routes/`, `lib/`, `schemas/`, `scripts/`) | Thunder on Deno Deploy, serverless, MongoDB. Auth, tenants, RBAC and wallets come from the thunder-core plugin. |
-| Agent | `agent/` (Go, from Phase 1) | Runs on each user server: reconciles Docker to the desired state, builds, streams logs on request. |
+| Control plane | this repo (`routes/`, `lib/`, `schemas/`, `scripts/`) | Thunder with MongoDB, stateless and serverless-style (no background jobs). Runs on a dedicated EC2 host from `deploy.docker-compose.yml`, behind Traefik with frps for the ingress ([INGRESS.md](INGRESS.md), setup A). Auth, tenants, RBAC and wallets come from the thunder-core plugin. |
+| Agent | `agent/` (Go) | On each machine it is a host: it creates partitions (Sysbox system containers, §27). Each partition runs the same agent as a server: reconciles Docker to the desired state, builds, streams logs on request. |
 | Dashboard | `public/app` | thunder-ui (React). Screens are generated from the backend zod schemas through the SDK. |
 
 ## Transport (§3)
@@ -16,7 +16,8 @@ There is no gateway and no persistent connection. Agents **poll** `POST /agents/
 
 - **The poll is the heartbeat.** It renews a 10 s lease in a tiny `serverLeases` document with one `findOneAndUpdate`. An idle poll costs exactly one database operation.
 - **Cursors, not timestamps:** each poll acknowledges the last command sequence and applied desired-state version, so delivery is exactly once even when responses are lost.
-- **Adaptive intervals:** 5 s idle, 1 s active, about 300 ms with a terminal open. The control plane sets the interval in every response.
+- **Adaptive intervals:** 5 s idle, 1 s active, 150 ms with a terminal open (`AGENT_POLL_*` settings). The control plane sets the interval in every response.
+- **Long polling (§16 Phase 13):** a poll with nothing to deliver waits up to 25 s and answers as soon as a command, spec or terminal input arrives.
 - **Offline detection without cron:** a sweep sharded 64 ways is piggybacked on ordinary requests, with the due check in memory. Alerts leave through an outbox, never inside a poll.
 
 ## Desired state (§4.4)

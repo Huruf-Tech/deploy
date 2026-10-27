@@ -31,7 +31,7 @@ export type get$return = {
         pairingExpiresAt?: Date | undefined;
         installMethod: "manual" | "ssh";
         provider: {
-            kind: "machine" | "partition" | "rented" | "byo";
+            kind: "machine" | "partition" | "rented";
             host?: string | undefined;
             partition?: string | undefined;
             meshPort?: number | undefined;
@@ -58,10 +58,9 @@ export type get$return = {
             cpu: number;
             memFree: number;
             diskFree: number;
-            /** Pool machines only (PLAN §26) */
+            /** Machines only (PLAN §27) */
             partitions?: {
                 name: string;
-                remainder: boolean;
                 /** Docker state: running, exited… */
                 state: string;
                 size: {
@@ -106,14 +105,11 @@ export type get$return = {
         } | undefined;
         pool?: {
             status: "pending" | "ready" | "failed";
-            mode?: ("machine" | "pool") | undefined;
             allocatable?: {
                 cpus: number;
                 memMb: number;
                 diskGb: number;
             } | undefined;
-            sysbox?: string | undefined;
-            notes?: string[] | undefined;
             error?: string | undefined;
             updatedAt: Date;
             class?: string | undefined;

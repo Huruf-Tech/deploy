@@ -233,38 +233,46 @@ const registerJoinedAgent = async (
     throw Response.forbidden("Your plan's server limit is reached");
   }
   const host = rental?.host ?? partition?.host;
-  const mesh = host ? await meshPlacement(host) : undefined;
+  let mesh = host ? await meshPlacement(host) : undefined;
 
   const now = new Date();
   let insertedId: ObjectId;
-  try {
-    ({ insertedId } = await serverModel.insertOne({
-      tenant,
-      name: rental?.name ?? partition?.label ?? hello.inventory.hostname,
-      labels: {},
-      status: "active",
-      identity: {
-        signPublicKey: hello.signPublicKey,
-        boxPublicKey: hello.boxPublicKey,
-        fingerprint,
-      },
-      installMethod: "ssh",
-      provider: {
-        kind,
-        ...(host ? { host, meshPort: mesh!.meshPort } : {}),
-        ...(partition ? { partition: partition.name } : {}),
-        ...(rental ? { subscription: rental.subscription } : {}),
-      },
-      inventory: hello.inventory,
-      acceptedBy: session.createdBy,
-      acceptedAt: now,
-      createdAt: now,
-    }));
-  } catch (error) {
-    // The same agent saying hello twice at once: the other one registered
-    // it; this one gives its slot back and retries as the existing server.
-    if (kind === "partition") await quotaGuard.release(tenant, "servers");
-    throw error;
+  // Another partition joining the same machine at once took the port: the next.
+  for (let attempt = 1;; attempt++) {
+    try {
+      ({ insertedId } = await serverModel.insertOne({
+        tenant,
+        name: rental?.name ?? partition?.label ?? hello.inventory.hostname,
+        labels: {},
+        status: "active",
+        identity: {
+          signPublicKey: hello.signPublicKey,
+          boxPublicKey: hello.boxPublicKey,
+          fingerprint,
+        },
+        installMethod: "ssh",
+        provider: {
+          kind,
+          ...(host ? { host, meshPort: mesh!.meshPort } : {}),
+          ...(partition ? { partition: partition.name } : {}),
+          ...(rental ? { subscription: rental.subscription } : {}),
+        },
+        inventory: hello.inventory,
+        acceptedBy: session.createdBy,
+        acceptedAt: now,
+        createdAt: now,
+      }));
+      break;
+    } catch (error) {
+      if (host && attempt < 5 && isMeshPortTaken(error)) {
+        mesh = await meshPlacement(host);
+        continue;
+      }
+      // The same agent saying hello twice at once: the other one registered
+      // it; this one gives its slot back and retries as the existing server.
+      if (kind === "partition") await quotaGuard.release(tenant, "servers");
+      throw error;
+    }
   }
   forgetAgent(fingerprint);
   await openLease(insertedId, tenant);
@@ -296,6 +304,12 @@ const registerJoinedAgent = async (
 };
 
 /** The next UDP port a machine forwards to a partition's private network. */
+/** The unique index on a machine's private-network ports refused this one. */
+export const isMeshPortTaken = (error: unknown) =>
+  isDuplicateKeyError(error) &&
+  "provider.meshPort" in
+    ((error as { keyPattern?: object }).keyPattern ?? {});
+
 /**
  * Where a partition's private network is reached (PLAN §27): the next free
  * UDP port its machine forwards to it, and the machine's address with it.
@@ -311,7 +325,6 @@ export const meshPlacement = async (host: ObjectId) => {
       projection: { "inventory.publicIp": 1, "inventory.privateIp": 1 },
     }),
   ]);
-  // ponytail: two partitions registering at once could pick the same port; a unique index on (host, meshPort) if that happens.
   const meshPort = Math.max(MESH_PORT, last?.provider?.meshPort ?? MESH_PORT) +
     1;
   const ip = machine?.inventory?.publicIp || machine?.inventory?.privateIp;

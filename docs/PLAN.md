@@ -1,8 +1,11 @@
 # Huruf Deploy — Product & Technical Plan
 
-> Status: **Draft v4 — planning only, no code yet.**
+> Status: **v4.8 — Phases 0–13 and 15–18 are built** (status notes in §16); Phase 14 is the backlog, managed servers (D42, §24) are not built.
 > Product: **Huruf Deploy**. Reference product: Dokploy (inspiration, not a clone).
 > Every phase in §16 ends with a review checkpoint before the next one starts.
+
+**v4.8:**
+- **Rentals on any machine** (D49, §28, Phase 18): no pool machines; an admin gives any platform machine a class, and rentals are isolated one by one. Every partition's whole disk is capped at its size. Phase 18 addendum in §16 logs the review fixes (billing keys, admin suspend/resume/delete, deploy pruning, agent shutdown).
 
 **v4.7:**
 - **Partitions on every server** (D48, §27, Phase 17): every agent is a host and the customer sizes a partition after install, leaving the rest to other tools; uninstall no longer relies on a log of what the agent installed.
@@ -121,7 +124,7 @@ A free-to-use SaaS that deploys and operates apps on **the user's own machines**
 | D43 | **Built-in ingress (Phase 11):** Traefik ships in the control plane package (one per instance) and balances each project's custom domains evenly across its healthy servers. Routes come from the control plane (Traefik HTTP provider, no redeploys); certificates are Let's Encrypt via HTTP-01, issued once by the control plane, stored encrypted in MongoDB and synced to every instance. No AWS or Cloudflare dependency; instances are stateless, so more can be added behind any TCP load balancer. Custom domains only: user apps are never served under the platform's own domain (§14). |
 | D44 | **Long polling, not WebSockets (Phase 13):** an agent's poll waits at the control plane until there's something for it (a command, a new spec, terminal input) or a time limit passes. This keeps the polling protocol, adds no dependency to the agent (Go's standard library has no WebSocket client) and keeps old agents working unchanged. WebSockets may come later between the browser and the control plane only, for terminals. |
 | D45 | **AI template assistant (Phase 12):** the platform's own Anthropic key, offered as a plan feature with a monthly limit. It drafts templates (from a GitHub repo or a description) and fixes failed builds and rollouts; a person always reviews and saves. |
-| D47 | **Shared resources (Phase 16, §26):** Huruf's pool machines are split into partitions (Sysbox system containers, behind a `PartitionDriver`), each running our normal agent; a rented partition joins the customer's tenant as an ordinary server, and Huruf's own remainder partition holds everything not rented (CPU uncapped at lowest priority), so nothing sits idle. Sizes are plans and a rental is a subscription (existing mechanisms, refactored where needed), priced from a rate card per class and paid monthly upfront from the wallet. Admins approve requests for now; custom domains only. |
+| D47 | ~~**Shared resources (Phase 16, §26):** Huruf's pool machines are split into partitions (Sysbox system containers, behind a `PartitionDriver`), each running our normal agent; a rented partition joins the customer's tenant as an ordinary server, and Huruf's own remainder partition holds everything not rented (CPU uncapped at lowest priority), so nothing sits idle. Sizes are plans and a rental is a subscription (existing mechanisms, refactored where needed), priced from a rate card per class and paid monthly upfront from the wallet. Admins approve requests for now; custom domains only.~~ **Superseded by D49** (pool machines and the remainder partition are gone; rentals, classes, sizes, approval and billing remain). |
 | D48 | **Partitions on every server (Phase 17, §27):** every agent is a host; after install the customer creates a partition of the size they choose and leaves the rest of the machine to other tools. Partitions are servers and can be added, resized and removed later. Uninstall removes partitions and our own objects by label and name, never shared packages (Sysbox only on request), so the install log goes. |
 | D49 | **Rentals on any machine (Phase 18, §28):** no pool machines. An admin adds machines like any customer and makes one available for rent by giving it a class; approving a request creates the customer's partition on the machine the admin picks. Rentals are isolated one by one, so the platform's own partitions and other tools share the machine. |
 | D46 | **Payments through Stripe, saved cards first (Phase 15, §25):** customers save a card on a Billing page (Stripe Elements; card data never touches us) and are charged later, off session, when a renewal or payment is short, and on demand through "Add funds". Money always lands in the thunder-core wallet first (`Wallet.ensureBalance` / `addBalance` / `settleTopup`), and every charge still goes through `BillingService`. USD only for now. Gateways sit behind one `PaymentGateway` interface, so more can join the same Billing page later. |
@@ -284,12 +287,12 @@ Each event id is unique (index), so retries never double-apply.
 
 **Terminal:**
 - The agent opens a PTY: `docker exec` with a TTY into a container, or a host shell (a separate permission).
-- The server switches to **terminal mode** (≈ 300 ms polls).
+- The server switches to **terminal mode** (≈ 150 ms polls, `AGENT_POLL_TERMINAL_MS`; long polling, Phase 13, delivers input as soon as it arrives).
 - Keystrokes are posted by the UI (`POST /streams/api/:id/input`), batched every ~50 ms, and delivered on the next agent poll.
 - PTY output is batched every ~100 ms and posted as events. The UI polls output about every 300 ms. **xterm.js** renders it.
 - Expected keystroke-to-echo time: ≈ 0.4–1 s. Fine for typing commands and reading output; full-screen tools (vim, top) work but feel laggy.
 - Optional **line mode**: local echo and line editing in the browser, sending on Enter. It feels instant for normal shell use.
-- Every session is audited (who, server/container, start, end). The content is never stored with us.
+- Session audit (who, server/container, start, end) is deferred with audit logs (§17). The content is never stored with us.
 - **Long polling (Phase 13, D44)** replaces the fast terminal polls, for near-instant streams within the same model.
 
 ---
@@ -343,7 +346,7 @@ This is the onboarding flow from the original requirements: *"the user provides 
 
 ### 4.5 One-off command types
 
-`build.run`, `image.pull`, `logs.stream`, `metrics.stream`, `exec.run`, `terminal.open`, `cache.clear`, `volume.backup`, `volume.restore`, `agent.update`, `docker.ensure`.
+Built: `ping`, `docker.ensure`, `stream.open` / `stream.close` (logs, build output, metrics, exec, terminal, capacity), `build.run`, `agent.update`, `registry.delete`, `host.cleanup`, `pool.ensure`, `partition.create` / `resize` / `stop` / `start` / `remove` / `send` / `receive`. Not built: `cache.clear` (§9.2), `volume.backup` / `volume.restore` (backups skipped, §11).
 
 ---
 
@@ -372,7 +375,7 @@ Thunder naming rules apply: reference fields are named after the entity, never `
 | Collection | Key fields |
 |---|---|
 | `networks` | tenant, cidr (e.g. `10.210.0.0/16`), nextSubnetIndex, primaryServer(server)?, registry {mode: `none`/`builtin`/`external`, meshAddress?, external(registry)?, usernameEnc?, passwordEnc?} (the built-in registry's credentials, or a reference to an external `registries` entry) |
-| `servers` | tenant, name, status (`pending`/`active`/`rejected`/`removed`), identity {signPublicKey, boxPublicKey, fingerprint}, pairingCode, pairingExpiresAt, installMethod (`ssh`/`manual`, later `managed`), provider {kind: `byo`/`managed`, cloud?, region?, instanceId?, instanceType?} (§24), labels{}, inventory {hostname, os, arch, cpuCores, memory, disk, publicIp, privateIp, dockerVersion, agentVersion}, resources {cpuUsed, memFree, diskFree, reportedAt}, mesh {enabled, reachable, publicKey, meshIp, endpoint, containerSubnet}, appliedVersion, acceptedBy(user). **Cold document:** polls never write it. |
+| `servers` | tenant, name, status (`pending`/`active`/`rejected`/`removed`), identity {signPublicKey, boxPublicKey, fingerprint}, pairingCode, pairingExpiresAt, installMethod (`ssh`/`manual`, later `managed`), provider {kind: `machine`/`partition`/`rented`, host(server)?, partition?, meshPort?, subscription?} (§27, §28; a `managed` kind is future, §24), labels{}, inventory {hostname, os, arch, cpuCores, memory, disk, publicIp, privateIp, dockerVersion, agentVersion}, resources {cpuUsed, memFree, diskFree, reportedAt}, mesh {enabled, reachable, publicKey, meshIp, endpoint, containerSubnet}, appliedVersion, acceptedBy(user). **Cold document:** polls never write it. |
 | `serverLeases` | _id = server, tenant, shard, status (mirrors `servers.status`), aliveUntil, offlineSince?, desiredVersion, commandSeq, fastPollUntil, terminalUntil. **Hot document:** one `findOneAndUpdate` per poll; partial index `{shard, aliveUntil}` where `status: "active", offlineSince: null`. |
 | `sweepShards` | _id (shard 0–63), nextRunAt |
 | `serverSpecs` | server, version, specSealed, createdAt. Only the latest version per server is kept. |
@@ -523,9 +526,10 @@ Decided per deployment, in this order:
   - `service`: Handlebars compose plus inputs, for one-click services. Generated passwords become project secret variables.
 - **Versioning:** every save creates an immutable version. Projects pin a version, and the UI offers "upgrade to vN" with a diff.
 - **Rendering** happens on the control plane with the built-in `handlebarsRender`. The agent receives final files only.
-- **Compose sources** are parsed by the agent with `compose-go` into the same runtime spec, so they get the same reconciler, health checks, rollouts and DNS. Unsupported keys are reported up front.
+- **Compose sources** are parsed on the control plane (`lib/deploy/compose.ts`, `@std/yaml`) into the same runtime spec, so they get the same reconciler, health checks, rollouts and DNS. Unsupported keys are reported when the template is rendered, before anything reaches a server.
 - **Seed system templates** (data, not code): Thunder, React/Vite (static), Next.js, Node, Deno, plus one-click Postgres, MongoDB, Redis, MySQL, MinIO.
-- **Later:** an AI assistant drafts a template from a prompt.
+- **AI assistant:** drafts a template from a repo or a prompt (Phase 12).
+- `cachePaths` is stored on template versions but not used by builds yet.
 
 ### 9.2 Cache, with escape hatches
 
@@ -536,8 +540,8 @@ How caching stays fast and correct:
 
 Escape hatches:
 - **"Deploy without cache"** checkbox on any deploy (`--no-cache`, recorded on the deployment).
-- **"Clear build cache"** per project: bumps `cacheEpoch` and sends `cache.clear` to that project's build servers. Other projects are unaffected.
-- A server-level "Prune build cache and unused images" action, plus an automatic prune above a disk threshold.
+- **"Clear build cache"** per project: bumps `cacheEpoch` (new cache mount ids) and the next build runs without the layer cache. Other projects are unaffected. Not built: a `cache.clear` command that empties the old mounts on the build servers, so they stay until Docker's cache is pruned by hand.
+- Not built: a server-level "Prune build cache and unused images" action and an automatic prune above a disk threshold.
 
 ### 9.3 Deploy flow
 
@@ -594,9 +598,9 @@ The **control plane orchestrates rollouts across servers**. There is no backgrou
 | Type | Use | Behavior |
 |---|---|---|
 | `local` | DBs, stateful apps | Docker named volume. The project is restricted to **one server**, with stop-first deploys (§10). |
-| `s3` | Shared files across replicas and servers | rclone volume plugin, installed on demand. The UI warns it is **not for databases**. |
+| `s3` | Shared files across replicas and servers | rclone volume plugin, installed on demand. The UI warns it is **not for databases**. **Not working inside partitions yet:** the plugin needs `/dev/fuse` and mount propagation, which Sysbox partitions don't provide. |
 
-- **Backups:** per-volume schedule plus an S3 target (credentials as encrypted variables). Run by the agent on its own timer, with retention N. Restore on demand.
+- **Backups (not built; skipped by the owner for now):** per-volume schedule plus an S3 target (credentials as encrypted variables). Run by the agent on its own timer, with retention N. Restore on demand.
 - One-click DB services default to a `local` volume plus a backup schedule.
 
 ---
@@ -605,17 +609,17 @@ The **control plane orchestrates rollouts across servers**. There is no backgrou
 
 - **Scopes:** `global` (owned by the user, usable in all their tenants), `tenant`, `project`. Precedence: **project > tenant > global**.
 - A key is unique per scope owner: each user (global), each tenant, and **each project**. The first index left the project out, so two projects of one tenant couldn't share a name (e.g. two Redis with a generated `PASSWORD`); it's `uniqueKeyPerScopeOwner` now, and `setup:prod` drops the old one.
-- **References:** e.g. `DATABASE_URL=${{tenant.MONGO_URL}}` or `${{shop-db.PASSWORD}}`, with cycle checks.
+- **References:** e.g. `DATABASE_URL=${{tenant.MONGO_URL}}` or `${{shop-db.PASSWORD}}`, with cycle checks. References reach through chains of other projects, at most 20 referenced projects.
 - **Encryption (envelope):**
   - Master key in env `DEPLOY_MASTER_KEY` (separate from `SECRET_KEY`).
   - A data key per user (global) and per tenant, stored encrypted in `keyring`.
   - AES-256-GCM via WebCrypto (no new dependency). A re-wrap script handles rotation.
-- **Secrets:** masked in the UI, and every reveal is audited.
+- **Secrets:** masked in the UI. Reveals are **not audited yet** (audit logs are off by owner decision).
 - **Delivery:** resolved at deploy time, snapshotted (encrypted) into the release, and sealed to each agent.
   - `env` variables become container env.
   - `file` variables are mounted read-only from tmpfs at `/run/secrets/<KEY>`.
   - `build` variables are passed as BuildKit secrets.
-- **External access:** a `variables.resolve` endpoint authenticated with thunder-core **API keys** (`X-Api-Key` + `X-TENANT-ID`, narrowed by `resourceGrant`). Reads are audited, and the SDK comes from `generate:sdk`.
+- **External access:** a `variables.resolve` endpoint authenticated with thunder-core **API keys** (`X-Api-Key` + `X-TENANT-ID`, narrowed by `resourceGrant`). Reads are not audited yet. The SDK comes from `generate:sdk`.
 
 ---
 
@@ -664,13 +668,13 @@ visitor ─► (later: any TCP load balancer) ─► control plane instance(s): 
   - The server's edge proxy then spreads requests across its local replicas, as today; zero-downtime switches stay there.
   - Per project:
     - **weighted round robin** (the default);
-    - **sticky sessions**, a cookie naming the server, which works across instances.
+    - **sticky sessions**, a cookie naming the server, which works across instances. **Not built yet.**
 - **Health.**
-  - A server is eligible only while its lease is alive and it has at least one healthy replica of the live release, both already known from polls and `workload.status` events. Offline servers drop out within the lease time.
+  - A server is eligible while the project is placed on it (`placedOn`), its lease is alive and it has a tunnel port; its weight is its replicas (configured or autoscaled). Replica health isn't checked here: projects with a health check path get Traefik's own health check per server. Offline servers drop out within the lease time.
   - Traefik retries a request on another server when it couldn't connect.
 - **Network path: reverse tunnels.** Servers can be anywhere (any cloud, behind NAT), so the control plane never connects to them.
   - Each agent opens an **outbound** tunnel to the control plane with frp (`frpc` on the server, `frps` next to Traefik), just as it opens outbound polls. No port is opened on servers.
-  - frps asks the control plane to approve each login (frp server plugin). The agent signs it with its identity key, and only active servers get a tunnel. Each server's tunnel listens on `127.0.0.1` of the control plane, at a port stored on the server, so only the local Traefik can use it.
+  - frps asks the control plane to approve each login (frp server plugin). The login is an HMAC of the server id with `INGRESS_CONFIG_TOKEN` (`lib/domains/tunnels.ts`, nothing stored per server), and only active servers get a tunnel. Each server's tunnel listens on `127.0.0.1` of the control plane, at a port stored on the server, so only the local Traefik can use it.
   - On the server, the tunnel ends at Caddy's ingress listener on `127.0.0.1`, which routes by host name to the projects' live replicas.
   - Several control plane instances: the agent opens one tunnel to each, from the list in its desired state, so every instance's Traefik reaches every server.
   - TLS ends at Traefik. The tunnel itself is TLS-encrypted by frp. Agents never receive certificates and have no database access.
@@ -678,13 +682,13 @@ visitor ─► (later: any TCP load balancer) ─► control plane instance(s): 
 - **Certificates: Let's Encrypt with the HTTP challenge.**
   - The control plane is the ACME client (npm `acme-client`). The account key and every certificate key are stored encrypted with the platform keyring.
   - Traefik routes `/.well-known/acme-challenge/*` on port 80 for any host to the control plane. Tokens live in MongoDB, so whichever instance receives the challenge can answer it.
-  - A certificate is issued once and shared by all instances. Traefik on HTTPS can't take certificates from the HTTP provider, only from files: each instance's control plane keeps a local directory in sync through MongoDB change streams, and Traefik's file provider watches it. Each version gets a new file name, because Traefik may miss a file replaced in place.
+  - A certificate is issued once and shared by all instances. Traefik on HTTPS can't take certificates from the HTTP provider, only from files: on each Traefik config poll, the instance rewrites one `TRAEFIK_CERTS_DIR/certificates.yml` (PEMs inline, replaced atomically, only when a certificate changed), and Traefik's file provider watches it.
   - Renewal starts 30 days before expiry, through the piggyback scheduler, with one claim so only one instance renews.
 - **Domain lifecycle**, shown step by step in the dashboard:
   1. **Ownership:** `_huruf.<domain> TXT huruf-verify=<token>`, checked with an ordinary DNS lookup (no third-party integration). Without it, a tenant could claim a domain that another customer later points at the platform. The token is derived, not random: an HMAC of tenant and domain with a platform secret made once (`platformSecrets`, sealed, never rotated). Re-adding a domain gives the record that's already in DNS, and another tenant gets a different one. Nothing about past verification is stored; adding a domain runs one check, so records already in place verify at once.
   2. **Waiting for DNS:** the domain must resolve to the ingress, either as a CNAME to `INGRESS_HOSTNAME` (subdomains) or as an A record to `INGRESS_IPV4` (apex). The user clicks **Check now** once the records are in place. The control plane then checks the ownership record and DNS right away, and every minute for up to 30 minutes while records propagate, then stops until the next click. It never checks unprompted, and it orders a certificate only after both pass, so a wrong record never spends Let's Encrypt attempts. A domain behind Cloudflare's proxy gets a specific explanation.
   3. **Issuing:** at most 3 orders per domain per hour (Let's Encrypt allows 5 failed validations per hour), with exponential backoff and the ACME error shown verbatim.
-  4. **Live:** the route is added. The control plane then connects with the domain's name, checks the certificate it gets and that the project answers, rather than Traefik's "no route".
+  4. **Live:** the route is added. Not built yet: a check after issuing that connects with the domain's name and confirms the certificate and that the project answers, rather than Traefik's "no route".
   5. **Renewing / error:** each with its reason and what to do.
 - **Not in this phase:**
   - platform subdomains: user apps are never served under the platform's domain, because of cookie scope and reputation;
@@ -769,9 +773,9 @@ Every new dependency is justified in its PR (the same rule as the backend's CLAU
     - full build logs
     - release spec and diffs
     - deployment history (latest 5 in the summary, the rest paginated)
-    - variables (values masked; a secret is revealed per click, and audited)
-    - volumes and backups
-    - audit trail
+    - variables (values masked; a secret is revealed per click; auditing deferred, §17)
+    - volumes (backups deferred, §11)
+    - audit trail (deferred, §17)
   - **Drill-downs open in a `Sheet`** (e.g. a deployment's details from the project page), so the user keeps context.
 - **Accessibility (WCAG 2.2 AA):**
   - Everything works by keyboard, with visible focus and labelled inputs.
@@ -810,7 +814,7 @@ Every new dependency is justified in its PR (the same rule as the backend's CLAU
 
 ## 16. Phases
 
-Each phase ends with a **review checkpoint** (demo + code review + approval). Phases 0–10 are the MVP. Phase 11 (domains) starts when you decide.
+Each phase ends with a **review checkpoint** (demo + code review + approval). Phases 0–10 are the MVP. Phases 0–13 and 15–18 are built (each has its status below); Phase 14 is the backlog.
 
 ### Phase 0 — Foundations
 - Built in reviewable sub-phases:
@@ -981,7 +985,7 @@ Each phase ends with a **review checkpoint** (demo + code review + approval). Ph
   - **Share toggle and removal:** owner only. Removing forgets the App here; the user deletes it on GitHub (linked).
   - **Webhooks:** `POST /githubHooks/api/webhook/:integration`, HMAC-SHA256 verified with that integration's secret. `push` is accepted and ignored until deploy on push (Phase 6c).
   - **Templates:** system (seeded from `scripts/data/systemTemplates.ts` by setup; a new version only when content changes) and tenant. Every save is an immutable version. Clone keeps `clonedFrom`. Rendering uses Handlebars without HTML escaping and in strict mode; templates see `inputs.*` and `build.cacheKey`; empty `generate: password` inputs are generated. Quota `templates`.
-  - **Not yet:** an admin UI for system templates (`systemTemplates`; they are edited as data for now), a form-based inputs editor (JSON for now), and the "projects pin this template" delete guard (Phase 6).
+  - **Not yet:** an admin UI for system templates (`systemTemplates`; they are edited as data for now), a form-based inputs editor (JSON for now), and the "projects pin this template" delete guard (built since: a template used by projects can't be deleted).
   - **Verified:** `tests/github_test.ts` runs the three-step connect against a fake GitHub that checks the App JWT signature, lists a private repo, and checks webhook signatures; `tests/templates_test.ts` renders all ten seeds and clones and edits Thunder. In the browser: clone Thunder, edit, save v2, preview.
 
 ### Phase 6 — Deployments (split for review)
@@ -1254,12 +1258,12 @@ Owner's decisions recorded (§25.10). 15a–15d built; the owner tested the paym
   6. No card number, CVC or full card data is ever sent to or stored by the control plane (only Stripe ids, brand, last 4, expiry).
   7. Everything works against Stripe test mode with `stripe listen` forwarding webhooks locally.
 
-### Phase 16 — Shared resources: rent partitions of Huruf's machines (planned, D47, §26)
-Not started; the owner says go per stage. Each stage ends with a review. Built on the existing mechanisms, refactoring them where needed (§26.6).
+### Phase 16 — Shared resources: rent partitions of Huruf's machines (built, D47, §26; pool machines superseded by D49)
+16a–16f are built. Each stage ended with a review. Built on the existing mechanisms, refactoring them where needed (§26.6). **Phase 18 (D49) removed the pool machines** described below: no `pool` mode of `pool.ensure`, Docker data-root on the XFS volume, `--storage-opt` system-file cap, remainder partition, block-device volumes, `makePoolMachine`, `POOL_ALLOW_IPS`, `POOL_SPARE_PERCENT` or `server.prune`. The status notes below record what was built then.
 - **16f status: built (pending review).** Operations.
   - **Moving a partition** between pool machines of its class (§26.10): from the pool machine's Partitions panel ("Move to another machine": targets with room on the private network, the expected downtime), with "Cancel move" for a move that stops reporting. A resize waiting for a move is refused until it's done.
   - **Draining:** "Takes new rentals" off; a pool machine with live (or incoming) rentals can't be deleted or uninstalled.
-  - **Capacity** on Admin → Rentals: per class, machines and those taking rentals, rented memory, the spare share against `POOL_SPARE_PERCENT`, revenue against cost.
+  - **Capacity** on Admin → Rentals: per class, machines and those taking rentals, rented memory, the spare share against `POOL_SPARE_PERCENT` (removed in Phase 18), revenue against cost.
   - **Uptime:** downtime per period from leases (§26.11); the customer's Rental panel and the admin's Partitions panel show this period's uptime.
   - **Agent:** `partition.send` and `partition.receive`; command errors are capped at the protocol's 500 characters (keeping the start and the end), since a longer one was refused and held back every later event.
   - **Verified locally** on two Sysbox pool machines over WireGuard: a rented partition moved there and back (14 s and 17 s down), its system files and Docker data intact, the same server with its agent and containers; a failed move and a canceled one each left it running on the source.
@@ -1328,17 +1332,17 @@ Not started; the owner says go per stage. Each stage ends with a review. Built o
     - The remainder always holds allocatable minus everything rented: memory and disk are taken from it before a rental is created or grown, and given back after one shrinks or is removed. CPU stays uncapped at the lowest weight; a rental's weight is 1024 per vCPU.
     - It refuses to shrink any partition below its real memory or disk use, instead of letting the kernel kill a process.
   - **Commands** (existing command channel):
-    - `pool.ensure` installs Sysbox, mounts the XFS volume (a device formatted only when empty, or a loop file), moves Docker onto it (overlay2, Sysbox runtime), runs the usual `docker.ensure` inside, builds the partition image and applies the network rules. It refuses a machine running anything but our own containers.
+    - `pool.ensure` (the `pool` mode, removed in Phase 18) installs Sysbox, mounts the XFS volume (a device formatted only when empty, or a loop file), moves Docker onto it (overlay2, Sysbox runtime), runs the usual `docker.ensure` inside, builds the partition image and applies the network rules. It refuses a machine running anything but our own containers.
     - `partition.create` is sealed, since it carries a join token minted by the same `createJoinToken` the SSH wizard now uses. It creates the partition and installs our agent inside, which joins its tenant.
     - `partition.resize` (live), `partition.stop`, `partition.start`, `partition.remove`.
   - **Network:**
     - The nftables table `huruf_pool` is written to `/etc/huruf-pool.nft` and included by `nftables.service`, so isolation is back at boot before Docker restarts partitions.
     - Per-partition traffic counters are restored by the agent at start, and start at 0 again after a reboot (16d treats a smaller value as a reset).
-    - `POOL_ALLOW_IPS` lets partitions reach a control plane on a private address.
+    - `POOL_ALLOW_IPS` let partitions reach a control plane on a private address (removed in Phase 18).
   - **Reports:**
     - Each partition's state, size, CPU time, memory in use, disk and traffic ride on the poll summary (`resources.partitions`); nothing new is stored.
     - A partition's agent says hello again when its limits change, so its server shows the new size.
-  - **Control plane (`lib/pool/pool.ts`):** `makePoolMachine` (platform servers only; reserve from `POOL_RESERVE_CPUS` 0.25, `POOL_RESERVE_MEM_MB` 512, `POOL_RESERVE_DISK_GB` 10), `recordPoolSetup` (`servers.pool`: status, allocatable, Sysbox version, notes), `createPartition`, `resizePartition`, `stopPartition`, `startPartition`, `removePartition`, `partitionName` (`p` + 11 hex). `hostSetupPayload` was split out of `prepareHost` so `pool.ensure` carries the usual host setup.
+  - **Control plane (`lib/pool/pool.ts`):** `makePoolMachine` (removed in Phase 18; platform servers only; reserve from `POOL_RESERVE_CPUS` 0.25, `POOL_RESERVE_MEM_MB` 512, `POOL_RESERVE_DISK_GB` 10), `recordPoolSetup` (`servers.pool`: status, allocatable, Sysbox version, notes), `createPartition`, `resizePartition`, `stopPartition`, `startPartition`, `removePartition`, `partitionName` (`p` + 11 hex). `hostSetupPayload` was split out of `prepareHost` so `pool.ensure` carries the usual host setup.
   - **Tests:** `agent/internal/pool` (fake driver: remainder sizing, carving, too big, remainder in use, resize up and down, removal, install-script quoting, state kept across restarts) and `tests/pool_test.ts` (platform-only pool machines, waiting for ready, the sealed create opening to a live join token for the customer's tenant, resize and remove payloads, partitions in the summary schema).
   - **Verified end to end on a fresh spike machine:**
     1. Our agent installed as a platform server; `pool.ensure` from the control plane installed Sysbox, formatted the loop volume, moved Docker and reported 11.75 vCPU / 15,355 MB / 19 GB allocatable.
@@ -1427,14 +1431,12 @@ Not started; the owner says go per stage. Each stage ends with a review. Built o
 The owner said go for all stages (2026-10-27). Every agent is a host; after install the customer creates a partition of the size they choose, and projects run in partitions. Uninstall no longer needs the install log.
 - **17b–17d status: built (pending review).**
   - **Agent:**
-    - Every agent is a host. `pool.ensure` has two modes:
-      - `machine`: Docker installed if missing, Sysbox installed without restarting Docker (17a), a sparse partition volume, counters only;
-      - `pool`: Phase 16's setup.
+    - Every agent is a host. `pool.ensure` (payload `{reserve}` only since Phase 18, which removed the `pool` mode): Docker installed if missing, Sysbox installed without restarting Docker (17a), a sparse partition volume (always a loop file), counters only.
     - Forwards come with the machine's desired state (`forwards`): a `huruf_forward` nftables table plus the `DOCKER-USER` accept rule. They're re-applied when a partition starts and after a reboot, and stale connection tracking is cleared for added ports only.
     - The partition image moves its own Docker to `10.212.0.1/24` and pools in `10.213.0.0/16`.
     - Uninstall (`cleanup`) follows one fixed rule; `ledger` is gone, and the installer no longer starts it.
   - **Control plane:**
-    - A server's `provider.kind` is `machine`, `partition`, `rented` or `byo` (from before partitions, reinstall it).
+    - A server's `provider.kind` is `machine`, `partition` or `rented` (`byo`, from before partitions, was removed in Phase 18).
     - An agent joining without a partition claim is a machine: host setup runs, and it takes no plan slot. Pairing makes machines too.
     - A partition's join token names its machine and partition. It joins with a plan slot (rentals without), its machine's next UDP port (`provider.meshPort`, from 51821) and `mesh.endpoint` at the machine's address.
     - Projects can't target machines. A public port must be free across a machine's partitions.
@@ -1445,7 +1447,7 @@ The owner said go for all stages (2026-10-27). Every agent is a host; after inst
     - Removing a machine shows the agent's plan with one Sysbox checkbox.
   - **Found and fixed in the end-to-end run:**
     - Forwards matched every packet to the port, so a partition's own connection to another machine's forwarded 51821 was sent back into itself. They now match only traffic for the machine (`fib daddr type local`).
-    - On a machine, a partition's data quota is its whole disk size (its system files have no cap there), and its agent reports that size, not the host's disk.
+    - On a machine, a partition's data quota is its whole disk size, and its agent reports that size, not the host's disk. (Phase 18 caps its system files too: §28.)
     - The Partitions panel's lookup needed a typed ObjectId filter.
   - **Verified locally** on a machine whose other tool's container was never restarted:
     - The machine joined and set itself up (908 GB sparse volume, 455 MB on disk; Docker's data untouched).
@@ -1477,14 +1479,14 @@ The owner said go for all stages (2026-10-27). Every agent is a host; after inst
   1. A fresh Ubuntu machine is added with the wizard; the customer creates a partition; a project deploys to it with a custom domain, a public port and the private network.
   2. On a machine that also runs Dokploy, the customer gives us part of it; Dokploy keeps running, and removing ours later leaves it running.
   3. A second partition is added and the first resized live.
-  4. Pool machines and rentals behave as before (Phase 16 tests green).
+  4. Rentals behave as before (Phase 16 tests green; pool machines were removed later by Phase 18).
 
 ### Phase 18 — Rentals on any machine (built, pending review, D49, §28)
 The owner's decision (2026-10-27): no pool machines. An admin adds machines like any customer; a machine is for rent once the admin gives it a class; approving a request creates the customer's partition on the machine the admin picks, beside the platform's own partitions and other tools.
 - **Status: built (pending review).**
   - **Agent:**
-    - Rentals are isolated one by one (`isolated` on `partition.create` and `partition.receive`; table `inet huruf_isolate`, a set of rented bridges, also loaded at boot from `/etc/huruf-isolate.nft`): no reaching the machine, other partitions (nor being reached from them), the metadata endpoint, mail ports or private ranges (but `POOL_ALLOW_IPS`).
-    - The platform's own partitions stay unrestricted. The machine-wide pool rules are now the traffic counters only. Rentals on a Phase 16 pool machine count as isolated.
+    - Rentals are isolated one by one (`isolated` on `partition.create` and `partition.receive`; table `inet huruf_isolate`, a set of rented bridges, also loaded at boot from `/etc/huruf-isolate.nft`): no reaching the machine, other partitions (nor being reached from them), the metadata endpoint, mail ports or any private range.
+    - The platform's own partitions stay unrestricted. The machine-wide pool rules are now the traffic counters only.
     - Sysbox is pinned to v0.7.1: asking GitHub for the latest failed under its rate limit and broke host setup.
     - The partition image is built again when another tool's cleanup removed it.
   - **Control plane:**
@@ -1502,6 +1504,22 @@ The owner's decision (2026-10-27): no pool machines. An admin adds machines like
     - the platform's partition reached the machine, a private address and the internet, but not the rental;
     - the rental reached only the internet;
     - the rules survived an agent restart.
+- **Addendum: built after review (2026-10-27).**
+  - **Pool machines removed (D49):** no `pool` mode, Docker data-root on the XFS volume, `--storage-opt` cap, remainder partition or block-device volumes (always a sparse loop file); provider kinds `machine`/`partition`/`rented` (no `byo`); no `POOL_ALLOW_IPS` (isolated rentals reach no private range), `POOL_SPARE_PERCENT`, `server.prune` or `makePoolMachine`. `pool.ensure`'s payload is `{reserve, isolated}`: `isolated` names the machine's live rentals, and the agent isolates them whatever its own records say (rentals made by an agent older than the isolation flag included; it never un-isolates).
+  - **Disk cap:** every new partition has its own copy of the partition image's files under its quota folder, so its whole disk is capped at its size (§28).
+  - **Admin actions on a rental** (`rentalsAdmin` `/:id/suspend`, `/:id/resume`, `/:id/terminate`): suspend holds it (stopped, not renewed until resumed), resume starts it again, delete removes it now with its data (nothing refunded). A customer's pending rentals refresh while waiting for approval.
+  - **Billing (§22.3):** the subscribe key follows the subscription's last period, and a replayed charge is refused by its ledger reference; a plan with `active: false` is no longer offered, but its subscribers keep renewing; renewals wait (no `pastDue`) while `PLATFORM_TENANT` isn't set; an admin-approved resize charges the card off session like a renewal; proration credits the price only, not overage; an upgrade mid-period charges the cut period's traffic overage; traffic while a renewal waits counts in the period it follows; month ends clamp (Jan 31 → Feb 28); only partitions take a plan slot (QuotaGuard, over-limit enforcement, usage bar, §27.2); a rental due on its machine's poll renews just that rental.
+  - **Deploys:** a claimed deployment gets a 10-minute deadline at once; cancelling no longer alerts; deployments beyond the newest 100 per project are pruned; resolved alert events expire after 90 days (TTL); a template used by projects can't be deleted; variable references reach through chains of other projects (at most 20).
+  - **Performance:** `refreshSpecs` batches its reads and computes 8 servers at a time; the agent collects partition usage with 3 commands per summary; new indexes: `servers` `provider.host` + `provider.meshPort` (unique: two partitions joining a machine at once, or a move, take the next port), `bootstrapSessions` `partition.host`, `subscriptionPeriods` `ledgerReference`.
+  - **Agent:** shutdown waits up to 2 + 1 minutes for running commands (`TimeoutStopSec=240` in the unit, new installs); a move gives up after 15 minutes without bytes; the uninstall marker gives up after 10 minutes; partition names and file variable keys are validated.
+  - **Local tasks:** `setup:dev` and `load:agents` run with `ENV_TYPE=test` (`.env.test`), like `test`.
+- **Open:**
+  - S3 volumes inside partitions don't work yet: the rclone Docker plugin needs `/dev/fuse` and mount propagation, which Sysbox partitions don't provide.
+  - Moving a rental between Phase 18 machines needs the machines on the private network: machines get no mesh index, so `moveTargets` reports them unreachable.
+  - "Re-create partition" for a charged rental whose partition failed: the route exists (`POST /rentalsAdmin/api/:id/partition`), no button yet.
+  - Template rename: the route exists (`PATCH /templates/api/:id`), no UI yet.
+  - Per-project distribution (`registry` / `perServer`) is set through the API only.
+  - Not built elsewhere in the plan: `cache.clear` (§9.2), audited variable reveals and resolve reads (§12), ingress sticky sessions and the post-issue Live check (§14), template `cachePaths` (stored, unused).
 
 ### Phase 14 — Backlog (after MVP)
 - Ability to upgrade already installed agent along with its deps — **done (pending review):**
@@ -1529,7 +1547,7 @@ The owner's decision (2026-10-27): no pool machines. An admin adds machines like
 - Secrets in poll responses are sealed with the agent's X25519 key.
 - SSH credentials stay in handler memory only for the bootstrap request.
 - Join tokens are one-time and short-lived. Pending agents are capped and expire, and pairing codes must match.
-- The agent executes only a fixed allowlist. The terminal and `exec.run` need their own permissions and are audited, and their content is never stored with us.
+- The agent executes only a fixed allowlist. The terminal and exec need their own permissions (the `shell` policy), and their content is never stored with us. Auditing them waits for the audit log below.
 - WireGuard encrypts all mesh traffic. The built-in registry listens on the mesh only and requires auth.
 - Every route is protected by thunder-core RBAC, with tenant isolation on all resources.
 - GitHub webhook HMAC is verified per integration.
@@ -1564,7 +1582,7 @@ None. The proposed Free quotas (all features on), no proration on upgrade, and t
 | Build-on-every-server image drift | Same commit, pinned base digest, lockfile warning. Registry modes preferred when available. |
 | Mesh unreachable (NAT, firewalls) | Optional by design. Reachability matrix plus clear warnings. Relay in the backlog. |
 | Builds affect running apps | Build CPU/memory limits, `builder=true` preference, one build at a time per server. |
-| Disk exhaustion on user machines | Log caps, image/cache GC per release N, auto-prune, default disk alert. |
+| Disk exhaustion on user machines | Log caps, image GC per release N, disk alert rules, partition disk quotas. Auto-prune of the build cache isn't built. |
 | Latency between Deno Deploy and the database | Run Deploy in the region closest to the database cluster. Reuse one Mongo client per instance. Minimal round trips per request (§20.2). |
 | Poll volume at very large scale | Server-controlled `nextPollMs` and a global load-shedding setting, jittered intervals, stateless poll tier. Database sharding by tenant/server when needed. |
 
@@ -1665,17 +1683,28 @@ There are three kinds of limit. All are enforced **server-side in the domain ser
 | `SAFETY_API_REQUESTS_PER_USER_PER_MIN` | 600 | General API abuse |
 | `SAFETY_TERMINAL_IDLE_MIN` / `SAFETY_TERMINAL_MAX_HOURS` | 15 / 4 | Forgotten terminals |
 | `SAFETY_STREAM_IDLE_SEC` | 30 | Forgotten log views |
-| `SAFETY_BUILD_TIMEOUT_MIN` | 30 | Stuck builds |
+| `DEPLOY_BUILD_TIMEOUT_SEC` | 1800 | Stuck builds (the deadline adds 2 minutes) |
 | `ALERT_AGENT_OFFLINE_GRACE_SEC` | 20 | Alert flapping |
 
 **C. Agent defaults** — protect the user's own disk. Delivered in the desired spec, so a change reaches every server on its next poll.
 
 | Setting | Default |
 |---|---|
-| `AGENT_CONTAINER_LOG_CAP` | 10 MB × 5 files per container |
-| `AGENT_BUILD_LOGS_KEPT` | 20 per project, 5 MB each |
-| `AGENT_CONCURRENT_BUILDS` | 1 |
-| `AGENT_FOOTPRINT_DAILY_RETENTION_DAYS` | 90 |
+| `AGENT_CONTAINER_LOG_MAX_SIZE` / `AGENT_CONTAINER_LOG_MAX_FILE` | `10m` / 5 files per container (sent with host setup) |
+| `CAPACITY_RETENTION_DAYS` | 90 (daily peaks, 7–366) |
+| Build logs kept | 50 per builder (fixed in the agent) |
+| Concurrent builds | 1 per server (fixed in the agent) |
+
+**D. Other settings** (also in `envs`; read through the cached `Settings`):
+
+| Setting | Default | What |
+|---|---|---|
+| `AGENT_CONTROL_PLANE_URL` | `BASE_URL` | Where installed agents reach the control plane |
+| `AGENT_DRAIN_MS` | 3000 | How long a replaced replica keeps serving before it's removed |
+| `AGENT_GIT_IMAGE` | `alpine/git:latest` | The image builds clone in |
+| `AGENT_REGISTRY_IMAGE` | `registry:2` | The built-in registry's image (§8.4) |
+| `PAYMENTS_ADD_FUNDS_MIN` / `PAYMENTS_ADD_FUNDS_MAX` / `PAYMENTS_DAILY_CAP` | 500 / 100,000 / 200,000 cents | Add funds bounds (§25.5) |
+| `DEPLOY_MASTER_KEY_PREVIOUS` | none (process env) | The old master key while `scripts/rewrapKeyring.ts` re-wraps the keyring to `DEPLOY_MASTER_KEY` (§12) |
 
 **How enforcement stays cheap:**
 - **Count quotas** (servers, projects, members…) use a per-tenant `tenantUsage` document with an **atomic conditional increment**: `updateOne({ tenant, servers: { $lt: limit } }, { $inc: { servers: 1 } })`.
@@ -1807,13 +1836,15 @@ Subscriptions are **per tenant**, because thunder-core wallets are per `{tenant,
 ### 22.3 Charging and renewal (no cron)
 
 - **Subscribe / upgrade** (tenant owner only):
-  - `Wallet.transfer({ fromTenant: tenant, toTenant: PLATFORM_TENANT, amount, currency, idempotencyKey: "sub:<subscription>:<periodStart>", foreignRefType: "subscriptionPeriod", purpose: "subscription" })`.
+  - `Wallet.transfer({ fromTenant: tenant, toTenant: PLATFORM_TENANT, amount, currency, idempotencyKey: "sub:<subscription>:to:<plan>:from:<last period id or \"none\">", foreignRefType: "subscriptionPeriod", purpose: "subscription" })`.
+  - The key names the period the change follows, so a double click charges once and a lapsed subscription can't be resubscribed for free under an old key. A replayed charge is also refused: a period already recorded for its ledger reference (indexed `subscriptionPeriods.ledgerReference`) stops it.
   - The new `subscriptionPeriods` entry is inserted **in the same Mongo transaction** (`databaseSession`), so a charge always has its log entry and vice versa.
+  - Plans with `active: false` are no longer offered; existing subscribers keep renewing on them.
   - **Upgrade:** the new plan starts immediately with a fresh period. No proration in the MVP; the UI states this before confirming. **Changing:** proration is always required (owner, 2026-10-26), added in Phase 16b for plans and rentals alike.
   - **Downgrade or cancel:** takes effect at the period end (`cancelAtPeriodEnd`).
 - **Lazy renewal.** When entitlements are resolved (on a mutation or dashboard load), the tenant has `autoRenew` and the last period has ended:
-  1. The same request attempts the renewal charge. The idempotency key prevents double charges under concurrency.
-  2. **Success:** a new period starts **now**, not backdated, so an unused tenant isn't charged for time it wasn't there.
+  1. The same request attempts the renewal charge (key `sub:<subscription>:renew:<ended period end>`). The idempotency key prevents double charges under concurrency. While `PLATFORM_TENANT` isn't set, renewals wait (nobody goes `pastDue`).
+  2. **Success:** a new period starts **now**, not backdated, so an unused tenant isn't charged for time it wasn't there. Month ends clamp (Jan 31 → Feb 28).
   3. **Insufficient balance:** status `pastDue`, the tenant falls back to Free, a notification goes to the outbox, and the attempt is retried at most hourly (`nextRenewalAttemptAt`).
 - **Wallet top-up** comes with Phase 15 (Stripe, §25): saved cards charged when a payment is short, and "Add funds". Until then the admin credits wallets through thunder-core.
 
@@ -1827,7 +1858,7 @@ Subscriptions are **per tenant**, because thunder-core wallets are per `{tenant,
 
 1. **Nothing is deleted, and workloads keep running** (they run on the user's machines).
 2. Creating anything beyond the quota is blocked, with a clear banner and an upgrade link.
-3. After `PLAN_OVERLIMIT_GRACE_DAYS` (default 3), the servers beyond the quota (newest first) switch to **slow polling (60 s)** and stop receiving new deploys. This protects our request budget. Upgrading restores them immediately.
+3. After `PLAN_OVERLIMIT_GRACE_DAYS` (default 3), the servers beyond the quota (newest first; only partitions count, never machines or rented servers, §27.2) switch to **slow polling (60 s)** and stop receiving new deploys. This protects our request budget. Upgrading restores them immediately.
 
 ### 22.6 Permissions and UI
 
@@ -1938,16 +1969,16 @@ Each axis of variation is an interface with one class per variant. Adding a vari
 
 ## 24. Managed servers (optional, D42)
 
-> **Folded into shared resources (D47, §26).** The owner consented to platform-run capacity with Phase 16: pool machines are added manually there, and the AWS provisioning below becomes Phase 19, feeding the pool. Per-hour billing (§24.2) is replaced by monthly upfront allocations (§26.7); hourly blocks remain a later option.
+> **Folded into shared resources (D47, §26).** The owner consented to platform-run capacity with Phase 16: machines are added manually there (since Phase 18 like any customer's machine, §28), and the AWS provisioning below becomes Phase 19, feeding the pool. Per-hour billing (§24.2) is replaced by monthly upfront allocations (§26.7); hourly blocks remain a later option.
 
 **Idea:** the user provisions an EC2 instance from the dashboard on the platform's AWS account. The tenant pays the plan subscription plus metered machine usage per hour.
 
 ### 24.1 Seams prepared in the MVP
-- `servers.provider` {kind: `byo`/`managed`, cloud, region, instanceId, instanceType} (Phase 1).
+- `servers.provider` (Phase 1); its kinds are now `machine`/`partition`/`rented` (§27, §28), and a `managed` kind with cloud, region, instanceId and instanceType would be added by this phase.
 - `ServerProvisioner` strategy (§23.3): `provision()`, `deprovision()`, `describe()`. Server removal always calls `deprovision()`, so a managed instance can never outlive its record.
 - Managed instances install through cloud-init user-data carrying the one-time join token. This is the same join path as the SSH wizard (§4.2/§4.3), so no SSH is needed.
 - `BillingService` (Phase 10) owns every charge: plan periods now, usage meters later.
-- Plan entries `limits.managedServers` and `features.managedServers` (0 / off on Free).
+- ~~Plan entries `limits.managedServers` and `features.managedServers`~~ (removed in Phase 16b).
 
 ### 24.2 Proposed design (to confirm before implementing)
 - **Prepaid blocks:** charge the wallet for a block of hours ahead, refund unused time on stop. An empty wallet stops the instance, which is terminated after a grace period. No post-paid debt.
@@ -2004,7 +2035,7 @@ interface PaymentGateway {
 | `paymentEvents` | gateway, eventId (unique, so a replayed webhook is ignored), type, tenant, topup?, processedAt; TTL 90 days. Refunds and disputes are kept (no TTL) for the admin. |
 
 ### 25.5 Flows
-- **Save a card (on session):** Billing → "Add card" opens the Payment Element; the server creates a SetupIntent (`usage: off_session`) on the tenant's Stripe customer; the browser confirms it (3-D Secure inline when the bank asks). The webhook `setup_intent.succeeded` (and a direct read after confirm, for instant feedback) stores the card; the first card becomes the default. Remove detaches it in Stripe and deletes our row; the default can't be removed while autoPay is on and a subscription renews, unless another card is set.
+- **Save a card (on session):** Billing → "Add card" opens the Payment Element; the server creates a SetupIntent (`usage: off_session`) on the tenant's Stripe customer; the browser confirms it (3-D Secure inline when the bank asks). The webhook `setup_intent.succeeded` (and a direct read after confirm, for instant feedback) stores the card; the first card becomes the default. Remove detaches it in Stripe and deletes our row; the last card can't be removed while the tenant has active servers (§25.10), so another card is added first.
 - **Add funds (on session):** amount between $5 and $1,000 (settings). `Wallet.addBalance` with key `add:<tenant>:<client nonce>` (a double click reuses one charge) charges the default card. Results:
   - `succeeded` → credited immediately, shown at once;
   - `requires_action` (3-D Secure) → the top-up stays `pending`, the browser completes it with the returned client secret, and the webhook settles it;
@@ -2060,7 +2091,7 @@ interface PaymentGateway {
 
 ## 26. Shared resources: rent partitions of Huruf's machines (D47, Phase 16)
 
-> **Planned, not started.** Owner's decisions are in §26.12. No code until the owner says go.
+> **Built (Phase 16), then reshaped by D49 (§28):** pool machines, the remainder partition, Docker on the XFS volume, `--storage-opt` and `POOL_SPARE_PERCENT` are gone. Kept as the record of the design; where this section and §28 disagree, §28 wins. Owner's decisions are in §26.12.
 > **Rule for this phase (owner):** build on the existing mechanisms and refactor them where needed. Never a parallel copy.
 
 ### 26.1 Goal and scope
@@ -2130,14 +2161,14 @@ The control plane doesn't need to know a server is shared, except for billing an
   1. **Inventory:** the agent reads its limits from the partition's own cgroup files (`/sys/fs/cgroup/memory.max`, `cpu.max`, both correct inside a partition) and its disk from `df` (the quota shows as the size).
   2. **Memory sizing of apps:** the agent gives every container on a rented partition a memory limit (the project's own, or the partition's size when it sets none), so runtimes that size their heap from cgroup limits (Node, Java, Go) see the real limit instead of the machine's memory.
 
-**Pool machine layout (from the spike):**
+**Pool machine layout (from the spike; removed in Phase 18, see §27.3 and §28 for today's layout):**
 - **Outer Docker** uses the classic `overlay2` driver (containerd snapshotter off) with its data on an **XFS volume mounted with `prjquota`**, so `--storage-opt size=` caps each partition's own system files (apt, logs, `/tmp`): 3 GB, part of the partition's disk size.
 - **Each partition's** `/var/lib/docker`, `/var/lib/containerd` (where Docker 29 keeps images) and the agent's state are bind-mounted from one directory on that volume under one **XFS project quota** (the rest of the disk size). Sysbox mounts them ID-mapped, so the partition's root user owns them without owning anything on the host.
 - **Project IDs:** our project IDs come from a reserved range kept apart from the IDs Docker assigns for `--storage-opt`; production may also put the two on separate volumes.
 - **The partition image:** Ubuntu 24.04 with systemd, `docker.io`, `docker-buildx` (the agent builds with BuildKit) and `wireguard-tools`, with the kernel-debug mounts masked.
 - **Host packages:** `kmod` is required by Sysbox's preflight; WireGuard needs the host kernel module loaded.
 
-### 26.4 The remainder partition (no idle capacity)
+### 26.4 The remainder partition (no idle capacity) — removed in Phase 18
 
 Owner's requirement: capacity nobody has rented yet must not sit idle while Huruf's own apps could use it. Each pool machine therefore has one **remainder partition**, Huruf's own (platform tenant). It always holds whatever isn't rented:
 
@@ -2157,7 +2188,7 @@ Owner's requirement: capacity nobody has rented yet must not sit idle while Huru
 
 ### 26.5 The host role (the "higher-level agent")
 
-Not a new program: the **same agent binary** in a host role (`--pool` at install), so the release, update and command mechanisms are reused.
+Not a new program: the **same agent binary** in a host role (since Phase 17 every agent is a host), so the release, update and command mechanisms are reused.
 - **Install and placement in the tenants:**
   - The pool machine itself is a server of the platform tenant, installed and accepted by an admin like any server. It shows the whole machine, partitions included.
   - Huruf's remainder partition is a second server of the platform tenant, used for Huruf's own apps.
@@ -2317,19 +2348,19 @@ Needed for a resize that doesn't fit, or for draining a machine. An admin action
   - Realistic on single machines: AWS's own commitment for a single EC2 instance is 99.5%, and our own failures are covered by the alerts and moves below.
   - Credits for a missed month are set with the terms of service.
   - Admins are alerted through the existing alert rules on pool machines.
-  - Each class keeps spare machines' worth of capacity (setting `POOL_SPARE_PERCENT`, default 20, as free memory on machines taking rentals) to move partitions off a failed machine. Admin → Rentals flags a class below it.
+  - ~~Each class keeps spare machines' worth of capacity (`POOL_SPARE_PERCENT`)~~ (removed in Phase 18; Admin → Rentals shows free memory per machine instead).
   - Monthly uptime per rented server comes from its lease: a server that polls again after its lease ran out was down since then (one lease of grace), added to its period's `usage.downtimeMs`; an ongoing outage counts too. Not the offline sweep's flag, which can lag minutes in a small fleet.
 - **Performance (§20):**
   - Every partition polls like any server; a 2 vCPU machine with three partitions makes four agents' polls, already budgeted per server.
   - Traffic and usage ride on the host's existing `summary`.
   - The price and fit functions are pure and shared.
-  - BYO servers' paths don't change.
+  - Customers' own machines' paths don't change.
 
 ### 26.12 Owner's decisions
 
 1. **Partitions:** a pool machine is split into partitions, each running our agent; a rented partition joins the customer's tenant. This replaces the earlier design of one shared agent with per-customer slices.
 2. **Sysbox** for partitions (chosen over gVisor for compatibility), behind a `PartitionDriver` interface.
-3. **No idle capacity:** Huruf's remainder partition holds everything not rented (CPU uncapped at lowest priority).
+3. ~~**No idle capacity:** Huruf's remainder partition holds everything not rented (CPU uncapped at lowest priority).~~ Superseded by D49: the platform's own partitions share the machine with rentals.
 4. **Pricing:** ready sizes and custom requests from a per-class rate card. Launch rates as proposed in §26.8 until the owner changes them.
 5. **Approval:** an admin approves every request and resize, up and down; automatic approval may come later.
 6. **Web addresses:** custom domains only (D43 stands).
@@ -2363,7 +2394,7 @@ Needed for a resize that doesn't fit, or for draining a machine. An admin action
 | Memory cap | A process asking for 3 GB in a 2.25 GB partition was killed by the kernel; the partition, its agent and Docker kept running. |
 | Shrinking below use | The kernel kills the largest process. The driver must check first (§26.4). |
 | Live carve | The remainder shrank from 7 GB to 4.75 GB (and its disk quota) while running; Salha's partition was created next to it. |
-| Disk | Docker data, images and agent state capped by the XFS project quota (a 2 GB write over the limit refused; raising the quota live took effect at once); the partition's system files capped at 3 GB by `--storage-opt`. Inside, `df` shows the quota as the disk size. |
+| Disk | Docker data, images and agent state capped by the XFS project quota (a 2 GB write over the limit refused; raising the quota live took effect at once); the partition's system files capped at 3 GB by `--storage-opt` (the pool layout, removed in Phase 18; partitions now keep their system files in their quota folder, §28). Inside, `df` shows the quota as the disk size. |
 | Network isolation | Control plane and internet reachable; the host, other partitions and the metadata address blocked (the host check also run without the rules to confirm the rule is what blocks it; Docker already separates partition networks too). |
 | Traffic counters | nftables counters per partition (in and out) work; read by the host agent. |
 | Overhead | See §26.3: ~110 MB per partition with the agent; ~4 s to start. |
@@ -2396,14 +2427,14 @@ Needed for a resize that doesn't fit, or for draining a machine. An admin action
 - **After install, the customer creates a partition** and decides its size: vCPU, memory and disk. What they don't give us stays free for anything else on the machine (Dokploy, databases). Admins do the same on their machines.
 - **A partition is a server:** its agent joins the tenant, and projects, metrics, terminal and alerts work as today. The server quota counts partitions; machines don't count.
 - **Changing partitions later is allowed:** add more, resize live, remove. These are Phase 16's commands (`partition.create`, `resize`, `remove`), with the same refusal to shrink below what a partition uses.
-- **Pool machines** stay as in Phase 16: the admin prepares them for rentals, they get a class, and Huruf's remainder partition is optional there.
+- **Pool machines** are gone (D49, §28): an admin's machine gets a class to take rentals.
 
 ### 27.3 On a customer's machine
 
-- **Docker stays where it is.** Sysbox is added as a runtime and Docker reloads its runtimes on `SIGHUP`, so other tools' containers keep running. Moving Docker's data and requiring an empty machine stay for pool machines only.
-- **Disk:** partition data lives on an XFS volume in a sparse file (`/var/lib/huruf-pool.img`, the loop file of §26.5), so it takes only the space actually written, with a quota per partition of its whole disk size. A partition's own system files stay in the host's Docker, without a size cap. The file can't take more than the host's disk has free when written to, since it's sparse.
-- **CPU and memory limits** apply as on pool machines.
-- **Isolation rules** (no reaching other partitions, the host, private ranges, port 25) stay for pool machines. A customer's partitions reach their own network, as their projects do today.
+- **Docker stays where it is.** Sysbox is added as a runtime and Docker reloads its runtimes on `SIGHUP`, so other tools' containers keep running.
+- **Disk:** partition data lives on an XFS volume in a sparse file (`/var/lib/huruf-pool.img`, the loop file of §26.5), so it takes only the space actually written, with a quota per partition of its whole disk size. Since Phase 18 a partition's system files live in that quota folder too (§28); older partitions keep them in the host's Docker, uncapped, until they move. The file can't take more than the host's disk has free when written to, since it's sparse.
+- **CPU and memory limits** apply per partition (§26.3).
+- **Isolation rules** (no reaching other partitions, the host, private ranges, port 25) apply to rented partitions only (§28). A customer's partitions reach their own network, as their projects do today.
 - **Reaching a partition:**
   - Custom domains: unchanged. The agent inside opens its outbound tunnel (§14), already checked in 16c.
   - Public ports (`publicPort`): the host forwards the port to the partition running the project, only for traffic addressed to the machine itself. Rented partitions still refuse them.
@@ -2430,4 +2461,5 @@ Needed for a resize that doesn't fit, or for draining a machine. An admin action
 - **Approval** picks one of the platform's machines of the rental's class with room and creates the customer's partition there (§26.9 otherwise unchanged: charging, renewal, suspension, moves, uptime).
 - **Isolation per rental:** the rules of §26.3 apply to rented partitions only, so the platform's own partitions and other tools on the machine keep their network.
 - **Disk:** a partition's system files live in its quota folder, mounted over its system folders, so its whole disk is capped at its size; only entries right under `/` escape. Usage over the size is flagged for the admin and the owner is told. A move sends that folder alone; an older partition, whose system files are in its container, is converted on its move.
-- **Rentals on Phase 16 pool machines** keep working: their machines are machines with a class, and their partitions count as isolated.
+- **Phase 16 pool machines** are no longer supported (no `pool` mode); reinstall one as a machine and give it a class.
+- **Moving rentals** needs both machines on the private network; Phase 18 machines get no mesh index yet, so moves between them show the target unreachable (Phase 18 Open list).

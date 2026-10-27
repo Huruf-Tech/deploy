@@ -45,15 +45,13 @@ Background from the planning conversation that is **not** in [PLAN.md](PLAN.md).
 | Separate agent repo | Monorepo chosen. The agent uses the same license. |
 | One shared agent per pool machine with per-customer slices (the first D47 design) | Replaced by partitions: each rented partition runs our normal agent and joins the customer's tenant, so every server feature works unchanged. |
 | gVisor for partitions | The owner chose Sysbox: our agent needs Docker, BuildKit and systemd inside the partition, which Sysbox supports fully. gVisor stays possible behind `PartitionDriver`. |
-| Keeping unrented capacity free on pool machines | The owner doesn't want idle capacity: Huruf's remainder partition uses whatever isn't rented and shrinks when a rental is carved out. |
+| Keeping unrented capacity free on pool machines | The owner doesn't want idle capacity. First solved by a remainder partition; since D49 (Phase 18) there are no pool machines: rentals sit on any platform machine beside its own partitions. |
 | One small VM per renting customer instead of sharing | Shared resources (D47): the owner wants to share a machine between small customers; dedicated machines can still be offered as a large size. |
 | Free subdomains for customers without a domain | The owner keeps D43: custom domains only, also on rented servers. |
 
 ## 4. Things the owner still has to provide (not decided in the plan)
 
-- **Infrastructure and accounts:**
-  - A Deno Deploy project (and region).
-  - A MongoDB replica set (e.g. Atlas) in the same region. Transactions and TTL indexes need a replica set.
+- **Infrastructure and accounts:** provided. The control plane runs on a dedicated EC2 host from `deploy.docker-compose.yml`, behind Traefik (INGRESS.md setup A), with a MongoDB replica set (transactions and TTL indexes need one).
 - **Agent distribution:**
   - The public domain for the control plane and for the agent install script (`https://get.<domain>/agent`).
   - A GitHub org/repo for signed agent releases, plus a signing key.
@@ -79,26 +77,27 @@ Background from the planning conversation that is **not** in [PLAN.md](PLAN.md).
 
 ## 6. Where things stand
 
-- **Phases 0–10 are built.** Each has a status note in PLAN.md §16 (verified behavior, deviations, known limits); they await the owner's review.
-- **Phase 11 (custom domains, built-in ingress)** is built and live since 2026-10-25 (Traefik and frps replaced nginx on the control plane's EC2).
-- **Phase 12 (AI template assistant)** and **Phase 13 (long polling, chosen over WebSockets)** are built and await review; each has a status note in PLAN.md §16, and "Fixes after going live" there lists what changed after deployment.
-- **Phase 14 backlog:**
-  - Done: agent self-update.
-  - Done: uninstall ("Remove server", `huruf-deploy-agent uninstall`). The agent records its host changes in `<state-dir>/ledger.jsonl`, and the installer marks fresh installs. Cleanup undoes only ledger entries and objects matched by label or exact name, never by a `huruf-` prefix, because Dokploy apps can be named `huruf-tech-*`. Servers installed before the ledger existed get conservative rules. Docker and project data volumes are kept unless asked.
-  - Skipped because they need the owner's decision or consent: everything else.
+- **Phases 0–13 and 15–18 are built**, each with a status note in PLAN.md §16 (verified behavior, deviations, known limits); they await the owner's review. Phase 11's ingress is live since 2026-10-25 (Traefik and frps replaced nginx on the control plane's EC2).
+- **Phase 18 addendum** in PLAN.md §16 logs the review refactor (commit `05d4e64`): pool machines, `byo` servers, `POOL_ALLOW_IPS` and `server.prune` removed; billing keys and rules; admin suspend, resume and delete of rentals; deploy pruning and deadlines; agent shutdown and move timeouts. Its **Open** list holds what's known unfinished (S3 volumes in partitions, moves between Phase 18 machines, a few routes without UI).
+- **Uninstall** follows one fixed rule (Phase 17): partitions and our own objects by label and exact name, never a `huruf-` prefix (Dokploy apps can be named `huruf-tech-*`), Sysbox only when asked. The install ledger (`ledger.jsonl`) is gone.
+- **Phase 14 backlog:** agent self-update and uninstall are done; everything else waits for the owner's decision or consent.
+- **Working rules:**
+  - Local runs use `ENV_TYPE=test` (`.env.test`, local Mongo `huruf-deploy-test`); `deno task test`, `setup:dev` and `load:agents` set it. The root `.env` points at production: never read or write the production database without asking the owner.
+  - One phase or sub-phase at a time, stopping for review.
+  - After a schema or route change: `deno task generate:sdk -v 0.0.1 --overwrite`, then `npm run build` in `public/app`; after a deploy that changes indexes or access control: `deno task setup:prod`.
 - **Owner decisions recorded during the build:**
   - Shells are governed by RBAC.
   - Workspace variables come from the workspace owner at deploy time.
-  - No audit logs for now.
+  - No audit logs for now (so variable reveals and resolve reads aren't audited).
   - Volume backups are skipped for now.
   - S3 credentials live in storage connections.
-  - Managed servers are not built without explicit consent. **Consent given 2026-10-26 with shared resources** (D47, PLAN §26): customers rent slices of Huruf's pool machines; partitions (Sysbox) running our agent, with Huruf's remainder partition using whatever isn't rented; sizes and custom amounts from a per-class rate card; admin approval for now (resizes too); custom domains only; Free tenants can rent; no fixed cap (as many as admins approve); 3 days past due before suspending, 14 suspended before release; an uptime promise (target to be set); terms of service later on the website. **Build on existing mechanisms and refactor them, never a parallel copy:** sizes are plans, a rented server is a subscription plus a server record (PLAN §26.3).
+  - Managed servers are not built without explicit consent. **Consent given 2026-10-26 with shared resources** (D47, PLAN §26), reshaped on 2026-10-27 by **D49** (PLAN §28): no pool machines; an admin gives any platform machine a class and approval creates the customer's partition there, isolated one by one; sizes and custom amounts from a per-class rate card; admin approval for now (resizes too); custom domains only; Free tenants can rent; no fixed cap; 3 days past due before suspending, 14 suspended before release; an uptime promise of 99% a month; terms of service later on the website. **Build on existing mechanisms and refactor them, never a parallel copy:** sizes are plans, a rented server is a subscription plus a server record (PLAN §26.6).
 - **Open items for the owner:**
   - Framework (thunder-ui core, not editable here):
     - `src/core/crud/ViewPage.tsx` redirects `<id>` to `form/<id>` with a path that already contains the base, so the router adds `/app` twice. Our cards avoid it by opening `form/<id>`; core's own users or links through `<id>` still hit it.
     - Core's axios interceptor toasts "Request failed with status code …" whenever an error body is plain text (`Response.badRequest("…")`), next to the page's own message.
-  - Framework test `tests/router.test.ts` ("500 details are hidden in production") fails under `ENV_TYPE=test`; it belongs to the framework.
+  - Framework test `tests/router.test.ts` ("500 details are hidden in production") fails under `ENV_TYPE=test`, before and after our changes; it belongs to the framework.
   - Verification emails: thunder-core doesn't configure Better Auth's `emailVerification`, so no verification email is sent. The fix belongs in the plugin.
   - Alert channels: confirm that email (needs real SMTP settings) and Slack (needs a workspace webhook) arrive.
   - Capacity: the "fits N more" ±1 check needs a week of real use.
-  - Test database: `.env` now points at production, so tests must never read it alone. A gitignored `.env.test` (local Mongo, `huruf-deploy-test`) overrides it whenever `ENV_TYPE=test`, which `deno task test` sets. On a new machine, create it before running tests.
+  - Test database: `.env` now points at production, so local runs must never read it alone. A gitignored `.env.test` (local Mongo, `huruf-deploy-test`; also blank `INGRESS_TUNNEL_ADDRS=` when testing agents) overrides it whenever `ENV_TYPE=test`. On a new machine, create it first.

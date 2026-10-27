@@ -248,6 +248,11 @@ export const $poolEnsurePayload = z.object({
     memMb: z.number().int().min(0),
     diskGb: z.number().int().min(0),
   }),
+  /**
+   * The rentals on this machine (PLAN §28): kept apart whatever the agent's
+   * own records say, so rentals made by an older agent are isolated too.
+   */
+  isolated: z.array($partitionName).max(500).default([]),
 });
 
 /**

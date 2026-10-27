@@ -145,12 +145,13 @@ export const syncDeployIndexes = async () => {
       { name: "uniqueFingerprint", unique: true },
     ),
     serverModel.createIndex({ tenant: 1, status: 1 }, { name: "tenantStatus" }),
-    // A machine's partitions, and the next free private-network port on it.
+    // A machine's partitions; each has its own private-network port on it.
     serverModel.createIndex(
       { "provider.host": 1, "provider.meshPort": -1 },
       {
-        name: "hostPartitions",
-        partialFilterExpression: { "provider.host": { $exists: true } },
+        name: "uniqueMeshPort",
+        unique: true,
+        partialFilterExpression: { "provider.meshPort": { $exists: true } },
       },
     ),
     // Unaccepted servers disappear once their pairing code expires.

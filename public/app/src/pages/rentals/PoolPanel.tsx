@@ -3,12 +3,9 @@ import { useTranslation } from "react-i18next"
 import { ThunderSDK } from "thunder-sdk"
 import { toast } from "sonner"
 
-import { use } from "@/core/hooks/use"
-import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
-import { Textarea } from "@/components/ui/textarea"
 import {
   Select,
   SelectContent,
@@ -16,17 +13,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
+import { ConfirmDialog } from "@/components/confirm-dialog"
 import { Panel } from "@/components/console/panel"
 import { KeyValue } from "@/components/console/key-value"
+import { useCached } from "@/hooks/use-cached"
+import { toCents, toDollars } from "@/lib/format"
 import { money } from "@/lib/plans"
+import { queries } from "@/lib/queries"
 import { errorMessage } from "@/lib/utils"
 import { isMachine, type TServer } from "@/pages/servers/server"
 import { MoveDialog } from "./MoveDialog"
@@ -34,11 +27,14 @@ import { MoveDialog } from "./MoveDialog"
 /** Picked in the class select: the machine isn't for rent. */
 const NOT_FOR_RENT = "none"
 
+const can = (action: string) => ThunderSDK.isPermitted("rentalsAdmin", action)
+
 /**
  * Rentals on one of the platform's machines (PLAN §28), for admins: a
  * machine is for rent once it has a class; whether it takes new rentals
  * (draining), its cost against what it earns, and the rentals on it with
- * their uptime and Move. Its partitions are in the Partitions panel.
+ * their uptime and Move. Its partitions are in the Partitions panel. Each
+ * control shows only with its own permission.
  */
 export function PoolPanel({
   server,
@@ -47,26 +43,25 @@ export function PoolPanel({
   server: TServer
   onChanged: () => void
 }) {
-  const allowed =
-    isMachine(server) && ThunderSDK.isPermitted("rentalsAdmin", "pool")
-  const request = ThunderSDK.useCaching(
-    ["rentalsAdmin", "pool", server._id],
-    async ({ signal }) =>
-      allowed
-        ? await ThunderSDK.rentalsAdmin.pool({
-            params: { id: server._id },
-            signal,
-          })
-        : null
-  )
-  const info = use(request).data
+  if (!isMachine(server) || !can("pool")) return null
+  return <MachineRentals server={server} onChanged={onChanged} />
+}
+
+function MachineRentals({
+  server,
+  onChanged,
+}: {
+  server: TServer
+  onChanged: () => void
+}) {
+  const { data: info, reload } = useCached(queries.machineRentals(server._id))
   if (!info?.platform || server.pool?.status !== "ready") return null
   return (
     <RentalsDetails
       server={server}
       info={info}
       onChanged={() => {
-        request.invalidate()
+        reload()
         onChanged()
       }}
     />
@@ -79,73 +74,6 @@ const labelOf = (r: {
   plan?: string
 }) => `${r.tenantName ?? r.partition} · ${r.plan ?? ""}`
 
-/** Suspending or deleting a rental, with an optional reason for its owner. */
-function ActDialog({
-  label,
-  action,
-  onCancel,
-  onConfirm,
-}: {
-  label: string
-  action: "suspend" | "terminate"
-  onCancel: () => void
-  onConfirm: (reason?: string) => Promise<void>
-}) {
-  const { t } = useTranslation()
-  const [reason, setReason] = React.useState("")
-  const [busy, setBusy] = React.useState(false)
-  return (
-    <Dialog open onOpenChange={(o) => !o && onCancel()}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>
-            {action === "suspend"
-              ? t("Suspend this rental?")
-              : t("Delete this rental?")}
-          </DialogTitle>
-          <DialogDescription>
-            {action === "suspend"
-              ? t(
-                  "{{label}} stops now and isn't renewed until you resume it. Its data is kept.",
-                  { label }
-                )
-              : t(
-                  "{{label}} is deleted now with everything on it. Nothing is refunded.",
-                  {
-                    label,
-                  }
-                )}
-          </DialogDescription>
-        </DialogHeader>
-        <div className="flex flex-col gap-2">
-          <Label htmlFor="act-reason">
-            {t("Reason for the customer (optional)")}
-          </Label>
-          <Textarea
-            id="act-reason"
-            maxLength={500}
-            value={reason}
-            onChange={(e) => setReason(e.target.value)}
-          />
-        </div>
-        <DialogFooter>
-          <Button
-            variant="destructive"
-            disabled={busy}
-            onClick={async () => {
-              setBusy(true)
-              await onConfirm(reason.trim() || undefined)
-              setBusy(false)
-            }}
-          >
-            {action === "suspend" ? t("Suspend") : t("Delete")}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  )
-}
-
 function RentalsDetails({
   server,
   info,
@@ -156,17 +84,9 @@ function RentalsDetails({
   onChanged: () => void
 }) {
   const { t } = useTranslation()
-  const classes = use(
-    ThunderSDK.useCaching(
-      ["serverClasses", "all"],
-      async ({ signal }) =>
-        await ThunderSDK.serverClasses.get({
-          params: {},
-          query: { limit: 50 },
-          signal,
-        })
-    )
-  ).data?.results
+  const canUpdate = can("updatePool")
+  const canMove = can("move") && can("moveTargets")
+  const classes = useCached(queries.serverClasses()).data?.results
   const [moving, setMoving] = React.useState<{ id: string; label: string }>()
   const [canceling, setCanceling] = React.useState<string>()
   const [acting, setActing] = React.useState<{
@@ -193,6 +113,13 @@ function RentalsDetails({
     } catch (e) {
       toast.error(errorMessage(e) ?? t("Could not save"))
     }
+  }
+  const saveCost = () => {
+    if (cost === undefined) return
+    const cents = toCents(cost)
+    // Empty or not a number: back to the saved cost.
+    if (!(cents >= 0)) return setCost(undefined)
+    if (cents !== (pool.monthlyCost ?? 0)) update({ monthlyCost: cents })
   }
   const act = async (
     id: string,
@@ -252,6 +179,7 @@ function RentalsDetails({
               })),
             ]}
             value={pool.class ?? NOT_FOR_RENT}
+            disabled={!canUpdate}
             onValueChange={(v) =>
               update({ class: v === NOT_FOR_RENT ? null : (v as string) })
             }
@@ -276,12 +204,12 @@ function RentalsDetails({
             type="number"
             min={0}
             step="0.01"
-            value={cost ?? (pool.monthlyCost ? pool.monthlyCost / 100 : "")}
-            onChange={(e) => setCost(e.target.value)}
-            onBlur={() =>
-              cost !== undefined &&
-              update({ monthlyCost: Math.round(Number(cost) * 100) })
+            disabled={!canUpdate}
+            value={
+              cost ?? (pool.monthlyCost ? toDollars(pool.monthlyCost) : "")
             }
+            onChange={(e) => setCost(e.target.value)}
+            onBlur={saveCost}
           />
         </div>
         {forRent && (
@@ -296,6 +224,7 @@ function RentalsDetails({
             </span>
             <Switch
               checked={pool.accepting !== false}
+              disabled={!canUpdate}
               onCheckedChange={(accepting) => update({ accepting })}
             />
           </label>
@@ -320,9 +249,7 @@ function RentalsDetails({
           {info.rentals.map((r) => (
             <li key={r._id} className="flex flex-col gap-1 px-3 py-2">
               <div className="flex flex-wrap items-baseline justify-between gap-x-2">
-                <span className="font-medium">
-                  {r.tenantName ?? r.partition} · {r.plan}
-                </span>
+                <span className="font-medium">{labelOf(r)}</span>
                 {r.uptime !== undefined && (
                   <span className="text-xs text-muted-foreground tabular-nums">
                     {t("{{n}}% up", { n: r.uptime.toFixed(2) })}
@@ -346,13 +273,15 @@ function RentalsDetails({
                   {t("Moving to {{name}}", {
                     name: r.moving.toName ?? r.moving.to,
                   })}
-                  <button
-                    type="button"
-                    className="underline underline-offset-2"
-                    onClick={() => setCanceling(r._id)}
-                  >
-                    {t("Cancel move")}
-                  </button>
+                  {can("cancelMove") && (
+                    <button
+                      type="button"
+                      className="underline underline-offset-2"
+                      onClick={() => setCanceling(r._id)}
+                    >
+                      {t("Cancel move")}
+                    </button>
+                  )}
                 </div>
               ) : (
                 <>
@@ -364,7 +293,7 @@ function RentalsDetails({
                     </span>
                   )}
                   <div className="flex flex-wrap gap-x-3 text-xs text-muted-foreground [&>button]:underline [&>button]:underline-offset-2 [&>button:hover]:text-foreground">
-                    {r.status !== "suspended" && (
+                    {canMove && r.status !== "suspended" && (
                       <button
                         type="button"
                         onClick={() =>
@@ -374,42 +303,45 @@ function RentalsDetails({
                         {t("Move to another machine")}
                       </button>
                     )}
-                    {r.held ? (
+                    {r.held
+                      ? can("resume") && (
+                          <button
+                            type="button"
+                            onClick={() => act(r._id, "resume")}
+                          >
+                            {t("Resume")}
+                          </button>
+                        )
+                      : can("suspend") &&
+                        r.status !== "suspended" && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setActing({
+                                id: r._id,
+                                label: labelOf(r),
+                                action: "suspend",
+                              })
+                            }
+                          >
+                            {t("Suspend")}
+                          </button>
+                        )}
+                    {can("terminate") && (
                       <button
                         type="button"
-                        onClick={() => act(r._id, "resume")}
+                        className="text-destructive-foreground"
+                        onClick={() =>
+                          setActing({
+                            id: r._id,
+                            label: labelOf(r),
+                            action: "terminate",
+                          })
+                        }
                       >
-                        {t("Resume")}
+                        {t("Delete")}
                       </button>
-                    ) : (
-                      r.status !== "suspended" && (
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setActing({
-                              id: r._id,
-                              label: labelOf(r),
-                              action: "suspend",
-                            })
-                          }
-                        >
-                          {t("Suspend")}
-                        </button>
-                      )
                     )}
-                    <button
-                      type="button"
-                      className="text-destructive-foreground"
-                      onClick={() =>
-                        setActing({
-                          id: r._id,
-                          label: labelOf(r),
-                          action: "terminate",
-                        })
-                      }
-                    >
-                      {t("Delete")}
-                    </button>
                   </div>
                 </>
               )}
@@ -418,13 +350,31 @@ function RentalsDetails({
         </ul>
       )}
 
-      {acting && (
-        <ActDialog
-          {...acting}
-          onCancel={() => setActing(undefined)}
-          onConfirm={(reason) => act(acting.id, acting.action, reason)}
-        />
-      )}
+      <ConfirmDialog
+        open={!!acting}
+        onOpenChange={(o) => !o && setActing(undefined)}
+        title={
+          acting?.action === "terminate"
+            ? t("Delete this rental?")
+            : t("Suspend this rental?")
+        }
+        description={
+          acting?.action === "terminate"
+            ? t(
+                "{{label}} is deleted now with everything on it. Nothing is refunded.",
+                { label: acting.label }
+              )
+            : t(
+                "{{label}} stops now and isn't renewed until you resume it. Its data is kept.",
+                { label: acting?.label }
+              )
+        }
+        confirmLabel={
+          acting?.action === "terminate" ? t("Delete") : t("Suspend")
+        }
+        reasonLabel={t("Reason for the customer (optional)")}
+        onConfirm={(reason) => acting && act(acting.id, acting.action, reason)}
+      />
       {moving && (
         <MoveDialog
           rental={moving.id}
@@ -433,29 +383,16 @@ function RentalsDetails({
           onDone={onChanged}
         />
       )}
-      <Dialog
+      <ConfirmDialog
         open={!!canceling}
         onOpenChange={(o) => !o && setCanceling(undefined)}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{t("Cancel this move?")}</DialogTitle>
-            <DialogDescription>
-              {t(
-                "For a move that stopped reporting (an agent restarted during it). The partition starts again on this machine and the copy on the other one is removed."
-              )}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button
-              variant="destructive"
-              onClick={() => canceling && cancelMove(canceling)}
-            >
-              {t("Cancel move")}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        title={t("Cancel this move?")}
+        description={t(
+          "For a move that stopped reporting (an agent restarted during it). The partition starts again on this machine and the copy on the other one is removed."
+        )}
+        confirmLabel={t("Cancel move")}
+        onConfirm={() => canceling && cancelMove(canceling)}
+      />
     </Panel>
   )
 }

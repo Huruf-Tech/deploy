@@ -45,7 +45,7 @@ export type deleteRuleHandler$params = {
     id?: string;
 };
 export type alerts$query = {
-    open?: boolean | undefined;
+    open?: ("true" | "false") | undefined;
     limit?: number;
 };
 export declare const controlPlaneModule: (sdk: typeof BaseSDK) => {

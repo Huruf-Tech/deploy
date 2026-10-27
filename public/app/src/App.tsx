@@ -13,7 +13,6 @@ import { coreRoutes, type TRouteObject } from "@/core/router.tsx"
 import { Protected } from "@/core/protected.tsx"
 import { SelectTenant } from "@/core/pages/tenant/select-tenant.tsx"
 import { NotFound } from "@/core/layouts/shared/not-found.tsx"
-import { Onboarding } from "@/components/onboarding.tsx"
 
 const router = createBrowserRouter(
   [
@@ -61,7 +60,6 @@ const router = createBrowserRouter(
 export function App() {
   return (
     <AppWrapper>
-      <Onboarding />
       <RouterProvider router={router} />
     </AppWrapper>
   )

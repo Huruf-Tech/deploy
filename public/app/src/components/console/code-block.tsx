@@ -1,3 +1,5 @@
+import { useTranslation } from "react-i18next"
+
 import { CopyButton } from "@/components/ui/copy-button"
 import { cn } from "@/lib/utils"
 import { highlight, type TLang } from "./highlight"
@@ -19,6 +21,7 @@ export function CodeBlock({
   label?: React.ReactNode
   className?: string
 }) {
+  const { t } = useTranslation()
   return (
     <div className={cn("relative rounded-lg border bg-muted/50", className)}>
       {label && (
@@ -26,11 +29,15 @@ export function CodeBlock({
           {label}
         </div>
       )}
+      {/* Focusable, so the code can be scrolled from the keyboard. */}
       <pre
         dir="ltr"
+        tabIndex={0}
+        role="region"
+        aria-label={typeof label === "string" ? label : t("Code")}
         style={maxHeight ? { maxHeight } : undefined}
         className={cn(
-          "overflow-auto p-3 pe-10 font-mono text-xs leading-relaxed",
+          "overflow-auto p-3 pe-10 font-mono text-xs leading-relaxed outline-none focus-visible:ring-2 focus-visible:ring-ring",
           wrap ? "break-all whitespace-pre-wrap" : "whitespace-pre"
         )}
       >

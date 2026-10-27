@@ -183,7 +183,6 @@ export function EnvEditor({
                 type="button"
                 variant="ghost"
                 size="icon-sm"
-                aria-pressed={v.isSecret}
                 aria-label={
                   v.isSecret
                     ? t("{{key}} is secret; make it plain", { key: v.key })

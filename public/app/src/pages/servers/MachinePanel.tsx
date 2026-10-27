@@ -16,26 +16,23 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { ConfirmDialog } from "@/components/confirm-dialog"
 import { Panel } from "@/components/console/panel"
 import { KeyValue } from "@/components/console/key-value"
 import { DataTable } from "@/components/console/data-table"
 import { StatusBadge, StatusDot } from "@/components/console/status"
 import { usePolling } from "@/hooks/use-polling"
+import { bytes, gbOfMb, sizeText } from "@/lib/format"
 import { cn, errorMessage } from "@/lib/utils"
 import type { TServer } from "./server"
 
 type TSize = { cpus: number; memMb: number; diskGb: number }
 type TRow = Awaited<ReturnType<typeof ThunderSDK.servers.partitions>>[number]
 
-const gbOfMb = (mb: number) => Math.floor((mb / 1024) * 2) / 2
-const gb = (bytes: number) => `${(bytes / 2 ** 30).toFixed(1)} GB`
-const sizeText = (s: TSize) =>
-  `${s.cpus} vCPU · ${gbOfMb(s.memMb)} GB · ${s.diskGb} GB`
-
 /**
  * A machine's partitions (PLAN §27.2): the part of the machine Huruf Deploy
  * gets, chosen by its owner; the rest stays free for other tools on it.
- * Pool machines (rented out, §26) show the Pool machine panel instead.
+ * Rentals on the platform's machines are in the Rentals panel.
  */
 export function MachinePanel({
   server,
@@ -50,9 +47,9 @@ export function MachinePanel({
   // Until the list loads, what the page has; then the list, which is fresh.
   const all =
     rows ??
-    (server.resources?.partitions ?? [])
-      .filter((p) => !p.remainder)
-      .map((p) => ({ ...p, joining: false }) as TRow)
+    (server.resources?.partitions ?? []).map(
+      (p) => ({ ...p, joining: false }) as TRow
+    )
   const partitions = all.filter((p) => !p.creating) as (TRow & {
     size: TSize
   })[]
@@ -64,6 +61,13 @@ export function MachinePanel({
   }>()
   const [removing, setRemoving] = React.useState<string>()
   const canChange = ThunderSDK.isPermitted("servers", "createPartition")
+  // Aborted when the panel goes away.
+  const alive = React.useRef<AbortSignal>(undefined)
+  React.useEffect(() => {
+    const controller = new AbortController()
+    alive.current = controller.signal
+    return () => controller.abort()
+  }, [])
 
   const load = React.useCallback(() => {
     ThunderSDK.servers
@@ -93,6 +97,7 @@ export function MachinePanel({
     diskGb: allocatable.diskGb - used.diskGb,
   }
 
+  // Removals are followed until the machine answers, while the panel is open.
   const remove = async (name: string) => {
     try {
       const { command } = await ThunderSDK.servers.removePartition({
@@ -100,12 +105,21 @@ export function MachinePanel({
       })
       setRemoving(undefined)
       load()
-      // The machine removes it; its answer says whether that worked.
+      follow(command)
+    } catch (e) {
+      toast.error(errorMessage(e) ?? t("Could not remove it"))
+    }
+  }
+  const follow = async (command: string) => {
+    const signal = alive.current
+    try {
       let done = false
       for (let i = 0; i < 40 && !done; i++) {
         await new Promise((r) => setTimeout(r, 1_500))
+        if (signal?.aborted) return
         const outcome = await ThunderSDK.servers.command({
           params: { id: server._id, command },
+          signal,
         })
         if (outcome.status === "failed")
           throw new Error(outcome.error ?? t("The machine couldn't remove it"))
@@ -120,7 +134,8 @@ export function MachinePanel({
         )
       onChanged()
     } catch (e) {
-      toast.error(errorMessage(e) ?? t("Could not remove it"))
+      if (!signal?.aborted)
+        toast.error(errorMessage(e) ?? t("Could not remove it"))
     }
   }
 
@@ -246,7 +261,9 @@ export function MachinePanel({
                       <StatusDot
                         state={p.state === "running" ? "running" : "stopped"}
                       />
-                      <span className="sr-only">{p.state}</span>
+                      <span className="sr-only">
+                        {p.state === "running" ? t("Running") : t("Stopped")}
+                      </span>
                       {row?.rented ? (
                         <span>
                           {t("Rented: {{tenant}} · {{plan}}", row.rented)}
@@ -301,10 +318,10 @@ export function MachinePanel({
               cell: (p) => (
                 <div dir="ltr" className="text-end rtl:text-start">
                   <div>
-                    {gb(p.memUsed ?? 0)} / {gbOfMb(p.size.memMb)} GB
+                    {bytes(p.memUsed ?? 0)} / {gbOfMb(p.size.memMb)} GB
                   </div>
                   <div className="text-muted-foreground">
-                    {gb(p.diskUsed ?? 0)} / {p.size.diskGb} GB
+                    {bytes(p.diskUsed ?? 0)} / {p.size.diskGb} GB
                   </div>
                 </div>
               ),
@@ -364,29 +381,16 @@ export function MachinePanel({
           }}
         />
       )}
-      <Dialog
+      <ConfirmDialog
         open={!!removing}
         onOpenChange={(o) => !o && setRemoving(undefined)}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{t("Remove this partition?")}</DialogTitle>
-            <DialogDescription>
-              {t(
-                "It's deleted with its projects' containers and data, and its server goes from the list. The machine keeps running."
-              )}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button
-              variant="destructive"
-              onClick={() => removing && remove(removing)}
-            >
-              {t("Remove partition")}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        title={t("Remove this partition?")}
+        description={t(
+          "It's deleted with its projects' containers and data, and its server goes from the list. The machine keeps running."
+        )}
+        confirmLabel={t("Remove partition")}
+        onConfirm={() => removing && remove(removing)}
+      />
     </Panel>
   )
 }

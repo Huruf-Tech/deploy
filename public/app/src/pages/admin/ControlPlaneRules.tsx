@@ -1,11 +1,9 @@
 import * as React from "react"
 import { ThunderSDK } from "thunder-sdk"
 import { useTranslation } from "react-i18next"
-import { formatDistanceToNow } from "date-fns"
 import { toast } from "sonner"
 import { IconPencil, IconPlus, IconTrash, IconX } from "@tabler/icons-react"
 
-import { use } from "@/core/hooks/use"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -29,7 +27,9 @@ import { Panel } from "@/components/console/panel"
 import { StatusBadge } from "@/components/console/status"
 import { Timeline } from "@/components/console/timeline"
 import { errorMessage } from "@/lib/utils"
-import { useFresh } from "@/hooks/use-fresh"
+import { useCached } from "@/hooks/use-cached"
+import { queries } from "@/lib/queries"
+import { ago } from "@/lib/format"
 
 type TMetric =
   "cpCpu" | "cpMemory" | "cpPollLatency" | "cpErrorRate" | "cpPollsMissing"
@@ -327,26 +327,14 @@ function RuleDialog({
 export function ControlPlaneRules() {
   const { t } = useTranslation()
   const [editing, setEditing] = React.useState<TRule | null | undefined>()
-  const rules = ThunderSDK.useCaching(
-    ["controlPlane", "rules"],
-    async ({ signal }) =>
-      (await ThunderSDK.controlPlane.rules({ signal })) as unknown as TRule[]
-  )
-  const events = ThunderSDK.useCaching(
-    ["controlPlane", "alerts"],
-    async ({ signal }) =>
-      (await ThunderSDK.controlPlane.alerts({
-        signal,
-        query: { limit: 10 },
-      })) as unknown as TEvent[]
-  )
-  const { data: list } = use(rules)
-  const { data: recent } = use(events)
-  useFresh(rules, events)
+  const rules = useCached(queries.controlPlaneRules())
+  const events = useCached(queries.controlPlaneAlerts())
+  const list = rules.data as unknown as TRule[] | null
+  const recent = events.data as unknown as TEvent[] | null
 
   const reload = () => {
-    rules.invalidate()
-    events.invalidate()
+    rules.reload()
+    events.reload()
   }
 
   const toggle = async (rule: TRule) => {
@@ -517,9 +505,7 @@ export function ControlPlaneRules() {
                   )}
                 </span>
               ),
-              time: formatDistanceToNow(new Date(e.firedAt), {
-                addSuffix: true,
-              }),
+              time: ago(e.firedAt),
               details: (
                 <>
                   {e.instance === "all" ? t("All instances") : e.instance}

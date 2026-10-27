@@ -1,9 +1,7 @@
 import { Link } from "react-router"
-import { ThunderSDK } from "thunder-sdk"
 import { useTranslation } from "react-i18next"
 import { IconAlertTriangle, IconArrowRight } from "@tabler/icons-react"
 
-import { use } from "@/core/hooks/use"
 import { getLocalPath } from "@/core/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Panel } from "@/components/console/panel"
@@ -18,6 +16,8 @@ import {
   POLL_BUDGET_MS,
   type TOverview,
 } from "./control-plane"
+import { useCached } from "@/hooks/use-cached"
+import { queries } from "@/lib/queries"
 
 function Figure({
   label,
@@ -44,20 +44,12 @@ function Figure({
 /**
  * The control plane at a glance for platform admins on the Overview page:
  * health, load and the busiest instance, with the full page one click away.
- * Shares its request with Admin > Control plane (same cache key).
+ * Shares its query with Admin > Control plane.
  */
 export function ControlPlaneSummary() {
   const { t } = useTranslation()
-  const request = ThunderSDK.useCaching(
-    ["controlPlane", "1h"],
-    async ({ signal }) =>
-      (await ThunderSDK.controlPlane.overview({
-        signal,
-        query: { range: "1h" },
-      })) as unknown as TOverview
-  )
-  const { data: o, isLoading } = use(request)
-  usePolling(() => request.invalidate(), 60_000)
+  const { data: o, isLoading, reload } = useCached(queries.controlPlane("1h"))
+  usePolling(reload, 60_000)
 
   const list = o ? findings(o, t) : []
   const worst =

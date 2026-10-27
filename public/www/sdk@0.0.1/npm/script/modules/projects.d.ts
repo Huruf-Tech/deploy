@@ -298,9 +298,6 @@ export type update$body = {
     branch?: string | undefined;
     templateVersion?: number | undefined;
     template?: string | undefined;
-    inputs?: {
-        [K in string]: string | number | boolean;
-    } | undefined;
     compose?: string | undefined;
     volumes?: {
         name: string;

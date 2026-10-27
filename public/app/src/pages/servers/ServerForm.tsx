@@ -7,7 +7,6 @@ import { toast } from "sonner"
 import { Page } from "@/components/page"
 import { PageHeader } from "@/components/console/page-header"
 import { Panel } from "@/components/console/panel"
-import { use } from "@/core/hooks/use"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -15,7 +14,8 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { errorMessage } from "@/lib/utils"
 import { ServerLabels } from "./ServerLabels"
 import { serverSchema } from "./server"
-import { useFresh } from "@/hooks/use-fresh"
+import { useCached } from "@/hooks/use-cached"
+import { queries } from "@/lib/queries"
 
 /**
  * Edit server: the generic form shows `labels` (a record) as a JSON textarea,
@@ -29,15 +29,7 @@ export default function ServerForm() {
   const [name, setName] = React.useState<string>()
   const [busy, setBusy] = React.useState(false)
 
-  const request = ThunderSDK.useCaching(
-    ["servers", id],
-    async ({ signal }) =>
-      (await ThunderSDK.servers.get({ signal, params: { id }, query: {} })) as {
-        results: unknown[]
-      }
-  )
-  const { data, isLoading } = use(request)
-  useFresh(request)
+  const { data, isLoading, reload } = useCached(queries.server(id))
   const server = React.useMemo(() => {
     const parsed = serverSchema.safeParse(data?.results?.[0])
     return parsed.success ? parsed.data : undefined
@@ -54,7 +46,7 @@ export default function ServerForm() {
           params: { id },
           body: { name: next },
         })
-      request.invalidate()
+      reload()
       toast.success(t("Server saved"))
       navigate(-1)
     } catch (e) {
@@ -96,11 +88,7 @@ export default function ServerForm() {
           <div className="flex flex-col gap-2">
             <Label>{t("Labels")}</Label>
             {/* Saved as you add or remove them. */}
-            <ServerLabels
-              server={id}
-              labels={server.labels}
-              onSaved={() => request.invalidate()}
-            />
+            <ServerLabels server={id} labels={server.labels} onSaved={reload} />
           </div>
         </Panel>
         <div className="flex justify-end gap-2">

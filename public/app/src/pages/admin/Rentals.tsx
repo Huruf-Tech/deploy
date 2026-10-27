@@ -4,7 +4,6 @@ import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
 import { IconServer2, IconServerBolt } from "@tabler/icons-react"
 
-import { use } from "@/core/hooks/use"
 import { Page } from "@/components/page"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -20,18 +19,17 @@ import {
 import { PageHeader } from "@/components/console/page-header"
 import { DataTable } from "@/components/console/data-table"
 import { EmptyState } from "@/components/console/empty-state"
-import { useFresh } from "@/hooks/use-fresh"
+import { useCached } from "@/hooks/use-cached"
+import { dateTime, gbOfMb, sizeText } from "@/lib/format"
 import { money } from "@/lib/plans"
+import { queries } from "@/lib/queries"
 import { errorMessage } from "@/lib/utils"
 import { MachinePicker } from "@/pages/rentals/MachinePicker"
 import { usable } from "@/pages/rentals/rental"
 
 type TItem = Awaited<ReturnType<typeof ThunderSDK.rentalsAdmin.queue>>[number]
 
-const sizeText = (s: TItem["size"]) =>
-  `${s.cpus} vCPU · ${Math.round((s.memMb / 1024) * 10) / 10} GB · ${s.diskGb} GB`
-
-/** Picks the pool machine for a request (PLAN §26.7), then approves it. */
+/** Picks the machine for a request (PLAN §26.7), then approves it. */
 function ApproveDialog({
   item,
   onOpenChange,
@@ -42,16 +40,7 @@ function ApproveDialog({
   onDone: () => void
 }) {
   const { t } = useTranslation()
-  const machines = use(
-    ThunderSDK.useCaching(
-      ["rentalsAdmin", "placement", item._id],
-      async ({ signal }) =>
-        await ThunderSDK.rentalsAdmin.placement({
-          params: { id: item._id },
-          signal,
-        })
-    )
-  ).data
+  const machines = useCached(queries.placementFor(item._id)).data
   const [host, setHost] = React.useState<string>()
   const pick = host ?? machines?.find(usable)?.server
   const [busy, setBusy] = React.useState(false)
@@ -93,7 +82,7 @@ function ApproveDialog({
         ) : !machines.length ? (
           <p className="text-sm text-muted-foreground">
             {t(
-              "No pool machine of this class takes rentals. Add one, or set a machine's class on its page."
+              "No machine of this class takes rentals. Give a machine this class on its page."
             )}
           </p>
         ) : (
@@ -178,20 +167,13 @@ function RejectDialog({
   )
 }
 
-const gbOfMb = (mb: number) => Math.round((mb / 1024) * 10) / 10
-
 /**
  * Per machine for rent (PLAN §28): what customers rent, what the platform's
  * own partitions take, what's free, and revenue against cost.
  */
 function Capacity() {
   const { t } = useTranslation()
-  const data = use(
-    ThunderSDK.useCaching(
-      ["rentalsAdmin", "capacity"],
-      async ({ signal }) => await ThunderSDK.rentalsAdmin.capacity({ signal })
-    )
-  ).data
+  const data = useCached(queries.rentalCapacity()).data
   if (!data?.machines.length) return null
   return (
     <section aria-labelledby="capacity-title" className="flex flex-col gap-2">
@@ -266,15 +248,9 @@ function Capacity() {
 /** Admin → Rentals (PLAN §26.8): requests and resizes waiting for approval. */
 export default function RentalsAdmin() {
   const { t } = useTranslation()
-  const request = ThunderSDK.useCaching(
-    ["rentalsAdmin", "queue"],
-    async ({ signal }) => await ThunderSDK.rentalsAdmin.queue({ signal })
-  )
-  useFresh(request)
-  const { data } = use(request)
+  const { data, reload } = useCached(queries.rentalQueue())
   const [approving, setApproving] = React.useState<TItem | null>(null)
   const [rejecting, setRejecting] = React.useState<TItem | null>(null)
-  const reload = () => request.invalidate()
 
   const approveResize = async (item: TItem) => {
     try {
@@ -291,7 +267,7 @@ export default function RentalsAdmin() {
       <PageHeader
         title={t("Rentals")}
         description={t(
-          "Servers customers asked to rent, and resizes. Approving places them on a pool machine and charges the first month."
+          "Servers customers asked to rent, and resizes. Approving places them on a machine for rent and charges the first month."
         )}
       />
       <Capacity />
@@ -349,7 +325,7 @@ export default function RentalsAdmin() {
                 header: t("Asked"),
                 sortValue: (r) => new Date(r.requestedAt).getTime(),
                 className: "whitespace-nowrap tabular-nums text-xs",
-                cell: (r) => new Date(r.requestedAt).toLocaleString(),
+                cell: (r) => dateTime(r.requestedAt),
               },
               {
                 id: "actions",

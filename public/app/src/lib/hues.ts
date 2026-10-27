@@ -40,11 +40,3 @@ export const HUES = {
 export type THue = keyof typeof HUES
 
 export type TLevel = "ok" | "warning" | "critical"
-
-/** A bar's fill: the resource's hue while fine, amber or rose when it isn't. */
-export const levelFill = (hue: THue, level: TLevel = "ok") =>
-  level === "critical"
-    ? HUES.rose.bar
-    : level === "warning"
-      ? HUES.amber.bar
-      : HUES[hue].bar

@@ -8,7 +8,6 @@ import {
   IconX,
 } from "@tabler/icons-react"
 
-import { use } from "@/core/hooks/use"
 import { Button } from "@/components/ui/button"
 import {
   Select,
@@ -21,6 +20,8 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Kbd } from "@/components/console/kbd"
 import { StatusDot } from "@/components/console/status"
 import { cn } from "@/lib/utils"
+import { useCached } from "@/hooks/use-cached"
+import { queries } from "@/lib/queries"
 
 // xterm.js loads only when the shell first opens (PLAN §15.5).
 const TerminalView = React.lazy(() =>
@@ -123,11 +124,7 @@ function ServerPicker({
   onChange: (server: string) => void
 }) {
   const { t } = useTranslation()
-  const request = ThunderSDK.useCaching(
-    ["projects", "placement"],
-    async ({ signal }) => await ThunderSDK.projects.placementInfo({ signal })
-  )
-  const servers = [...(use(request).data ?? [])].sort(
+  const servers = [...(useCached(queries.placement()).data ?? [])].sort(
     (a, b) =>
       Number(b.online) - Number(a.online) || a.name.localeCompare(b.name)
   )

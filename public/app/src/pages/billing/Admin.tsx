@@ -4,7 +4,6 @@ import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
 import { IconGift, IconReceipt } from "@tabler/icons-react"
 
-import { use } from "@/core/hooks/use"
 import { Page } from "@/components/page"
 import { Button } from "@/components/ui/button"
 import {
@@ -28,8 +27,10 @@ import { PageHeader } from "@/components/console/page-header"
 import { DataTable } from "@/components/console/data-table"
 import { EmptyState } from "@/components/console/empty-state"
 import { StatusBadge } from "@/components/console/status"
-import { useFresh } from "@/hooks/use-fresh"
 import { errorMessage } from "@/lib/utils"
+import { useCached } from "@/hooks/use-cached"
+import { day } from "@/lib/format"
+import { queries } from "@/lib/queries"
 
 function GrantDialog({
   open,
@@ -41,17 +42,7 @@ function GrantDialog({
   onGranted: () => void
 }) {
   const { t } = useTranslation()
-  const plans = use(
-    ThunderSDK.useCaching(
-      ["plans", "all"],
-      async ({ signal }) =>
-        await ThunderSDK.plans.get({
-          params: {},
-          query: { limit: 100 },
-          signal,
-        })
-    )
-  ).data?.results
+  const plans = useCached(queries.plans()).data?.results
   const [plan, setPlan] = React.useState<string>()
   const [error, setError] = React.useState<string | null>(null)
   const [busy, setBusy] = React.useState(false)
@@ -156,13 +147,7 @@ function GrantDialog({
 /** Admin → Billing (PLAN §22.6): every tenant's subscription, and grants. */
 export default function BillingAdmin() {
   const { t } = useTranslation()
-  const request = ThunderSDK.useCaching(
-    ["billingAdmin"],
-    async ({ signal }) =>
-      await ThunderSDK.billingAdmin.subscriptions({ query: {}, signal })
-  )
-  useFresh(request)
-  const { data } = use(request)
+  const { data, reload } = useCached(queries.billingAdmin())
   const [granting, setGranting] = React.useState(false)
 
   return (
@@ -254,9 +239,7 @@ export default function BillingAdmin() {
                     : undefined,
                 className: "whitespace-nowrap tabular-nums",
                 cell: (s) =>
-                  s.currentPeriodEnd
-                    ? new Date(s.currentPeriodEnd).toLocaleDateString()
-                    : "—",
+                  s.currentPeriodEnd ? day(s.currentPeriodEnd) : "—",
               },
             ]}
           />
@@ -265,7 +248,7 @@ export default function BillingAdmin() {
       <GrantDialog
         open={granting}
         onOpenChange={setGranting}
-        onGranted={() => request.invalidate()}
+        onGranted={reload}
       />
     </Page>
   )

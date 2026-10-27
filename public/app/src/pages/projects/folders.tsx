@@ -45,19 +45,6 @@ export type TFolder = Awaited<
   ReturnType<typeof ThunderSDK.projectGroups.get>
 >["results"][number]
 
-export const useFolders = () =>
-  ThunderSDK.useCaching(["projectGroups"], async ({ signal }) =>
-    ThunderSDK.isPermitted("projectGroups", "get")
-      ? (
-          await ThunderSDK.projectGroups.get({
-            signal,
-            params: {},
-            query: { limit: 500 },
-          })
-        ).results
-      : []
-  )
-
 /** Moves projects in or out of a folder (`null`: out of any folder). */
 export async function moveProjects(ids: string[], folder: string | null) {
   const results = await Promise.allSettled(

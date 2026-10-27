@@ -21,10 +21,13 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 import { RefSelect } from "@/core/custom/RefSelect"
-import { use } from "@/core/hooks/use"
 import type { TField } from "@/core/lib/jsonSchemaToFields"
 import { getLocalPath } from "@/core/lib/utils"
 import { errorMessage } from "@/lib/utils"
+import { toCents, toDollars } from "@/lib/format"
+import { money } from "@/lib/plans"
+import { useCached } from "@/hooks/use-cached"
+import { queries } from "@/lib/queries"
 
 /** Same order and defaults as `$planLimits` / `$planFeatures` (the Free plan). */
 const LIMITS = [
@@ -306,12 +309,12 @@ export default function PlanForm() {
               step="0.01"
               required
               disabled={plan.isFree}
-              value={plan.price.amount / 100}
+              value={toDollars(plan.price.amount)}
               onChange={(e) =>
                 set({
                   price: {
                     ...plan.price,
-                    amount: Math.round(Number(e.target.value) * 100),
+                    amount: toCents(e.target.value) || 0,
                   },
                 })
               }
@@ -514,33 +517,13 @@ function ServerSize({
 }) {
   const { t } = useTranslation()
   const r = plan.resources
-  const suggested = use(
-    ThunderSDK.useCaching(
-      [
-        "rentals",
-        "quote",
-        plan.class ?? "",
-        String(r.vcpu),
-        String(r.memMb),
-        String(r.diskGb),
-      ],
-      async ({ signal }) =>
-        plan.class
-          ? await ThunderSDK.rentals
-              .quote({
-                query: {
-                  class: plan.class,
-                  vcpu: r.vcpu,
-                  memMb: r.memMb,
-                  diskGb: r.diskGb,
-                },
-                signal,
-              })
-              .then((q) => q.price)
-              .catch(() => undefined)
-          : undefined
+  const suggested = useCached(
+    queries.rentalQuote(
+      plan.class
+        ? { class: plan.class, vcpu: r.vcpu, memMb: r.memMb, diskGb: r.diskGb }
+        : undefined
     )
-  ).data
+  ).data?.price
   const field = (
     key: keyof TPlanDraft["resources"],
     label: string,
@@ -580,7 +563,7 @@ function ServerSize({
       {typeof suggested === "number" && (
         <p className="flex items-center gap-2 text-[13px] text-muted-foreground sm:col-span-2">
           {t("The rate card says {{price}} a month.", {
-            price: `\u2066$${(suggested / 100).toFixed(2)}\u2069`,
+            price: `\u2066${money(suggested, plan.price.currency)}\u2069`,
           })}
           <Button
             type="button"

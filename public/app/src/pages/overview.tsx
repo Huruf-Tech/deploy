@@ -2,6 +2,7 @@ import * as React from "react"
 import { Link, useNavigate } from "react-router"
 import { ThunderSDK } from "thunder-sdk"
 import { useTranslation } from "react-i18next"
+import type { TFunction } from "i18next"
 import {
   IconAlertTriangle,
   IconMailExclamation,
@@ -11,7 +12,6 @@ import {
   IconServer2,
 } from "@tabler/icons-react"
 
-import { use } from "@/core/hooks/use"
 import { usePolling } from "@/hooks/use-polling"
 import { getAuthUrl, getLocalPath } from "@/core/lib/utils"
 import { Page } from "@/components/page"
@@ -28,6 +28,8 @@ import {
   type TCapacityReport,
   type TClassFootprint,
 } from "@/lib/capacity"
+import { ago, mb } from "@/lib/format"
+import { queries } from "@/lib/queries"
 import { cn } from "@/lib/utils"
 import { PageHeader } from "@/components/console/page-header"
 import { Panel } from "@/components/console/panel"
@@ -38,19 +40,18 @@ import { DataTable, type TColumn } from "@/components/console/data-table"
 import { EmptyState } from "@/components/console/empty-state"
 import { ControlPlaneSummary } from "@/pages/admin/ControlPlaneSummary"
 import { AiPrompt } from "@/pages/projects/AiPrompt"
-import { DeploymentStatus, ago } from "@/pages/projects/shared"
+import { DeploymentStatus } from "@/pages/projects/shared"
+import { useCached } from "@/hooks/use-cached"
 
 const MiB = 1024 * 1024
 
-const formatMb = (mb: number) =>
-  mb >= 1024 ? `${(mb / 1024).toFixed(1)} GB` : `${Math.round(mb)} MB`
-
-const formatDays = (days: number) =>
+/** "~3 days", "~5 weeks", "~4 months". */
+const inDays = (t: TFunction, days: number) =>
   days < 14
-    ? `~${days} days`
+    ? t("~{{count}} days", { count: days })
     : days < 90
-      ? `~${Math.round(days / 7)} weeks`
-      : `~${Math.round(days / 30)} months`
+      ? t("~{{count}} weeks", { count: Math.round(days / 7) })
+      : t("~{{count}} months", { count: Math.round(days / 30) })
 
 /** Reserved and used against the pool's total, for one resource. */
 function Capacity({
@@ -135,40 +136,22 @@ function VerifyEmailAlert({ email }: { email: string }) {
 export default function Overview() {
   const { t } = useTranslation()
   const navigate = useNavigate()
-  const meRequest = ThunderSDK.useCaching(
-    ["me"],
-    async ({ signal }) => await ThunderSDK.me.get({ signal })
-  )
-  const placementRequest = ThunderSDK.useCaching(
-    ["projects", "placement"],
-    async ({ signal }) => await ThunderSDK.projects.placementInfo({ signal })
-  )
-  const projectsRequest = ThunderSDK.useCaching(
-    ["projects"],
-    async ({ signal }) => await ThunderSDK.projects.list({ signal })
-  )
-  const alertsRequest = ThunderSDK.useCaching(
-    ["alertEvents", "open"],
-    async ({ signal }) =>
-      await ThunderSDK.alertEvents.list({
-        query: { open: "true", limit: 10 },
-        signal,
-      })
-  )
-  // Cached data shows at once; servers, projects and alerts refetch every 30 s.
-  usePolling(() => {
-    for (const r of [
-      meRequest,
-      placementRequest,
-      projectsRequest,
-      alertsRequest,
+  const { data: me } = useCached(queries.me())
+  const { data: servers } = useCached(queries.placement())
+  const { data: projects } = useCached(queries.projects())
+  const { data: openAlerts } = useCached(queries.openAlerts())
+  // Cached data shows at once; these refetch every 30 s (not the queries
+  // under them, such as each project's).
+  const reread = () => {
+    for (const q of [
+      queries.me(),
+      queries.placement(),
+      queries.projects(),
+      queries.openAlerts(),
     ])
-      r.invalidate()
-  }, 30_000)
-  const { data: me } = use(meRequest)
-  const { data: servers } = use(placementRequest)
-  const { data: projects } = use(projectsRequest)
-  const { data: openAlerts } = use(alertsRequest)
+      q.invalidate({ stopPropagation: true })
+  }
+  usePolling(reread, 30_000)
   const online = React.useMemo(
     () => (servers ?? []).filter((s) => s.online).map((s) => s.server),
     [servers]
@@ -187,9 +170,7 @@ export default function Overview() {
   const canAddServer = ThunderSDK.isPermitted("servers", "create")
   const canCreateProject = ThunderSDK.isPermitted("projects", "create")
   const refresh = () => {
-    placementRequest.invalidate()
-    projectsRequest.invalidate()
-    alertsRequest.invalidate()
+    reread()
     capacity.request.invalidate()
   }
   const header = (status?: React.ReactNode) => (
@@ -368,8 +349,8 @@ export default function Overview() {
             "{{name}} reserves {{reserved}} per replica but uses {{used}}; lower its reservation.",
             {
               name: projectName(w.project) ?? w.workload,
-              reserved: formatMb(w.reserve.memMb),
-              used: formatMb(p95 / MiB),
+              reserved: mb(w.reserve.memMb),
+              used: mb(p95 / MiB),
             }
           )
         )
@@ -434,8 +415,8 @@ export default function Overview() {
                 ? t(
                     "Offline: capacity unavailable ({{mem}} reserved of {{total}})",
                     {
-                      mem: formatMb(s.memReservedMb),
-                      total: formatMb(s.memoryMb),
+                      mem: mb(s.memReservedMb),
+                      total: mb(s.memoryMb),
                     }
                   )
                 : failed
@@ -451,9 +432,7 @@ export default function Overview() {
             label={t("Memory used on {{name}}", { name: s.name })}
             value={memUsed}
             total={s.memoryMb}
-            text={`${formatMb(memUsed)} / ${formatMb(
-              s.memReservedMb
-            )} / ${formatMb(s.memoryMb)}`}
+            text={`${mb(memUsed)} / ${mb(s.memReservedMb)} / ${mb(s.memoryMb)}`}
           />
         )
       },
@@ -470,7 +449,7 @@ export default function Overview() {
         const r = reportOf(s.server)
         return r ? (
           <span className="font-mono text-xs">
-            {formatMb(Math.max(0, roomOf(r).memMb))}
+            {mb(Math.max(0, roomOf(r).memMb))}
           </span>
         ) : (
           "—"
@@ -585,14 +564,14 @@ export default function Overview() {
                   total={totals.memMb}
                   reserved={totals.memReserved}
                   used={used?.memMb}
-                  format={formatMb}
+                  format={mb}
                 />
                 <Capacity
                   label={t("Disk")}
                   hue="emerald"
                   total={totals.diskMb}
                   used={used?.diskMb}
-                  format={formatMb}
+                  format={mb}
                 />
               </div>
             )}
@@ -698,7 +677,7 @@ export default function Overview() {
                     <span className="min-w-0 text-[13px]">
                       {t("more apps like {{name}}", { name: c.name })}
                       <span className="block text-xs text-muted-foreground">
-                        {formatMb(c.memMb)} · {c.cpu.toFixed(2)} CPU ·{" "}
+                        {mb(c.memMb)} · {c.cpu.toFixed(2)} CPU ·{" "}
                         {c.samples ? t("measured") : t("declared")} ·{" "}
                         {t("largest server fits {{n}}", { n: largest })}
                         {cpuFits < pool &&
@@ -736,14 +715,14 @@ export default function Overview() {
                 {memFull === null
                   ? t("Pool memory isn't growing.")
                   : t("Pool memory full in {{when}}.", {
-                      when: formatDays(memFull),
+                      when: inDays(t, memFull),
                     })}
               </p>
               <p>
                 {diskFull === null
                   ? t("Pool disk isn't growing.")
                   : t("Pool disk full in {{when}}.", {
-                      when: formatDays(diskFull),
+                      when: inDays(t, diskFull),
                     })}
               </p>
             </>

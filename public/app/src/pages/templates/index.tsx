@@ -6,7 +6,6 @@ import { IconCopy, IconSparkles } from "@tabler/icons-react"
 
 import { Page } from "@/components/page"
 import { PageHeader } from "@/components/console/page-header"
-import { use } from "@/core/hooks/use"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -19,9 +18,10 @@ import {
 } from "@/components/selection-bar"
 import { cn } from "@/lib/utils"
 import { CloneDialog, TemplateIcon, type TTemplate } from "./shared"
-import { useFresh } from "@/hooks/use-fresh"
 import { useAiStatus } from "@/hooks/use-ai"
 import { AiDraftDialog } from "./AiDraft"
+import { useCached } from "@/hooks/use-cached"
+import { queries } from "@/lib/queries"
 
 function TemplateCard({
   template,
@@ -155,12 +155,7 @@ export default function TemplatesPage() {
   const [drafting, setDrafting] = React.useState(false)
   const { status: ai } = useAiStatus()
 
-  const request = ThunderSDK.useCaching(
-    ["templates"],
-    async ({ signal }) => await ThunderSDK.templates.list({ signal })
-  )
-  const { data, isLoading } = use(request)
-  useFresh(request)
+  const { data, isLoading, reload } = useCached(queries.templates())
   const selection = useSelection()
 
   const own = (data ?? []).filter((x) => x.scope === "tenant")
@@ -218,7 +213,7 @@ export default function TemplatesPage() {
       <SelectionBar
         selection={selection}
         remove={(id) => ThunderSDK.templates.del({ params: { id } })}
-        onDone={() => request.invalidate()}
+        onDone={reload}
         canDelete={ThunderSDK.isPermitted("templates", "del")}
       />
 
@@ -226,7 +221,7 @@ export default function TemplatesPage() {
         open={drafting}
         onOpenChange={setDrafting}
         onCreated={(id) => {
-          request.invalidate()
+          reload()
           navigate(`./${id}`)
         }}
       />
@@ -235,7 +230,7 @@ export default function TemplatesPage() {
         template={cloning}
         onOpenChange={(open) => !open && setCloning(null)}
         onCloned={(id) => {
-          request.invalidate()
+          reload()
           navigate(`./${id}`)
         }}
       />

@@ -31,7 +31,7 @@ export type TColumn<T> = {
 }
 
 /**
- * The default list (DESIGN §5): real table markup, sticky header, 36 px rows,
+ * The default list (DESIGN §5): real table markup, 36 px rows,
  * client sorting, loading and empty states. Rows open with `onRowClick` (and
  * Enter when focused). Selection and row menus go in `columns`.
  */
@@ -94,6 +94,7 @@ export function DataTable<T>({
 
   return (
     // Clipped, so the header's square background stays inside the corners.
+    // The table scrolls sideways inside it, so the header can't stick.
     <div
       className={cn(
         "min-w-0 overflow-hidden rounded-[10px] border bg-card",
@@ -101,7 +102,7 @@ export function DataTable<T>({
       )}
     >
       <Table aria-label={label} className="text-[13px]">
-        <TableHeader className="sticky top-0 z-10 bg-card">
+        <TableHeader className="bg-card">
           <TableRow className="hover:bg-transparent">
             {columns.map((col) => {
               const active = sort?.id === col.id

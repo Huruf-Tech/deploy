@@ -1,10 +1,7 @@
 import { Link } from "react-router"
-import { ThunderSDK } from "thunder-sdk"
 import { useTranslation } from "react-i18next"
 import { IconPlus, IconX } from "@tabler/icons-react"
 
-import { use } from "@/core/hooks/use"
-import { useFresh } from "@/hooks/use-fresh"
 import { getLocalPath } from "@/core/lib/utils"
 import { Button } from "@/components/ui/button"
 import { FieldDescription, FieldLegend, FieldSet } from "@/components/ui/field"
@@ -16,6 +13,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { useCached } from "@/hooks/use-cached"
+import { queries } from "@/lib/queries"
 
 export type TVolume = {
   name: string
@@ -38,12 +37,7 @@ export function VolumesEditor({
   onChange: (volumes: TVolume[]) => void
 }) {
   const { t } = useTranslation()
-  const request = ThunderSDK.useCaching(
-    ["storages"],
-    async ({ signal }) => await ThunderSDK.storages.list({ signal })
-  )
-  useFresh(request)
-  const cached = use(request).data
+  const cached = useCached(queries.storages()).data
   const storages = Array.isArray(cached) ? cached : undefined
   const locations = [
     { value: LOCAL, label: t("On the server (local)") },

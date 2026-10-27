@@ -7,7 +7,7 @@ import type { BillingService, TRentalHooks } from "@/lib/billing/billing.ts";
 import type { PaymentService } from "@/lib/payments/payments.ts";
 import { notifyOwner } from "@/lib/billing/notify.ts";
 import { retireServer } from "@/lib/agents/retire.ts";
-import { meshPlacement } from "@/lib/agents/servers.ts";
+import { isMeshPortTaken, meshPlacement } from "@/lib/agents/servers.ts";
 import { refreshSpecs } from "@/lib/deploy/specs.ts";
 import { freeOf, takenOn } from "@/lib/pool/room.ts";
 import {
@@ -829,15 +829,23 @@ export class RentalService implements TRentalHooks {
     if (outcome.ok) {
       // Its private network is reached through the new machine's port now.
       if (sub.server) {
-        const { meshPort, endpoint } = await meshPlacement(move.to);
-        await serverModel.updateOne({ _id: sub.server }, {
-          $set: {
-            "provider.host": move.to,
-            "provider.meshPort": meshPort,
-            ...(endpoint ? { "mesh.endpoint": endpoint } : {}),
-          },
-          ...(endpoint ? {} : { $unset: { "mesh.endpoint": "" } }),
-        });
+        for (let attempt = 1;; attempt++) {
+          const { meshPort, endpoint } = await meshPlacement(move.to);
+          try {
+            await serverModel.updateOne({ _id: sub.server }, {
+              $set: {
+                "provider.host": move.to,
+                "provider.meshPort": meshPort,
+                ...(endpoint ? { "mesh.endpoint": endpoint } : {}),
+              },
+              ...(endpoint ? {} : { $unset: { "mesh.endpoint": "" } }),
+            });
+            break;
+          } catch (error) {
+            if (attempt < 5 && isMeshPortTaken(error)) continue;
+            throw error;
+          }
+        }
         await refreshSpecs([from, move.to, sub.server]);
       }
       await removePartition(from, partition)

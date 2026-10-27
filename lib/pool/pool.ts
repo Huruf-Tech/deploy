@@ -1,3 +1,7 @@
+import {
+  LIVE_RENTAL,
+  subscriptionModel,
+} from "@/schemas/billing/subscription.ts";
 import { ObjectId } from "mongodb";
 import type z from "zod";
 import { Response } from "@/core/http/response.ts";
@@ -73,8 +77,15 @@ export async function setUpMachine(server: ObjectId, createdBy?: ObjectId) {
     $set: { "pool.status": "pending", "pool.updatedAt": new Date() },
     $unset: { "pool.error": "" },
   });
+  const rentals = await subscriptionModel.find({
+    kind: "server",
+    "rental.host": doc._id,
+    "rental.partition": { $exists: true },
+    status: { $in: [...LIVE_RENTAL] },
+  }, { projection: { "rental.partition": 1 }, limit: 500 }).toArray();
   const payload: z.input<typeof $poolEnsurePayload> = {
     reserve: await reserve(),
+    isolated: rentals.map((r) => r.rental!.partition!),
   };
   return await issueCommand({
     server: doc._id,

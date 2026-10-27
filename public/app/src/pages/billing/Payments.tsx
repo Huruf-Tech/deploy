@@ -19,7 +19,6 @@ import {
   IconTrash,
 } from "@tabler/icons-react"
 
-import { use } from "@/core/hooks/use"
 import { Page } from "@/components/page"
 import { Button } from "@/components/ui/button"
 import {
@@ -41,10 +40,12 @@ import { StatusBadge } from "@/components/console/status"
 import { DataTable } from "@/components/console/data-table"
 import { EmptyState } from "@/components/console/empty-state"
 import { useTheme } from "@/components/theme-provider"
-import { useFresh } from "@/hooks/use-fresh"
 import { cn, errorMessage } from "@/lib/utils"
+import { dateTime, toCents, toDollars } from "@/lib/format"
 import { money } from "@/lib/plans"
 import { stripeAppearance, stripeFor, waitForTopup as settled } from "./stripe"
+import { useCached } from "@/hooks/use-cached"
+import { queries } from "@/lib/queries"
 
 type TCards = Awaited<ReturnType<typeof ThunderSDK.payments.cards>>
 type TCard = TCards["cards"][number]
@@ -215,7 +216,7 @@ function AddFundsDialog({
   const [busy, setBusy] = React.useState(false)
   // One per opening: a double click reuses the same charge.
   const nonce = React.useMemo(() => (open ? crypto.randomUUID() : ""), [open])
-  const cents = Math.round(Number(dollars) * 100)
+  const cents = toCents(dollars)
   const valid = Number.isFinite(cents) && cents >= 500 && cents <= 100_000
 
   const pay = async (e: React.FormEvent) => {
@@ -279,7 +280,7 @@ function AddFundsDialog({
                 type="button"
                 size="sm"
                 variant={cents === preset ? "default" : "outline"}
-                onClick={() => setDollars(String(preset / 100))}
+                onClick={() => setDollars(String(toDollars(preset)))}
               >
                 {money(preset, "usd")}
               </Button>
@@ -325,40 +326,24 @@ function AddFundsDialog({
  */
 export default function Payments() {
   const { t } = useTranslation()
-  const configRequest = ThunderSDK.useCaching(
-    ["payments", "config"],
-    async ({ signal }) => await ThunderSDK.payments.config({ signal })
-  )
-  const summaryRequest = ThunderSDK.useCaching(
-    ["payments", "summary"],
-    async ({ signal }) => await ThunderSDK.payments.summary({ signal })
-  )
-  const { data: config } = use(configRequest)
-  const { data: summary } = use(summaryRequest)
-  useFresh(configRequest, summaryRequest)
+  const { data: config } = useCached(queries.paymentsConfig())
+  const summaryQuery = useCached(queries.paymentsSummary())
+  const summary = summaryQuery.data
 
   const isOwner = !!summary?.isOwner
-  const cardsRequest = ThunderSDK.useCaching(
-    ["payments", "cards", String(isOwner)],
-    async ({ signal }) =>
-      isOwner ? await ThunderSDK.payments.cards({ signal }) : null
-  )
-  const statementRequest = ThunderSDK.useCaching(
-    ["payments", "statement", String(isOwner)],
-    async ({ signal }) =>
-      isOwner ? await ThunderSDK.payments.statement({ signal }) : null
-  )
-  const { data: cards } = use(cardsRequest)
-  const { data: statement } = use(statementRequest)
+  const cardsQuery = useCached(queries.cards(isOwner))
+  const statementQuery = useCached(queries.statement(isOwner))
+  const cards = cardsQuery.data
+  const statement = statementQuery.data
 
   const [adding, setAdding] = React.useState(false)
   const [funding, setFunding] = React.useState(false)
   const [confirming, setConfirming] = React.useState(false)
 
   const refresh = () => {
-    summaryRequest.invalidate()
-    cardsRequest.invalidate()
-    statementRequest.invalidate()
+    summaryQuery.reload()
+    cardsQuery.reload()
+    statementQuery.reload()
   }
 
   const act = async (fn: () => PromiseLike<unknown>, done: string) => {
@@ -675,9 +660,7 @@ export default function Payments() {
                     e.createdAt ? new Date(e.createdAt).getTime() : 0,
                   cell: (e) => (
                     <span className="text-xs whitespace-nowrap text-muted-foreground tabular-nums">
-                      {e.createdAt
-                        ? new Date(e.createdAt).toLocaleString()
-                        : "—"}
+                      {e.createdAt ? dateTime(e.createdAt) : "—"}
                     </span>
                   ),
                 },

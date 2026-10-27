@@ -16,7 +16,6 @@ import {
 } from "@tabler/icons-react"
 
 import { Page } from "@/components/page"
-import { use } from "@/core/hooks/use"
 import { useBreadcrumbTitle } from "@/core/layouts/shared/breadcrumb"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
@@ -71,8 +70,8 @@ import { DeploymentSheet } from "./DeploymentSheet"
 import { DomainsTab } from "./DomainsTab"
 import { type TVolume, VolumesEditor } from "./VolumesEditor"
 import { LabelChips } from "@/pages/servers/ServerLabels"
+import { ago } from "@/lib/format"
 import {
-  ago,
   DeploymentStatus,
   duration,
   isLive,
@@ -81,7 +80,8 @@ import {
   type TDeploymentSummary,
   type TProject,
 } from "./shared"
-import { useFresh } from "@/hooks/use-fresh"
+import { useCached } from "@/hooks/use-cached"
+import { queries } from "@/lib/queries"
 
 const TerminalSheet = React.lazy(() => import("@/pages/servers/TerminalSheet"))
 
@@ -238,15 +238,7 @@ function Releases({
   onDeployed: (id: string) => void
 }) {
   const { t } = useTranslation()
-  const request = ThunderSDK.useCaching(
-    ["projects", project._id, "releases"],
-    async ({ signal }) =>
-      await ThunderSDK.projects.releases({
-        signal,
-        params: { id: project._id },
-      })
-  )
-  const { data, isLoading } = use(request)
+  const { data, isLoading } = useCached(queries.releases(project._id))
 
   const rollback = async (release: string, number: number) => {
     try {
@@ -343,12 +335,7 @@ function Settings({
 }) {
   const { t } = useTranslation()
   const navigate = useNavigate()
-  const placement = use(
-    ThunderSDK.useCaching(
-      ["projects", "placement"],
-      async ({ signal }) => await ThunderSDK.projects.placementInfo({ signal })
-    )
-  )
+  const placement = useCached(queries.placement())
   const [servers, setServers] = React.useState(
     project.servers.map((s) => s._id)
   )
@@ -476,12 +463,7 @@ function Settings({
       })
       // The cached list still has it: refresh it (and the server pickers,
       // keyed under "projects") before going back, so it's gone there.
-      // useCaching is the SDK's cache entry, not a React hook.
-      // eslint-disable-next-line react-hooks/rules-of-hooks
-      await ThunderSDK.useCaching(
-        ["projects"],
-        async ({ signal }) => await ThunderSDK.projects.list({ signal })
-      ).invalidate()
+      await queries.projects().invalidate()
       toast.success(
         t(
           "Project deleted. Its containers stop on each server's next check-in."
@@ -920,37 +902,16 @@ export default function ProjectDetail() {
     (location.state as { deployKeyPublic?: string } | null)?.deployKeyPublic
   )
 
-  const request = ThunderSDK.useCaching(
-    ["projects", id],
-    async ({ signal }) =>
-      await ThunderSDK.projects.get({ signal, params: { id } })
-  )
-  const { data: project } = use(request)
-  const history = ThunderSDK.useCaching(
-    ["projects", id, "deployments"],
-    async ({ signal }) =>
-      await ThunderSDK.projects.deployments({
-        signal,
-        params: { id },
-        query: { page: 1 },
-      })
-  )
-  const { data: deployments } = use(history)
-  // Same cache entry as the Domains tab, so changes there show here too.
-  const domainsRequest = ThunderSDK.useCaching(
-    ["domains", id],
-    async ({ signal }) =>
-      canDomains
-        ? await ThunderSDK.domains.list({ signal, query: { project: id } })
-        : []
-  )
-  const { data: domains } = use(domainsRequest)
-  useFresh(request, history, domainsRequest)
+  const { data: project, reload } = useCached(queries.project(id))
+  const history = useCached(queries.deployments(id))
+  const deployments = history.data
+  // Same query as the Domains tab, so changes there show here too.
+  const { data: domains } = useCached(queries.domains(id))
   useBreadcrumbTitle(project?.name)
 
   const refresh = () => {
-    request.invalidate()
-    history.invalidate()
+    reload()
+    history.reload()
   }
   usePolling(() => {
     if (deployments?.some((d) => isLive(d.status) || d.status === "queued"))

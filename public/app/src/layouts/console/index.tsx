@@ -1,7 +1,6 @@
 import React from "react"
 import { Link, useLocation, useNavigate } from "react-router"
 import { useTranslation } from "react-i18next"
-import { ThunderSDK } from "thunder-sdk"
 import {
   IconAlertCircle,
   IconArrowsExchange,
@@ -25,7 +24,6 @@ import { NotificationPopover } from "@/core/pages/notifications/notification-pop
 import { features } from "@/core/lib/features"
 import { useLogout } from "@/core/protected"
 import { CardBanner } from "./card-banner"
-import { use } from "@/core/hooks/use"
 import {
   getAuthUrl,
   getInitials,
@@ -69,6 +67,8 @@ import {
 import { useIsMobile } from "@/hooks/use-mobile"
 import { CommandMenu, type TNavGroup } from "./command-menu"
 import { canOpenShell, ShellDock } from "./shell-dock"
+import { useCached } from "@/hooks/use-cached"
+import { queries } from "@/lib/queries"
 
 /**
  * Open unless the viewer collapsed it. Our own key: the primitive's
@@ -426,12 +426,7 @@ function UserMenu() {
 }
 
 function useMe() {
-  // Same key as the overview's, so the shell and the page share one read.
-  const me = ThunderSDK.useCaching(
-    ["me"],
-    async ({ signal }) => await ThunderSDK.me.get({ signal })
-  )
-  return use(me).data
+  return useCached(queries.me()).data
 }
 
 function Notifications() {

@@ -2,7 +2,6 @@ import * as React from "react"
 import { ThunderSDK } from "thunder-sdk"
 import { useNavigate, useParams } from "react-router"
 import { useTranslation } from "react-i18next"
-import { format } from "date-fns"
 import { toast } from "sonner"
 import { IconCopy, IconPlayerPlay, IconTrash } from "@tabler/icons-react"
 
@@ -13,7 +12,6 @@ import { KeyValue } from "@/components/console/key-value"
 import { CodeBlock } from "@/components/console/code-block"
 import { langOf } from "@/components/console/highlight"
 import { DataTable } from "@/components/console/data-table"
-import { use } from "@/core/hooks/use"
 import { useBreadcrumbTitle } from "@/core/layouts/shared/breadcrumb"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -45,7 +43,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
 import { errorMessage } from "@/lib/utils"
 import { CloneDialog, TemplateIcon } from "./shared"
-import { useFresh } from "@/hooks/use-fresh"
+import { useCached } from "@/hooks/use-cached"
+import { queries } from "@/lib/queries"
+import { dateTime } from "@/lib/format"
 
 type TDetail = Awaited<ReturnType<typeof ThunderSDK.templates.get>>
 type TContent = TDetail["content"]
@@ -373,23 +373,9 @@ export default function TemplateDetail() {
   const [deleting, setDeleting] = React.useState(false)
   const [tab, setTab] = React.useState("source")
 
-  const request = ThunderSDK.useCaching(
-    ["templates", id, String(version ?? "latest")],
-    async ({ signal }) =>
-      await ThunderSDK.templates.get({
-        signal,
-        params: { id },
-        query: version ? { version } : {},
-      })
-  )
-  const { data } = use(request)
-  const versions = ThunderSDK.useCaching(
-    ["templates", id, "versions"],
-    async ({ signal }) =>
-      await ThunderSDK.templates.versions({ signal, params: { id } })
-  )
-  const { data: history } = use(versions)
-  useFresh(request, versions)
+  const { data, reload } = useCached(queries.template(id, version))
+  const versions = useCached(queries.templateVersions(id))
+  const history = versions.data
   useBreadcrumbTitle(data?.template.name)
 
   if (!data) {
@@ -507,8 +493,8 @@ export default function TemplateDetail() {
                 content={content}
                 onSaved={() => {
                   setVersion(undefined)
-                  request.invalidate()
-                  versions.invalidate()
+                  reload()
+                  versions.reload()
                 }}
               />
             ) : (
@@ -571,7 +557,7 @@ export default function TemplateDetail() {
                   sortValue: (v) => new Date(v.createdAt).getTime(),
                   cell: (v) => (
                     <span className="text-xs whitespace-nowrap text-muted-foreground">
-                      {format(new Date(v.createdAt), "PPp")}
+                      {dateTime(v.createdAt)}
                     </span>
                   ),
                 },

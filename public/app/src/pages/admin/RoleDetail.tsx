@@ -1,10 +1,8 @@
-import { ThunderSDK } from "thunder-sdk"
 import { Link, useParams } from "react-router"
 import { useTranslation } from "react-i18next"
 import { IconPencil } from "@tabler/icons-react"
 
 import { Page } from "@/components/page"
-import { use } from "@/core/hooks/use"
 import { getLocalPath } from "@/core/lib/utils"
 import { useBreadcrumbTitle } from "@/core/layouts/shared/breadcrumb"
 import { Button } from "@/components/ui/button"
@@ -15,7 +13,8 @@ import { KeyValue } from "@/components/console/key-value"
 import { StatusBadge } from "@/components/console/status"
 import { EmptyState } from "@/components/console/empty-state"
 import { Chip } from "@/components/record-cards"
-import { useFresh } from "@/hooks/use-fresh"
+import { useCached } from "@/hooks/use-cached"
+import { queries } from "@/lib/queries"
 
 /**
  * A role and the policies attached to it (Admin > Roles > a role), each with
@@ -25,32 +24,9 @@ export default function RoleDetail() {
   const { t } = useTranslation()
   const { id = "" } = useParams()
 
-  const roleRequest = ThunderSDK.useCaching(
-    ["accessControl", id],
-    async ({ signal }) =>
-      (
-        await ThunderSDK.accessControl.get({
-          signal,
-          params: { id },
-          query: {},
-        })
-      ).results[0]
-  )
-  // Few enough to read at once; the role's are picked from them.
-  const policiesRequest = ThunderSDK.useCaching(
-    ["accessControlPolicies", "all"],
-    async ({ signal }) =>
-      (
-        await ThunderSDK.accessControlPolicies.get({
-          signal,
-          params: {},
-          query: { limit: 500 },
-        })
-      ).results
-  )
-  const { data: role, isLoading } = use(roleRequest)
-  const { data: policies } = use(policiesRequest)
-  useFresh(roleRequest, policiesRequest)
+  const { data: role, isLoading } = useCached(queries.role(id))
+  // The role's policies are picked from all of them.
+  const { data: policies } = useCached(queries.policies())
   useBreadcrumbTitle(role?.role)
 
   if (isLoading && !role)

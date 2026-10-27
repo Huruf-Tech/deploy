@@ -2,35 +2,30 @@ import { Link } from "react-router"
 
 import { cn } from "@/lib/utils"
 
-/** A compact KPI for strips of 3–6. `chart` takes a sparkline. */
+/** A compact KPI for strips of 3–6. */
 export function Stat({
   label,
   value,
   hint,
-  chart,
   to,
   className,
 }: {
   label: React.ReactNode
   value: React.ReactNode
   hint?: React.ReactNode
-  chart?: React.ReactNode
   to?: string
   className?: string
 }) {
   const body = (
     <>
       <div className="text-xs text-muted-foreground">{label}</div>
-      <div className="mt-1 flex items-end justify-between gap-3">
-        <div className="min-w-0">
-          <div className="truncate text-xl font-semibold tracking-tight tabular-nums">
-            {value}
-          </div>
-          {hint && (
-            <div className="truncate text-xs text-muted-foreground">{hint}</div>
-          )}
+      <div className="mt-1 min-w-0">
+        <div className="truncate text-xl font-semibold tracking-tight tabular-nums">
+          {value}
         </div>
-        {chart && <div className="h-8 w-20 shrink-0">{chart}</div>}
+        {hint && (
+          <div className="truncate text-xs text-muted-foreground">{hint}</div>
+        )}
       </div>
     </>
   )

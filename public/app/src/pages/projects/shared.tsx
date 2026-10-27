@@ -1,5 +1,4 @@
 import { useTranslation } from "react-i18next"
-import { formatDistanceToNowStrict } from "date-fns"
 import {
   IconBrandGithub,
   IconBrandDocker,
@@ -67,9 +66,6 @@ export function SourceIcon({
             : IconTemplate
   return <Icon className={cn("size-4", className)} aria-hidden />
 }
-
-export const ago = (date?: string) =>
-  date ? formatDistanceToNowStrict(new Date(date), { addSuffix: true }) : ""
 
 export const duration = (ms?: number) => {
   if (ms === undefined) return ""

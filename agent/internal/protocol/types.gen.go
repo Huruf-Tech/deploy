@@ -827,6 +827,8 @@ type HostCleanupPayload struct {
 
 type PoolEnsurePayload struct {
 	Reserve PoolEnsurePayloadReserve `json:"reserve"`
+
+	Isolated []string `json:"isolated"`
 }
 
 type PoolEnsurePayloadReserve struct {

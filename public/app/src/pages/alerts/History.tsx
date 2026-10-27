@@ -2,30 +2,26 @@ import { ThunderSDK } from "thunder-sdk"
 import { useTranslation } from "react-i18next"
 import { IconBellCheck } from "@tabler/icons-react"
 
-import { use } from "@/core/hooks/use"
 import { Page } from "@/components/page"
 import { PageHeader } from "@/components/console/page-header"
 import { DataTable, type TColumn } from "@/components/console/data-table"
 import { EmptyState } from "@/components/console/empty-state"
 import { StatusBadge } from "@/components/console/status"
 import { usePolling } from "@/hooks/use-polling"
+import { dateTime } from "@/lib/format"
 import { METRICS } from "./metrics"
+import { useCached } from "@/hooks/use-cached"
+import { queries } from "@/lib/queries"
 
 type TEvent = Awaited<ReturnType<typeof ThunderSDK.alertEvents.list>>[number]
 
-const when = (at: string | Date) => new Date(at).toLocaleString()
 const time = (at?: string | Date) => (at ? new Date(at).getTime() : undefined)
 
 /** Monitoring → Alert history (PLAN §13): episodes and their delivery. */
 export default function AlertHistory() {
   const { t } = useTranslation()
-  const request = ThunderSDK.useCaching(
-    ["alertEvents"],
-    async ({ signal }) =>
-      await ThunderSDK.alertEvents.list({ query: { limit: 100 }, signal })
-  )
-  const { data } = use(request)
-  usePolling(() => request.invalidate(), 30_000)
+  const { data, reload } = useCached(queries.alertEvents())
+  usePolling(reload, 30_000)
 
   const columns: TColumn<TEvent>[] = [
     {
@@ -73,14 +69,14 @@ export default function AlertHistory() {
       header: t("Fired"),
       sortValue: (e) => time(e.firedAt),
       className: "whitespace-nowrap tabular-nums",
-      cell: (e) => when(e.firedAt),
+      cell: (e) => dateTime(e.firedAt),
     },
     {
       id: "resolved",
       header: t("Resolved"),
       sortValue: (e) => time(e.resolvedAt),
       className: "whitespace-nowrap tabular-nums",
-      cell: (e) => (e.resolvedAt ? when(e.resolvedAt) : "—"),
+      cell: (e) => (e.resolvedAt ? dateTime(e.resolvedAt) : "—"),
     },
     {
       id: "notice",

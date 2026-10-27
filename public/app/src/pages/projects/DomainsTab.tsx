@@ -12,7 +12,6 @@ import {
   IconWorld,
 } from "@tabler/icons-react"
 
-import { use } from "@/core/hooks/use"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -22,8 +21,10 @@ import { EmptyState } from "@/components/console/empty-state"
 import { Panel } from "@/components/console/panel"
 import { StatusBadge } from "@/components/console/status"
 import { usePolling } from "@/hooks/use-polling"
-import { useFresh } from "@/hooks/use-fresh"
 import { cn, errorMessage } from "@/lib/utils"
+import { useCached } from "@/hooks/use-cached"
+import { queries } from "@/lib/queries"
+import { day } from "@/lib/format"
 
 type TDomain = Awaited<ReturnType<typeof ThunderSDK.domains.list>>[number]
 
@@ -233,17 +234,11 @@ export function DomainsTab({ project }: { project: string }) {
   const { t } = useTranslation()
   const [hostname, setHostname] = React.useState("")
   const [adding, setAdding] = React.useState(false)
-  const request = ThunderSDK.useCaching(
-    ["domains", project],
-    async ({ signal }) =>
-      await ThunderSDK.domains.list({ signal, query: { project } })
-  )
-  const { data, isLoading } = use(request)
-  useFresh(request)
+  const { data, isLoading, reload } = useCached(queries.domains(project))
   const working = data?.some(
     (d) => d.status === "checking" || d.status === "issuing"
   )
-  usePolling(() => working && request.invalidate(), 5_000)
+  usePolling(() => working && reload(), 5_000)
 
   const add = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -251,7 +246,7 @@ export function DomainsTab({ project }: { project: string }) {
     try {
       await ThunderSDK.domains.create({ body: { project, hostname } })
       setHostname("")
-      request.invalidate()
+      reload()
     } catch (err) {
       toast.error(errorMessage(err) ?? t("Could not add the domain"))
     } finally {
@@ -259,7 +254,7 @@ export function DomainsTab({ project }: { project: string }) {
     }
   }
 
-  const onChanged = () => request.invalidate()
+  const onChanged = reload
   const columns: TColumn<TDomain>[] = [
     {
       id: "hostname",
@@ -297,7 +292,7 @@ export function DomainsTab({ project }: { project: string }) {
         d.status === "active" && d.certificate ? (
           <span className="text-xs text-muted-foreground">
             {t("Certificate valid until {{date}}; it renews automatically.", {
-              date: new Date(d.certificate.notAfter).toLocaleDateString(),
+              date: day(d.certificate.notAfter),
             })}
           </span>
         ) : (

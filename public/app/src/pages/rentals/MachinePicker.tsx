@@ -1,10 +1,11 @@
 import { useTranslation } from "react-i18next"
 
 import { StatusBadge } from "@/components/console/status"
+import { gbOfMb } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import { type TMachineSpot, usable } from "./rental"
 
-/** Pool machines a rental can go to, with why the others can't (PLAN §26.7). */
+/** Machines a rental can go to, with why the others can't (PLAN §26.7). */
 export function MachinePicker({
   machines,
   pick,
@@ -18,7 +19,7 @@ export function MachinePicker({
   return (
     <div
       role="radiogroup"
-      aria-label={t("Pool machine")}
+      aria-label={t("Machine")}
       className="flex flex-col gap-2"
     >
       {machines.map((m) => (
@@ -40,21 +41,14 @@ export function MachinePicker({
             className="text-xs text-muted-foreground tabular-nums"
           >
             {t("{{mem}} GB · {{disk}} GB · {{cpu}} vCPU free", {
-              mem: Math.round((m.free.memMb / 1024) * 10) / 10,
+              mem: gbOfMb(m.free.memMb),
               disk: m.free.diskGb,
               cpu: m.cpuRoom,
             })}
           </span>
           {!m.fits ? (
             <StatusBadge tone="neutral" label={t("No room")} />
-          ) : m.remainderShort ? (
-            <span className="basis-full text-xs text-warning-foreground">
-              {t(
-                "Huruf's partition there uses {{mb}} MB: free memory there first",
-                { mb: m.remainderUsesMb }
-              )}
-            </span>
-          ) : m.reachable === false ? (
+          ) : "reachable" in m && !m.reachable ? (
             <span className="basis-full text-xs text-warning-foreground">
               {t("Not reachable from this machine over the private network")}
             </span>

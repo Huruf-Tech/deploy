@@ -126,19 +126,25 @@ Flat by default: canvas → card (hairline border) → popover (border + soft sh
 |---|---|
 | `PageHeader` | Title, optional status badge, one-line description, actions on the end side, optional tabs underneath. Every page starts with it. |
 | `StatusDot`, `StatusBadge` | One mapping from states (online, offline, pending, healthy, building, deploying, failed, cancelled, active…) to the status tokens, with text, never color alone. Replaces today's scattered pills. |
-| `Stat` | A compact KPI: label, value, optional delta and sparkline, optional link. Used in strips of 3–6. |
-| `Meter` | Labelled bar with value text and threshold coloring (from `components/meter.tsx`, generalized). |
+| `Stat` | A compact KPI: label, value, optional hint, optional link. Used in strips of 3–6. |
+| `Meter` | Usage bar with its value as text and threshold coloring (warning at 80 %, danger at 95 % unless `level`, `warnAt` or `critAt` say otherwise), a `role="meter"` whose value is clamped to its range. `layout`: `stacked` (default), `row` (label, bar, value on one line, for cards) or `compact` (table cells; the label is only the accessible name). |
 | `Panel` | A bordered surface with an optional header (title, description, actions) and dense body. Replaces ad-hoc `Card` usage. |
-| `DataTable` | The default for lists: sticky header, 36 px rows, sortable columns, selection, row actions menu, empty and loading states, client filter box. Card grids remain only where a visual summary helps (servers have both). |
+| `DataTable` | The default for lists: 36 px rows, sortable columns, selection, row actions menu, empty and loading states, client filter box. The header doesn't stick: the table scrolls sideways inside its rounded wrapper, which makes that wrapper the scroll container. Card grids remain only where a visual summary helps (servers have both). |
 | `KeyValue` | Two-column facts list (label → value, copyable mono values). For detail pages. |
 | `Toolbar` | Search, filters, view toggle and primary action above lists, one line. |
 | `EmptyState` | Icon, one sentence, one action. |
-| `CodeBlock` | Mono, copy button, wraps or scrolls. For DNS records, commands and logs. |
+| `CodeBlock` | Mono, copy button, wraps or scrolls. For DNS records, commands and logs. The code is a focusable, labelled region (its `label`, else "Code") so it scrolls from the keyboard. |
 | `Timeline` | Deployment and event history: dot, label, time, details on expand. |
+| `ConfirmDialog` (`components/confirm-dialog.tsx`) | Asks before a destructive action: title, what happens, the destructive button (disabled while it runs) and, with `reasonLabel`, an optional reason passed to `onConfirm`. Every destructive confirmation on our pages uses it. |
 
 Kit props worth knowing: `DataTable` takes `isSelected` (selected-row highlight), `onRowClick` and `limit` (first N rows after sorting, then "Show N more"; use it for long secondary lists); its wrapper clips to the radius so the header can't square the corners. `CodeBlock` takes `lang` (`shell`, `yaml`, `dockerfile`: every command and template file is highlighted, via `highlight.tsx`, theme tokens only) and `maxHeight` (the code scrolls, the copy button stays); `PageHeader` wraps a string title in the page's `h1`, while a custom title (an inline rename) renders its own.
 
-Files: `page-header`, `status` (`StatusDot`, `StatusBadge`, `toneOf`), `stat` (`Stat`, `StatStrip`), `meter`, `panel`, `data-table` (`DataTable`, `TColumn`), `key-value`, `toolbar`, `empty-state`, `code-block`, `timeline`, `kbd`. Status tokens come as a fill (`bg-success`), text (`text-success-foreground`) and soft background (`bg-success-soft`), likewise `warning`, `info` and `destructive`.
+Files: `page-header`, `status` (`StatusDot`, `StatusBadge`, `toneOf`, `stateLabel`: a state's translation key, `pastDue` → "Past due"), `stat` (`Stat`, `StatStrip`), `meter`, `panel`, `data-table` (`DataTable`, `TColumn`), `key-value`, `toolbar`, `empty-state`, `code-block`, `timeline`, `kbd`. Status tokens come as a fill (`bg-success`), text (`text-success-foreground`) and soft background (`bg-success-soft`), likewise `warning`, `info` and `destructive`.
+
+Shared helpers outside the kit:
+
+- **Data:** every cached read is defined once in `src/lib/queries.ts` and read with `useCached` (`src/hooks/use-cached.ts`). The SDK keeps its cache in localStorage with no expiry and keeps the first callback registered for a key, so a key defined twice can read the wrong thing and a cached copy can outlive a reload. `useCached` shows the cached copy at once and refetches on mount; `reload` refetches after a change. Never call `ThunderSDK.useCaching` from a page. (`useCapacity` is the exception: capacity reads stream from every server, so they're kept for the session and refreshed on demand.)
+- **Formatting:** `src/lib/format.ts` has the one rule for sizes (`mb`, `bytes`, `gbOfMb`, `sizeText`), cents in inputs (`toCents`, `toDollars`; display with `money` from `lib/plans.ts`) and dates in the UI language (`day`, `dateTime`, `ago`, which wraps core's locale-aware `timeAgo`). Don't format dates with a bare `toLocaleString()` or date-fns without a locale: Arabic would read English.
 
 Rules: pages compose these; new patterns get added here first, then used. The kit lives in our own folder, so core syncs never touch it. `DataTable` selection and row menus are columns for now; they become built-in when a second page needs them.
 
@@ -150,16 +156,15 @@ Rules: pages compose these; new patterns get added here first, then used. The ki
 
 | Need | bklit |
 |---|---|
-| Time series (requests, latency, CPU, memory, DB ops) | `line-chart`, `area-chart` with `grid`, `x-axis`, `y-axis`, `chart-tooltip`, `legend` |
-| Live server metrics (2 s samples) | `live-line-chart` |
-| KPI sparklines | `sparkline` |
-| Usage of a whole (disk, quota) | `gauge-chart`, `ring-chart` |
-| Comparisons (busiest routes, per-server load) | `bar-chart` |
+| Time series (requests, latency, CPU, memory, DB ops, the server's live metrics) | `line-chart` with `grid`, `x-axis`, `y-axis`, `chart-tooltip` |
+| Usage of a whole (disk, quota) | our `Meter` (§5) |
+
+Only what pages use is installed. Other bklit charts (`area-chart`, `bar-chart`, `live-line-chart`, `gauge`, `ring-chart`, `sparkline`, legends, patterns) were removed unused; add one through the CLI when a page first needs it, with a preset.
 
 - Installed through the CLI into `src/components/charts/` (registry `@bklit`: `https://bklit.com/r/{name}.json`; the old `ui.bklit.com` redirects). The CLI overwrites `src/lib/utils.ts`: restore ours after any `shadcn add @bklit/...`. It also appends `--chart-*` / `--legend*` variables to `src/index.css`; ours map them onto Huruf's neutrals. Its dependencies (`@visx/*`, `d3-*`, `@number-flow/react`; `motion` we have) are justified: they replace `recharts` once every chart is migrated, and `recharts` is then removed.
 - `recharts` and `ui/chart.tsx` are gone; bklit's d3 types come from `@types/d3-shape` and `@types/d3-array`. bklit's vendored files are excluded from eslint (presets are linted).
 - `TimeSeries` draws monotone curves (no overshoot); its time axis is evenly spaced in time (`tickMode="domain"` with our `formatTick`, a small marked addition to the vendored `x-axis.tsx`: keep it when updating bklit), shows 24-hour times up to two days and dates beyond, and leaves the first tick blank so it never sits on the y axis' bottom label; and expects rows with `date: Date`; thin long series to about 240 points first. A null bucket is carried forward by the caller (the control plane does this).
-- Presets live in `src/components/charts/presets.tsx` (`TimeSeries`, `Spark`, `SERIES` colors); gauge, ring, bar and live-line presets are added there when a page first needs them. Defaults: compact margins, no entry animation on refresh (only on first draw, and none under reduced motion), tooltips with units, `--chart-*` colors, and time axes in the viewer's locale.
+- Presets live in `src/components/charts/presets.tsx` (`TimeSeries`, `SERIES` colors); other presets are added there when a page first needs them. Defaults: compact margins, no entry animation on refresh (only on first draw, and none under reduced motion), tooltips with units, `--chart-*` colors, and time axes in the viewer's locale.
 
 ---
 
@@ -220,6 +225,9 @@ Raise these upstream with thunder-ui rather than patching core.
 - No hard-coded colors (`text-sky-600`, `bg-[#…]`) outside `lib/hues.ts` and the tokens; status always through `StatusBadge` or `StatusDot`.
 - Lists are `DataTable` unless a card grid is clearly better; dense rows, 13 px.
 - Charts only through `src/components/charts/` presets.
+- Reads only through `src/lib/queries.ts` + `useCached`; sizes, money inputs and dates only through `src/lib/format.ts`.
+- Each control is gated on its own permission: a panel readable with one permission still hides (or disables) the actions that need others.
+- Counts go through i18next plurals: `t("{{count}} projects", { count })` and `_zero`, `_one`, `_two`, `_few`, `_many` beside the key (the key itself is the "other" form). Arabic uses all of them; English uses `_zero` and `_one` and repeats its plural in the rest, so both files keep the same keys.
 - Check light, dark, phone and Arabic before calling a UI change done; run axe on the page (both themes).
 - No palette colors (`text-amber-700`, `bg-sky-500/10`) on content: status tokens (`bg-warning-soft text-warning-foreground` …) and `text-brand-text` for orange text.
 - Panels `rounded-[10px]`, inner boxes `rounded-lg`; no gradients, glass or large icon tiles on content.

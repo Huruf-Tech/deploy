@@ -84,7 +84,7 @@ Deno.test({
           await setUpMachine(host);
           const command = await latest("pool.ensure");
           const payload = command.payload as Record<string, unknown>;
-          assertEquals(Object.keys(payload), ["reserve"]);
+          assertEquals(Object.keys(payload), ["reserve", "isolated"]);
           assertEquals(
             (payload.reserve as Record<string, number>).memMb,
             512,
