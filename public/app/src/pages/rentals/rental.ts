@@ -45,6 +45,6 @@ export type TMachineSpot =
       ReturnType<typeof ThunderSDK.rentalsAdmin.moveTargets>
     >["targets"][number]
 
-/** It has room and, for a move, the private network reaches it. */
+/** It has room and, for a move, its source machine has an address to move from. */
 export const usable = (m: TMachineSpot) =>
   m.fits && (!("reachable" in m) || m.reachable)

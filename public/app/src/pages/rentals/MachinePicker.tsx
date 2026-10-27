@@ -50,7 +50,7 @@ export function MachinePicker({
             <StatusBadge tone="neutral" label={t("No room")} />
           ) : "reachable" in m && !m.reachable ? (
             <span className="basis-full text-xs text-warning-foreground">
-              {t("Not reachable from this machine over the private network")}
+              {t("The machine it's on has no address to move from")}
             </span>
           ) : null}
         </button>

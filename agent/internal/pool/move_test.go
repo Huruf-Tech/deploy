@@ -28,24 +28,24 @@ func TestServeSendsEachPartOnceWithTheToken(t *testing.T) {
 	ctx := context.Background()
 	done := make(chan error, 1)
 	go func() {
-		done <- serve(ctx, addr, token, map[string][]string{
+		done <- serve(ctx, addr, token, testKey, map[string][]string{
 			"/image": {"echo", "image bytes"},
 			"/data":  {"echo", "data bytes"},
 		})
 	}()
 
 	// The target retries until the source listens; a wrong token is refused.
-	if _, err := fetch(ctx, addr, "wrong", "/image", "cat"); err == nil || !strings.Contains(err.Error(), "403") {
+	if _, err := fetch(ctx, addr, "wrong", testKey, "/image", "cat"); err == nil || !strings.Contains(err.Error(), "403") {
 		t.Fatalf("wrong token: %v", err)
 	}
-	out, err := fetch(ctx, addr, token, "/image", "cat")
+	out, err := fetch(ctx, addr, token, testKey, "/image", "cat")
 	if err != nil || out != "image bytes\n" {
 		t.Fatalf("image = %q, %v", out, err)
 	}
-	if _, err := fetch(ctx, addr, token, "/image", "cat"); err == nil || !strings.Contains(err.Error(), "410") {
+	if _, err := fetch(ctx, addr, token, testKey, "/image", "cat"); err == nil || !strings.Contains(err.Error(), "410") {
 		t.Fatalf("a part is sent once: %v", err)
 	}
-	if out, err := fetch(ctx, addr, token, "/data", "cat"); err != nil || out != "data bytes\n" {
+	if out, err := fetch(ctx, addr, token, testKey, "/data", "cat"); err != nil || out != "data bytes\n" {
 		t.Fatalf("data = %q, %v", out, err)
 	}
 	select {
@@ -63,9 +63,9 @@ func TestServeFailsWhenAPartFails(t *testing.T) {
 	ctx := context.Background()
 	done := make(chan error, 1)
 	go func() {
-		done <- serve(ctx, addr, token, map[string][]string{"/data": {"sh", "-c", "echo broken >&2; exit 3"}})
+		done <- serve(ctx, addr, token, testKey, map[string][]string{"/data": {"sh", "-c", "echo broken >&2; exit 3"}})
 	}()
-	_, _ = fetch(ctx, addr, token, "/data", "cat")
+	_, _ = fetch(ctx, addr, token, testKey, "/data", "cat")
 	if err := <-done; err == nil || !strings.Contains(err.Error(), "broken") {
 		t.Fatalf("serve = %v, want the part's error", err)
 	}
@@ -74,7 +74,7 @@ func TestServeFailsWhenAPartFails(t *testing.T) {
 func TestServeGivesUpWhenNobodyComes(t *testing.T) {
 	defer func(w time.Duration) { moveWait = w }(moveWait)
 	moveWait = 50 * time.Millisecond
-	err := serve(context.Background(), freeAddr(t), strings.Repeat("t", 32), map[string][]string{"/data": {"true"}})
+	err := serve(context.Background(), freeAddr(t), strings.Repeat("t", 32), testKey, map[string][]string{"/data": {"true"}})
 	if err == nil || !strings.Contains(err.Error(), "in time") {
 		t.Fatalf("serve = %v", err)
 	}
@@ -88,7 +88,7 @@ func TestServeGivesUpOnAStalledReceiver(t *testing.T) {
 	addr, token := freeAddr(t), strings.Repeat("t", 32)
 	done := make(chan error, 1)
 	go func() {
-		done <- serve(context.Background(), addr, token, map[string][]string{"/data": {"yes"}})
+		done <- serve(context.Background(), addr, token, testKey, map[string][]string{"/data": {"yes"}})
 	}()
 	var conn net.Conn
 	for i := 0; i < 50; i++ {
@@ -128,8 +128,8 @@ func TestTarRoundTrip(t *testing.T) {
 	create[2], extract[2] = src, dst // -C: the test's directories
 	ctx := context.Background()
 	done := make(chan error, 1)
-	go func() { done <- serve(ctx, addr, token, map[string][]string{"/data": create}) }()
-	if _, err := fetch(ctx, addr, token, "/data", extract...); err != nil {
+	go func() { done <- serve(ctx, addr, token, testKey, map[string][]string{"/data": create}) }()
+	if _, err := fetch(ctx, addr, token, testKey, "/data", extract...); err != nil {
 		t.Fatal(err)
 	}
 	if err := <-done; err != nil {

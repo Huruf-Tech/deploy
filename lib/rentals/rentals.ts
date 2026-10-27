@@ -1,3 +1,5 @@
+import { agentCommandModel } from "@/schemas/infrastructure/agentCommand.ts";
+import { bootstrapSessionModel } from "@/schemas/infrastructure/bootstrapSession.ts";
 import { ObjectId, type WithId } from "mongodb";
 import { platformTenant } from "@/lib/billing/platform.ts";
 import { Response } from "@/core/http/response.ts";
@@ -12,6 +14,7 @@ import { refreshSpecs } from "@/lib/deploy/specs.ts";
 import { freeOf, takenOn } from "@/lib/pool/room.ts";
 import {
   createPartition,
+  moveAddress,
   movePartition,
   partitionName,
   removePartition,
@@ -19,7 +22,6 @@ import {
   startPartition,
   stopPartition,
 } from "@/lib/pool/pool.ts";
-import { reachable } from "@/lib/network/mesh.ts";
 import { $plan, planModel, type TPlan } from "@/schemas/billing/plan.ts";
 import {
   serverClassModel,
@@ -572,6 +574,123 @@ export class RentalService implements TRentalHooks {
     }).catch((e) => log(`resume notice: ${e}`));
   }
 
+  // --- Rentals that didn't arrive (PLAN §26.9) ---
+
+  /**
+   * Approved rentals still without a server: being set up, or stuck, with
+   * why (the machine couldn't create the partition, or its agent never joined).
+   */
+  async waiting() {
+    const subs = await subscriptionModel.find({
+      kind: "server",
+      status: { $in: [...RUNNING] },
+      "rental.host": { $exists: true },
+      server: { $exists: false },
+    }, { sort: { updatedAt: 1 }, limit: 100 }).toArray();
+    const sessions = await bootstrapSessionModel.find({
+      "rental.subscription": { $in: subs.map((s) => s._id) },
+    }, {
+      sort: { createdAt: -1 },
+      projection: {
+        rental: 1,
+        status: 1,
+        error: 1,
+        createdAt: 1,
+        expiresAt: 1,
+        "partition.command": 1,
+      },
+    }).toArray();
+    const [commands, hosts] = await Promise.all([
+      agentCommandModel.find({
+        _id: { $in: sessions.flatMap((s) => s.partition?.command ?? []) },
+      }, { projection: { status: 1, error: 1 } }).toArray(),
+      serverModel.find({ _id: { $in: subs.map((s) => s.rental!.host!) } }, {
+        projection: { name: 1 },
+      }).toArray(),
+    ]);
+    const now = new Date();
+    return subs.map((sub) => {
+      const session = sessions.find((s) =>
+        s.rental?.subscription.equals(sub._id)
+      );
+      const command = session?.partition?.command &&
+        commands.find((c) => c._id.equals(session.partition!.command!));
+      const error = command?.status === "failed"
+        ? command.error ?? "The machine couldn't create it"
+        : session?.status === "failed"
+        ? session.error ?? "Its agent couldn't join"
+        : !session || session.expiresAt < now
+        ? "Its agent never joined"
+        : undefined;
+      return {
+        sub,
+        host: hosts.find((h) => h._id.equals(sub.rental!.host!))?.name,
+        since: session?.createdAt ?? sub.updatedAt,
+        ...(error ? { error } : {}),
+      };
+    });
+  }
+
+  /**
+   * Creates an approved rental's partition again, on its machine or another
+   * of its class with room; a half-made one on the old machine goes.
+   */
+  async recreate(id: ObjectId, admin: ObjectId, host?: ObjectId) {
+    const sub = await this.rentalOf(id, {
+      status: { $in: [...RUNNING] },
+      server: { $exists: false },
+    });
+    const from = sub.rental.host;
+    if (!from || !sub.rental.partition) {
+      throw Response.badRequest("The rental isn't placed yet");
+    }
+    const to = host ?? from;
+    if (!to.equals(from)) {
+      const spot = (await this.placement(id)).find((m) =>
+        m.server === String(to)
+      );
+      if (!spot?.fits) {
+        throw Response.badRequest("That machine has no room for this rental");
+      }
+      await removePartition(from, sub.rental.partition)
+        .catch((e) => log(`remove the failed ${sub.rental.partition}: ${e}`));
+      await subscriptionModel.updateOne({ _id: id }, {
+        $set: { "rental.host": to, updatedAt: new Date() },
+      });
+    }
+    // Its old join token goes, so only the new partition can join.
+    await bootstrapSessionModel.updateMany({
+      "rental.subscription": id,
+      status: "installing",
+    }, { $set: { status: "failed", error: "Created again" } });
+    await this.createPartitionFor({
+      ...sub,
+      rental: { ...sub.rental, host: to },
+    }, admin);
+  }
+
+  /**
+   * Gives the running period's charge back to the customer's wallet and
+   * removes the rental with its partition (e.g. it could never be delivered).
+   */
+  async refund(id: ObjectId, admin: ObjectId, reason?: string) {
+    const sub = await this.rentalOf(id, { status: { $in: [...LIVE] } });
+    if (sub.rental.move) {
+      throw Response.badRequest("It's being moved: cancel the move first");
+    }
+    const amount = await this.billing.refundCurrent(id, admin);
+    await this.release(sub, "canceled");
+    notifyOwner(sub.tenant, {
+      subject: "{workspace}: your rented server was refunded",
+      text: `Huruf gave ${
+        (amount / 100).toFixed(2)
+      } USD back to your wallet and removed the rented server${
+        reason ? `: ${reason}` : ""
+      }.`,
+    }).catch((e) => log(`refund notice: ${e}`));
+    return { amount };
+  }
+
   /** Deletes a rental now, with its partition and data; nothing is refunded. */
   async terminate(id: ObjectId, reason?: string) {
     const sub = await this.rentalOf(id, { status: { $in: [...LIVE] } });
@@ -698,13 +817,17 @@ export class RentalService implements TRentalHooks {
       throw Response.badRequest("The rental isn't placed yet");
     }
     const source = await serverModel.findOne({ _id: sub.rental.host }, {
-      projection: { name: 1, mesh: 1, "resources.partitions": 1 },
+      projection: {
+        name: 1,
+        "inventory.publicIp": 1,
+        "inventory.privateIp": 1,
+        "resources.partitions": 1,
+      },
     });
     const spots = (await this.placement(id))
       .filter((m) => m.server !== String(sub.rental.host));
-    const meshes = await serverModel.find({
-      _id: { $in: spots.map((m) => new ObjectId(m.server)) },
-    }, { projection: { mesh: 1 } }).toArray();
+    // The target fetches from the source's address (TCP MOVE_PORT open).
+    const reachable = !!source && !!moveAddress(source);
     const used = source?.resources?.partitions
       ?.find((p) => p.name === sub.rental.partition)?.diskUsed ??
       sub.rental.size.diskGb * GB;
@@ -714,13 +837,7 @@ export class RentalService implements TRentalHooks {
       moving: !!sub.rental.move,
       // Stopping, committing and starting take about a minute; the rest is copying.
       downtimeSec: Math.ceil(60 + used / (mbps * 1e6)),
-      targets: spots.map((m) => {
-        const target = meshes.find((t) => String(t._id) === m.server);
-        return {
-          ...m,
-          reachable: !!source && !!target && reachable(source, target),
-        };
-      }),
+      targets: spots.map((m) => ({ ...m, reachable })),
     };
   }
 
@@ -737,7 +854,7 @@ export class RentalService implements TRentalHooks {
     }
     if (!spot.reachable) {
       throw Response.badRequest(
-        "The two machines don't reach each other over the private network",
+        "The machine it's on has no address to move from",
       );
     }
     // Claimed first, so two admins can't move it at once.

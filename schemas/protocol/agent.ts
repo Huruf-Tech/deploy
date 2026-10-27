@@ -126,6 +126,7 @@ export const $commandType = z.enum([
   "stream.open",
   "stream.close",
   "build.run",
+  "cache.clear",
   "agent.update",
   "registry.delete",
   "host.cleanup",
@@ -138,6 +139,14 @@ export const $commandType = z.enum([
   "partition.send",
   "partition.receive",
 ]);
+
+/**
+ * `cache.clear`, for a project's build servers ("Clear build cache", PLAN
+ * §9.2): its BuildKit cache mounts go (their ids start with `<project>-`).
+ */
+export const $cacheClearPayload = z.object({
+  project: z.string().regex(/^[a-f0-9]{24}$/),
+});
 
 /**
  * `registry.delete`, for the server running the built-in registry: these
@@ -283,24 +292,29 @@ export const $partitionResizePayload = z.object({
 /** `partition.stop`, `partition.start`, `partition.remove`. */
 export const $partitionNamePayload = z.object({ name: $partitionName });
 
-/** The port a machine serves a moving partition on, over the mesh. */
+/** The TCP port a machine serves a moving partition on, for the move only. */
 export const MOVE_PORT = 51830;
 
+/** A move's one-time AES-256 key, base64: the transfer is encrypted with it. */
+const $moveKey = z.string().regex(/^[A-Za-z0-9+/]{43}=$/);
+
 /**
- * `partition.send`, sealed (it carries the move's token): stops a partition
- * and serves its system files and data on `listen` (this machine's mesh
- * address) for one `partition.receive` (PLAN §26.10). It starts the partition
- * again if the transfer doesn't finish.
+ * `partition.send`, sealed (it carries the move's token and key): stops a
+ * partition and serves its system files and data on `listen` for one
+ * `partition.receive` (PLAN §26.10), encrypted with `key`. It starts the
+ * partition again if the transfer doesn't finish.
  */
 export const $partitionSendPayload = z.object({
   name: $partitionName,
-  listen: z.string().max(64).describe("host:port, the mesh address"),
+  listen: z.string().max(64).describe("host:port to serve on"),
   token: z.string().min(32).max(128),
+  key: $moveKey,
 });
 
 /**
- * `partition.receive`, sealed: pulls a partition from `from` (the source's
- * mesh address) and starts it here with `size`; its agent keeps its identity.
+ * `partition.receive`, sealed: pulls a partition from `from` (the source
+ * machine's address) and starts it here with `size`; its agent keeps its
+ * identity.
  */
 export const $partitionReceivePayload = z.object({
   name: $partitionName,
@@ -308,6 +322,7 @@ export const $partitionReceivePayload = z.object({
   isolated: z.boolean().default(false),
   from: z.string().max(64).describe("host:port"),
   token: z.string().min(32).max(128),
+  key: $moveKey,
 });
 
 /** One host preflight result, reported by `docker.ensure`. */

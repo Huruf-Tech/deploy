@@ -18,6 +18,7 @@ import { orderCertificate } from "@/lib/domains/acme.ts";
 import { refreshSpecs } from "@/lib/deploy/specs.ts";
 import { projectModel } from "@/schemas/applications/project.ts";
 import {
+  certificateArchiveModel,
   domainJobSlotModel,
   domainModel,
   platformSecretModel,
@@ -27,6 +28,9 @@ import {
 /** After "Check now": look every minute, for half an hour (PLAN §14). */
 export const CHECK_WINDOW_MS = 30 * 60_000;
 export const CHECK_EVERY_MS = 60_000;
+/** A new certificate's HTTPS check: every 30 s, for 10 minutes. */
+export const VERIFY_EVERY_MS = 30_000;
+export const VERIFY_WINDOW_MS = 10 * 60_000;
 const CHECK_BATCH = 20;
 
 /** Let's Encrypt allows 5 failed validations per hour: stay under it. */
@@ -269,18 +273,44 @@ export async function startCheck(tenant: ObjectId, id: ObjectId) {
   await checkOnce(domain, now);
 }
 
+/** Keeps removed domains' valid certificates for their tenant to reuse. */
+async function archiveCertificates(domains: WithId<TDomain>[]) {
+  const now = new Date();
+  for (const d of domains) {
+    if (!d.certificate || d.certificate.notAfter <= now) continue;
+    await certificateArchiveModel.updateOne({ _id: d.hostname }, {
+      $set: { tenant: d.tenant, certificate: d.certificate, archivedAt: now },
+    }, { upsert: true });
+  }
+}
+
+/** A kept certificate for this tenant's hostname, taken out of the archive. */
+async function archivedCertificate(domain: WithId<TDomain>, now: Date) {
+  const kept = await certificateArchiveModel.findOneAndDelete({
+    _id: domain.hostname,
+    tenant: domain.tenant,
+  });
+  return kept && now < renewAt(kept.certificate) ? kept.certificate : null;
+}
+
 export async function removeDomain(tenant: ObjectId, id: ObjectId) {
-  const { deletedCount } = await domainModel.deleteOne({ _id: id, tenant });
-  if (!deletedCount) throw Response.notFound("Domain not found");
+  const domain = await domainModel.findOneAndDelete({ _id: id, tenant });
+  if (!domain) throw Response.notFound("Domain not found");
+  await archiveCertificates([domain]);
   await quotaGuard.release(tenant, "domains");
 }
 
-/** With its project: frees each domain's quota. */
+/** With its project: frees each domain's quota, keeps its certificate. */
 export async function removeProjectDomains(
   tenant: ObjectId,
   project: ObjectId,
 ) {
-  const { deletedCount } = await domainModel.deleteMany({ tenant, project });
+  const domains = await domainModel.find({ tenant, project }).toArray();
+  if (!domains.length) return;
+  const { deletedCount } = await domainModel.deleteMany({
+    _id: { $in: domains.map((d) => d._id) },
+  });
+  await archiveCertificates(domains);
   for (let i = 0; i < deletedCount; i++) {
     await quotaGuard.release(tenant, "domains");
   }
@@ -327,18 +357,33 @@ export async function issueOnce(id: ObjectId, now = new Date()) {
     return;
   }
 
-  const orders = [...recent, now];
+  const first = domain.status === "issuing";
+  // A first certificate needn't be ordered when one is still good: its own
+  // (checked again after a failure) or one its tenant had for the hostname.
+  const kept = first
+    ? domain.certificate && now < renewAt(domain.certificate)
+      ? domain.certificate
+      : await archivedCertificate(domain, now)
+    : null;
+  const orders = kept ? recent : [...recent, now];
   try {
-    const certificate = await orderCertificate(domain.hostname, domain.tenant);
-    const first = domain.status === "issuing";
+    const certificate = kept ??
+      await orderCertificate(domain.hostname, domain.tenant);
     await domainModel.updateOne({ _id: id }, {
       $set: {
-        status: "active",
+        // A first certificate is live once it answers over HTTPS.
+        status: first ? "verifying" : "active",
         certificate,
         issueAt: renewAt(certificate),
         issueFailures: 0,
         issueOrders: orders,
         updatedAt: new Date(),
+        ...(first
+          ? {
+            nextCheckAt: new Date(now.getTime() + VERIFY_EVERY_MS),
+            checkUntil: new Date(now.getTime() + VERIFY_WINDOW_MS),
+          }
+          : {}),
       },
       $unset: { issueLockedUntil: "", error: "" },
     });
@@ -372,6 +417,65 @@ export async function issueOnce(id: ObjectId, now = new Date()) {
   }
 }
 
+/** Swapped in tests: whether `https://<hostname>` answers with its certificate. */
+export const liveCheck = {
+  answers: async (hostname: string) => {
+    // Any response means TLS worked: the certificate is the one served.
+    const res = await fetch(`https://${hostname}/`, {
+      redirect: "manual",
+      signal: AbortSignal.timeout(10_000),
+    });
+    await res.body?.cancel();
+  },
+};
+
+/**
+ * One check of a domain that's `verifying`: live once `https://<hostname>`
+ * answers through Traefik with its new certificate. Retried every 30 s for
+ * 10 minutes, then it fails with why; "Check now" tries again without a new
+ * order.
+ */
+export async function verifyOnce(domain: WithId<TDomain>, now = new Date()) {
+  const filter = { _id: domain._id, status: "verifying" as const };
+  try {
+    await liveCheck.answers(domain.hostname);
+    await domainModel.updateOne(filter, {
+      $set: { status: "active", updatedAt: now },
+      $unset: { nextCheckAt: "", checkUntil: "", error: "" },
+    });
+  } catch (error) {
+    const message = String((error as Error)?.message ?? error).slice(0, 300);
+    const expired = !domain.checkUntil || now >= domain.checkUntil;
+    await domainModel.updateOne(
+      filter,
+      expired
+        ? {
+          $set: {
+            status: "failed",
+            error: `https://${domain.hostname} doesn't answer: ${message}`,
+            updatedAt: now,
+          },
+          $unset: { nextCheckAt: "", checkUntil: "" },
+        }
+        : {
+          $set: {
+            nextCheckAt: new Date(now.getTime() + VERIFY_EVERY_MS),
+            updatedAt: now,
+          },
+        },
+    );
+  }
+}
+
+/** Verifies the domains that are due, a bounded batch per run. */
+export async function verifyDue(now = new Date()) {
+  const due = await domainModel.find(
+    { status: "verifying", nextCheckAt: { $lte: now } },
+    { limit: CHECK_BATCH, sort: { nextCheckAt: 1 } },
+  ).toArray();
+  await Promise.all(due.map((d) => verifyOnce(d, now)));
+}
+
 /** Orders for the domains that are due, a few per run: each takes seconds. */
 export async function issueDue(now = new Date()) {
   const due = await domainModel.find(
@@ -387,5 +491,6 @@ export const domainChecks = new PiggybackScheduler(
   async () => {
     await checkDue();
     await issueDue();
+    await verifyDue();
   },
 );

@@ -28,11 +28,12 @@ import { day } from "@/lib/format"
 
 type TDomain = Awaited<ReturnType<typeof ThunderSDK.domains.list>>[number]
 
-/** Domain states on the shared status tokens (checks and issuing pulse). */
+/** Domain states on the shared status tokens (checks, issuing and verifying pulse). */
 const STATE: Record<TDomain["status"], string> = {
   pending: "pending",
   checking: "deploying",
   issuing: "deploying",
+  verifying: "deploying",
   active: "healthy",
   failed: "failed",
 }
@@ -43,6 +44,7 @@ function DomainStatus({ status }: { status: TDomain["status"] }) {
     pending: t("Waiting for DNS records"),
     checking: t("Checking DNS"),
     issuing: t("Getting a certificate"),
+    verifying: t("Verifying HTTPS"),
     active: t("Live"),
     failed: t("Needs attention"),
   }[status]
@@ -165,9 +167,14 @@ function DomainSetup({ domain }: { domain: TDomain }) {
       ) : (
         <>
           <p className="text-[13px] text-muted-foreground">
-            {t(
-              "Create these records at your DNS provider, then click Check now. Checking continues for 30 minutes while they propagate."
-            )}
+            {domain.status === "verifying"
+              ? t(
+                  "The certificate is issued. Checking that https://{{name}} answers before it goes live; this is retried for 10 minutes.",
+                  { name: domain.hostname }
+                )
+              : t(
+                  "Create these records at your DNS provider, then click Check now. Checking continues for 30 minutes while they propagate."
+                )}
           </p>
           <div
             role="table"
@@ -236,7 +243,10 @@ export function DomainsTab({ project }: { project: string }) {
   const [adding, setAdding] = React.useState(false)
   const { data, isLoading, reload } = useCached(queries.domains(project))
   const working = data?.some(
-    (d) => d.status === "checking" || d.status === "issuing"
+    (d) =>
+      d.status === "checking" ||
+      d.status === "issuing" ||
+      d.status === "verifying"
   )
   usePolling(() => working && reload(), 5_000)
 

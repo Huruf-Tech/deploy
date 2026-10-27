@@ -4,13 +4,15 @@ import { $objectId } from "@/core/utils/createCRUD.ts";
 
 /**
  * Where a custom domain is (PLAN §14, D43): added → (user clicks Check) →
- * checking ownership and DNS → issuing a certificate → active.
- * `pending` waits for the user; `failed` names what went wrong.
+ * checking ownership and DNS → issuing a certificate → verifying it answers
+ * over HTTPS → active. `pending` waits for the user; `failed` names what
+ * went wrong.
  */
 export const $domainStatus = z.enum([
   "pending",
   "checking",
   "issuing",
+  "verifying",
   "active",
   "failed",
 ]);
@@ -43,7 +45,7 @@ export const $domain = z.object({
   status: $domainStatus,
   /** Set once ownership and DNS passed: no other tenant can verify it then. */
   verifiedAt: z.date().optional(),
-  /** While `checking`: when to look again, and until when. */
+  /** While `checking` or `verifying`: when to look again, and until when. */
   nextCheckAt: z.date().optional(),
   checkUntil: z.date().optional(),
   checks: $domainChecks.optional(),
@@ -64,6 +66,18 @@ export const $domain = z.object({
 export type TDomain = z.output<typeof $domain>;
 
 export const domainModel = mongodb.db().collection<TDomain>("domains");
+
+/**
+ * Certificates of removed domains, by hostname (PLAN §14): the same tenant
+ * adding the hostname again gets it back instead of a new order (Let's
+ * Encrypt's rate limits). Each goes when it expires (TTL).
+ */
+export const certificateArchiveModel = mongodb.db().collection<{
+  _id: string;
+  tenant: TDomain["tenant"];
+  certificate: z.output<typeof $domainCertificate>;
+  archivedAt: Date;
+}>("certificateArchive");
 
 /** HTTP-01 answers, so any instance can reply to Let's Encrypt. */
 export const acmeChallengeModel = mongodb.db().collection<

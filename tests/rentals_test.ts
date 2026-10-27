@@ -26,7 +26,6 @@ import { serverLeaseModel } from "@/schemas/infrastructure/serverLease.ts";
 import { agentCommandModel } from "@/schemas/infrastructure/agentCommand.ts";
 import { tenantUsageModel } from "@/schemas/limits/tenantUsage.ts";
 import { seedKeys } from "./sealing_test.ts";
-import { meshIpOf } from "@/schemas/infrastructure/network.ts";
 import { MOVE_PORT } from "@/schemas/protocol/agent.ts";
 import { testSession } from "./_session.ts";
 
@@ -392,12 +391,12 @@ Deno.test({
             tenant: platform.tenantId,
             name: "pool-2",
             status: "active",
+            inventory: { publicIp: "203.0.113.31" },
             identity: {
               signPublicKey: "x",
               boxPublicKey: publicKey,
               fingerprint: `pool-${host2}`,
             },
-            mesh: { index: 2, enabled: true },
             pool: {
               status: "ready",
               class: cls,
@@ -435,18 +434,15 @@ Deno.test({
             };
           };
 
-          // Not on a common private network yet: no move.
+          // Its machine has no address to move from yet: no move.
+          await serverModel.updateOne({ _id: host }, {
+            $unset: { "inventory.publicIp": "", "inventory.privateIp": "" },
+          });
           let targets = await rentals.moveTargets(rental);
           assertEquals(targets.targets.map((m) => m.reachable), [false]);
           assert(targets.downtimeSec >= 60);
           await serverModel.updateOne({ _id: host }, {
-            $set: {
-              mesh: {
-                index: 1,
-                enabled: true,
-                peers: { [String(host2)]: true },
-              },
-            },
+            $set: { "inventory.publicIp": "203.0.113.30" },
           });
           targets = await rentals.moveTargets(rental);
           assertEquals(
@@ -486,7 +482,7 @@ Deno.test({
           assertEquals(del.status, 400, JSON.stringify(del.json));
           assert(JSON.stringify(del.json).includes("move them"));
 
-          // Moved: the target pulls from the source's mesh address.
+          // Moved: the target pulls from the source's address, encrypted.
           await rentals.move(rental, host2, platform.user);
           assertEquals(
             (await refused(() => rentals.move(rental, host2, platform.user)))
@@ -496,11 +492,18 @@ Deno.test({
           );
           const receive = await opened(host2, "partition.receive");
           const send = await opened(host, "partition.send");
-          assertEquals(send.listen, `${meshIpOf(1)}:${MOVE_PORT}`);
+          assertEquals(send.listen, `:${MOVE_PORT}`);
           assertEquals(
             [receive.name, receive.from, receive.token, receive.size],
-            [name, send.listen, send.token, (await sub()).rental!.size],
+            [
+              name,
+              `203.0.113.30:${MOVE_PORT}`,
+              send.token,
+              (await sub()).rental!.size,
+            ],
           );
+          assertEquals(receive.key, send.key, "one key for the move");
+          assertEquals(atob(send.key).length, 32);
           const listed = await customer.call("GET", "/rentals/api");
           assertEquals(listed.json[0].moving, true);
           await rentals.moveFinished(receive._id, { ok: true });
@@ -785,6 +788,44 @@ Deno.test({
         );
         assertEquals((await commands("partition.remove")).length, removes + 1);
         await mailed(/deleted by Huruf/);
+
+        // A rental whose partition failed: listed with why, created again,
+        // or refunded in full.
+        const e = new ObjectId(
+          (await customer.call("POST", "/rentals/api/request", { plan: small }))
+            .json.rental,
+        );
+        await rentals.approve(e, host, platform.user);
+        const failed = (await commands("partition.create")).at(-1)!;
+        await agentCommandModel.updateOne({ _id: failed._id }, {
+          $set: { status: "failed", error: "No space left on device" },
+        });
+        const stuck = (await rentals.waiting()).find((w) =>
+          w.sub._id.equals(e)
+        );
+        assertEquals(stuck?.error, "No space left on device");
+        const before = (await commands("partition.create")).length;
+        await rentals.recreate(e, platform.user);
+        assertEquals((await commands("partition.create")).length, before + 1);
+        assertEquals(
+          (await rentals.waiting()).find((w) => w.sub._id.equals(e))?.error,
+          undefined,
+          "being set up again",
+        );
+        const paid = await balance();
+        assertEquals((await rentals.refund(e, platform.user)).amount, 2_200);
+        assertEquals(await balance(), paid + 2_200);
+        assertEquals(
+          (await subscriptionModel.findOne({ _id: e }))!.status,
+          "canceled",
+        );
+        assertEquals(
+          (await refused(() => rentals.refund(e, platform.user)))?.status,
+          404,
+          "refunded once",
+        );
+        assertEquals(await balance(), paid + 2_200);
+        await mailed(/was refunded/);
       });
     } finally {
       config.PLATFORM_TENANT = previous;

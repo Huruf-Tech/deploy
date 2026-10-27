@@ -97,7 +97,7 @@ export type poll$return = {
     configVersion: string;
     commands: {
         seq: number;
-        type: "ping" | "docker.ensure" | "stream.open" | "stream.close" | "build.run" | "agent.update" | "registry.delete" | "host.cleanup" | "pool.ensure" | "partition.create" | "partition.resize" | "partition.stop" | "partition.start" | "partition.remove" | "partition.send" | "partition.receive";
+        type: "ping" | "docker.ensure" | "stream.open" | "stream.close" | "build.run" | "cache.clear" | "agent.update" | "registry.delete" | "host.cleanup" | "pool.ensure" | "partition.create" | "partition.resize" | "partition.stop" | "partition.start" | "partition.remove" | "partition.send" | "partition.receive";
         payload: {
             [K in string]: unknown;
         };

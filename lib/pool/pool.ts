@@ -1,3 +1,4 @@
+import { encodeBase64 } from "@std/encoding/base64";
 import {
   LIVE_RENTAL,
   subscriptionModel,
@@ -12,7 +13,6 @@ import { sealTo } from "@/lib/agents/sealing.ts";
 import { serverModel } from "@/schemas/infrastructure/server.ts";
 import { bootstrapSessionModel } from "@/schemas/infrastructure/bootstrapSession.ts";
 import { encodeHex } from "@std/encoding/hex";
-import { meshIpOf } from "@/schemas/infrastructure/network.ts";
 import {
   type $partitionCreatePayload,
   type $partitionReceivePayload,
@@ -44,8 +44,9 @@ async function machine(server: ObjectId, prepared: boolean) {
         name: 1,
         identity: 1,
         pool: 1,
-        mesh: 1,
         provider: 1,
+        "inventory.publicIp": 1,
+        "inventory.privateIp": 1,
       },
     },
   );
@@ -212,11 +213,20 @@ export async function resizePartition(
   });
 }
 
+/** Where a machine serves a moving partition: its public address, else its private one. */
+export const moveAddress = (machine: {
+  inventory?: { publicIp?: string; privateIp?: string };
+}) => {
+  const ip = machine.inventory?.publicIp || machine.inventory?.privateIp;
+  return ip && `${ip.includes(":") ? `[${ip}]` : ip}:${MOVE_PORT}`;
+};
+
 /**
  * Moves a partition between machines (PLAN §26.10): the source stops it
- * and serves it on its mesh address, the target pulls it and starts it. Both
- * commands are sealed: they carry the move's one-time token. The control
- * plane removes the source's copy once the target reports it running.
+ * and serves it on its address for the move only, the target pulls it and
+ * starts it. Both commands are sealed: they carry the move's one-time token
+ * and the key that encrypts the transfer. The control plane removes the
+ * source's copy once the target reports it running.
  */
 export async function movePartition(opts: {
   from: ObjectId;
@@ -229,23 +239,24 @@ export async function movePartition(opts: {
     machine(opts.from, true),
     machine(opts.to, true),
   ]);
-  if (!source.mesh?.index) {
-    throw Response.badRequest(`${source.name} isn't on the private network`);
-  }
-  const listen = `${meshIpOf(source.mesh.index)}:${MOVE_PORT}`;
+  const from = moveAddress(source);
+  if (!from) throw Response.badRequest(`${source.name} has no address`);
   const token = encodeHex(crypto.getRandomValues(new Uint8Array(32)));
+  const key = encodeBase64(crypto.getRandomValues(new Uint8Array(32)));
   const send: z.input<typeof $partitionSendPayload> = {
     name: opts.name,
-    listen,
+    listen: `:${MOVE_PORT}`,
     token,
+    key,
   };
   const receive: z.input<typeof $partitionReceivePayload> = {
     name: opts.name,
     size: opts.size,
     // Only rentals move (PLAN §26.10), and they stay apart.
     isolated: true,
-    from: listen,
+    from,
     token,
+    key,
   };
   // The target first: it waits for the source, not the other way round.
   const received = await issueCommand({

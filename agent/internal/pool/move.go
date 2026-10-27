@@ -23,12 +23,12 @@ import (
 )
 
 // Moving a partition (PLAN §26.10): the source stops it and serves its
-// directory over the mesh: its system files (PLAN §28), Docker's, containerd's
-// and our agent's state, so the agent keeps its identity. An older partition,
-// whose system files are in its container, also serves them committed to an
-// image, and the target copies them into its own root. The target starts it.
-// WireGuard encrypts the transfer; a one-time token, sealed to both machines,
-// guards it.
+// directory on its address for the move only: its system files (PLAN §28),
+// Docker's, containerd's and our agent's state, so the agent keeps its
+// identity. An older partition, whose system files are in its container, also
+// serves them committed to an image, and the target copies them into its own
+// root. The target starts it. The move's one-time key, sealed to both machines
+// with its token, encrypts the transfer (seal.go); the token guards it.
 
 // movedLabel marks images a move committed, so Remove deletes them.
 const movedLabel = "huruf.moved"
@@ -48,7 +48,7 @@ func tarArgs(name string, create bool) []string {
 	return append(args, "-xpf", "-")
 }
 
-func (d *Sysbox) Send(ctx context.Context, name, listen, token string) (err error) {
+func (d *Sysbox) Send(ctx context.Context, name, listen, token, key string) (err error) {
 	if err := d.Stop(ctx, name); err != nil {
 		return err
 	}
@@ -58,14 +58,14 @@ func (d *Sysbox) Send(ctx context.Context, name, listen, token string) (err erro
 		}
 	}()
 	if ownRoot(name) {
-		return serve(ctx, listen, token, map[string][]string{"/data": tarArgs(name, true)})
+		return serve(ctx, listen, token, key, map[string][]string{"/data": tarArgs(name, true)})
 	}
 	tag := "huruf-move-" + name + ":" + strconv.FormatInt(time.Now().Unix(), 10)
 	if _, err := sh.Run(ctx, "docker", "commit", "--change", "LABEL "+movedLabel+"="+name, container(name), tag); err != nil {
 		return err
 	}
 	defer sh.Run(context.WithoutCancel(ctx), "docker", "rmi", tag)
-	return serve(ctx, listen, token, map[string][]string{
+	return serve(ctx, listen, token, key, map[string][]string{
 		"/image": {"docker", "save", tag},
 		"/data":  tarArgs(name, true),
 	})
@@ -110,7 +110,11 @@ func idle(progress *atomic.Int64, after time.Duration, fn func()) (stop func()) 
 // serve sends each part once, to requests bearing the token. It returns when
 // all were sent, on the first failure, or when nothing moves for moveWait:
 // no request for the next part, or no bytes of the current one.
-func serve(ctx context.Context, listen, token string, parts map[string][]string) error {
+func serve(ctx context.Context, listen, token, key string, parts map[string][]string) error {
+	// A bad key fails before anything is served.
+	if _, _, err := moveCipher(key, ""); err != nil {
+		return err
+	}
 	ln, err := net.Listen("tcp", listen)
 	if err != nil {
 		return err
@@ -137,13 +141,14 @@ func serve(ctx context.Context, listen, token string, parts map[string][]string)
 			progress.Add(1)
 			w.Header().Set("Content-Type", "application/octet-stream")
 			var stderr bytes.Buffer
+			sealed, _ := newSealWriter(key, path, counted{w, &progress})
 			cmd := exec.CommandContext(r.Context(), argv[0], argv[1:]...)
-			cmd.Stdout, cmd.Stderr = counted{w, &progress}, &stderr
+			cmd.Stdout, cmd.Stderr = sealed, &stderr
 			if err := cmd.Run(); err != nil {
 				results <- fmt.Errorf("sending %s: %w: %s", path, err, sh.Tail(strings.TrimSpace(stderr.String()), 400))
 				return
 			}
-			results <- nil
+			results <- sealed.Close()
 		})
 	}
 	srv := &http.Server{Handler: mux, ReadHeaderTimeout: 10 * time.Second}
@@ -170,21 +175,21 @@ func serve(ctx context.Context, listen, token string, parts map[string][]string)
 	return nil
 }
 
-func (d *Sysbox) Receive(ctx context.Context, name string, size protocol.PartitionSize, weight int, from, token string) error {
+func (d *Sysbox) Receive(ctx context.Context, name string, size protocol.PartitionSize, weight int, from, token, key string) error {
 	if err := ensureImage(ctx); err != nil {
 		return err
 	}
 	if err := prepareDir(ctx, name, size); err != nil {
 		return err
 	}
-	if _, err := fetch(ctx, from, token, "/data", tarArgs(name, false)...); err != nil {
+	if _, err := fetch(ctx, from, token, key, "/data", tarArgs(name, false)...); err != nil {
 		return err
 	}
 	// Its system files came with its directory.
 	if _, err := os.Stat(filepath.Join(rootDir(name), "usr")); err == nil {
 		return runPartition(ctx, name, size, weight, image)
 	}
-	out, err := fetch(ctx, from, token, "/image", "docker", "load")
+	out, err := fetch(ctx, from, token, key, "/image", "docker", "load")
 	if err != nil {
 		return err
 	}
@@ -207,7 +212,7 @@ func (d *Sysbox) Receive(ctx context.Context, name string, size protocol.Partiti
 // fetch pipes one part into a command. Connecting is retried for moveWait:
 // the source may still be stopping the partition. A part that stops
 // arriving for moveWait fails.
-func fetch(ctx context.Context, from, token, path string, argv ...string) (string, error) {
+func fetch(ctx context.Context, from, token, key, path string, argv ...string) (string, error) {
 	ctx, cancel := context.WithCancelCause(ctx)
 	defer cancel(nil)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+from+path, nil)
@@ -238,11 +243,19 @@ func fetch(ctx context.Context, from, token, path string, argv ...string) (strin
 	var progress atomic.Int64
 	stalled := errors.New("the sending machine stopped sending " + path)
 	defer idle(&progress, moveWait, func() { cancel(stalled) })()
+	opened, err := newOpenReader(key, path, io.TeeReader(resp.Body, counted{io.Discard, &progress}))
+	if err != nil {
+		return "", err
+	}
 	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...)
-	cmd.Stdin = io.TeeReader(resp.Body, counted{io.Discard, &progress})
+	cmd.Stdin = opened
 	out, err := cmd.CombinedOutput()
 	if errors.Is(context.Cause(ctx), stalled) {
 		return string(out), stalled
+	}
+	// A wrong key or tampered data: that's why, not what the command made of it.
+	if opened.err != nil {
+		return string(out), fmt.Errorf("receiving %s: %w", path, opened.err)
 	}
 	if err != nil {
 		return string(out), fmt.Errorf("receiving %s: %w: %s", path, err, sh.Tail(strings.TrimSpace(string(out)), 400))

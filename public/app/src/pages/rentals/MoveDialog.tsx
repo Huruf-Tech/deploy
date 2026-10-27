@@ -20,7 +20,8 @@ import { queries } from "@/lib/queries"
 
 /**
  * Moves a rental to another machine of its class (PLAN §26.10), after
- * saying how long it's offline: the copy runs over the private network.
+ * saying how long it's offline: the copy goes straight between the two
+ * machines, encrypted with the move's one-time key.
  */
 export function MoveDialog({
   rental,
@@ -67,7 +68,7 @@ export function MoveDialog({
           <DialogDescription>
             {info
               ? t(
-                  "It's offline for about {{minutes}} min while its data is copied to the other machine. Its server, projects and domains stay the same.",
+                  "It's offline for about {{minutes}} min while its data is copied, encrypted, straight to the other machine (TCP port 51830 must be open on both). Its server, projects and domains stay the same.",
                   { minutes }
                 )
               : t("Loading…")}

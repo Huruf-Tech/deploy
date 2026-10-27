@@ -87,7 +87,7 @@ export type moveTargets$return = {
         };
         cpuRoom: number;
         fits: boolean;
-        /** Over the private network */
+        /** The source machine has an address to move from */
         reachable: boolean;
     }[];
 };
@@ -122,8 +122,36 @@ export type capacity$return = {
         cost: number;
     }[];
 };
+export type waiting$return = {
+    _id: string;
+    tenantName?: string | undefined;
+    plan?: string | undefined;
+    size: {
+        cpus: number;
+        memMb: number;
+        diskGb: number;
+    };
+    /** The machine's name */
+    host?: string | undefined;
+    since: Date;
+    /** Why it's stuck; absent while it's being set up */
+    error?: string | undefined;
+}[];
 export type recreatePartition$params = {
     id?: string;
+};
+export type recreatePartition$body = {
+    host?: string | undefined;
+};
+export type refund$params = {
+    id?: string;
+};
+export type refund$body = {
+    reason?: string | undefined;
+};
+export type refund$return = {
+    /** Cents refunded */
+    amount: number;
 };
 export type pool$params = {
     id?: string;
@@ -192,7 +220,12 @@ export const rentalsAdminModule = (sdk: typeof BaseSDK) => {
         move$body: move$body,
         cancelMove$params: cancelMove$params,
         capacity$return: capacity$return,
+        waiting$return: waiting$return,
         recreatePartition$params: recreatePartition$params,
+        recreatePartition$body: recreatePartition$body,
+        refund$params: refund$params,
+        refund$body: refund$body,
+        refund$return: refund$return,
         pool$params: pool$params,
         pool$return: pool$return,
         updatePool$params: updatePool$params,
@@ -565,16 +598,72 @@ export const rentalsAdminModule = (sdk: typeof BaseSDK) => {
             return res;
         }, data);
     },
+        waiting(data?: {
+        params?: undefined,
+        query?: undefined,
+        body?: undefined,
+    } & TRequestOptions<waiting$return>) {
+        return sdk.resolveAxiosResponse(async () => {
+            sdk.checkPermission("rentalsAdmin", "waiting");
+
+            const method = "get";
+            const toPath = compile("rentalsAdmin/api/waiting");
+            const requestPayload = {
+                method,
+                url: toPath(sdk.resolvePathParams(data?.params)),
+                params: data?.query,
+                data: data?.body,
+                signal: data?.signal,
+                ...(data?.axiosConfig
+                ? sdk.resolveAxiosConfig(data.axiosConfig)
+                : undefined),
+            };
+
+            sdk.log("Sending Request:", requestPayload);
+
+            const res = await sdk._axios!.request(requestPayload);
+
+            return res;
+        }, data);
+    },
         recreatePartition(data: {
         params: recreatePartition$params,
         query?: undefined,
-        body?: undefined,
+        body: recreatePartition$body,
     } & TRequestOptions<unknown>) {
         return sdk.resolveAxiosResponse(async () => {
             sdk.checkPermission("rentalsAdmin", "recreatePartition");
 
             const method = "post";
             const toPath = compile("rentalsAdmin/api/:id/partition");
+            const requestPayload = {
+                method,
+                url: toPath(sdk.resolvePathParams(data?.params)),
+                params: data?.query,
+                data: data?.body,
+                signal: data?.signal,
+                ...(data?.axiosConfig
+                ? sdk.resolveAxiosConfig(data.axiosConfig)
+                : undefined),
+            };
+
+            sdk.log("Sending Request:", requestPayload);
+
+            const res = await sdk._axios!.request(requestPayload);
+
+            return res;
+        }, data);
+    },
+        refund(data: {
+        params: refund$params,
+        query?: undefined,
+        body: refund$body,
+    } & TRequestOptions<refund$return>) {
+        return sdk.resolveAxiosResponse(async () => {
+            sdk.checkPermission("rentalsAdmin", "refund");
+
+            const method = "post";
+            const toPath = compile("rentalsAdmin/api/:id/refund");
             const requestPayload = {
                 method,
                 url: toPath(sdk.resolvePathParams(data?.params)),
@@ -664,7 +753,9 @@ export const rentalsAdminModule = (sdk: typeof BaseSDK) => {
     (methods.move as any).__scope = "rentalsAdmin";
     (methods.cancelMove as any).__scope = "rentalsAdmin";
     (methods.capacity as any).__scope = "rentalsAdmin";
+    (methods.waiting as any).__scope = "rentalsAdmin";
     (methods.recreatePartition as any).__scope = "rentalsAdmin";
+    (methods.refund as any).__scope = "rentalsAdmin";
     (methods.pool as any).__scope = "rentalsAdmin";
     (methods.updatePool as any).__scope = "rentalsAdmin";
 

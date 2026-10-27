@@ -7,6 +7,7 @@ import {
   IconAlertTriangle,
   IconBrandDocker,
   IconBrandGithub,
+  IconChevronDown,
   IconDatabase,
   IconStack2,
   IconGitBranch,
@@ -42,6 +43,12 @@ import { StatusBadge } from "@/components/console/status"
 import { getLocalPath } from "@/core/lib/utils"
 import { useCapacity } from "@/hooks/use-capacity"
 import { type TVolume, VolumesEditor } from "./VolumesEditor"
+import { DistributionEditor, type TDistribution } from "./DistributionEditor"
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible"
 import { EnvEditor, type TEnvVariable } from "@/components/env-import"
 import { LabelChips } from "@/pages/servers/ServerLabels"
 import { classFootprints, fitsIn, roomOf } from "@/lib/capacity"
@@ -373,6 +380,9 @@ export default function NewProject() {
   const [servers, setServers] = React.useState<string[]>([])
   const [replicas, setReplicas] = React.useState(1)
   const [volumes, setVolumes] = React.useState<TVolume[]>([])
+  const [distribution, setDistribution] = React.useState<TDistribution>({
+    distribution: "auto",
+  })
   const [variables, setVariables] = React.useState<TEnvVariable[]>([])
   const [port, setPort] = React.useState("")
   const [publicPort, setPublicPort] = React.useState("")
@@ -536,7 +546,10 @@ export default function NewProject() {
             volumes: composeLike ? [] : volumes,
             variables,
             autoDeploy: true,
-            distribution: "auto",
+            distribution: distribution.distribution,
+            ...(distribution.registry
+              ? { registry: distribution.registry }
+              : {}),
             deployNow: true,
           },
         })
@@ -803,6 +816,34 @@ export default function NewProject() {
                 )}
               </div>
             )}
+
+            <Collapsible
+              defaultOpen={distribution.distribution !== "auto"}
+              className="flex flex-col gap-3"
+            >
+              <CollapsibleTrigger
+                render={
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="group self-start"
+                  />
+                }
+              >
+                <IconChevronDown
+                  className="transition-transform group-data-[panel-open]:rotate-180"
+                  aria-hidden
+                />
+                {t("Advanced")}
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <DistributionEditor
+                  value={distribution}
+                  onChange={setDistribution}
+                />
+              </CollapsibleContent>
+            </Collapsible>
           </Section>
         )}
 

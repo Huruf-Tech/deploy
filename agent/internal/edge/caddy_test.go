@@ -27,6 +27,8 @@ func TestIngressListenerRoutesByProjectHeader(t *testing.T) {
 	for _, want := range []string{
 		`"X-Huruf-Project":["p1"]`, `"dial":"10.0.0.3:3000"`, `"uri":"/health"`,
 		`"X-Huruf-Project":["p2"]`, `"No healthy replicas"`, `"Unknown project"`,
+		// Sticky sessions, round robin for new visitors.
+		`"policy":"cookie"`, `"name":"huruf_replica"`, `"fallback":{"policy":"round_robin"}`,
 	} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("ingress routes lack %s: %s", want, text)

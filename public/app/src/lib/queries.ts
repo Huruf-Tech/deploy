@@ -296,6 +296,13 @@ export const queries = {
       ["rentalsAdmin", "queue"],
       async ({ signal }) => await ThunderSDK.rentalsAdmin.queue({ signal })
     ),
+  /** Approved rentals still without a server: stuck, or being set up. */
+  rentalWaiting: () =>
+    query(["rentalsAdmin", "waiting"], async ({ signal }) =>
+      can("rentalsAdmin", "waiting")
+        ? await ThunderSDK.rentalsAdmin.waiting({ signal })
+        : []
+    ),
   rentalCapacity: () =>
     query(
       ["rentalsAdmin", "capacity"],

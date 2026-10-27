@@ -478,7 +478,8 @@ export default new Router("/api", function projects(router) {
       shape: () => ({ params: $params }),
       handler: async (req) => {
         const { id } = $params.parse(paramsAsJson(req));
-        await clearBuildCache((await withTenant(req)).tenant._id, id);
+        const { tenant, user } = await withTenant(req);
+        await clearBuildCache(tenant._id, id, user._id);
         return Response.json({ ok: true });
       },
     };

@@ -38,6 +38,7 @@ const MESSAGES: Array<[string, z.ZodType, "input" | "output"]> = [
   ["EventsRequest", protocol.$eventsRequest, "input"],
   ["SealedPayload", protocol.$sealedPayload, "output"],
   ["BuildRunPayload", protocol.$buildRunPayload, "output"],
+  ["CacheClearPayload", protocol.$cacheClearPayload, "output"],
   ["DesiredSpec", protocol.$desiredSpec, "output"],
   ["WorkloadStatusEvent", protocol.$workloadStatusEvent, "input"],
   ["MeshStatusEvent", protocol.$meshStatusEvent, "input"],

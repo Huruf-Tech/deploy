@@ -25,8 +25,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { Field, FieldError, FieldLabel } from "@/components/ui/field"
+import {
+  Field,
+  FieldError,
+  FieldLabel,
+  FieldLegend,
+  FieldSet,
+} from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
+import { queries } from "@/lib/queries"
 import { cn, errorMessage } from "@/lib/utils"
 
 export type TTemplate = Awaited<
@@ -58,6 +66,129 @@ export function TemplateIcon({
   }
   const Component = (icon && ICONS[icon]) || IconTemplate
   return <Component className={className} aria-hidden />
+}
+
+/**
+ * Name, description and icon of a tenant template; saving refreshes every
+ * template read. Mount it when opening, so it starts from the saved values.
+ */
+export function EditDetailsDialog({
+  template,
+  open,
+  onOpenChange,
+}: {
+  template: Pick<TTemplate, "_id" | "name" | "description" | "icon">
+  open: boolean
+  onOpenChange: (open: boolean) => void
+}) {
+  const { t } = useTranslation()
+  const [name, setName] = React.useState(template.name)
+  const [description, setDescription] = React.useState(
+    template.description ?? ""
+  )
+  const [icon, setIcon] = React.useState(template.icon ?? "")
+  const [error, setError] = React.useState<string | null>(null)
+  const [busy, setBusy] = React.useState(false)
+
+  const submit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    setBusy(true)
+    setError(null)
+    try {
+      await ThunderSDK.templates.update({
+        params: { id: template._id },
+        body: { name, description, icon },
+      })
+      // Under "templates": the list and every version of this one.
+      await queries.templates().invalidate()
+      toast.success(t("Saved"))
+      onOpenChange(false)
+    } catch (e) {
+      setError(errorMessage(e) ?? t("Could not save"))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  // A custom image URL stays selectable next to the bundled icons.
+  const choices = [
+    "",
+    ...Object.keys(ICONS),
+    ...(icon && !ICONS[icon] ? [icon] : []),
+  ]
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <form onSubmit={submit} className="flex flex-col gap-4">
+          <DialogHeader>
+            <DialogTitle>{t("Edit details")}</DialogTitle>
+            <DialogDescription>
+              {t(
+                "Projects using this template keep working; only how it's listed changes."
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <Field>
+            <FieldLabel htmlFor="template-name">{t("Name")}</FieldLabel>
+            <Input
+              id="template-name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              maxLength={80}
+              required
+              autoFocus
+            />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="template-description">
+              {t("Description")}
+            </FieldLabel>
+            <Textarea
+              id="template-description"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              maxLength={500}
+              rows={3}
+              placeholder={t("Optional")}
+            />
+          </Field>
+          <FieldSet>
+            <FieldLegend variant="label">{t("Icon")}</FieldLegend>
+            <div
+              role="radiogroup"
+              aria-label={t("Icon")}
+              className="flex flex-wrap gap-1.5"
+            >
+              {choices.map((choice) => (
+                <button
+                  key={choice || "default"}
+                  type="button"
+                  role="radio"
+                  aria-checked={icon === choice}
+                  aria-label={choice || t("Default")}
+                  title={choice || t("Default")}
+                  onClick={() => setIcon(choice)}
+                  className={cn(
+                    "flex size-9 items-center justify-center rounded-lg border outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring",
+                    icon === choice && "border-primary bg-primary/5"
+                  )}
+                >
+                  <TemplateIcon icon={choice} className="size-4" />
+                </button>
+              ))}
+            </div>
+          </FieldSet>
+          {error && <FieldError>{error}</FieldError>}
+          <DialogFooter>
+            <Button type="submit" disabled={busy || !name.trim()}>
+              {t("Save")}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  )
 }
 
 export const slugify = (name: string) =>

@@ -213,6 +213,33 @@ func exports(env map[string]string) string {
 	return b.String()
 }
 
+// ClearCache drops a project's BuildKit cache mounts (`cache.clear`, PLAN
+// §9.2): templates name them `<project>-<epoch>`, and BuildKit records that id
+// in each mount's description. Its layer cache ages out by BuildKit's GC.
+func (b *Builder) ClearCache(ctx context.Context, p protocol.CacheClearPayload) (map[string]any, error) {
+	if !isProjectID(p.Project) {
+		return nil, errors.New("invalid project id")
+	}
+	out, err := sh.Run(ctx, "docker", "builder", "prune", "-f",
+		"--filter", "type=exec.cachemount", "--filter", "description~="+p.Project+"-")
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{"pruned": sh.Tail(strings.TrimSpace(out), 200)}, nil
+}
+
+func isProjectID(s string) bool {
+	if len(s) != 24 {
+		return false
+	}
+	for _, c := range s {
+		if !strings.ContainsRune("0123456789abcdef", c) {
+			return false
+		}
+	}
+	return true
+}
+
 func (b *Builder) pruneLogs() {
 	matches, _ := filepath.Glob(filepath.Join(b.Dir, "*.log"))
 	if len(matches) <= keepLogs {

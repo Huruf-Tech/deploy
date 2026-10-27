@@ -3,7 +3,12 @@ import { ThunderSDK } from "thunder-sdk"
 import { useNavigate, useParams } from "react-router"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
-import { IconCopy, IconPlayerPlay, IconTrash } from "@tabler/icons-react"
+import {
+  IconCopy,
+  IconPencil,
+  IconPlayerPlay,
+  IconTrash,
+} from "@tabler/icons-react"
 
 import { Page } from "@/components/page"
 import { PageHeader } from "@/components/console/page-header"
@@ -42,7 +47,7 @@ import { Switch } from "@/components/ui/switch"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
 import { errorMessage } from "@/lib/utils"
-import { CloneDialog, TemplateIcon } from "./shared"
+import { CloneDialog, EditDetailsDialog, TemplateIcon } from "./shared"
 import { useCached } from "@/hooks/use-cached"
 import { queries } from "@/lib/queries"
 import { dateTime } from "@/lib/format"
@@ -371,6 +376,7 @@ export default function TemplateDetail() {
   const [version, setVersion] = React.useState<number>()
   const [cloning, setCloning] = React.useState(false)
   const [deleting, setDeleting] = React.useState(false)
+  const [editing, setEditing] = React.useState(false)
   const [tab, setTab] = React.useState("source")
 
   const { data, reload } = useCached(queries.template(id, version))
@@ -460,6 +466,16 @@ export default function TemplateDetail() {
             >
               <IconCopy aria-hidden /> {t("Clone")}
             </Button>
+            {template.scope === "tenant" &&
+              ThunderSDK.isPermitted("templates", "update") && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setEditing(true)}
+                >
+                  <IconPencil aria-hidden /> {t("Edit details")}
+                </Button>
+              )}
             {template.scope === "tenant" && (
               <Button
                 variant="ghost"
@@ -595,6 +611,13 @@ export default function TemplateDetail() {
         </Panel>
       </div>
 
+      {editing && (
+        <EditDetailsDialog
+          template={template}
+          open={editing}
+          onOpenChange={setEditing}
+        />
+      )}
       <CloneDialog
         template={cloning ? template : null}
         onOpenChange={setCloning}

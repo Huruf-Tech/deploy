@@ -7,7 +7,7 @@ export type list$return = {
     _id: string;
     project: string;
     hostname: string;
-    status: "pending" | "checking" | "issuing" | "active" | "failed";
+    status: "pending" | "checking" | "issuing" | "verifying" | "active" | "failed";
     checks?: {
         ownership: boolean;
         dns: boolean;

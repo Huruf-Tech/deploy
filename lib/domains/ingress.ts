@@ -80,7 +80,11 @@ const ids = (list: ObjectId[]) => [...new Set(list.map(String))];
 
 async function buildConfig() {
   const domains = await domainModel.find(
-    { status: "active", "certificate.notAfter": { $gt: new Date() } },
+    // Served while verifying too: that check is a request through here.
+    {
+      status: { $in: ["active", "verifying"] },
+      "certificate.notAfter": { $gt: new Date() },
+    },
     { projection: { hostname: 1, project: 1 } },
   ).toArray();
 
@@ -163,6 +167,16 @@ async function buildConfig() {
           name: `p-${id}-s-${e.server}`,
           weight: e.replicas,
         })),
+        // Sticky sessions (PLAN §14): a visitor stays on its server; the
+        // server's edge keeps it on its replica (cookie `huruf_replica`).
+        sticky: {
+          cookie: {
+            name: "huruf_server",
+            secure: true,
+            httpOnly: true,
+            sameSite: "lax",
+          },
+        },
         ...(health ? { healthCheck: {} } : {}),
       },
     };
@@ -228,7 +242,10 @@ async function sync() {
   if (!dir) return;
 
   const domains = await domainModel.find(
-    { status: "active", "certificate.notAfter": { $gt: new Date() } },
+    {
+      status: { $in: ["active", "verifying"] },
+      "certificate.notAfter": { $gt: new Date() },
+    },
     { projection: { "certificate.issuedAt": 1 }, sort: { _id: 1 } },
   ).toArray();
   const version = domains.map((d) =>

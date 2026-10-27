@@ -39,6 +39,7 @@ import {
 import { registryModel } from "@/schemas/infrastructure/serverSpec.ts";
 import {
   acmeChallengeModel,
+  certificateArchiveModel,
   domainJobSlotModel,
   domainModel,
 } from "@/schemas/applications/domain.ts";
@@ -309,6 +310,11 @@ export const syncDeployIndexes = async () => {
       partialFilterExpression: { verifiedAt: { $exists: true } },
     }),
     domainModel.createIndex({ project: 1 }, { name: "project" }),
+    // Removed domains' certificates go when they expire.
+    certificateArchiveModel.createIndex({ "certificate.notAfter": 1 }, {
+      name: "ttl",
+      expireAfterSeconds: 0,
+    }),
     serverModel.createIndex({ tunnelPort: 1 }, {
       name: "uniqueTunnelPort",
       unique: true,

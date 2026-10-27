@@ -69,6 +69,7 @@ import { VariableTable } from "@/pages/variables"
 import { DeploymentSheet } from "./DeploymentSheet"
 import { DomainsTab } from "./DomainsTab"
 import { type TVolume, VolumesEditor } from "./VolumesEditor"
+import { DistributionEditor, type TDistribution } from "./DistributionEditor"
 import { LabelChips } from "@/pages/servers/ServerLabels"
 import { ago } from "@/lib/format"
 import {
@@ -387,6 +388,13 @@ function Settings({
   const [needsNetwork, setNeedsNetwork] = React.useState(
     !!project.needsPrivateNetwork
   )
+  const initialDistribution: TDistribution = {
+    distribution: project.distribution as TDistribution["distribution"],
+    registry: project.registry,
+  }
+  const [distribution, setDistribution] = React.useState(initialDistribution)
+  const builds =
+    project.source.type !== "image" && project.source.type !== "compose"
   const [busy, setBusy] = React.useState(false)
   const [deleting, setDeleting] = React.useState(false)
   const [confirm, setConfirm] = React.useState("")
@@ -417,6 +425,16 @@ function Settings({
           acknowledgeVolumeRisk: strategy !== project.deployStrategy,
           autoDeploy,
           needsPrivateNetwork: needsNetwork,
+          ...(JSON.stringify(distribution) !==
+          JSON.stringify(initialDistribution)
+            ? {
+                distribution: distribution.distribution,
+                registry:
+                  distribution.distribution === "registry"
+                    ? (distribution.registry ?? null)
+                    : null,
+              }
+            : {}),
           ...(project.compose !== undefined && compose !== project.compose
             ? { compose }
             : {}),
@@ -739,6 +757,16 @@ function Settings({
             />
           )}
         </Panel>
+
+        {builds && (
+          <Panel title={t("Build")} bodyClassName="flex flex-col gap-4">
+            <DistributionEditor
+              value={distribution}
+              onChange={setDistribution}
+              note={t("Changes apply on the next deploy.")}
+            />
+          </Panel>
+        )}
 
         <Panel
           title={t("Source and network")}

@@ -984,13 +984,37 @@ export async function rollback(opts: {
   });
 }
 
-/** "Clear build cache": a new cache id, and the next build skips the layer cache (PLAN §9.2). */
-export async function clearBuildCache(tenant: ObjectId, project: ObjectId) {
-  const { matchedCount } = await projectModel.updateOne(
+/**
+ * "Clear build cache" (PLAN §9.2): a new cache id, the next build skips the
+ * layer cache, and the servers that built it drop its cache mounts.
+ */
+export async function clearBuildCache(
+  tenant: ObjectId,
+  project: ObjectId,
+  user?: ObjectId,
+) {
+  const doc = await projectModel.findOneAndUpdate(
     { _id: project, tenant },
     { $inc: { cacheEpoch: 1 }, $set: { noCacheNext: true } },
+    { projection: { servers: 1, placedOn: 1 } },
   );
-  if (!matchedCount) throw Response.notFound("Project not found");
+  if (!doc) throw Response.notFound("Project not found");
+  const built = await deploymentModel.distinct("builds.server", {
+    project,
+    "builds.server": { $exists: true },
+  });
+  const servers = new Map(
+    [...doc.servers, ...doc.placedOn, ...built].map((s) => [String(s), s]),
+  );
+  for (const server of servers.values()) {
+    await issueCommand({
+      server,
+      tenant,
+      type: "cache.clear",
+      payload: { project: project.toHexString() },
+      createdBy: user,
+    }).catch((e) => log.warn(`cache.clear on ${server}: ${e}`));
+  }
 }
 
 /** GitHub `push` webhook: deploy every auto-deploy project on that branch (PLAN §16 6c). */

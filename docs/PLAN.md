@@ -346,7 +346,7 @@ This is the onboarding flow from the original requirements: *"the user provides 
 
 ### 4.5 One-off command types
 
-Built: `ping`, `docker.ensure`, `stream.open` / `stream.close` (logs, build output, metrics, exec, terminal, capacity), `build.run`, `agent.update`, `registry.delete`, `host.cleanup`, `pool.ensure`, `partition.create` / `resize` / `stop` / `start` / `remove` / `send` / `receive`. Not built: `cache.clear` (§9.2), `volume.backup` / `volume.restore` (backups skipped, §11).
+Built: `ping`, `docker.ensure`, `stream.open` / `stream.close` (logs, build output, metrics, exec, terminal, capacity), `build.run`, `cache.clear`, `agent.update`, `registry.delete`, `host.cleanup`, `pool.ensure`, `partition.create` / `resize` / `stop` / `start` / `remove` / `send` / `receive`. Not built: `volume.backup` / `volume.restore` (backups skipped, §11).
 
 ---
 
@@ -540,7 +540,7 @@ How caching stays fast and correct:
 
 Escape hatches:
 - **"Deploy without cache"** checkbox on any deploy (`--no-cache`, recorded on the deployment).
-- **"Clear build cache"** per project: bumps `cacheEpoch` (new cache mount ids) and the next build runs without the layer cache. Other projects are unaffected. Not built: a `cache.clear` command that empties the old mounts on the build servers, so they stay until Docker's cache is pruned by hand.
+- **"Clear build cache"** per project: bumps `cacheEpoch` (new cache mount ids), the next build runs without the layer cache, and `cache.clear` goes to every server that built it (its current servers and those its deployments' builds ran on): `docker builder prune --filter type=exec.cachemount --filter description~=<project>-` drops the project's cache mounts, whose ids start with the project id. Other projects are unaffected; old layers age out by BuildKit's own GC.
 - Not built: a server-level "Prune build cache and unused images" action and an automatic prune above a disk threshold.
 
 ### 9.3 Deploy flow
@@ -668,7 +668,7 @@ visitor ─► (later: any TCP load balancer) ─► control plane instance(s): 
   - The server's edge proxy then spreads requests across its local replicas, as today; zero-downtime switches stay there.
   - Per project:
     - **weighted round robin** (the default);
-    - **sticky sessions**, a cookie naming the server, which works across instances. **Not built yet.**
+    - **sticky sessions, always on** (owner, 2026-10-27): Traefik's weighted service sets `huruf_server` (Secure, HttpOnly, SameSite=Lax) naming the server, which works across instances; the server's edge (Caddy) sets `huruf_replica` naming the replica, with round robin for new visitors and for those whose replica is gone.
 - **Health.**
   - A server is eligible while the project is placed on it (`placedOn`), its lease is alive and it has a tunnel port; its weight is its replicas (configured or autoscaled). Replica health isn't checked here: projects with a health check path get Traefik's own health check per server. Offline servers drop out within the lease time.
   - Traefik retries a request on another server when it couldn't connect.
@@ -688,7 +688,8 @@ visitor ─► (later: any TCP load balancer) ─► control plane instance(s): 
   1. **Ownership:** `_huruf.<domain> TXT huruf-verify=<token>`, checked with an ordinary DNS lookup (no third-party integration). Without it, a tenant could claim a domain that another customer later points at the platform. The token is derived, not random: an HMAC of tenant and domain with a platform secret made once (`platformSecrets`, sealed, never rotated). Re-adding a domain gives the record that's already in DNS, and another tenant gets a different one. Nothing about past verification is stored; adding a domain runs one check, so records already in place verify at once.
   2. **Waiting for DNS:** the domain must resolve to the ingress, either as a CNAME to `INGRESS_HOSTNAME` (subdomains) or as an A record to `INGRESS_IPV4` (apex). The user clicks **Check now** once the records are in place. The control plane then checks the ownership record and DNS right away, and every minute for up to 30 minutes while records propagate, then stops until the next click. It never checks unprompted, and it orders a certificate only after both pass, so a wrong record never spends Let's Encrypt attempts. A domain behind Cloudflare's proxy gets a specific explanation.
   3. **Issuing:** at most 3 orders per domain per hour (Let's Encrypt allows 5 failed validations per hour), with exponential backoff and the ACME error shown verbatim.
-  4. **Live:** the route is added. Not built yet: a check after issuing that connects with the domain's name and confirms the certificate and that the project answers, rather than Traefik's "no route".
+  4. **Verifying → Live:** the route and certificate are served at once; the control plane fetches `https://<domain>` (any HTTP answer over valid TLS) every 30 s for 10 minutes and marks the domain live once it answers, else failed with why. "Check now" verifies again without a new order.
+  - **Certificate reuse:** a removed domain's valid certificate (removed alone or with its project) is kept by hostname (`certificateArchive`, gone when it expires). When the same tenant adds and verifies that hostname again, it gets the kept certificate instead of a new order (Let's Encrypt's rate limits). Only the same tenant: the key is sealed under its key.
   5. **Renewing / error:** each with its reason and what to do.
 - **Not in this phase:**
   - platform subdomains: user apps are never served under the platform's domain, because of cookie scope and reputation;
@@ -1513,13 +1514,15 @@ The owner's decision (2026-10-27): no pool machines. An admin adds machines like
   - **Performance:** `refreshSpecs` batches its reads and computes 8 servers at a time; the agent collects partition usage with 3 commands per summary; new indexes: `servers` `provider.host` + `provider.meshPort` (unique: two partitions joining a machine at once, or a move, take the next port), `bootstrapSessions` `partition.host`, `subscriptionPeriods` `ledgerReference`.
   - **Agent:** shutdown waits up to 2 + 1 minutes for running commands (`TimeoutStopSec=240` in the unit, new installs); a move gives up after 15 minutes without bytes; the uninstall marker gives up after 10 minutes; partition names and file variable keys are validated.
   - **Local tasks:** `setup:dev` and `load:agents` run with `ENV_TYPE=test` (`.env.test`), like `test`.
+- **Second addendum (owner, 2026-10-27): built.**
+  - **Moves without a private network** (§26.10 "Transport"): encrypted, straight between machines on TCP 51830.
+  - **Rentals that didn't arrive:** Admin → Rentals lists approved rentals still without a server and why (`GET /rentalsAdmin/api/waiting`: the machine's create error, or "its agent never joined"); "Try again" creates the partition again there or on another machine of its class with room (`POST /:id/partition {host?}`; the half-made one and its join token go); "Refund" gives the running period's charge back to the wallet and removes the rental (`POST /:id/refund`; the period ends then and records `refunded`; a second refund gives nothing).
+  - **Template details:** a tenant's template can be renamed, described and given another icon.
+  - **Image distribution** is chosen per project in the dashboard (auto, build on each server, or a registry), when creating it and in its settings.
+  - **`cache.clear`** (§9.2), **sticky sessions** and the **HTTPS check before Live** with **certificate reuse** (§14).
 - **Open:**
-  - S3 volumes inside partitions don't work yet: the rclone Docker plugin needs `/dev/fuse` and mount propagation, which Sysbox partitions don't provide.
-  - Moving a rental between Phase 18 machines needs the machines on the private network: machines get no mesh index, so `moveTargets` reports them unreachable.
-  - "Re-create partition" for a charged rental whose partition failed: the route exists (`POST /rentalsAdmin/api/:id/partition`), no button yet.
-  - Template rename: the route exists (`PATCH /templates/api/:id`), no UI yet.
-  - Per-project distribution (`registry` / `perServer`) is set through the API only.
-  - Not built elsewhere in the plan: `cache.clear` (§9.2), audited variable reveals and resolve reads (§12), ingress sticky sessions and the post-issue Live check (§14), template `cachePaths` (stored, unused).
+  - S3 volumes inside partitions don't work yet: in a Sysbox partition a FUSE mount can't be handed to a container (the Docker plugin, a bind at start and a bind after start all fail); mounting the bucket inside each project container is the likely way, to be designed.
+  - Not built elsewhere in the plan: audited variable reveals and resolve reads (§12), template `cachePaths` (stored, unused).
 
 ### Phase 14 — Backlog (after MVP)
 - Ability to upgrade already installed agent along with its deps — **done (pending review):**
@@ -2337,7 +2340,7 @@ Needed for a resize that doesn't fit, or for draining a machine. An admin action
 3. The target carves the size from its remainder, pulls both parts (`docker load`, `tar -x`) under the partition's disk quota, and starts it from the moved image.
 4. On the target's success the rental and its server point at the new machine and the source's copy is removed. On failure the source starts it again and the target gives its reservation back; the old copy is kept until a move succeeds.
 
-- **Transport:** the private network (WireGuard between the platform's servers, which every ready server joins). Moves need the two machines to reach each other there; the control plane never carries the data.
+- **Transport** (owner, 2026-10-27): straight between the two machines, for the move only. The source serves on TCP 51830 (`MOVE_PORT`, open on machines for rent); the target fetches from the source's public address (else its private one). The control plane seals a one-time token and AES-256 key to both: every part is AES-256-GCM in authenticated 64 KiB chunks (the last one marked), so a wrong key, tampering or a cut-off transfer fails the move and the source starts the partition again. No private network for machines, and the control plane never carries the data.
 - The partition's agent keeps its identity, so the customer's server, projects and domains stay the same.
 - **Downtime is shown first:** about a minute plus the data at `POOL_MOVE_MBPS` (default 50 MB/s). Measured locally: a 1 GB partition was down 14–17 s.
 - **Stuck moves:** if an agent restarts mid-move, no result comes. "Cancel move" starts the partition on the source and removes the target's copy; a target whose reservation was removed during the copy doesn't start it.

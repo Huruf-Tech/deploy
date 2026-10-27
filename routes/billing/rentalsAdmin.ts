@@ -195,7 +195,9 @@ export default new Router("/api", function rentalsAdmin(router) {
         free: z.object({ memMb: z.number(), diskGb: z.number() }),
         cpuRoom: z.number(),
         fits: z.boolean(),
-        reachable: z.boolean().describe("Over the private network"),
+        reachable: z.boolean().describe(
+          "The source machine has an address to move from",
+        ),
       })),
     });
 
@@ -262,26 +264,74 @@ export default new Router("/api", function rentalsAdmin(router) {
     };
   });
 
-  // Re-creates an approved rental's partition (e.g. its create failed).
-  router.post("/:id/partition", function recreatePartition() {
+  // Approved rentals still without a server, and why (PLAN §26.9).
+  router.get("/waiting", function waiting() {
+    const $return = z.array(z.object({
+      _id: z.string(),
+      tenantName: z.string().optional(),
+      plan: z.string().optional(),
+      size: z.object({
+        cpus: z.number(),
+        memMb: z.number(),
+        diskGb: z.number(),
+      }),
+      host: z.string().optional().describe("The machine's name"),
+      since: z.date(),
+      error: z.string().optional().describe(
+        "Why it's stuck; absent while it's being set up",
+      ),
+    }));
+
     return {
-      shape: () => ({ params: $params }),
+      shape: () => ({ return: $return }),
+      handler: async () => {
+        const rows = await rentalService.waiting();
+        const [tenants, plans] = await Promise.all([
+          tenantModel.find({ _id: { $in: rows.map((r) => r.sub.tenant) } }, {
+            projection: { name: 1 },
+          }).toArray(),
+          planModel.find({ _id: { $in: rows.map((r) => r.sub.plan) } }, {
+            projection: { name: 1 },
+          }).toArray(),
+        ]);
+        return Response.json(rows.map(({ sub, ...r }) => ({
+          _id: sub._id,
+          tenantName: tenants.find((t) => t._id.equals(sub.tenant))?.name,
+          plan: plans.find((p) => p._id.equals(sub.plan))?.name,
+          size: sub.rental!.size,
+          ...r,
+        })));
+      },
+    };
+  });
+
+  // Creates a stuck rental's partition again, there or on another machine.
+  router.post("/:id/partition", function recreatePartition() {
+    const $body = z.object({ host: $objectId.optional() });
+
+    return {
+      shape: () => ({ params: $params, body: $body }),
       handler: async (req) => {
         const { id } = $params.parse(paramsAsJson(req));
-        const sub = await subscriptionModel.findOne({
-          _id: id,
-          kind: "server",
-          status: { $in: ["active", "pastDue"] },
-          server: { $exists: false },
-        });
-        if (!sub?.rental) {
-          throw Response.badRequest("No approved rental without a server");
-        }
-        await rentalService.createPartitionFor(
-          { ...sub, rental: sub.rental },
-          await admin(req),
-        );
+        const { host } = $body.parse(await bodyAsJson(req));
+        await rentalService.recreate(id, await admin(req), host);
         return Response.json({ ok: true });
+      },
+    };
+  });
+
+  // The running period back to the wallet, and the rental removed.
+  router.post("/:id/refund", function refund() {
+    const $return = z.object({ amount: z.number().describe("Cents refunded") });
+
+    return {
+      shape: () => ({ params: $params, body: $reason, return: $return }),
+      handler: async (req) => {
+        const { id } = $params.parse(paramsAsJson(req));
+        const { reason } = $reason.parse(await bodyAsJson(req));
+        return Response.json(
+          await rentalService.refund(id, await admin(req), reason),
+        );
       },
     };
   });

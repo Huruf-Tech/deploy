@@ -265,6 +265,12 @@ Deno.test({
         "clear build cache: a new cache id and no layer cache next time",
         async () => {
           await call("POST", `/projects/api/${project}/clearCache`, {});
+          // The servers that built it drop its cache mounts.
+          const clears = await mongodb.db().collection("agentCommands").find({
+            type: "cache.clear",
+            "payload.project": project,
+          }).toArray();
+          assert(clears.length > 0, "cache.clear sent to its builders");
           await call("POST", `/projects/api/${project}/deploy`, {});
           await pollAll();
           const build = agents[0].builds.at(-1)!;

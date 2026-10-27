@@ -193,7 +193,7 @@ type PollResponse struct {
 type Command struct {
 	Seq int64 `json:"seq"`
 
-	// One of: ping, docker.ensure, stream.open, stream.close, build.run, agent.update, registry.delete, host.cleanup, pool.ensure, partition.create, partition.resize, partition.stop, partition.start, partition.remove, partition.send, partition.receive
+	// One of: ping, docker.ensure, stream.open, stream.close, build.run, cache.clear, agent.update, registry.delete, host.cleanup, pool.ensure, partition.create, partition.resize, partition.stop, partition.start, partition.remove, partition.send, partition.receive
 	Type string `json:"type"`
 
 	Payload map[string]any `json:"payload"`
@@ -395,6 +395,10 @@ type BuildRunPayloadPush struct {
 	Username string `json:"username"`
 
 	Password string `json:"password"`
+}
+
+type CacheClearPayload struct {
+	Project string `json:"project"`
 }
 
 type DesiredSpec struct {
@@ -874,10 +878,12 @@ type PartitionNamePayload struct {
 type PartitionSendPayload struct {
 	Name string `json:"name"`
 
-	// host:port, the mesh address
+	// host:port to serve on
 	Listen string `json:"listen"`
 
 	Token string `json:"token"`
+
+	Key string `json:"key"`
 }
 
 type PartitionReceivePayload struct {
@@ -891,4 +897,6 @@ type PartitionReceivePayload struct {
 	From string `json:"from"`
 
 	Token string `json:"token"`
+
+	Key string `json:"key"`
 }

@@ -127,6 +127,11 @@ Deno.test({
           { name: `p-${project}-s-${a}`, weight: 1 },
           { name: `p-${project}-s-${b}`, weight: 3 },
         ]);
+        assertEquals(
+          services[`p-${project}`].weighted.sticky.cookie.name,
+          "huruf_server",
+          "a visitor stays on its server",
+        );
         const lb = services[`p-${project}-s-${b}`].loadBalancer;
         assertEquals(lb.servers, [{ url: "http://127.0.0.1:20002" }]);
         assertEquals(lb.healthCheck.path, "/health");

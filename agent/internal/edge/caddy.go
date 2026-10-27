@@ -63,6 +63,9 @@ func (c *Caddy) Apply(ctx context.Context, routes []reconcile.Route) error {
 	return nil
 }
 
+// StickyCookie names a visitor's replica on this server.
+const StickyCookie = "huruf_replica"
+
 // Config is the full Caddy JSON config for these routes.
 func Config(routes []reconcile.Route) map[string]any {
 	servers := map[string]any{}
@@ -109,11 +112,18 @@ func handlerFor(route reconcile.Route) map[string]any {
 	handler := map[string]any{
 		"handler":   "reverse_proxy",
 		"upstreams": upstreams,
-		// A replica that stopped between updates is retried on another one.
+		// Sticky sessions (PLAN §14): a visitor stays on the replica its
+		// cookie names; new visitors, and those whose replica is gone, are
+		// spread round robin. A replica that stopped between updates is
+		// retried on another one.
 		"load_balancing": map[string]any{
-			"selection_policy": map[string]string{"policy": "round_robin"},
-			"try_duration":     "5s",
-			"try_interval":     "250ms",
+			"selection_policy": map[string]any{
+				"policy":   "cookie",
+				"name":     StickyCookie,
+				"fallback": map[string]string{"policy": "round_robin"},
+			},
+			"try_duration": "5s",
+			"try_interval": "250ms",
 		},
 	}
 	if route.HealthPath != "" {

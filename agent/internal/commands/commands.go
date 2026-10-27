@@ -80,7 +80,8 @@ func Default(ctx context.Context, s *streams.Manager, builder *build.Builder, op
 			s.Close(p.Session)
 			return map[string]any{"closed": true}, nil
 		}),
-		"build.run": Sealed(open, builder.Run),
+		"build.run":   Sealed(open, builder.Run),
+		"cache.clear": Handle(builder.ClearCache),
 		"agent.update": Handle(func(ctx context.Context, p protocol.AgentUpdatePayload) (map[string]any, error) {
 			result, err := update.Apply(ctx, p)
 			if err == nil && result["restarting"] == true {

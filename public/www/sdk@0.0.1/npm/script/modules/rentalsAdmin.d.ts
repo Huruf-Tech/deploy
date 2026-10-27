@@ -82,7 +82,7 @@ export type moveTargets$return = {
         };
         cpuRoom: number;
         fits: boolean;
-        /** Over the private network */
+        /** The source machine has an address to move from */
         reachable: boolean;
     }[];
 };
@@ -117,8 +117,36 @@ export type capacity$return = {
         cost: number;
     }[];
 };
+export type waiting$return = {
+    _id: string;
+    tenantName?: string | undefined;
+    plan?: string | undefined;
+    size: {
+        cpus: number;
+        memMb: number;
+        diskGb: number;
+    };
+    /** The machine's name */
+    host?: string | undefined;
+    since: Date;
+    /** Why it's stuck; absent while it's being set up */
+    error?: string | undefined;
+}[];
 export type recreatePartition$params = {
     id?: string;
+};
+export type recreatePartition$body = {
+    host?: string | undefined;
+};
+export type refund$params = {
+    id?: string;
+};
+export type refund$body = {
+    reason?: string | undefined;
+};
+export type refund$return = {
+    /** Cents refunded */
+    amount: number;
 };
 export type pool$params = {
     id?: string;
@@ -186,7 +214,12 @@ export declare const rentalsAdminModule: (sdk: typeof BaseSDK) => {
         move$body: move$body;
         cancelMove$params: cancelMove$params;
         capacity$return: capacity$return;
+        waiting$return: waiting$return;
         recreatePartition$params: recreatePartition$params;
+        recreatePartition$body: recreatePartition$body;
+        refund$params: refund$params;
+        refund$body: refund$body;
+        refund$return: refund$return;
         pool$params: pool$params;
         pool$return: pool$return;
         updatePool$params: updatePool$params;
@@ -335,16 +368,38 @@ export declare const rentalsAdminModule: (sdk: typeof BaseSDK) => {
         catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<capacity$return | TResult>;
         finally: (onfinally?: (() => void) | null | undefined) => Promise<capacity$return>;
     };
+    readonly waiting: (data?: {
+        params?: undefined;
+        query?: undefined;
+        body?: undefined;
+    } & TRequestOptions<waiting$return>) => {
+        readonly raw: Promise<import("axios").AxiosResponse<waiting$return, any, {}, any>>;
+        readonly data: Promise<waiting$return>;
+        then: <TResult1 = waiting$return, TResult2 = never>(onfulfilled?: ((value: waiting$return) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+        catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<waiting$return | TResult>;
+        finally: (onfinally?: (() => void) | null | undefined) => Promise<waiting$return>;
+    };
     readonly recreatePartition: (data: {
         params: recreatePartition$params;
         query?: undefined;
-        body?: undefined;
+        body: recreatePartition$body;
     } & TRequestOptions<unknown>) => {
         readonly raw: Promise<import("axios").AxiosResponse<unknown, any, {}, any>>;
         readonly data: Promise<unknown>;
         then: <TResult1 = unknown, TResult2 = never>(onfulfilled?: ((value: unknown) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
         catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<unknown>;
         finally: (onfinally?: (() => void) | null | undefined) => Promise<unknown>;
+    };
+    readonly refund: (data: {
+        params: refund$params;
+        query?: undefined;
+        body: refund$body;
+    } & TRequestOptions<refund$return>) => {
+        readonly raw: Promise<import("axios").AxiosResponse<refund$return, any, {}, any>>;
+        readonly data: Promise<refund$return>;
+        then: <TResult1 = refund$return, TResult2 = never>(onfulfilled?: ((value: refund$return) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+        catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<refund$return | TResult>;
+        finally: (onfinally?: (() => void) | null | undefined) => Promise<refund$return>;
     };
     readonly pool: (data: {
         params: pool$params;

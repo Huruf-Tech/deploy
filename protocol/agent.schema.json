@@ -524,6 +524,7 @@
                   "stream.open",
                   "stream.close",
                   "build.run",
+                  "cache.clear",
                   "agent.update",
                   "registry.delete",
                   "host.cleanup",
@@ -1371,6 +1372,20 @@
         "noCache",
         "timeoutSec",
         "gitImage"
+      ],
+      "additionalProperties": false
+    },
+    "CacheClearPayload": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "project": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{24}$"
+        }
+      },
+      "required": [
+        "project"
       ],
       "additionalProperties": false
     },
@@ -2607,18 +2622,23 @@
         "listen": {
           "type": "string",
           "maxLength": 64,
-          "description": "host:port, the mesh address"
+          "description": "host:port to serve on"
         },
         "token": {
           "type": "string",
           "minLength": 32,
           "maxLength": 128
+        },
+        "key": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9+/]{43}=$"
         }
       },
       "required": [
         "name",
         "listen",
-        "token"
+        "token",
+        "key"
       ],
       "additionalProperties": false
     },
@@ -2669,6 +2689,10 @@
           "type": "string",
           "minLength": 32,
           "maxLength": 128
+        },
+        "key": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9+/]{43}=$"
         }
       },
       "required": [
@@ -2676,7 +2700,8 @@
         "size",
         "isolated",
         "from",
-        "token"
+        "token",
+        "key"
       ],
       "additionalProperties": false
     }

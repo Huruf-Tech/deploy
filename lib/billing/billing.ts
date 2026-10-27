@@ -584,6 +584,44 @@ export class BillingService {
     }
   }
 
+  /**
+   * Admin: gives the running period's charge back to the wallet and ends the
+   * period now (e.g. a rental that was never delivered). Returns the amount;
+   * a repeated refund gives nothing more.
+   */
+  async refundCurrent(subscription: ObjectId, user: ObjectId) {
+    const now = new Date();
+    const period = await subscriptionPeriodModel.findOne(
+      { subscription, kind: "paid", periodEnd: { $gt: now } },
+      { sort: { periodStart: -1 } },
+    );
+    if (!period || period.amount <= 0) return 0;
+    await mongodb.withSession((client) =>
+      client.withTransaction(async (session) => {
+        await Wallet.transfer({
+          fromTenant: await platformTenant(),
+          toTenant: period.tenant,
+          amount: period.amount,
+          currency: period.currency,
+          // The customer paid this; the platform's balance never blocks it.
+          allowOverdraft: true,
+          overdraftLimit: Number.MAX_SAFE_INTEGER,
+          idempotencyKey: `refund:${period._id}`,
+          description: "Refund",
+          purpose: "subscription",
+          foreignRefType: "subscriptionPeriod",
+          foreignRef: period._id.toHexString(),
+          user,
+          databaseSession: session,
+        });
+        await subscriptionPeriodModel.updateOne({ _id: period._id }, {
+          $set: { periodEnd: now, refunded: period.amount },
+        }, { session });
+      })
+    );
+    return period.amount;
+  }
+
   /** Cancel at the period end; a workspace then falls back to Free. */
   async cancel(tenant: ObjectId, subject: TSubject = WORKSPACE) {
     const { matchedCount } = await subscriptionModel.updateOne(

@@ -20,7 +20,7 @@ export const $subscriptionPeriod = z.object({
   plan: $objectId.meta({ ref: "plans" }),
   periodStart: z.date(),
   periodEnd: z.date(),
-  /** What was charged: the price minus `proratedCredit`. */
+  /** What was charged: the price minus `proratedCredit`, plus `overage`. */
   amount: z.number().int().min(0),
   currency: z.string(),
   /** Unused time of the replaced period, credited against this one (PLAN §26.6 B). */
@@ -38,6 +38,8 @@ export const $subscriptionPeriod = z.object({
   }).optional(),
   /** Charged with this period: the previous period's traffic beyond its allowance. */
   overage: z.object({ gb: z.number(), amount: z.number().int() }).optional(),
+  /** Given back to the wallet by an admin; the period ended then (PLAN §26.9). */
+  refunded: z.number().int().min(0).optional(),
   kind: z.enum(["paid", "complimentary"]),
   paidAt: z.date().optional(),
   /** Why a complimentary period was granted. */
