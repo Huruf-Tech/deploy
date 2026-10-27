@@ -567,8 +567,60 @@ Deno.test({
       );
 
       await t.step(
+        "an admin suspends and resumes it; it isn't renewed meanwhile",
+        async () => {
+          const stops = (await commands("partition.stop")).length;
+          const starts = (await commands("partition.start")).length;
+          assertEquals(
+            (await customer.call(
+              "POST",
+              `/rentalsAdmin/api/${rental}/suspend`,
+              {},
+            ))
+              .status,
+            403,
+            "admins only",
+          );
+          await rentals.hold(rental, platform.user, "Abuse report");
+          const held = await sub();
+          assertEquals([held.status, held.rental!.held?.status], [
+            "suspended",
+            "active",
+          ]);
+          assertEquals((await commands("partition.stop")).length, stops + 1);
+          await mailed(/stopped by Huruf/);
+          // Its period ends meanwhile: not charged, still held.
+          const before = await balance();
+          await endPeriod();
+          await billing.renewIfDue(tenant);
+          assertEquals([(await sub()).status, await balance()], [
+            "suspended",
+            before,
+          ]);
+          const list = await customer.call("GET", "/rentals/api/");
+          assertEquals(
+            list.json.find((r: { _id: string }) => r._id === String(rental))
+              .held,
+            true,
+          );
+          await rentals.resume(rental);
+          assertEquals((await sub()).status, "active");
+          assertEquals((await sub()).rental!.held, undefined);
+          assertEquals((await commands("partition.start")).length, starts + 1);
+          // The ended period renews now.
+          await fund(10_000);
+          const funded = await balance();
+          await billing.renewIfDue(tenant);
+          assert(await balance() < funded);
+          assert((await sub()).currentPeriodEnd! > new Date());
+        },
+      );
+
+      await t.step(
         "unpaid: past due, suspended after 3 days, paid and resumed",
         async () => {
+          const stops = (await commands("partition.stop")).length;
+          const starts = (await commands("partition.start")).length;
           // Empty the wallet; there's no billing account, so no card is charged.
           const empty = await balance();
           if (await balance() > 0) {
@@ -591,7 +643,7 @@ Deno.test({
           });
           await billing.renewIfDue(tenant);
           assertEquals((await sub()).status, "suspended");
-          assertEquals((await commands("partition.stop")).length, 1);
+          assertEquals((await commands("partition.stop")).length, stops + 1);
           await mailed(/stopped/);
           // Paying resumes it.
           await fund(10_000);
@@ -600,7 +652,7 @@ Deno.test({
           });
           await billing.renewIfDue(tenant);
           assertEquals((await sub()).status, "active");
-          assertEquals((await commands("partition.start")).length, 1);
+          assertEquals((await commands("partition.start")).length, starts + 1);
         },
       );
 
@@ -685,6 +737,19 @@ Deno.test({
           404,
           "nothing left to approve",
         );
+        // An admin deletes an approved rental now.
+        const c =
+          (await customer.call("POST", "/rentals/api/request", { plan: small }))
+            .json.rental;
+        await rentals.approve(new ObjectId(c), host, platform.user);
+        const removes = (await commands("partition.remove")).length;
+        await rentals.terminate(new ObjectId(c), "Terms violation");
+        assertEquals(
+          (await subscriptionModel.findOne({ _id: new ObjectId(c) }))!.status,
+          "canceled",
+        );
+        assertEquals((await commands("partition.remove")).length, removes + 1);
+        await mailed(/deleted by Huruf/);
       });
     } finally {
       config.PLATFORM_TENANT = previous;

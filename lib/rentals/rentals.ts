@@ -562,6 +562,70 @@ export class RentalService implements TRentalHooks {
     return this.billing.cancel(tenant, { kind: "server", subscription: id });
   }
 
+  // --- An admin's hand (support, abuse) ---
+
+  /** Stops a rental; it isn't renewed until an admin resumes it. */
+  async hold(id: ObjectId, admin: ObjectId, reason?: string) {
+    const sub = await this.rentalOf(id, { status: { $in: [...RUNNING] } });
+    if (!sub.rental.host || !sub.rental.partition) {
+      throw Response.badRequest("The rental isn't placed yet");
+    }
+    if (sub.rental.move) throw Response.badRequest("It's being moved");
+    await stopPartition(sub.rental.host, sub.rental.partition);
+    const now = new Date();
+    await subscriptionModel.updateOne({ _id: id }, {
+      $set: {
+        status: "suspended",
+        "rental.suspendedAt": now,
+        "rental.held": {
+          by: admin,
+          at: now,
+          status: sub.status as (typeof RUNNING)[number],
+          ...(reason ? { reason } : {}),
+        },
+        updatedAt: now,
+      },
+    });
+    notifyOwner(sub.tenant, {
+      subject: "{workspace}: your rented server was stopped by Huruf",
+      text: `Huruf stopped your rented server${
+        reason ? `: ${reason}` : ""
+      }. Its data is kept. Contact support to start it again.`,
+    }).catch((e) => log(`hold notice: ${e}`));
+  }
+
+  /** Starts a held rental again; a period that ended meanwhile renews next. */
+  async resume(id: ObjectId) {
+    const sub = await this.rentalOf(id, {
+      status: "suspended",
+      "rental.held": { $exists: true },
+    });
+    await startPartition(sub.rental.host!, sub.rental.partition!);
+    await subscriptionModel.updateOne({ _id: id }, {
+      $set: { status: sub.rental.held!.status, updatedAt: new Date() },
+      $unset: { "rental.held": "", "rental.suspendedAt": "" },
+    });
+    notifyOwner(sub.tenant, {
+      subject: "{workspace}: your rented server is running again",
+      text: "Huruf started your rented server again.",
+    }).catch((e) => log(`resume notice: ${e}`));
+  }
+
+  /** Deletes a rental now, with its partition and data; nothing is refunded. */
+  async terminate(id: ObjectId, reason?: string) {
+    const sub = await this.rentalOf(id, { status: { $in: [...LIVE] } });
+    if (sub.rental.move) {
+      throw Response.badRequest("It's being moved: cancel the move first");
+    }
+    await this.release(sub, "canceled");
+    notifyOwner(sub.tenant, {
+      subject: "{workspace}: your rented server was deleted by Huruf",
+      text: `Huruf deleted your rented server with its data${
+        reason ? `: ${reason}` : ""
+      }.`,
+    }).catch((e) => log(`terminate notice: ${e}`));
+  }
+
   // --- Billing's rental hooks (PLAN §26.9) ---
 
   async overage(sub: WithId<TSubscription>) {

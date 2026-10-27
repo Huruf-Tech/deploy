@@ -203,7 +203,14 @@ export function RentalPanel({ server }: { server: string }) {
           )}
         </p>
       )}
-      {rental.status === "suspended" && (
+      {rental.held && (
+        <p className="rounded-lg bg-destructive-soft px-3 py-2 text-[13px] text-destructive-foreground">
+          {t(
+            "Huruf stopped it. Its data is kept: contact support to start it again."
+          )}
+        </p>
+      )}
+      {rental.status === "suspended" && !rental.held && (
         <p className="rounded-lg bg-destructive-soft px-3 py-2 text-[13px] text-destructive-foreground">
           {t(
             "Stopped because it couldn't renew. Its data is kept for a while: add funds on the Billing page and it starts again."

@@ -128,6 +128,7 @@ export default new Router("/api", function rentals(router) {
         ),
         rejectedReason: z.string().optional(),
         suspendedAt: z.date().optional(),
+        held: z.boolean().optional().describe("Stopped by Huruf, not unpaid"),
         uptime: z.number().optional().describe("This period so far, percent"),
         moving: z.boolean().optional().describe(
           "Huruf moves it to another machine",
@@ -170,6 +171,7 @@ export default new Router("/api", function rentals(router) {
             pendingChange: s.rental!.pendingChange?.plan,
             rejectedReason: s.rental!.rejectedReason,
             suspendedAt: s.rental!.suspendedAt,
+            ...(s.rental!.held ? { held: true } : {}),
             uptime: uptimes.get(String(s._id)),
             ...(s.rental!.move ? { moving: true } : {}),
           };

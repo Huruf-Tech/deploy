@@ -123,6 +123,66 @@ export const rentalsAdminModule = (sdk) => {
                 return res;
             }, data);
         },
+        suspend(data) {
+            return sdk.resolveAxiosResponse(async () => {
+                sdk.checkPermission("rentalsAdmin", "suspend");
+                const method = "post";
+                const toPath = compile("rentalsAdmin/api/:id/suspend");
+                const requestPayload = {
+                    method,
+                    url: toPath(sdk.resolvePathParams(data?.params)),
+                    params: data?.query,
+                    data: data?.body,
+                    signal: data?.signal,
+                    ...(data?.axiosConfig
+                        ? sdk.resolveAxiosConfig(data.axiosConfig)
+                        : undefined),
+                };
+                sdk.log("Sending Request:", requestPayload);
+                const res = await sdk._axios.request(requestPayload);
+                return res;
+            }, data);
+        },
+        resume(data) {
+            return sdk.resolveAxiosResponse(async () => {
+                sdk.checkPermission("rentalsAdmin", "resume");
+                const method = "post";
+                const toPath = compile("rentalsAdmin/api/:id/resume");
+                const requestPayload = {
+                    method,
+                    url: toPath(sdk.resolvePathParams(data?.params)),
+                    params: data?.query,
+                    data: data?.body,
+                    signal: data?.signal,
+                    ...(data?.axiosConfig
+                        ? sdk.resolveAxiosConfig(data.axiosConfig)
+                        : undefined),
+                };
+                sdk.log("Sending Request:", requestPayload);
+                const res = await sdk._axios.request(requestPayload);
+                return res;
+            }, data);
+        },
+        terminate(data) {
+            return sdk.resolveAxiosResponse(async () => {
+                sdk.checkPermission("rentalsAdmin", "terminate");
+                const method = "post";
+                const toPath = compile("rentalsAdmin/api/:id/terminate");
+                const requestPayload = {
+                    method,
+                    url: toPath(sdk.resolvePathParams(data?.params)),
+                    params: data?.query,
+                    data: data?.body,
+                    signal: data?.signal,
+                    ...(data?.axiosConfig
+                        ? sdk.resolveAxiosConfig(data.axiosConfig)
+                        : undefined),
+                };
+                sdk.log("Sending Request:", requestPayload);
+                const res = await sdk._axios.request(requestPayload);
+                return res;
+            }, data);
+        },
         moveTargets(data) {
             return sdk.resolveAxiosResponse(async () => {
                 sdk.checkPermission("rentalsAdmin", "moveTargets");
@@ -270,6 +330,9 @@ export const rentalsAdminModule = (sdk) => {
     methods.reject.__scope = "rentalsAdmin";
     methods.approveResize.__scope = "rentalsAdmin";
     methods.rejectResize.__scope = "rentalsAdmin";
+    methods.suspend.__scope = "rentalsAdmin";
+    methods.resume.__scope = "rentalsAdmin";
+    methods.terminate.__scope = "rentalsAdmin";
     methods.moveTargets.__scope = "rentalsAdmin";
     methods.move.__scope = "rentalsAdmin";
     methods.cancelMove.__scope = "rentalsAdmin";

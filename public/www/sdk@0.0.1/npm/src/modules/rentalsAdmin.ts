@@ -57,6 +57,21 @@ export type rejectResize$params = {
 export type rejectResize$body = {
     reason: string;
 };
+export type suspend$params = {
+    id?: string;
+};
+export type suspend$body = {
+    reason?: string | undefined;
+};
+export type resume$params = {
+    id?: string;
+};
+export type terminate$params = {
+    id?: string;
+};
+export type terminate$body = {
+    reason?: string | undefined;
+};
 export type moveTargets$params = {
     id?: string;
 };
@@ -127,6 +142,8 @@ export type pool$return = {
         /** Cents per month */
         price: number;
         status: string;
+        /** Suspended by an admin */
+        held?: boolean | undefined;
         /** This period so far, percent */
         uptime?: number | undefined;
         /** Bytes used, when more than its size */
@@ -168,6 +185,11 @@ export const rentalsAdminModule = (sdk: typeof BaseSDK) => {
         approveResize$params: approveResize$params,
         rejectResize$params: rejectResize$params,
         rejectResize$body: rejectResize$body,
+        suspend$params: suspend$params,
+        suspend$body: suspend$body,
+        resume$params: resume$params,
+        terminate$params: terminate$params,
+        terminate$body: terminate$body,
         moveTargets$params: moveTargets$params,
         moveTargets$return: moveTargets$return,
         move$params: move$params,
@@ -333,6 +355,90 @@ export const rentalsAdminModule = (sdk: typeof BaseSDK) => {
 
             const method = "post";
             const toPath = compile("rentalsAdmin/api/:id/resize/reject");
+            const requestPayload = {
+                method,
+                url: toPath(sdk.resolvePathParams(data?.params)),
+                params: data?.query,
+                data: data?.body,
+                signal: data?.signal,
+                ...(data?.axiosConfig
+                ? sdk.resolveAxiosConfig(data.axiosConfig)
+                : undefined),
+            };
+
+            sdk.log("Sending Request:", requestPayload);
+
+            const res = await sdk._axios!.request(requestPayload);
+
+            return res;
+        }, data);
+    },
+        suspend(data: {
+        params: suspend$params,
+        query?: undefined,
+        body: suspend$body,
+    } & TRequestOptions<unknown>) {
+        return sdk.resolveAxiosResponse(async () => {
+            sdk.checkPermission("rentalsAdmin", "suspend");
+
+            const method = "post";
+            const toPath = compile("rentalsAdmin/api/:id/suspend");
+            const requestPayload = {
+                method,
+                url: toPath(sdk.resolvePathParams(data?.params)),
+                params: data?.query,
+                data: data?.body,
+                signal: data?.signal,
+                ...(data?.axiosConfig
+                ? sdk.resolveAxiosConfig(data.axiosConfig)
+                : undefined),
+            };
+
+            sdk.log("Sending Request:", requestPayload);
+
+            const res = await sdk._axios!.request(requestPayload);
+
+            return res;
+        }, data);
+    },
+        resume(data: {
+        params: resume$params,
+        query?: undefined,
+        body?: undefined,
+    } & TRequestOptions<unknown>) {
+        return sdk.resolveAxiosResponse(async () => {
+            sdk.checkPermission("rentalsAdmin", "resume");
+
+            const method = "post";
+            const toPath = compile("rentalsAdmin/api/:id/resume");
+            const requestPayload = {
+                method,
+                url: toPath(sdk.resolvePathParams(data?.params)),
+                params: data?.query,
+                data: data?.body,
+                signal: data?.signal,
+                ...(data?.axiosConfig
+                ? sdk.resolveAxiosConfig(data.axiosConfig)
+                : undefined),
+            };
+
+            sdk.log("Sending Request:", requestPayload);
+
+            const res = await sdk._axios!.request(requestPayload);
+
+            return res;
+        }, data);
+    },
+        terminate(data: {
+        params: terminate$params,
+        query?: undefined,
+        body: terminate$body,
+    } & TRequestOptions<unknown>) {
+        return sdk.resolveAxiosResponse(async () => {
+            sdk.checkPermission("rentalsAdmin", "terminate");
+
+            const method = "post";
+            const toPath = compile("rentalsAdmin/api/:id/terminate");
             const requestPayload = {
                 method,
                 url: toPath(sdk.resolvePathParams(data?.params)),
@@ -555,6 +661,9 @@ export const rentalsAdminModule = (sdk: typeof BaseSDK) => {
     (methods.reject as any).__scope = "rentalsAdmin";
     (methods.approveResize as any).__scope = "rentalsAdmin";
     (methods.rejectResize as any).__scope = "rentalsAdmin";
+    (methods.suspend as any).__scope = "rentalsAdmin";
+    (methods.resume as any).__scope = "rentalsAdmin";
+    (methods.terminate as any).__scope = "rentalsAdmin";
     (methods.moveTargets as any).__scope = "rentalsAdmin";
     (methods.move as any).__scope = "rentalsAdmin";
     (methods.cancelMove as any).__scope = "rentalsAdmin";

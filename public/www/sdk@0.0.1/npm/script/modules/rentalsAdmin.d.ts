@@ -52,6 +52,21 @@ export type rejectResize$params = {
 export type rejectResize$body = {
     reason: string;
 };
+export type suspend$params = {
+    id?: string;
+};
+export type suspend$body = {
+    reason?: string | undefined;
+};
+export type resume$params = {
+    id?: string;
+};
+export type terminate$params = {
+    id?: string;
+};
+export type terminate$body = {
+    reason?: string | undefined;
+};
 export type moveTargets$params = {
     id?: string;
 };
@@ -122,6 +137,8 @@ export type pool$return = {
         /** Cents per month */
         price: number;
         status: string;
+        /** Suspended by an admin */
+        held?: boolean | undefined;
         /** This period so far, percent */
         uptime?: number | undefined;
         /** Bytes used, when more than its size */
@@ -162,6 +179,11 @@ export declare const rentalsAdminModule: (sdk: typeof BaseSDK) => {
         approveResize$params: approveResize$params;
         rejectResize$params: rejectResize$params;
         rejectResize$body: rejectResize$body;
+        suspend$params: suspend$params;
+        suspend$body: suspend$body;
+        resume$params: resume$params;
+        terminate$params: terminate$params;
+        terminate$body: terminate$body;
         moveTargets$params: moveTargets$params;
         moveTargets$return: moveTargets$return;
         move$params: move$params;
@@ -233,6 +255,39 @@ export declare const rentalsAdminModule: (sdk: typeof BaseSDK) => {
         params: rejectResize$params;
         query?: undefined;
         body: rejectResize$body;
+    } & TRequestOptions<unknown>) => {
+        readonly raw: Promise<import("axios").AxiosResponse<unknown, any, {}, any>>;
+        readonly data: Promise<unknown>;
+        then: <TResult1 = unknown, TResult2 = never>(onfulfilled?: ((value: unknown) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+        catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<unknown>;
+        finally: (onfinally?: (() => void) | null | undefined) => Promise<unknown>;
+    };
+    readonly suspend: (data: {
+        params: suspend$params;
+        query?: undefined;
+        body: suspend$body;
+    } & TRequestOptions<unknown>) => {
+        readonly raw: Promise<import("axios").AxiosResponse<unknown, any, {}, any>>;
+        readonly data: Promise<unknown>;
+        then: <TResult1 = unknown, TResult2 = never>(onfulfilled?: ((value: unknown) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+        catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<unknown>;
+        finally: (onfinally?: (() => void) | null | undefined) => Promise<unknown>;
+    };
+    readonly resume: (data: {
+        params: resume$params;
+        query?: undefined;
+        body?: undefined;
+    } & TRequestOptions<unknown>) => {
+        readonly raw: Promise<import("axios").AxiosResponse<unknown, any, {}, any>>;
+        readonly data: Promise<unknown>;
+        then: <TResult1 = unknown, TResult2 = never>(onfulfilled?: ((value: unknown) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+        catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<unknown>;
+        finally: (onfinally?: (() => void) | null | undefined) => Promise<unknown>;
+    };
+    readonly terminate: (data: {
+        params: terminate$params;
+        query?: undefined;
+        body: terminate$body;
     } & TRequestOptions<unknown>) => {
         readonly raw: Promise<import("axios").AxiosResponse<unknown, any, {}, any>>;
         readonly data: Promise<unknown>;

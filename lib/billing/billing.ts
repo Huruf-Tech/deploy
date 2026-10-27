@@ -538,6 +538,8 @@ export class BillingService {
       // A suspended rental keeps trying, so paying resumes it (PLAN §26.9).
       status: { $in: ["active", "pastDue", "suspended"] },
       currentPeriodEnd: { $lte: now },
+      // An admin's suspension waits for the admin, not a payment.
+      "rental.held": { $exists: false },
       $or: [
         { nextRenewalAttemptAt: { $exists: false } },
         { nextRenewalAttemptAt: { $lte: now } },

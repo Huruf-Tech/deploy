@@ -25,8 +25,9 @@ export function useRentals() {
 /** How a rental's status reads (PLAN §26.9), with text, not color alone. */
 export function rentalStatus(
   t: (key: string) => string,
-  r: Pick<TRental, "status" | "cancelAtPeriodEnd">
+  r: Pick<TRental, "status" | "cancelAtPeriodEnd" | "held">
 ): { tone: TTone; label: string } {
+  if (r.held) return { tone: "danger", label: t("Stopped by Huruf") }
   switch (r.status) {
     case "requested":
       return { tone: "info", label: t("Waiting for approval") }

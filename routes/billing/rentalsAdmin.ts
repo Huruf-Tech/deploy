@@ -142,6 +142,45 @@ export default new Router("/api", function rentalsAdmin(router) {
     };
   });
 
+  // An admin's hand on a rental: stop it (not renewed meanwhile), start it
+  // again, or delete it now with its data (nothing refunded).
+  const $reason = z.object({ reason: z.string().max(500).optional() });
+
+  router.post("/:id/suspend", function suspend() {
+    return {
+      shape: () => ({ params: $params, body: $reason }),
+      handler: async (req) => {
+        const { id } = $params.parse(paramsAsJson(req));
+        const { reason } = $reason.parse(await bodyAsJson(req));
+        await rentalService.hold(id, await admin(req), reason);
+        return Response.json({ ok: true });
+      },
+    };
+  });
+
+  router.post("/:id/resume", function resume() {
+    return {
+      shape: () => ({ params: $params }),
+      handler: async (req) => {
+        const { id } = $params.parse(paramsAsJson(req));
+        await rentalService.resume(id);
+        return Response.json({ ok: true });
+      },
+    };
+  });
+
+  router.post("/:id/terminate", function terminate() {
+    return {
+      shape: () => ({ params: $params, body: $reason }),
+      handler: async (req) => {
+        const { id } = $params.parse(paramsAsJson(req));
+        const { reason } = $reason.parse(await bodyAsJson(req));
+        await rentalService.terminate(id, reason);
+        return Response.json({ ok: true });
+      },
+    };
+  });
+
   // Moving a rental to another pool machine (PLAN §26.10).
   router.get("/:id/move", function moveTargets() {
     const $return = z.object({
@@ -259,6 +298,7 @@ export default new Router("/api", function rentalsAdmin(router) {
         plan: z.string().optional(),
         price: z.number().describe("Cents per month"),
         status: z.string(),
+        held: z.boolean().optional().describe("Suspended by an admin"),
         uptime: z.number().optional().describe("This period so far, percent"),
         overDisk: z.number().optional().describe(
           "Bytes used, when more than its size",
@@ -317,6 +357,7 @@ export default new Router("/api", function rentalsAdmin(router) {
             plan: plan?.name,
             price: plan?.price.amount ?? 0,
             status: s.status,
+            ...(s.rental?.held ? { held: true } : {}),
             uptime: uptimes.get(String(s._id)),
             ...(s.rental?.overDisk
               ? { overDisk: s.rental.overDisk.bytes }

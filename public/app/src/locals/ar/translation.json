@@ -1346,5 +1346,19 @@
   "Rented: {{tenant}} · {{plan}}": "مؤجَّر: {{tenant}} · {{plan}}",
   "Machines for rent: give one a class on its page. Memory is what runs out, since it's never shared.": "الأجهزة المتاحة للإيجار: عيّن فئة للجهاز من صفحته. الذاكرة هي ما ينفد لأنها لا تُشارك أبدًا.",
   "not taking rentals": "لا يقبل إيجارات",
-  "Memory: rented / yours / free": "الذاكرة: مؤجَّرة / لك / متاحة"
+  "Memory: rented / yours / free": "الذاكرة: مؤجَّرة / لك / متاحة",
+  "Rental suspended": "تم إيقاف الإيجار",
+  "Rental resumed": "استُؤنف الإيجار",
+  "Rental deleted": "حُذف الإيجار",
+  "Suspended by an admin: not renewed until resumed": "أوقفه مسؤول: لا يُجدَّد حتى يُستأنف",
+  "Resume": "استئناف",
+  "Suspend": "إيقاف",
+  "Delete": "حذف",
+  "Suspend this rental?": "إيقاف هذا الإيجار؟",
+  "Delete this rental?": "حذف هذا الإيجار؟",
+  "{{label}} stops now and isn't renewed until you resume it. Its data is kept.": "يتوقف {{label}} الآن ولا يُجدَّد حتى تستأنفه. تُحفظ بياناته.",
+  "{{label}} is deleted now with everything on it. Nothing is refunded.": "يُحذف {{label}} الآن مع كل ما عليه. لا يُسترد أي مبلغ.",
+  "Reason for the customer (optional)": "السبب للعميل (اختياري)",
+  "Stopped by Huruf": "أوقفته حروف",
+  "Huruf stopped it. Its data is kept: contact support to start it again.": "أوقفته حروف. تُحفظ بياناته: تواصل مع الدعم لتشغيله من جديد."
 }

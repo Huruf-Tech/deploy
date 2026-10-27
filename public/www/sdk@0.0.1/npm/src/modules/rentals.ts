@@ -83,6 +83,8 @@ export type list$return = {
     pendingChange?: string | undefined;
     rejectedReason?: string | undefined;
     suspendedAt?: Date | undefined;
+    /** Stopped by Huruf, not unpaid */
+    held?: boolean | undefined;
     /** This period so far, percent */
     uptime?: number | undefined;
     /** Huruf moves it to another machine */

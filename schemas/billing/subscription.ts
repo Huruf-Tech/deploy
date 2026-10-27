@@ -64,6 +64,13 @@ export const $subscription = z.object({
     }).optional(),
     rejectedReason: z.string().max(500).optional(),
     suspendedAt: z.date().optional(),
+    /** Suspended by an admin: not renewed until resumed (the status it goes back to). */
+    held: z.object({
+      by: $objectId.meta({ ref: "users" }),
+      at: z.date(),
+      status: z.enum(["active", "pastDue"]),
+      reason: z.string().max(500).optional(),
+    }).optional(),
     /** Release warnings sent (days before release). */
     warned: z.array(z.number().int()).optional(),
     /** A move to another pool machine under way (PLAN §26.10). */

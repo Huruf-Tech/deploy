@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
+import { Textarea } from "@/components/ui/textarea"
 import {
   Select,
   SelectContent,
@@ -72,6 +73,79 @@ export function PoolPanel({
   )
 }
 
+const labelOf = (r: {
+  tenantName?: string
+  partition?: string
+  plan?: string
+}) => `${r.tenantName ?? r.partition} · ${r.plan ?? ""}`
+
+/** Suspending or deleting a rental, with an optional reason for its owner. */
+function ActDialog({
+  label,
+  action,
+  onCancel,
+  onConfirm,
+}: {
+  label: string
+  action: "suspend" | "terminate"
+  onCancel: () => void
+  onConfirm: (reason?: string) => Promise<void>
+}) {
+  const { t } = useTranslation()
+  const [reason, setReason] = React.useState("")
+  const [busy, setBusy] = React.useState(false)
+  return (
+    <Dialog open onOpenChange={(o) => !o && onCancel()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>
+            {action === "suspend"
+              ? t("Suspend this rental?")
+              : t("Delete this rental?")}
+          </DialogTitle>
+          <DialogDescription>
+            {action === "suspend"
+              ? t(
+                  "{{label}} stops now and isn't renewed until you resume it. Its data is kept.",
+                  { label }
+                )
+              : t(
+                  "{{label}} is deleted now with everything on it. Nothing is refunded.",
+                  {
+                    label,
+                  }
+                )}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="flex flex-col gap-2">
+          <Label htmlFor="act-reason">
+            {t("Reason for the customer (optional)")}
+          </Label>
+          <Textarea
+            id="act-reason"
+            maxLength={500}
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+          />
+        </div>
+        <DialogFooter>
+          <Button
+            variant="destructive"
+            disabled={busy}
+            onClick={async () => {
+              setBusy(true)
+              await onConfirm(reason.trim() || undefined)
+              setBusy(false)
+            }}
+          >
+            {action === "suspend" ? t("Suspend") : t("Delete")}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 function RentalsDetails({
   server,
   info,
@@ -95,6 +169,11 @@ function RentalsDetails({
   ).data?.results
   const [moving, setMoving] = React.useState<{ id: string; label: string }>()
   const [canceling, setCanceling] = React.useState<string>()
+  const [acting, setActing] = React.useState<{
+    id: string
+    label: string
+    action: "suspend" | "terminate"
+  }>()
   const [cost, setCost] = React.useState<string>()
   const pool = server.pool!
   const forRent = !!pool.class
@@ -110,6 +189,33 @@ function RentalsDetails({
         body,
       })
       toast.success(t("Saved"))
+      onChanged()
+    } catch (e) {
+      toast.error(errorMessage(e) ?? t("Could not save"))
+    }
+  }
+  const act = async (
+    id: string,
+    action: "suspend" | "resume" | "terminate",
+    reason?: string
+  ) => {
+    try {
+      if (action === "resume") {
+        await ThunderSDK.rentalsAdmin.resume({ params: { id } })
+      } else {
+        await ThunderSDK.rentalsAdmin[action]({
+          params: { id },
+          body: reason ? { reason } : {},
+        })
+      }
+      toast.success(
+        {
+          suspend: t("Rental suspended"),
+          resume: t("Rental resumed"),
+          terminate: t("Rental deleted"),
+        }[action]
+      )
+      setActing(undefined)
       onChanged()
     } catch (e) {
       toast.error(errorMessage(e) ?? t("Could not save"))
@@ -230,6 +336,11 @@ function RentalsDetails({
                   })}
                 </span>
               )}
+              {r.held && (
+                <span className="text-xs text-warning-foreground">
+                  {t("Suspended by an admin: not renewed until resumed")}
+                </span>
+              )}
               {r.moving ? (
                 <div className="flex flex-wrap items-center gap-x-2 text-xs text-info-foreground">
                   {t("Moving to {{name}}", {
@@ -252,20 +363,54 @@ function RentalsDetails({
                       })}
                     </span>
                   )}
-                  {r.status !== "suspended" && (
+                  <div className="flex flex-wrap gap-x-3 text-xs text-muted-foreground [&>button]:underline [&>button]:underline-offset-2 [&>button:hover]:text-foreground">
+                    {r.status !== "suspended" && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setMoving({ id: r._id, label: labelOf(r) })
+                        }
+                      >
+                        {t("Move to another machine")}
+                      </button>
+                    )}
+                    {r.held ? (
+                      <button
+                        type="button"
+                        onClick={() => act(r._id, "resume")}
+                      >
+                        {t("Resume")}
+                      </button>
+                    ) : (
+                      r.status !== "suspended" && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setActing({
+                              id: r._id,
+                              label: labelOf(r),
+                              action: "suspend",
+                            })
+                          }
+                        >
+                          {t("Suspend")}
+                        </button>
+                      )
+                    )}
                     <button
                       type="button"
-                      className="self-start text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
+                      className="text-destructive-foreground"
                       onClick={() =>
-                        setMoving({
+                        setActing({
                           id: r._id,
-                          label: `${r.tenantName ?? r.partition} · ${r.plan ?? ""}`,
+                          label: labelOf(r),
+                          action: "terminate",
                         })
                       }
                     >
-                      {t("Move to another machine")}
+                      {t("Delete")}
                     </button>
-                  )}
+                  </div>
                 </>
               )}
             </li>
@@ -273,6 +418,13 @@ function RentalsDetails({
         </ul>
       )}
 
+      {acting && (
+        <ActDialog
+          {...acting}
+          onCancel={() => setActing(undefined)}
+          onConfirm={(reason) => act(acting.id, acting.action, reason)}
+        />
+      )}
       {moving && (
         <MoveDialog
           rental={moving.id}

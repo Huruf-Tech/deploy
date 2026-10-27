@@ -1346,5 +1346,19 @@
   "Rented: {{tenant}} · {{plan}}": "Rented: {{tenant}} · {{plan}}",
   "Machines for rent: give one a class on its page. Memory is what runs out, since it's never shared.": "Machines for rent: give one a class on its page. Memory is what runs out, since it's never shared.",
   "not taking rentals": "not taking rentals",
-  "Memory: rented / yours / free": "Memory: rented / yours / free"
+  "Memory: rented / yours / free": "Memory: rented / yours / free",
+  "Rental suspended": "Rental suspended",
+  "Rental resumed": "Rental resumed",
+  "Rental deleted": "Rental deleted",
+  "Suspended by an admin: not renewed until resumed": "Suspended by an admin: not renewed until resumed",
+  "Resume": "Resume",
+  "Suspend": "Suspend",
+  "Delete": "Delete",
+  "Suspend this rental?": "Suspend this rental?",
+  "Delete this rental?": "Delete this rental?",
+  "{{label}} stops now and isn't renewed until you resume it. Its data is kept.": "{{label}} stops now and isn't renewed until you resume it. Its data is kept.",
+  "{{label}} is deleted now with everything on it. Nothing is refunded.": "{{label}} is deleted now with everything on it. Nothing is refunded.",
+  "Reason for the customer (optional)": "Reason for the customer (optional)",
+  "Stopped by Huruf": "Stopped by Huruf",
+  "Huruf stopped it. Its data is kept: contact support to start it again.": "Huruf stopped it. Its data is kept: contact support to start it again."
 }
