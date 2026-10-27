@@ -408,6 +408,8 @@ func (m *Manager) Remove(ctx context.Context, p protocol.PartitionNamePayload) (
 	}
 	entry, ok := s.Partitions[p.Name]
 	if !ok {
+		// A creation that failed halfway left its directory, quota and bridge.
+		_ = m.Driver.Remove(ctx, p.Name)
 		return map[string]any{"name": p.Name, "removed": false}, nil
 	}
 	if err := m.Driver.Remove(ctx, p.Name); err != nil {

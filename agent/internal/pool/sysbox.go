@@ -450,6 +450,13 @@ func setQuota(ctx context.Context, name string, size protocol.PartitionSize) err
 }
 
 func (Sysbox) Create(ctx context.Context, name string, size protocol.PartitionSize, weight int) error {
+	// Another tool's cleanup (e.g. `docker image prune -a`) removes it once
+	// no partition uses it: build it again rather than fail.
+	if _, err := run(ctx, "docker", "image", "inspect", image); err != nil {
+		if err := buildImage(ctx); err != nil {
+			return fmt.Errorf("building the partition image: %w", err)
+		}
+	}
 	if err := prepareDir(ctx, name, size); err != nil {
 		return err
 	}
