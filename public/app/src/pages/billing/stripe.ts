@@ -47,7 +47,8 @@ export async function confirmPayment(payment: {
     if (action?.error) throw new Error(action.error.message)
   }
   const row = await waitForTopup(payment.topup)
-  if (row?.status === "failed") throw new Error(row.error ?? "The payment failed")
+  if (row?.status === "failed")
+    throw new Error(row.error ?? "The payment failed")
   return !!row
 }
 

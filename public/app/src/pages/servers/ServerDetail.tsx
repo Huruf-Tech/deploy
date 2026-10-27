@@ -514,7 +514,7 @@ export default function ServerDetail() {
           {server.provider?.kind === "rented" && (
             <RentalPanel server={server._id} />
           )}
-          {isMachine(server) && server.pool?.mode !== "pool" && (
+          {isMachine(server) && (
             <MachinePanel
               server={server}
               onChanged={() => request.invalidate()}

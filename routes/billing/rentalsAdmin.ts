@@ -6,7 +6,6 @@ import { $objectId } from "@/core/utils/createCRUD.ts";
 import { withAuthSession } from "@/plugins/Huruf-Tech/thunder-core/utils/withAuthSession.ts";
 import { tenantModel } from "@/plugins/Huruf-Tech/thunder-core/schemas/tenant.ts";
 import { rentals as rentalService } from "@/lib/services.ts";
-import { createPartition, makePoolMachine } from "@/lib/pool/pool.ts";
 import { readTextSetting } from "@/lib/core/settings.ts";
 import { planModel } from "@/schemas/billing/plan.ts";
 import { subscriptionModel } from "@/schemas/billing/subscription.ts";
@@ -196,24 +195,23 @@ export default new Router("/api", function rentalsAdmin(router) {
     };
   });
 
-  // Per class: capacity, spare share, revenue and cost (PLAN §26.7, §26.11).
+  // Per machine for rent: capacity, revenue and cost (PLAN §26.7, §28).
   router.get("/capacity", function capacity() {
-    const $size = z.object({
-      cpus: z.number(),
-      memMb: z.number(),
-      diskGb: z.number(),
-    });
     const $return = z.object({
-      sparePercent: z.number().describe("The target, POOL_SPARE_PERCENT"),
-      classes: z.array(z.object({
+      machines: z.array(z.object({
         _id: z.string(),
         name: z.string(),
-        machines: z.number(),
-        accepting: z.number(),
-        allocatable: $size,
-        rented: $size,
-        freeMemMb: z.number().describe("On machines taking rentals"),
-        spare: z.number().describe("Free memory, percent of the class's"),
+        class: z.string().optional(),
+        accepting: z.boolean(),
+        allocatable: z.object({
+          cpus: z.number(),
+          memMb: z.number(),
+          diskGb: z.number(),
+        }),
+        rentedMemMb: z.number(),
+        ownMemMb: z.number().describe("The platform's own partitions"),
+        freeMemMb: z.number(),
+        rentals: z.number(),
         revenue: z.number().describe("Cents per month"),
         cost: z.number().describe("Cents per month"),
       })),
@@ -262,6 +260,9 @@ export default new Router("/api", function rentalsAdmin(router) {
         price: z.number().describe("Cents per month"),
         status: z.string(),
         uptime: z.number().optional().describe("This period so far, percent"),
+        overDisk: z.number().optional().describe(
+          "Bytes used, when more than its size",
+        ),
         moving: z.object({
           to: z.string(),
           toName: z.string().optional(),
@@ -317,6 +318,9 @@ export default new Router("/api", function rentalsAdmin(router) {
             price: plan?.price.amount ?? 0,
             status: s.status,
             uptime: uptimes.get(String(s._id)),
+            ...(s.rental?.overDisk
+              ? { overDisk: s.rental.overDisk.bytes }
+              : {}),
             ...(move
               ? {
                 moving: {
@@ -339,31 +343,11 @@ export default new Router("/api", function rentalsAdmin(router) {
     };
   });
 
-  // Pool machines (PLAN §26.5): prepare one, set its class, add Huruf's partition.
-  router.post("/pool/:id/ensure", function ensurePool() {
-    const $body = z.object({
-      device: z.string().max(100).optional(),
-      loopSizeGb: z.number().int().min(10).optional(),
-    }).refine((v) => !!v.device !== !!v.loopSizeGb, "A device or a loop size");
-
-    return {
-      shape: () => ({ params: $params, body: $body }),
-      handler: async (req) => {
-        const { id } = $params.parse(paramsAsJson(req));
-        const volume = $body.parse(await bodyAsJson(req));
-        await makePoolMachine({
-          server: id,
-          volume,
-          createdBy: await admin(req),
-        });
-        return Response.json({ ok: true });
-      },
-    };
-  });
-
+  // A platform machine is for rent once it has a class (PLAN §28): its
+  // class, whether it takes new rentals (draining), and its cost.
   router.patch("/pool/:id", function updatePool() {
     const $body = z.object({
-      class: $objectId.optional(),
+      class: $objectId.nullable().optional().describe("null: not for rent"),
       accepting: z.boolean().optional(),
       monthlyCost: z.number().int().min(0).optional(),
     });
@@ -379,35 +363,26 @@ export default new Router("/api", function rentalsAdmin(router) {
         ) {
           throw Response.notFound("Server class not found");
         }
+        const { class: cls, ...rest } = body;
         const { matchedCount } = await serverModel.updateOne(
-          { _id: id, "pool.status": { $exists: true } },
+          {
+            _id: id,
+            tenant: new ObjectId(await readTextSetting("PLATFORM_TENANT", "")),
+            "pool.status": { $exists: true },
+          },
           {
             $set: Object.fromEntries(
-              Object.entries(body).map(([k, v]) => [`pool.${k}`, v]),
+              Object.entries({
+                ...rest,
+                ...(cls ? { class: cls } : {}),
+              }).map(([k, v]) => [`pool.${k}`, v]),
             ),
+            ...(cls === null ? { $unset: { "pool.class": "" } } : {}),
           },
         );
         if (!matchedCount) {
-          throw Response.notFound("No pool machine with this id");
+          throw Response.notFound("No machine of the platform with this id");
         }
-        return Response.json({ ok: true });
-      },
-    };
-  });
-
-  router.post("/pool/:id/remainder", function createRemainder() {
-    return {
-      shape: () => ({ params: $params }),
-      handler: async (req) => {
-        const { id } = $params.parse(paramsAsJson(req));
-        const platform = await readTextSetting("PLATFORM_TENANT", "");
-        await createPartition({
-          host: id,
-          name: "huruf",
-          tenant: new ObjectId(platform),
-          remainder: true,
-          createdBy: await admin(req),
-        });
         return Response.json({ ok: true });
       },
     };

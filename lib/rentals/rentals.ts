@@ -41,6 +41,7 @@ const GB = 1e9;
 const LIVE = ["active", "pastDue", "suspended"] as const;
 /** Rentals that run (a suspended one is stopped on purpose). */
 const RUNNING = ["active", "pastDue"] as const;
+type TSizeSum = { cpus: number; memMb: number; diskGb: number };
 
 const log = (text: string) => Logger.warn(`[rentals] ${text}`);
 
@@ -289,30 +290,52 @@ export class RentalService implements TRentalHooks {
     if (!modifiedCount) throw Response.badRequest("No request to withdraw");
   }
 
-  /** What's rented on each pool machine (sizes of live rentals). */
-  private async usedOn(hosts: ObjectId[]) {
+  /**
+   * What's taken on each machine (PLAN §28): every partition it reports, the
+   * platform's own and rentals alike, plus rentals approved but not reported
+   * yet. A pool machine's remainder (§26.4) yields, so it doesn't count.
+   */
+  private async takenOn(
+    machines: {
+      _id: ObjectId;
+      resources?: { partitions?: z.output<typeof $partitionUsage>[] };
+    }[],
+  ) {
     const subs = await subscriptionModel.find({
       kind: "server",
-      "rental.host": { $in: hosts },
+      "rental.host": { $in: machines.map((m) => m._id) },
       status: { $in: [...LIVE] },
-    }, { projection: { "rental.host": 1, "rental.size": 1 } }).toArray();
-    const used = new Map<
-      string,
-      { cpus: number; memMb: number; diskGb: number }
-    >();
-    for (const s of subs) {
-      const key = String(s.rental!.host);
-      const u = used.get(key) ?? { cpus: 0, memMb: 0, diskGb: 0 };
-      u.cpus += s.rental!.size.cpus;
-      u.memMb += s.rental!.size.memMb;
-      u.diskGb += s.rental!.size.diskGb;
-      used.set(key, u);
+    }, {
+      projection: { "rental.host": 1, "rental.size": 1, "rental.partition": 1 },
+    }).toArray();
+    const taken = new Map<string, TSizeSum>();
+    for (const m of machines) {
+      const reported = (m.resources?.partitions ?? []).filter((p) =>
+        !p.remainder
+      );
+      const pending = subs.filter((s) =>
+        s.rental!.host!.equals(m._id) &&
+        !reported.some((p) => p.name === s.rental!.partition)
+      );
+      taken.set(
+        String(m._id),
+        [...reported.map((p) => p.size), ...pending.map((s) => s.rental!.size)]
+          .reduce(
+            (a, size) => ({
+              cpus: a.cpus + size.cpus,
+              memMb: a.memMb + size.memMb,
+              diskGb: a.diskGb + size.diskGb,
+            }),
+            { cpus: 0, memMb: 0, diskGb: 0 },
+          ),
+      );
     }
-    return used;
+    return taken;
   }
 
   /**
-   * Pool machines of the rental's class that can take `size` (PLAN §26.7):
+   * The platform's machines of the rental's class (PLAN §28: a machine is for
+   * rent once an admin gives it a class) that can take `size` (§26.7):
    * memory and disk never overcommit, CPU up to the class's ratio. Fullest
    * first, so whole machines stay free. `remainderShort`: the remainder would
    * have to give back memory it uses (the agent refuses then).
@@ -335,7 +358,7 @@ export class RentalService implements TRentalHooks {
       projection: { name: 1, pool: 1, "resources.partitions": 1 },
       limit: 200,
     }).toArray();
-    const used = await this.usedOn(machines.map((m) => m._id));
+    const used = await this.takenOn(machines);
     return machines.map((m) => {
       const all = m.pool!.allocatable!;
       const u = used.get(String(m._id)) ?? { cpus: 0, memMb: 0, diskGb: 0 };
@@ -894,82 +917,64 @@ export class RentalService implements TRentalHooks {
     return out;
   }
 
-  // --- Capacity (PLAN §26.7, §26.11) ---
+  // --- Capacity (PLAN §26.7, §28) ---
 
   /**
-   * Per class: what the pool machines offer, what's rented, the spare share
-   * kept for moving partitions off a failed machine (`POOL_SPARE_PERCENT`),
-   * and revenue against cost.
+   * Per machine for rent (a platform machine with a class): what it offers,
+   * what the platform's own partitions and rentals take, what's free, and
+   * revenue against cost.
    */
   async capacity() {
-    const [classes, machines, target] = await Promise.all([
-      serverClassModel.find({}, {
-        sort: { sortOrder: 1 },
-        projection: { name: 1 },
-      }).toArray(),
+    const [classes, machines] = await Promise.all([
+      serverClassModel.find({}, { projection: { name: 1 } }).toArray(),
       serverModel.find({
         tenant: await this.platformTenant(),
         status: "active",
         "pool.status": "ready",
-      }, { projection: { pool: 1 }, limit: 500 }).toArray(),
-      readNumberSetting("POOL_SPARE_PERCENT", 20),
+        "pool.class": { $exists: true },
+      }, {
+        projection: { name: 1, pool: 1, "resources.partitions": 1 },
+        sort: { name: 1 },
+        limit: 500,
+      }).toArray(),
     ]);
-    const subs = await subscriptionModel.find({
-      kind: "server",
-      "rental.host": { $in: machines.map((m) => m._id) },
-      status: { $in: [...LIVE] },
-    }, {
-      projection: { plan: 1, status: 1, "rental.host": 1, "rental.size": 1 },
-    }).toArray();
+    const [taken, subs] = await Promise.all([
+      this.takenOn(machines),
+      subscriptionModel.find({
+        kind: "server",
+        "rental.host": { $in: machines.map((m) => m._id) },
+        status: { $in: [...LIVE] },
+      }, {
+        projection: { plan: 1, status: 1, "rental.host": 1, "rental.size": 1 },
+      }).toArray(),
+    ]);
     const plans = await planModel.find(
       { _id: { $in: subs.map((s) => s.plan) } },
       { projection: { price: 1 } },
     ).toArray();
-    const zero = () => ({ cpus: 0, memMb: 0, diskGb: 0 });
-    type TMachine = (typeof machines)[number];
-    const offered = (list: TMachine[]) =>
-      list.reduce((a, m) => {
-        const all = m.pool?.allocatable ?? zero();
-        return {
-          cpus: a.cpus + all.cpus,
-          memMb: a.memMb + all.memMb,
-          diskGb: a.diskGb + all.diskGb,
-        };
-      }, zero());
-    const on = (list: TMachine[]) =>
-      subs.filter((s) => list.some((m) => m._id.equals(s.rental!.host!)));
-    const rented = (list: TMachine[]) =>
-      on(list).reduce((a, s) => ({
-        cpus: a.cpus + s.rental!.size.cpus,
-        memMb: a.memMb + s.rental!.size.memMb,
-        diskGb: a.diskGb + s.rental!.size.diskGb,
-      }), zero());
-
     return {
-      sparePercent: target,
-      classes: classes.map((cls) => {
-        const mine = machines.filter((m) => m.pool?.class?.equals(cls._id));
-        const accepting = mine.filter((m) => m.pool?.accepting !== false);
-        const all = offered(mine);
-        // Draining machines take nothing new: only accepting ones have room.
-        const freeMemMb = offered(accepting).memMb - rented(accepting).memMb;
+      machines: machines.map((m) => {
+        const all = m.pool!.allocatable ?? { cpus: 0, memMb: 0, diskGb: 0 };
+        const used = taken.get(String(m._id))!;
+        const mine = subs.filter((s) => s.rental!.host!.equals(m._id));
+        const rentedMemMb = mine.reduce((a, s) => a + s.rental!.size.memMb, 0);
         return {
-          _id: String(cls._id),
-          name: cls.name,
-          machines: mine.length,
-          accepting: accepting.length,
+          _id: String(m._id),
+          name: m.name,
+          class: classes.find((c) => c._id.equals(m.pool!.class!))?.name,
+          accepting: m.pool!.accepting !== false,
           allocatable: all,
-          rented: rented(mine),
-          freeMemMb,
-          // Memory never overcommits, so it's what runs out.
-          spare: all.memMb ? Math.round(100 * freeMemMb / all.memMb) : 0,
-          revenue: on(mine).filter((s) => s.status !== "suspended").reduce(
+          rentedMemMb,
+          ownMemMb: used.memMb - rentedMemMb,
+          freeMemMb: all.memMb - used.memMb,
+          rentals: mine.length,
+          revenue: mine.filter((s) => s.status !== "suspended").reduce(
             (sum, s) =>
               sum +
               (plans.find((p) => p._id.equals(s.plan))?.price.amount ?? 0),
             0,
           ),
-          cost: mine.reduce((sum, m) => sum + (m.pool?.monthlyCost ?? 0), 0),
+          cost: m.pool!.monthlyCost ?? 0,
         };
       }),
     };
@@ -1000,9 +1005,36 @@ export class RentalService implements TRentalHooks {
       const before = sub.rental!.counters;
       const delta = counterDelta(before?.rx, p.rxBytes) +
         counterDelta(before?.tx, p.txBytes);
+      // Its system files (packages, logs) have no hard cap on a machine:
+      // past its size it's flagged for the admin, and its owner told once.
+      const over = p.diskUsed > sub.rental!.size.diskGb * 2 ** 30;
       await subscriptionModel.updateOne({ _id: sub._id }, {
-        $set: { "rental.counters": { rx: p.rxBytes, tx: p.txBytes } },
+        $set: {
+          "rental.counters": { rx: p.rxBytes, tx: p.txBytes },
+          ...(over
+            ? {
+              "rental.overDisk": {
+                since: sub.rental!.overDisk?.since ?? now,
+                bytes: p.diskUsed,
+              },
+            }
+            : {}),
+        },
+        ...(!over && sub.rental!.overDisk
+          ? { $unset: { "rental.overDisk": "" } }
+          : {}),
       });
+      if (over && !sub.rental!.overDisk) {
+        notifyOwner(sub.tenant, {
+          subject:
+            "{workspace}: your rented server uses more disk than its size",
+          text:
+            `Your rented server uses ${
+              Math.ceil(p.diskUsed / 2 ** 30)
+            } GB of disk, more than its ${sub.rental!.size.diskGb} GB. ` +
+            `Free some space (old images, logs, packages) or ask for a bigger size.`,
+        }).catch((e) => log(`disk notice: ${e}`));
+      }
       if (delta > 0) {
         await subscriptionPeriodModel.updateOne(
           {

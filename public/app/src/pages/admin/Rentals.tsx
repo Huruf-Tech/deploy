@@ -20,7 +20,6 @@ import {
 import { PageHeader } from "@/components/console/page-header"
 import { DataTable } from "@/components/console/data-table"
 import { EmptyState } from "@/components/console/empty-state"
-import { StatusBadge } from "@/components/console/status"
 import { useFresh } from "@/hooks/use-fresh"
 import { money } from "@/lib/plans"
 import { errorMessage } from "@/lib/utils"
@@ -182,8 +181,8 @@ function RejectDialog({
 const gbOfMb = (mb: number) => Math.round((mb / 1024) * 10) / 10
 
 /**
- * Per class: what's rented of what the pool offers, the spare memory kept
- * for moving rentals off a failed machine, and revenue against cost.
+ * Per machine for rent (PLAN §28): what customers rent, what the platform's
+ * own partitions take, what's free, and revenue against cost.
  */
 function Capacity() {
   const { t } = useTranslation()
@@ -193,7 +192,7 @@ function Capacity() {
       async ({ signal }) => await ThunderSDK.rentalsAdmin.capacity({ signal })
     )
   ).data
-  if (!data?.classes.some((c) => c.machines)) return null
+  if (!data?.machines.length) return null
   return (
     <section aria-labelledby="capacity-title" className="flex flex-col gap-2">
       <div>
@@ -205,60 +204,55 @@ function Capacity() {
         </h2>
         <p className="text-xs text-muted-foreground">
           {t(
-            "Spare memory is kept to move rentals off a failed machine: the target is {{n}}% per class.",
-            { n: data.sparePercent }
+            "Machines for rent: give one a class on its page. Memory is what runs out, since it's never shared."
           )}
         </p>
       </div>
       <div className="overflow-x-auto">
         <DataTable
           label={t("Capacity")}
-          rows={data.classes.filter((c) => c.machines)}
-          rowId={(c) => c._id}
+          rows={data.machines}
+          rowId={(m) => m._id}
           columns={[
             {
-              id: "class",
-              header: t("Class"),
-              cell: (c) => (
+              id: "machine",
+              header: t("Machine"),
+              cell: (m) => (
                 <div className="min-w-0">
-                  <div className="font-medium">{c.name}</div>
+                  <div className="font-medium">{m.name}</div>
                   <div className="text-xs text-muted-foreground">
-                    {t("{{n}} machines, {{open}} taking rentals", {
-                      n: c.machines,
-                      open: c.accepting,
-                    })}
+                    {m.class}
+                    {!m.accepting && ` · ${t("not taking rentals")}`}
                   </div>
                 </div>
               ),
             },
             {
-              id: "rented",
-              header: t("Rented memory"),
+              id: "memory",
+              header: t("Memory: rented / yours / free"),
               className: "whitespace-nowrap tabular-nums",
-              cell: (c) => (
+              cell: (m) => (
                 <span dir="ltr">
-                  {gbOfMb(c.rented.memMb)} / {gbOfMb(c.allocatable.memMb)} GB
+                  {gbOfMb(m.rentedMemMb)} / {gbOfMb(m.ownMemMb)} /{" "}
+                  {gbOfMb(m.freeMemMb)} GB
                 </span>
               ),
             },
             {
-              id: "spare",
-              header: t("Spare"),
-              cell: (c) => (
-                <StatusBadge
-                  tone={c.spare < data.sparePercent ? "warning" : "success"}
-                  label={`${c.spare}%`}
-                />
-              ),
+              id: "rentals",
+              header: t("Rentals"),
+              align: "end",
+              className: "tabular-nums",
+              cell: (m) => m.rentals,
             },
             {
               id: "money",
               header: t("Earns / costs a month"),
               align: "end",
               className: "whitespace-nowrap tabular-nums",
-              cell: (c) => (
+              cell: (m) => (
                 <span dir="ltr">
-                  {money(c.revenue, "usd")} / {money(c.cost, "usd")}
+                  {money(m.revenue, "usd")} / {money(m.cost, "usd")}
                 </span>
               ),
             },

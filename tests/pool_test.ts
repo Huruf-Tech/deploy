@@ -8,10 +8,10 @@ import { openSealed } from "@/lib/agents/sealing.ts";
 import { ingestEvents } from "@/lib/agents/poll.ts";
 import {
   createPartition,
-  makePoolMachine,
   partitionName,
   removePartition,
   resizePartition,
+  setUpMachine,
 } from "@/lib/pool/pool.ts";
 import { serverModel } from "@/schemas/infrastructure/server.ts";
 import { serverLeaseModel } from "@/schemas/infrastructure/serverLease.ts";
@@ -79,27 +79,23 @@ Deno.test({
 
     try {
       await t.step(
-        "only the platform's servers become pool machines",
+        "a machine's host setup leaves its Docker where it is",
         async () => {
-          assertEquals(
-            (await refused(() =>
-              makePoolMachine({ server: theirs, volume: { loopSizeGb: 30 } })
-            ))?.status,
-            403,
-          );
-          await makePoolMachine({ server: host, volume: { loopSizeGb: 30 } });
+          await setUpMachine(host);
           const command = await latest("pool.ensure");
-          const payload = command.payload as Record<
-            string,
-            Record<string, unknown>
-          >;
-          assertEquals(payload.volume.loopSizeGb, 30);
-          assertEquals(payload.reserve.memMb, 512);
-          assert(payload.docker.edgeImage, "the usual host setup rides along");
+          const payload = command.payload as Record<string, unknown>;
+          assertEquals(payload.mode, "machine");
+          assertEquals(payload.docker, undefined, "no projects run on it");
+          assertEquals(
+            (payload.reserve as Record<string, number>).memMb,
+            512,
+          );
           assertEquals(
             (await serverModel.findOne({ _id: host }))!.pool!.status,
             "pending",
           );
+          // A customer's machine is set up the same way (PLAN §27, §28).
+          await setUpMachine(theirs);
         },
       );
 

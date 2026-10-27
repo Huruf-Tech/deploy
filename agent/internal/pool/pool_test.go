@@ -19,6 +19,7 @@ type fake struct {
 
 	sendErr, receiveErr error
 	forwards, added     []protocol.PortForward
+	isolated, allowIps  []string
 }
 
 func newFake() *fake {
@@ -53,6 +54,10 @@ func (f *fake) Usage(_ context.Context, name string) (Usage, error) {
 }
 func (f *fake) Restore(context.Context, []string) error            { return nil }
 func (f *fake) Send(context.Context, string, string, string) error { return f.sendErr }
+func (f *fake) Isolate(_ context.Context, names, allowIps []string) error {
+	f.isolated, f.allowIps = names, allowIps
+	return nil
+}
 func (f *fake) Forward(_ context.Context, forwards, added []protocol.PortForward) error {
 	f.forwards, f.added = forwards, added
 	return nil
@@ -295,4 +300,29 @@ func TestUsageNeverWaitsOnAChange(t *testing.T) {
 		t.Fatal("Usage waited on the lock")
 	}
 	m.mu.Unlock()
+}
+
+// Rentals are isolated one by one; the owner's own partitions aren't (PLAN §28).
+func TestOnlyRentalsAreIsolated(t *testing.T) {
+	m, f := setup(t)
+	ctx := context.Background()
+	own := protocol.PartitionSize{Cpus: 1, MemMb: 1024, DiskGb: 10}
+	if _, err := m.Create(ctx, protocol.PartitionCreatePayload{Name: "pown", Size: &own, Install: install()}); err != nil {
+		t.Fatal(err)
+	}
+	if len(f.isolated) != 0 {
+		t.Fatalf("own partition isolated: %v", f.isolated)
+	}
+	if _, err := m.Create(ctx, protocol.PartitionCreatePayload{Name: "prent", Size: &own, Isolated: true, Install: install()}); err != nil {
+		t.Fatal(err)
+	}
+	if len(f.isolated) != 1 || f.isolated[0] != "prent" {
+		t.Fatalf("isolated = %v", f.isolated)
+	}
+	if _, err := m.Remove(ctx, protocol.PartitionNamePayload{Name: "prent"}); err != nil {
+		t.Fatal(err)
+	}
+	if len(f.isolated) != 0 {
+		t.Fatalf("removed rental still isolated: %v", f.isolated)
+	}
 }

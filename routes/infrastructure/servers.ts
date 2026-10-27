@@ -120,6 +120,8 @@ export default new Router("/api", function servers(router) {
       diskUsed: z.number().optional(),
       server: z.object({ _id: z.string(), name: z.string() }).optional(),
       joining: z.boolean().describe("Its agent hasn't joined yet"),
+      rented: z.object({ tenant: z.string(), plan: z.string() }).optional()
+        .describe("A rental on the platform's machine (PLAN §28)"),
       creating: z.boolean().optional().describe(
         "The machine doesn't report it yet",
       ),

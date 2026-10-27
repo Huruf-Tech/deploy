@@ -1338,5 +1338,13 @@
   "Server removed: remove this partition": "أُزيل الخادم: أزِل هذا القسم",
   "Couldn't create it": "تعذّر إنشاؤه",
   "Creating: its server appears in a minute or two": "جارٍ الإنشاء: يظهر خادمه خلال دقيقة أو اثنتين",
-  "Dismiss": "تجاهل"
+  "Dismiss": "تجاهل",
+  "Rentals (admins)": "الإيجارات (للمسؤولين)",
+  "Give this machine a class to rent its free capacity to customers.": "عيّن فئة لهذا الجهاز لتأجير سعته المتاحة للعملاء.",
+  "Not for rent": "ليس للإيجار",
+  "Uses {{gb}} GB of disk, more than its size": "يستخدم {{gb}} GB من القرص، أكثر من حجمه",
+  "Rented: {{tenant}} · {{plan}}": "مؤجَّر: {{tenant}} · {{plan}}",
+  "Machines for rent: give one a class on its page. Memory is what runs out, since it's never shared.": "الأجهزة المتاحة للإيجار: عيّن فئة للجهاز من صفحته. الذاكرة هي ما ينفد لأنها لا تُشارك أبدًا.",
+  "not taking rentals": "لا يقبل إيجارات",
+  "Memory: rented / yours / free": "الذاكرة: مؤجَّرة / لك / متاحة"
 }

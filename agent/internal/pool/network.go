@@ -21,37 +21,13 @@ const (
 	nftablesConf = "/etc/nftables.conf"
 )
 
-// applyRules loads the table: traffic counters on every machine, and on a
-// pool machine (`isolate`) the rules that keep rented partitions apart. A
-// customer's own partitions reach their network, as projects on a server do.
-func applyRules(ctx context.Context, isolate bool, allowIps []string) error {
-	allow := ""
-	for _, ip := range allowIps {
-		allow += fmt.Sprintf("    iifname \"hp-*\" ip daddr %s accept\n", ip)
-	}
-	isolation := `  chain forward {
-    type filter hook forward priority -10; policy accept;
-` + allow + `    # Partitions never reach each other, the cloud's metadata endpoint (the
-    # machine's credentials), mail ports, or the machine's private network.
-    iifname "hp-*" oifname "hp-*" drop
-    iifname "hp-*" ip daddr 169.254.169.254 drop
-    iifname "hp-*" tcp dport { 25, 465, 587 } drop
-    iifname "hp-*" ip daddr { 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16 } ct state new drop
-  }
-  chain input {
-    type filter hook input priority -10; policy accept;
-    # Nothing on the machine itself is reachable from a partition.
-    iifname "hp-*" ct state established,related accept
-    iifname "hp-*" drop
-  }
-`
-	if !isolate {
-		isolation = ""
-	}
+// applyRules loads the traffic counters' table. Rentals are isolated one by
+// one in their own table (isolate.go, PLAN §28).
+func applyRules(ctx context.Context) error {
 	rules := `table inet ` + table + `
 delete table inet ` + table + `
 table inet ` + table + ` {
-` + isolation + `  chain count {
+  chain count {
     type filter hook forward priority -20; policy accept;
   }
 }

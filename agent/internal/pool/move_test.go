@@ -120,3 +120,21 @@ func TestForwardRulesMatchTheMachineOnly(t *testing.T) {
 		t.Fatal("a stopped partition's forward was written")
 	}
 }
+
+func TestIsolateRulesNameTheRentals(t *testing.T) {
+	rules := isolateRules([]string{"hp-pa", "hp-pb"}, []string{"10.0.0.5"})
+	for _, want := range []string{
+		`elements = { "hp-pa", "hp-pb" }`,
+		"iifname @rented ip daddr 10.0.0.5 accept",
+		`iifname @rented oifname "hp-*" drop`,
+		`iifname "hp-*" oifname @rented drop`,
+		"iifname @rented drop",
+	} {
+		if !strings.Contains(rules, want) {
+			t.Fatalf("missing %q in\n%s", want, rules)
+		}
+	}
+	if strings.Contains(isolateRules(nil, nil), "elements") {
+		t.Fatal("an empty set has no elements line")
+	}
+}

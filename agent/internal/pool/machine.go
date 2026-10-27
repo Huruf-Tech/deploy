@@ -109,13 +109,15 @@ func RemoveAll(ctx context.Context) (note string, err error) {
 
 	_, _ = run(ctx, "nft", "delete", "table", "inet", table)
 	_, _ = run(ctx, "nft", "delete", "table", "ip", forwardTable)
+	_, _ = run(ctx, "nft", "delete", "table", "inet", isolateTable)
+	_ = os.Remove(isolateFile)
 	_, _ = run(ctx, "iptables", append([]string{"-D"}, acceptForwarded...)...)
 	_ = os.Remove(rulesFile)
 	if conf, err := os.ReadFile(nftablesConf); err == nil {
-		include := []byte(`include "` + rulesFile + `"` + "\n")
-		if bytes.Contains(conf, include) {
-			_ = os.WriteFile(nftablesConf, bytes.ReplaceAll(conf, include, nil), 0o755)
+		for _, file := range []string{rulesFile, isolateFile} {
+			conf = bytes.ReplaceAll(conf, []byte(`include "`+file+`"`+"\n"), nil)
 		}
+		_ = os.WriteFile(nftablesConf, conf, 0o755)
 	}
 
 	if dockerOnVolume(ctx) {

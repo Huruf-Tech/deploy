@@ -278,6 +278,9 @@ export const $partitionCreatePayload = z.object({
   name: $partitionName,
   size: $partitionSize.optional().describe("Not for the remainder"),
   remainder: z.boolean().default(false),
+  isolated: z.boolean().default(false).describe(
+    "A rental (PLAN §28): no reaching the machine, other partitions, the metadata endpoint, mail ports or private ranges",
+  ),
   install: z.object({
     url: z.string().describe(
       "The control plane, as the agent inside reaches it",
@@ -318,6 +321,7 @@ export const $partitionSendPayload = z.object({
 export const $partitionReceivePayload = z.object({
   name: $partitionName,
   size: $partitionSize,
+  isolated: z.boolean().default(false),
   from: z.string().max(64).describe("host:port"),
   token: z.string().min(32).max(128),
 });

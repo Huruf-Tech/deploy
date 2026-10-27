@@ -90,27 +90,21 @@ export type cancelMove$params = {
     id?: string;
 };
 export type capacity$return = {
-    /** The target, POOL_SPARE_PERCENT */
-    sparePercent: number;
-    classes: {
+    machines: {
         _id: string;
         name: string;
-        machines: number;
-        accepting: number;
+        class?: string | undefined;
+        accepting: boolean;
         allocatable: {
             cpus: number;
             memMb: number;
             diskGb: number;
         };
-        rented: {
-            cpus: number;
-            memMb: number;
-            diskGb: number;
-        };
-        /** On machines taking rentals */
+        rentedMemMb: number;
+        /** The platform's own partitions */
+        ownMemMb: number;
         freeMemMb: number;
-        /** Free memory, percent of the class's */
-        spare: number;
+        rentals: number;
         /** Cents per month */
         revenue: number;
         /** Cents per month */
@@ -135,6 +129,8 @@ export type pool$return = {
         status: string;
         /** This period so far, percent */
         uptime?: number | undefined;
+        /** Bytes used, when more than its size */
+        overDisk?: number | undefined;
         moving?: {
             to: string;
             toName?: string | undefined;
@@ -154,19 +150,10 @@ export type updatePool$params = {
     id?: string;
 };
 export type updatePool$body = {
-    class?: string | undefined;
+    /** null: not for rent */
+    class?: (string | null) | undefined;
     accepting?: boolean | undefined;
     monthlyCost?: number | undefined;
-};
-export type ensurePool$params = {
-    id?: string;
-};
-export type ensurePool$body = {
-    device?: string | undefined;
-    loopSizeGb?: number | undefined;
-};
-export type createRemainder$params = {
-    id?: string;
 };
 
 export const rentalsAdminModule = (sdk: typeof BaseSDK) => {
@@ -192,9 +179,6 @@ export const rentalsAdminModule = (sdk: typeof BaseSDK) => {
         pool$return: pool$return,
         updatePool$params: updatePool$params,
         updatePool$body: updatePool$body,
-        ensurePool$params: ensurePool$params,
-        ensurePool$body: ensurePool$body,
-        createRemainder$params: createRemainder$params,
     };
 
     const methods = {
@@ -563,62 +547,6 @@ export const rentalsAdminModule = (sdk: typeof BaseSDK) => {
             return res;
         }, data);
     },
-        ensurePool(data: {
-        params: ensurePool$params,
-        query?: undefined,
-        body: ensurePool$body,
-    } & TRequestOptions<unknown>) {
-        return sdk.resolveAxiosResponse(async () => {
-            sdk.checkPermission("rentalsAdmin", "ensurePool");
-
-            const method = "post";
-            const toPath = compile("rentalsAdmin/api/pool/:id/ensure");
-            const requestPayload = {
-                method,
-                url: toPath(sdk.resolvePathParams(data?.params)),
-                params: data?.query,
-                data: data?.body,
-                signal: data?.signal,
-                ...(data?.axiosConfig
-                ? sdk.resolveAxiosConfig(data.axiosConfig)
-                : undefined),
-            };
-
-            sdk.log("Sending Request:", requestPayload);
-
-            const res = await sdk._axios!.request(requestPayload);
-
-            return res;
-        }, data);
-    },
-        createRemainder(data: {
-        params: createRemainder$params,
-        query?: undefined,
-        body?: undefined,
-    } & TRequestOptions<unknown>) {
-        return sdk.resolveAxiosResponse(async () => {
-            sdk.checkPermission("rentalsAdmin", "createRemainder");
-
-            const method = "post";
-            const toPath = compile("rentalsAdmin/api/pool/:id/remainder");
-            const requestPayload = {
-                method,
-                url: toPath(sdk.resolvePathParams(data?.params)),
-                params: data?.query,
-                data: data?.body,
-                signal: data?.signal,
-                ...(data?.axiosConfig
-                ? sdk.resolveAxiosConfig(data.axiosConfig)
-                : undefined),
-            };
-
-            sdk.log("Sending Request:", requestPayload);
-
-            const res = await sdk._axios!.request(requestPayload);
-
-            return res;
-        }, data);
-    },
     } as const;
 
     (methods.queue as any).__scope = "rentalsAdmin";
@@ -634,8 +562,6 @@ export const rentalsAdminModule = (sdk: typeof BaseSDK) => {
     (methods.recreatePartition as any).__scope = "rentalsAdmin";
     (methods.pool as any).__scope = "rentalsAdmin";
     (methods.updatePool as any).__scope = "rentalsAdmin";
-    (methods.ensurePool as any).__scope = "rentalsAdmin";
-    (methods.createRemainder as any).__scope = "rentalsAdmin";
 
     sdk["_moduleGroup"].set(methods, "Admin");
 

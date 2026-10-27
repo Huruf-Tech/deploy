@@ -69,10 +69,13 @@ export default function PaymentsAdmin() {
 
   const settle = (id: string) =>
     run(id, async () => {
-      const { outcome, status, error } =
-        await ThunderSDK.paymentsAdmin.settle({ params: { id } })
+      const { outcome, status, error } = await ThunderSDK.paymentsAdmin.settle({
+        params: { id },
+      })
       if (outcome === "no_charge") {
-        toast.info(t("Stripe has no charge for it. Abandon it to free its key."))
+        toast.info(
+          t("Stripe has no charge for it. Abandon it to free its key.")
+        )
       } else if (outcome === "waiting") {
         toast.info(t("Stripe is still processing it; try again later."))
       } else if (outcome === "owner") {
@@ -130,11 +133,7 @@ export default function PaymentsAdmin() {
             value={filter}
             onValueChange={(v) => setFilter(v as TFilter | "all")}
           >
-            <SelectTrigger
-              size="sm"
-              className="w-48"
-              aria-label={t("Status")}
-            >
+            <SelectTrigger size="sm" className="w-48" aria-label={t("Status")}>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>

@@ -126,7 +126,10 @@ function ConfirmDialog({
       ["billing", "quote", plan?._id ?? ""],
       async ({ signal }) =>
         plan && !plan.isFree && current?.isOwner
-          ? await ThunderSDK.billing.quote({ query: { plan: plan._id }, signal })
+          ? await ThunderSDK.billing.quote({
+              query: { plan: plan._id },
+              signal,
+            })
           : null
     )
   ).data
@@ -149,7 +152,9 @@ function ConfirmDialog({
         })
         if (!done) {
           toast.info(
-            t("Your bank is still processing it; the plan starts when it confirms.")
+            t(
+              "Your bank is still processing it; the plan starts when it confirms."
+            )
           )
           onOpenChange(false)
           return
@@ -200,7 +205,9 @@ function ConfirmDialog({
             </dd>
             {quote?.change === "scheduled" ? (
               <dd className="col-span-2 text-muted-foreground">
-                {t("Starts when your current period ends; nothing is charged now.")}
+                {t(
+                  "Starts when your current period ends; nothing is charged now."
+                )}
               </dd>
             ) : (
               <>

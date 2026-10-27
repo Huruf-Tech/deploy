@@ -31,14 +31,6 @@ type TPartitionSize = z.output<typeof $partitionSize>;
 export const partitionName = (id: ObjectId) =>
   `p${id.toHexString().slice(-11)}`;
 
-async function platformTenant() {
-  const id = await readTextSetting("PLATFORM_TENANT", "");
-  if (!ObjectId.isValid(id)) {
-    throw Response.badRequest("Payments aren't set up yet");
-  }
-  return new ObjectId(id);
-}
-
 /** An active machine (PLAN §27), optionally one whose host setup is done. */
 async function machine(server: ObjectId, prepared: boolean) {
   const doc = await serverModel.findOne(
@@ -118,25 +110,6 @@ async function issuePoolEnsure(
   });
 }
 
-/**
- * Makes a platform server a pool machine (`pool.ensure`): Sysbox, the XFS
- * partition volume, Docker on it, the partition network rules, then the
- * usual host setup. For a fresh machine only; the agent refuses otherwise.
- */
-export async function makePoolMachine(opts: {
-  server: ObjectId;
-  volume: z.input<typeof $poolEnsurePayload>["volume"];
-  createdBy?: ObjectId;
-}) {
-  const doc = await machine(opts.server, false);
-  if (!doc.tenant.equals(await platformTenant())) {
-    throw Response.forbidden(
-      "Only the platform's own machines can be pool machines",
-    );
-  }
-  return await issuePoolEnsure(doc, "pool", opts.volume, opts.createdBy);
-}
-
 /** Records a finished `pool.ensure` on the server document. */
 export async function recordPoolSetup(
   server: ObjectId,
@@ -179,6 +152,8 @@ export async function createPartition(opts: {
   /** The server's name in the dashboard (PLAN §27). */
   label?: string;
 }) {
+  // A rental is kept apart on its machine (PLAN §28).
+  const isolated = !!opts.rental;
   const doc = await machine(opts.host, true);
   const { session, token } = await createJoinToken({
     tenant: opts.tenant,
@@ -198,6 +173,7 @@ export async function createPartition(opts: {
     name: opts.name,
     ...(opts.size ? { size: opts.size } : {}),
     remainder: opts.remainder ?? false,
+    isolated,
     install: {
       url: controlPlaneUrl,
       tenant: opts.tenant.toHexString(),
@@ -287,6 +263,8 @@ export async function movePartition(opts: {
   const receive: z.input<typeof $partitionReceivePayload> = {
     name: opts.name,
     size: opts.size,
+    // Only rentals move (PLAN §26.10), and they stay apart.
+    isolated: true,
     from: listen,
     token,
   };

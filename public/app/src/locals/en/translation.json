@@ -1338,5 +1338,13 @@
   "Server removed: remove this partition": "Server removed: remove this partition",
   "Couldn't create it": "Couldn't create it",
   "Creating: its server appears in a minute or two": "Creating: its server appears in a minute or two",
-  "Dismiss": "Dismiss"
+  "Dismiss": "Dismiss",
+  "Rentals (admins)": "Rentals (admins)",
+  "Give this machine a class to rent its free capacity to customers.": "Give this machine a class to rent its free capacity to customers.",
+  "Not for rent": "Not for rent",
+  "Uses {{gb}} GB of disk, more than its size": "Uses {{gb}} GB of disk, more than its size",
+  "Rented: {{tenant}} · {{plan}}": "Rented: {{tenant}} · {{plan}}",
+  "Machines for rent: give one a class on its page. Memory is what runs out, since it's never shared.": "Machines for rent: give one a class on its page. Memory is what runs out, since it's never shared.",
+  "not taking rentals": "not taking rentals",
+  "Memory: rented / yours / free": "Memory: rented / yours / free"
 }

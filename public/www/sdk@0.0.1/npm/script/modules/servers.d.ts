@@ -159,6 +159,11 @@ export type partitions$return = {
     } | undefined;
     /** Its agent hasn't joined yet */
     joining: boolean;
+    /** A rental on the platform's machine (PLAN §28) */
+    rented?: {
+        tenant: string;
+        plan: string;
+    } | undefined;
     /** The machine doesn't report it yet */
     creating?: boolean | undefined;
     /** Why creating it failed */

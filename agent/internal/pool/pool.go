@@ -57,12 +57,16 @@ type Driver interface {
 	// Forward replaces the machine's ports forwarded into partitions (PLAN
 	// §27.3); `added` are new since the last call.
 	Forward(ctx context.Context, forwards, added []protocol.PortForward) error
+	// Isolate keeps these partitions (rentals) apart (PLAN §28).
+	Isolate(ctx context.Context, names, allowIps []string) error
 }
 
 // Entry is one partition in the machine's state file.
 type Entry struct {
 	Size      protocol.PartitionSize `json:"size"`
 	Remainder bool                   `json:"remainder,omitempty"`
+	// A rental: kept apart from the machine and its other partitions.
+	Isolated bool `json:"isolated,omitempty"`
 }
 
 type state struct {
@@ -70,6 +74,22 @@ type state struct {
 	Partitions  map[string]Entry       `json:"partitions"`
 	// From the desired state; re-applied when a partition (re)starts.
 	Forwards []protocol.PortForward `json:"forwards,omitempty"`
+	// Private addresses rentals may still reach, from host setup.
+	AllowIps []string `json:"allowIps,omitempty"`
+	// A pool machine (PLAN §26.5): every partition but the remainder is a rental.
+	Pool bool `json:"pool,omitempty"`
+}
+
+// isolate applies the rules for every rental on the machine.
+func (m *Manager) isolate(ctx context.Context, s *state) error {
+	var names []string
+	for name, e := range s.Partitions {
+		if e.Isolated || (s.Pool && !e.Remainder) {
+			names = append(names, name)
+		}
+	}
+	sort.Strings(names)
+	return m.Driver.Isolate(ctx, names, s.AllowIps)
 }
 
 // Manager serializes partition changes (commands run concurrently) and keeps
@@ -215,7 +235,12 @@ func (m *Manager) Ensure(ctx context.Context, p protocol.PoolEnsurePayload) (map
 		return result, err
 	}
 	s.Allocatable = allocatable
+	s.AllowIps = p.AllowIps
+	s.Pool = p.Mode == "pool"
 	if err := m.save(); err != nil {
+		return result, err
+	}
+	if err := m.isolate(ctx, s); err != nil {
 		return result, err
 	}
 	if left, err := s.free("", nil); err == nil {
@@ -303,7 +328,7 @@ func (m *Manager) createPartition(ctx context.Context, p protocol.PartitionCreat
 			if err := m.sizeRemainder(ctx, s, left); err != nil {
 				return none, err
 			}
-			entry = Entry{Size: *p.Size}
+			entry = Entry{Size: *p.Size, Isolated: p.Isolated}
 		}
 		if err := m.Driver.Create(ctx, p.Name, entry.Size, weight(entry)); err != nil {
 			return none, err
@@ -313,6 +338,9 @@ func (m *Manager) createPartition(ctx context.Context, p protocol.PartitionCreat
 			return none, err
 		}
 		_ = m.Driver.Forward(ctx, s.Forwards, nil)
+	}
+	if err := m.isolate(ctx, s); err != nil {
+		return none, err
 	}
 	return s.Partitions[p.Name].Size, nil
 }
@@ -419,6 +447,7 @@ func (m *Manager) Remove(ctx context.Context, p protocol.PartitionNamePayload) (
 	if err := m.save(); err != nil {
 		return nil, err
 	}
+	_ = m.isolate(ctx, s)
 	result := map[string]any{"name": p.Name, "removed": true}
 	if !entry.Remainder {
 		if left, err := s.free("", nil); err == nil {
@@ -477,10 +506,13 @@ func (m *Manager) Receive(ctx context.Context, p protocol.PartitionReceivePayloa
 	if err == nil {
 		err = m.sizeRemainder(ctx, s, left)
 	}
-	entry := Entry{Size: p.Size}
+	entry := Entry{Size: p.Size, Isolated: p.Isolated}
 	if err == nil {
 		s.Partitions[p.Name] = entry
 		err = m.save()
+	}
+	if err == nil {
+		err = m.isolate(ctx, s)
 	}
 	m.mu.Unlock()
 	if err != nil {
@@ -525,6 +557,9 @@ func (m *Manager) Restore(ctx context.Context) error {
 		names = append(names, name)
 	}
 	if err := m.Driver.Restore(ctx, names); err != nil {
+		return err
+	}
+	if err := m.isolate(ctx, s); err != nil {
 		return err
 	}
 	// Forwards and their firewall rule live in memory: a reboot lost them.

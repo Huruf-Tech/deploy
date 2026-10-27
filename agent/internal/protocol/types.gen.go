@@ -884,6 +884,9 @@ type PartitionCreatePayload struct {
 
 	Remainder bool `json:"remainder"`
 
+	// A rental (PLAN §28): no reaching the machine, other partitions, the metadata endpoint, mail ports or private ranges
+	Isolated bool `json:"isolated"`
+
 	Install PartitionCreatePayloadInstall `json:"install"`
 }
 
@@ -921,6 +924,8 @@ type PartitionReceivePayload struct {
 	Name string `json:"name"`
 
 	Size PartitionSize `json:"size"`
+
+	Isolated bool `json:"isolated"`
 
 	// host:port
 	From string `json:"from"`

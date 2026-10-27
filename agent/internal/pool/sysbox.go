@@ -104,7 +104,7 @@ func (Sysbox) Setup(ctx context.Context, p protocol.PoolEnsurePayload) (protocol
 	if err := buildImage(ctx); err != nil {
 		return none, result, err
 	}
-	if err := applyRules(ctx, pool, p.AllowIps); err != nil {
+	if err := applyRules(ctx); err != nil {
 		return none, result, err
 	}
 	existing, _ := run(ctx, "docker", "ps", "-a", "--filter", "label=huruf.partition", "--format", `{{.Label "huruf.partition"}}`)
@@ -160,7 +160,12 @@ func ensureDocker(ctx context.Context, notes *[]string) error {
 	return nil
 }
 
-// ensureSysbox installs Sysbox CE's latest release once and starts it,
+// sysboxVersion is the release partitions are tested with (spikes 16a, 17a).
+// Pinned: asking GitHub for the latest fails under its rate limit, and an
+// upgrade is a decision, not a side effect of setting up a machine.
+const sysboxVersion = "v0.7.1"
+
+// ensureSysbox installs Sysbox CE once and starts it,
 // without restarting Docker: other tools' containers may run there.
 // Sysbox's installer restarts Docker for `bip` and `default-address-pools`
 // unless daemon.json has them, so they're written first with the values
@@ -171,7 +176,7 @@ func ensureSysbox(ctx context.Context, notes *[]string) error {
 			return err
 		}
 		script := `set -e
-V=$(curl -fsSL https://api.github.com/repos/nestybox/sysbox/releases/latest | sed -n 's/.*"tag_name": *"\(v[^"]*\)".*/\1/p')
+V=` + sysboxVersion + `
 A=$(dpkg --print-architecture)
 curl -fsSL -o /tmp/sysbox.deb "https://downloads.nestybox.com/sysbox/releases/$V/sysbox-ce_${V#v}-0.linux_$A.deb"
 DEBIAN_FRONTEND=noninteractive apt-get install -y -qq /tmp/sysbox.deb

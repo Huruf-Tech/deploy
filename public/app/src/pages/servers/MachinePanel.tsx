@@ -247,7 +247,11 @@ export function MachinePanel({
                         state={p.state === "running" ? "running" : "stopped"}
                       />
                       <span className="sr-only">{p.state}</span>
-                      {s ? (
+                      {row?.rented ? (
+                        <span>
+                          {t("Rented: {{tenant}} · {{plan}}", row.rented)}
+                        </span>
+                      ) : s ? (
                         <Link
                           to={`../${s._id}`}
                           relative="path"
@@ -266,7 +270,7 @@ export function MachinePanel({
                     <div dir="ltr" className="text-xs text-muted-foreground">
                       {sizeText(p.size)}
                     </div>
-                    {canChange && (
+                    {canChange && !row?.rented && (
                       <div className="mt-1 flex gap-3 text-xs">
                         <button
                           type="button"

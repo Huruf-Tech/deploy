@@ -123,6 +123,7 @@ A free-to-use SaaS that deploys and operates apps on **the user's own machines**
 | D45 | **AI template assistant (Phase 12):** the platform's own Anthropic key, offered as a plan feature with a monthly limit. It drafts templates (from a GitHub repo or a description) and fixes failed builds and rollouts; a person always reviews and saves. |
 | D47 | **Shared resources (Phase 16, §26):** Huruf's pool machines are split into partitions (Sysbox system containers, behind a `PartitionDriver`), each running our normal agent; a rented partition joins the customer's tenant as an ordinary server, and Huruf's own remainder partition holds everything not rented (CPU uncapped at lowest priority), so nothing sits idle. Sizes are plans and a rental is a subscription (existing mechanisms, refactored where needed), priced from a rate card per class and paid monthly upfront from the wallet. Admins approve requests for now; custom domains only. |
 | D48 | **Partitions on every server (Phase 17, §27):** every agent is a host; after install the customer creates a partition of the size they choose and leaves the rest of the machine to other tools. Partitions are servers and can be added, resized and removed later. Uninstall removes partitions and our own objects by label and name, never shared packages (Sysbox only on request), so the install log goes. |
+| D49 | **Rentals on any machine (Phase 18, §28):** no pool machines. An admin adds machines like any customer and makes one available for rent by giving it a class; approving a request creates the customer's partition on the machine the admin picks. Rentals are isolated one by one, so the platform's own partitions and other tools share the machine. |
 | D46 | **Payments through Stripe, saved cards first (Phase 15, §25):** customers save a card on a Billing page (Stripe Elements; card data never touches us) and are charged later, off session, when a renewal or payment is short, and on demand through "Add funds". Money always lands in the thunder-core wallet first (`Wallet.ensureBalance` / `addBalance` / `settleTopup`), and every charge still goes through `BillingService`. USD only for now. Gateways sit behind one `PaymentGateway` interface, so more can join the same Billing page later. |
 | D42 | **Managed servers (optional, needs owner consent):** provision EC2 instances on the platform's AWS account and bill plan + metered usage from the wallet. The MVP only prepares the seams (§24). |
 
@@ -1420,7 +1421,7 @@ Not started; the owner says go per stage. Each stage ends with a review. Built o
      - An unpaid rental is suspended after 3 days and released after 14 more, with the emails; paying before release resumes it.
   5. **Resize:** an approved resize up applies in place without a restart and charges with proration once. One that doesn't fit is moved by an admin, and her server, projects and domains stay the same.
   6. **Nothing else changes:** workspace plans, BYO servers and existing billing behave as before (existing tests green).
-- **Phase 18 (later):** pool machines provisioned and retired on AWS automatically (`ServerProvisioner`, §24), and automatic approval when a class has room.
+- **Phase 19 (later):** pool machines provisioned and retired on AWS automatically (`ServerProvisioner`, §24), and automatic approval when a class has room.
 
 ### Phase 17 — Partitions on every server (built, pending review, D48, §27)
 The owner said go for all stages (2026-10-27). Every agent is a host; after install the customer creates a partition of the size they choose, and projects run in partitions. Uninstall no longer needs the install log.
@@ -1478,6 +1479,29 @@ The owner said go for all stages (2026-10-27). Every agent is a host; after inst
   3. A second partition is added and the first resized live.
   4. Pool machines and rentals behave as before (Phase 16 tests green).
 
+### Phase 18 — Rentals on any machine (built, pending review, D49, §28)
+The owner's decision (2026-10-27): no pool machines. An admin adds machines like any customer; a machine is for rent once the admin gives it a class; approving a request creates the customer's partition on the machine the admin picks, beside the platform's own partitions and other tools.
+- **Status: built (pending review).**
+  - **Agent:**
+    - Rentals are isolated one by one (`isolated` on `partition.create` and `partition.receive`; table `inet huruf_isolate`, a set of rented bridges, also loaded at boot from `/etc/huruf-isolate.nft`): no reaching the machine, other partitions (nor being reached from them), the metadata endpoint, mail ports or private ranges (but `POOL_ALLOW_IPS`).
+    - The platform's own partitions stay unrestricted. The machine-wide pool rules are now the traffic counters only. Rentals on a Phase 16 pool machine count as isolated.
+    - Sysbox is pinned to v0.7.1: asking GitHub for the latest failed under its rate limit and broke host setup.
+    - The partition image is built again when another tool's cleanup removed it.
+  - **Control plane:**
+    - `makePoolMachine` and the remainder route are gone. `PATCH /rentalsAdmin/api/pool/:id` sets a platform machine's class (`null`: not for rent), whether it takes new rentals, and its cost.
+    - Placement: the platform's machines of the rental's class taking rentals. A machine's free room is what it offers minus every partition it reports (its own and rentals) and rentals approved but not reported yet.
+    - Capacity: per machine (rented, own, free memory; rentals; revenue against cost). The per-class spare share is gone.
+    - **Disk:** a rental's data keeps its hard quota. Its system files (packages, logs) have no cap outside a pool machine, so a rental using more than its size is flagged (`rental.overDisk`, shown on its machine's Rentals panel) and its owner told once.
+    - A machine's partition list marks rentals ("Rented: workspace · size"), which change through their rental, not the panel.
+  - **Dashboard:**
+    - Every machine shows its Partitions panel.
+    - A platform machine shows "Rentals (admins)": class (or not for rent), takes new rentals, monthly cost, and the rentals on it with uptime, Move and the disk flag.
+    - Admin → Rentals shows capacity per machine.
+  - **Verified locally** on a fresh machine with one of the platform's partitions and a rental:
+    - the platform's partition reached the machine, a private address and the internet, but not the rental;
+    - the rental reached only the internet;
+    - the rules survived an agent restart.
+
 ### Phase 14 — Backlog (after MVP)
 - Ability to upgrade already installed agent along with its deps — **done (pending review):**
   - Agents report the SHA-256 of their binary. The control plane compares it with the `SHA256SUMS` the installer uses (`AGENT_DOWNLOAD_BASE`; optional `AGENT_CHECKSUMS_BASE` when the control plane reaches that host under another address), cached 5 minutes.
@@ -1494,7 +1518,7 @@ The owner said go for all stages (2026-10-27). Every agent is a host; after inst
 - PR preview deployments (consent needed)
 - macOS agent (consent needed)
 - **More roles** (owner agrees): viewer (read-only), developer (projects and variables only), billing manager, and per-project access.
-- Managed servers on our AWS account (D42, §24): now Phase 18, after shared resources (D47, §26)
+- Managed servers on our AWS account (D42, §24): now Phase 19, after shared resources (D47, §26)
 
 ---
 
@@ -1913,7 +1937,7 @@ Each axis of variation is an interface with one class per variant. Adding a vari
 
 ## 24. Managed servers (optional, D42)
 
-> **Folded into shared resources (D47, §26).** The owner consented to platform-run capacity with Phase 16: pool machines are added manually there, and the AWS provisioning below becomes Phase 18, feeding the pool. Per-hour billing (§24.2) is replaced by monthly upfront allocations (§26.7); hourly blocks remain a later option.
+> **Folded into shared resources (D47, §26).** The owner consented to platform-run capacity with Phase 16: pool machines are added manually there, and the AWS provisioning below becomes Phase 19, feeding the pool. Per-hour billing (§24.2) is replaced by monthly upfront allocations (§26.7); hourly blocks remain a later option.
 
 **Idea:** the user provisions an EC2 instance from the dashboard on the platform's AWS account. The tenant pays the plan subscription plus metered machine usage per hour.
 
@@ -2062,7 +2086,7 @@ Example:
 - the screens.
 
 **Later:**
-- AWS provisioning and automatic approval (Phase 18);
+- AWS provisioning and automatic approval (Phase 19);
 - backups of partitions;
 - yearly prepay.
 
@@ -2315,7 +2339,7 @@ Needed for a resize that doesn't fit, or for draining a machine. An admin action
 14. **The customer pays the partition overhead,** at the class's memory rate.
 10. **Terms of service and data processing:** on the website, later.
 11. **Reuse first:** build on existing mechanisms and refactor them where needed.
-12. **Consent for platform-run capacity** (D42): given with this feature; AWS provisioning follows in Phase 18.
+12. **Consent for platform-run capacity** (D42): given with this feature; AWS provisioning follows in Phase 19.
 
 **Open:**
 1. Final rates, once the Partitions panel shows real costs.
@@ -2398,3 +2422,11 @@ Needed for a resize that doesn't fit, or for draining a machine. An admin action
 
 - Sysbox's: Ubuntu 22.04+ (the OS check today), amd64 or arm64, kernel 5.12+ for ID-mapped mounts (else shiftfs). Host setup checks them before installing anything.
 - WireGuard's kernel module on the host (§26.13).
+
+## 28. Rentals on any machine (D49, Phase 18)
+
+- **No pool machines (owner, 2026-10-27).** Machines are added like any customer's (§27). Giving one a class makes its free capacity rentable; without a class it isn't for rent. "Takes new rentals" drains it; its monthly cost is for revenue against cost.
+- **Approval** picks one of the platform's machines of the rental's class with room and creates the customer's partition there (§26.9 otherwise unchanged: charging, renewal, suspension, moves, uptime).
+- **Isolation per rental:** the rules of §26.3 apply to rented partitions only, so the platform's own partitions and other tools on the machine keep their network.
+- **Disk:** a rental's data is capped (its quota); its system files aren't outside a pool machine. Usage over the size is flagged for the admin and the owner is told.
+- **Rentals on Phase 16 pool machines** keep working: their machines are machines with a class, and their partitions count as isolated.

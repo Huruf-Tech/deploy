@@ -2578,6 +2578,11 @@
           "default": false,
           "type": "boolean"
         },
+        "isolated": {
+          "default": false,
+          "description": "A rental (PLAN §28): no reaching the machine, other partitions, the metadata endpoint, mail ports or private ranges",
+          "type": "boolean"
+        },
         "install": {
           "type": "object",
           "properties": {
@@ -2607,6 +2612,7 @@
       "required": [
         "name",
         "remainder",
+        "isolated",
         "install"
       ],
       "additionalProperties": false
@@ -2726,6 +2732,10 @@
           ],
           "additionalProperties": false
         },
+        "isolated": {
+          "default": false,
+          "type": "boolean"
+        },
         "from": {
           "type": "string",
           "maxLength": 64,
@@ -2740,6 +2750,7 @@
       "required": [
         "name",
         "size",
+        "isolated",
         "from",
         "token"
       ],

@@ -240,6 +240,7 @@ Deno.test({
             ),
           );
           assertEquals(payload.size, { cpus: 1, memMb: 2176, diskGb: 25 });
+          assertEquals(payload.isolated, true, "a rental is kept apart");
           assertEquals(payload.install.tenant, String(tenant));
 
           // The partition's agent joins with its token: a rented server, no quota.
@@ -436,11 +437,35 @@ Deno.test({
             [["pool-2", true, true]],
           );
 
-          // Capacity per class, and a pool machine with rentals can't go.
-          const { classes } = await rentals.capacity();
-          const row = classes.find((c) => c._id === String(cls))!;
-          assertEquals([row.machines, row.rented.memMb], [2, 4096 + 128]);
-          assertEquals(row.spare, Math.round(100 * (16384 - 4224) / 16384));
+          // Capacity per machine for rent, and a machine with rentals can't go.
+          const { machines } = await rentals.capacity();
+          const row = machines.find((m) => m._id === String(host))!;
+          assertEquals(
+            [row.class, row.rentals, row.rentedMemMb, row.freeMemMb],
+            ["Shared CPU test", 1, 4096 + 128, 8192 - 4224],
+          );
+          assert(machines.some((m) => m._id === String(host2)));
+          // The platform's own partitions on a machine take its room too.
+          await serverModel.updateOne({ _id: host2 }, {
+            $set: {
+              "resources.partitions": [{
+                name: "pown",
+                remainder: false,
+                state: "running",
+                size: { cpus: 1, memMb: 2048, diskGb: 20 },
+                cpuMicros: 0,
+                memUsed: 0,
+                diskUsed: 0,
+                rxBytes: 0,
+                txBytes: 0,
+              }],
+            },
+          });
+          const roomy = (await rentals.moveTargets(rental)).targets[0];
+          assertEquals(roomy.free, { memMb: 8192 - 2048, diskGb: 80 });
+          await serverModel.updateOne({ _id: host2 }, {
+            $unset: { "resources.partitions": "" },
+          });
           const del = await platform.call("DELETE", `/servers/api/${host}`);
           assertEquals(del.status, 400, JSON.stringify(del.json));
           assert(JSON.stringify(del.json).includes("move them"));

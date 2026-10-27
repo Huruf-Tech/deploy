@@ -13,6 +13,8 @@ import { serverModel } from "@/schemas/infrastructure/server.ts";
 import { bootstrapSessionModel } from "@/schemas/infrastructure/bootstrapSession.ts";
 import { agentCommandModel } from "@/schemas/infrastructure/agentCommand.ts";
 import { subscriptionModel } from "@/schemas/billing/subscription.ts";
+import { planModel } from "@/schemas/billing/plan.ts";
+import { tenantModel } from "@/plugins/Huruf-Tech/thunder-core/schemas/tenant.ts";
 import { detachServer } from "@/lib/deploy/projects.ts";
 import type { $partitionSize } from "@/schemas/protocol/agent.ts";
 
@@ -235,6 +237,27 @@ export async function partitionsOf(tenant: ObjectId, machine: ObjectId) {
       expiresAt: { $gt: new Date() },
     }, { projection: { partition: 1, createdAt: 1 } }).toArray(),
   ]);
+  // Rentals on a platform machine (PLAN §28): theirs, changed through the rental.
+  const rentals = await subscriptionModel.find({
+    kind: "server",
+    "rental.host": machine,
+    status: { $in: ["active", "pastDue", "suspended"] },
+  }, { projection: { tenant: 1, plan: 1, "rental.partition": 1 } }).toArray();
+  const [tenants, plans] = await Promise.all([
+    tenantModel.find({ _id: { $in: rentals.map((r) => r.tenant) } }, {
+      projection: { name: 1 },
+    }).toArray(),
+    planModel.find({ _id: { $in: rentals.map((r) => r.plan) } }, {
+      projection: { name: 1 },
+    }).toArray(),
+  ]);
+  const rentalOf = (name: string) => {
+    const r = rentals.find((x) => x.rental?.partition === name);
+    return r && {
+      tenant: tenants.find((t) => t._id.equals(r.tenant))?.name ?? "",
+      plan: plans.find((p) => p._id.equals(r.plan))?.name ?? "",
+    };
+  };
   const commands = await agentCommandModel.find({
     _id: { $in: sessions.flatMap((s) => s.partition?.command ?? []) },
   }, { projection: { status: 1, error: 1 } }).toArray();
@@ -248,6 +271,7 @@ export async function partitionsOf(tenant: ObjectId, machine: ObjectId) {
     diskUsed?: number;
     server?: { _id: string; name: string };
     joining: boolean;
+    rented?: { tenant: string; plan: string };
     creating?: boolean;
     error?: string;
     label?: string;
@@ -263,7 +287,9 @@ export async function partitionsOf(tenant: ObjectId, machine: ObjectId) {
       ...(server
         ? { server: { _id: String(server._id), name: server.name } }
         : {}),
-      joining: !server && sessions.some((s) => s.partition?.name === p.name),
+      ...(rentalOf(p.name) ? { rented: rentalOf(p.name) } : {}),
+      joining: !server && !rentalOf(p.name) &&
+        sessions.some((s) => s.partition?.name === p.name),
     };
   });
   for (const session of sessions) {

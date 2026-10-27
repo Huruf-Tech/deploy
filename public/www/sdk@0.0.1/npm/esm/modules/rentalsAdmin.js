@@ -263,46 +263,6 @@ export const rentalsAdminModule = (sdk) => {
                 return res;
             }, data);
         },
-        ensurePool(data) {
-            return sdk.resolveAxiosResponse(async () => {
-                sdk.checkPermission("rentalsAdmin", "ensurePool");
-                const method = "post";
-                const toPath = compile("rentalsAdmin/api/pool/:id/ensure");
-                const requestPayload = {
-                    method,
-                    url: toPath(sdk.resolvePathParams(data?.params)),
-                    params: data?.query,
-                    data: data?.body,
-                    signal: data?.signal,
-                    ...(data?.axiosConfig
-                        ? sdk.resolveAxiosConfig(data.axiosConfig)
-                        : undefined),
-                };
-                sdk.log("Sending Request:", requestPayload);
-                const res = await sdk._axios.request(requestPayload);
-                return res;
-            }, data);
-        },
-        createRemainder(data) {
-            return sdk.resolveAxiosResponse(async () => {
-                sdk.checkPermission("rentalsAdmin", "createRemainder");
-                const method = "post";
-                const toPath = compile("rentalsAdmin/api/pool/:id/remainder");
-                const requestPayload = {
-                    method,
-                    url: toPath(sdk.resolvePathParams(data?.params)),
-                    params: data?.query,
-                    data: data?.body,
-                    signal: data?.signal,
-                    ...(data?.axiosConfig
-                        ? sdk.resolveAxiosConfig(data.axiosConfig)
-                        : undefined),
-                };
-                sdk.log("Sending Request:", requestPayload);
-                const res = await sdk._axios.request(requestPayload);
-                return res;
-            }, data);
-        },
     };
     methods.queue.__scope = "rentalsAdmin";
     methods.placement.__scope = "rentalsAdmin";
@@ -317,8 +277,6 @@ export const rentalsAdminModule = (sdk) => {
     methods.recreatePartition.__scope = "rentalsAdmin";
     methods.pool.__scope = "rentalsAdmin";
     methods.updatePool.__scope = "rentalsAdmin";
-    methods.ensurePool.__scope = "rentalsAdmin";
-    methods.createRemainder.__scope = "rentalsAdmin";
     sdk["_moduleGroup"].set(methods, "Admin");
     return methods;
 };
