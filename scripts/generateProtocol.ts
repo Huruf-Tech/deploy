@@ -54,6 +54,7 @@ const MESSAGES: Array<[string, z.ZodType, "input" | "output"]> = [
   ["PartitionNamePayload", protocol.$partitionNamePayload, "output"],
   ["PartitionSendPayload", protocol.$partitionSendPayload, "output"],
   ["PartitionReceivePayload", protocol.$partitionReceivePayload, "output"],
+  ["MoveRelay", protocol.$moveRelay, "output"],
 ];
 
 const schemas = Object.fromEntries(

@@ -1017,6 +1017,30 @@ export async function clearBuildCache(
   }
 }
 
+/**
+ * "Clear all build caches" for a workspace (PLAN §9.2): every server it
+ * builds on drops its whole build cache and dangling images, to free disk;
+ * the next builds start cold. Returns how many servers were asked.
+ */
+export async function clearAllBuildCaches(tenant: ObjectId, user?: ObjectId) {
+  // Machines build nothing: their partitions do.
+  const servers = await serverModel.find({
+    tenant,
+    status: "active",
+    "provider.kind": { $ne: "machine" },
+  }, { projection: { _id: 1 }, limit: 1_000 }).toArray();
+  for (const { _id } of servers) {
+    await issueCommand({
+      server: _id,
+      tenant,
+      type: "cache.clear",
+      payload: { all: true },
+      createdBy: user,
+    }).catch((e) => log.warn(`cache.clear on ${_id}: ${e}`));
+  }
+  return servers.length;
+}
+
 /** GitHub `push` webhook: deploy every auto-deploy project on that branch (PLAN §16 6c). */
 export async function deployOnPush(
   integration: ObjectId,

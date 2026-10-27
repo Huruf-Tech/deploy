@@ -216,7 +216,26 @@ func exports(env map[string]string) string {
 // ClearCache drops a project's BuildKit cache mounts (`cache.clear`, PLAN
 // §9.2): templates name them `<project>-<epoch>`, and BuildKit records that id
 // in each mount's description. Its layer cache ages out by BuildKit's GC.
+// With `all`, the whole build cache goes, and dangling images (untagged
+// build leftovers); tagged images stay, as rollbacks may need them.
 func (b *Builder) ClearCache(ctx context.Context, p protocol.CacheClearPayload) (map[string]any, error) {
+	if p.All {
+		// Not while a build runs: it would lose its cache midway.
+		b.mu.Lock()
+		defer b.mu.Unlock()
+		cache, err := sh.Run(ctx, "docker", "builder", "prune", "-af")
+		if err != nil {
+			return nil, err
+		}
+		images, err := sh.Run(ctx, "docker", "image", "prune", "-f")
+		if err != nil {
+			return nil, err
+		}
+		return map[string]any{
+			"cache":  sh.Tail(strings.TrimSpace(cache), 200),
+			"images": sh.Tail(strings.TrimSpace(images), 200),
+		}, nil
+	}
 	if !isProjectID(p.Project) {
 		return nil, errors.New("invalid project id")
 	}

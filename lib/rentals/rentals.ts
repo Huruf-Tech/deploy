@@ -1,3 +1,4 @@
+import { moveRelay } from "@/lib/domains/tunnels.ts";
 import { agentCommandModel } from "@/schemas/infrastructure/agentCommand.ts";
 import { bootstrapSessionModel } from "@/schemas/infrastructure/bootstrapSession.ts";
 import { ObjectId, type WithId } from "mongodb";
@@ -826,8 +827,11 @@ export class RentalService implements TRentalHooks {
     });
     const spots = (await this.placement(id))
       .filter((m) => m.server !== String(sub.rental.host));
-    // The target fetches from the source's address (TCP MOVE_PORT open).
-    const reachable = !!source && !!moveAddress(source);
+    // The target fetches from the source's address (TCP MOVE_PORT open), or
+    // through the tunnel server when the platform's tunnels are configured.
+    const reachable = !!source &&
+      (!!moveAddress(source) ||
+        !!await moveRelay(source._id, source._id, sub.rental.partition));
     const used = source?.resources?.partitions
       ?.find((p) => p.name === sub.rental.partition)?.diskUsed ??
       sub.rental.size.diskGb * GB;
@@ -854,7 +858,7 @@ export class RentalService implements TRentalHooks {
     }
     if (!spot.reachable) {
       throw Response.badRequest(
-        "The machine it's on has no address to move from",
+        "The machine it's on has no address to move from, and tunnels aren't set up",
       );
     }
     // Claimed first, so two admins can't move it at once.

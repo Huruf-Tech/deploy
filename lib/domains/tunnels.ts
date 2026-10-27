@@ -156,6 +156,31 @@ ops = ["Login", "NewProxy"]
   );
 }
 
+/**
+ * A machine's part of a move through the tunnel server (PLAN §26.10):
+ * absent until the platform's tunnels are configured.
+ */
+export async function moveRelay(
+  machine: ObjectId,
+  peer: ObjectId,
+  partition: string,
+) {
+  const [server] = (await readTextSetting("INGRESS_TUNNEL_ADDRS", ""))
+    .split(",").map((s) => s.trim()).filter(Boolean);
+  const token = await tunnelToken(machine);
+  if (!server || !token) return undefined;
+  return {
+    server,
+    user: machine.toHexString(),
+    token,
+    serverName: TUNNEL_SERVER_NAME,
+    ca: await tunnelCert(),
+    image: FRPC_IMAGE,
+    proxy: `move-${partition}`,
+    peer: peer.toHexString(),
+  };
+}
+
 /** The spec's `ingress`: absent until the platform's tunnels are configured. */
 export async function ingressSpecFor(
   server: WithId<TServer>,
@@ -184,13 +209,16 @@ type TFrpRequest = {
     user?: string | { user?: string; metas?: Record<string, string> };
     metas?: Record<string, string>;
     proxy_type?: string;
+    proxy_name?: string;
     remote_port?: number;
   };
 };
 
 /**
  * frps' server plugin (Login, NewProxy): only an active server with its own
- * token logs in, and it may open one TCP proxy, on its own tunnel port.
+ * token logs in, and it may open one TCP proxy, on its own tunnel port, and
+ * a private (STCP) tunnel for a move (`move-<partition>`), which only a
+ * visitor with the move's token reaches.
  */
 export async function frpDecision(body: TFrpRequest) {
   const reject = (reason: string) => ({ reject: true, reject_reason: reason });
@@ -210,11 +238,12 @@ export async function frpDecision(body: TFrpRequest) {
     return reject("unknown server");
   }
   if (body.op === "NewProxy") {
-    if (
-      content.proxy_type !== "tcp" || !server.tunnelPort ||
-      content.remote_port !== server.tunnelPort
-    ) {
-      return reject("only this server's tunnel port");
+    const move = content.proxy_type === "stcp" &&
+      /(^|\.)move-[a-z0-9]{1,12}$/.test(content.proxy_name ?? "");
+    const tunnel = content.proxy_type === "tcp" && !!server.tunnelPort &&
+      content.remote_port === server.tunnelPort;
+    if (!move && !tunnel) {
+      return reject("only this server's tunnel port, or a move");
     }
   } else if (body.op !== "Login") {
     return reject("unsupported operation");

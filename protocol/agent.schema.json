@@ -1382,10 +1382,14 @@
         "project": {
           "type": "string",
           "pattern": "^[a-f0-9]{24}$"
+        },
+        "all": {
+          "default": false,
+          "type": "boolean"
         }
       },
       "required": [
-        "project"
+        "all"
       ],
       "additionalProperties": false
     },
@@ -2632,6 +2636,59 @@
         "key": {
           "type": "string",
           "pattern": "^[A-Za-z0-9+/]{43}=$"
+        },
+        "relay": {
+          "type": "object",
+          "properties": {
+            "server": {
+              "type": "string",
+              "maxLength": 255,
+              "description": "host:port of frps"
+            },
+            "user": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{24}$",
+              "description": "This machine's tunnel user"
+            },
+            "token": {
+              "type": "string",
+              "maxLength": 200,
+              "description": "This machine's tunnel token"
+            },
+            "serverName": {
+              "type": "string",
+              "maxLength": 255,
+              "description": "frps' certificate name"
+            },
+            "ca": {
+              "type": "string",
+              "maxLength": 10000
+            },
+            "image": {
+              "type": "string",
+              "maxLength": 255
+            },
+            "proxy": {
+              "type": "string",
+              "pattern": "^move-[a-z0-9]{1,12}$"
+            },
+            "peer": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{24}$",
+              "description": "The other machine: the source lets it in, the target reaches its tunnel"
+            }
+          },
+          "required": [
+            "server",
+            "user",
+            "token",
+            "serverName",
+            "ca",
+            "image",
+            "proxy",
+            "peer"
+          ],
+          "additionalProperties": false
         }
       },
       "required": [
@@ -2683,7 +2740,7 @@
         "from": {
           "type": "string",
           "maxLength": 64,
-          "description": "host:port"
+          "description": "host:port; empty when only the relay reaches the source"
         },
         "token": {
           "type": "string",
@@ -2693,6 +2750,59 @@
         "key": {
           "type": "string",
           "pattern": "^[A-Za-z0-9+/]{43}=$"
+        },
+        "relay": {
+          "type": "object",
+          "properties": {
+            "server": {
+              "type": "string",
+              "maxLength": 255,
+              "description": "host:port of frps"
+            },
+            "user": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{24}$",
+              "description": "This machine's tunnel user"
+            },
+            "token": {
+              "type": "string",
+              "maxLength": 200,
+              "description": "This machine's tunnel token"
+            },
+            "serverName": {
+              "type": "string",
+              "maxLength": 255,
+              "description": "frps' certificate name"
+            },
+            "ca": {
+              "type": "string",
+              "maxLength": 10000
+            },
+            "image": {
+              "type": "string",
+              "maxLength": 255
+            },
+            "proxy": {
+              "type": "string",
+              "pattern": "^move-[a-z0-9]{1,12}$"
+            },
+            "peer": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{24}$",
+              "description": "The other machine: the source lets it in, the target reaches its tunnel"
+            }
+          },
+          "required": [
+            "server",
+            "user",
+            "token",
+            "serverName",
+            "ca",
+            "image",
+            "proxy",
+            "peer"
+          ],
+          "additionalProperties": false
         }
       },
       "required": [
@@ -2702,6 +2812,60 @@
         "from",
         "token",
         "key"
+      ],
+      "additionalProperties": false
+    },
+    "MoveRelay": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "server": {
+          "type": "string",
+          "maxLength": 255,
+          "description": "host:port of frps"
+        },
+        "user": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{24}$",
+          "description": "This machine's tunnel user"
+        },
+        "token": {
+          "type": "string",
+          "maxLength": 200,
+          "description": "This machine's tunnel token"
+        },
+        "serverName": {
+          "type": "string",
+          "maxLength": 255,
+          "description": "frps' certificate name"
+        },
+        "ca": {
+          "type": "string",
+          "maxLength": 10000
+        },
+        "image": {
+          "type": "string",
+          "maxLength": 255
+        },
+        "proxy": {
+          "type": "string",
+          "pattern": "^move-[a-z0-9]{1,12}$"
+        },
+        "peer": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{24}$",
+          "description": "The other machine: the source lets it in, the target reaches its tunnel"
+        }
+      },
+      "required": [
+        "server",
+        "user",
+        "token",
+        "serverName",
+        "ca",
+        "image",
+        "proxy",
+        "peer"
       ],
       "additionalProperties": false
     }

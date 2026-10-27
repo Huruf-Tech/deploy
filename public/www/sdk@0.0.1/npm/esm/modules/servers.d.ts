@@ -1,5 +1,8 @@
 import type { TRequestOptions, TFilters, TPagination } from "../types.js";
 import type { BaseSDK } from "../base.js";
+export type clearCaches$return = {
+    servers: number;
+};
 export type count$query = {
     /** Client side filters */
     filters?: TFilters | undefined;
@@ -288,6 +291,7 @@ export type liveness$return = {
 }[];
 export declare const serversModule: (sdk: typeof BaseSDK) => {
     readonly type: {
+        clearCaches$return: clearCaches$return;
         count$query: count$query;
         count$return: count$return;
         get$params: get$params;
@@ -325,6 +329,17 @@ export declare const serversModule: (sdk: typeof BaseSDK) => {
         bootstrapProgress$return: bootstrapProgress$return;
         installCommand$return: installCommand$return;
         liveness$return: liveness$return;
+    };
+    readonly clearCaches: (data?: {
+        params?: undefined;
+        query?: undefined;
+        body?: undefined;
+    } & TRequestOptions<clearCaches$return>) => {
+        readonly raw: Promise<import("axios").AxiosResponse<clearCaches$return, any, {}, any>>;
+        readonly data: Promise<clearCaches$return>;
+        then: <TResult1 = clearCaches$return, TResult2 = never>(onfulfilled?: ((value: clearCaches$return) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+        catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<clearCaches$return | TResult>;
+        finally: (onfinally?: (() => void) | null | undefined) => Promise<clearCaches$return>;
     };
     readonly count: (data: {
         params?: undefined;

@@ -196,7 +196,7 @@ export default new Router("/api", function rentalsAdmin(router) {
         cpuRoom: z.number(),
         fits: z.boolean(),
         reachable: z.boolean().describe(
-          "The source machine has an address to move from",
+          "The source machine can be reached: its address, or the tunnel server",
         ),
       })),
     });

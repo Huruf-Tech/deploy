@@ -87,7 +87,7 @@ export type moveTargets$return = {
         };
         cpuRoom: number;
         fits: boolean;
-        /** The source machine has an address to move from */
+        /** The source machine can be reached: its address, or the tunnel server */
         reachable: boolean;
     }[];
 };

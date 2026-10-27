@@ -35,17 +35,17 @@ func TestServeSendsEachPartOnceWithTheToken(t *testing.T) {
 	}()
 
 	// The target retries until the source listens; a wrong token is refused.
-	if _, err := fetch(ctx, addr, "wrong", testKey, "/image", "cat"); err == nil || !strings.Contains(err.Error(), "403") {
+	if _, err := fetch(ctx, &source{addrs: []string{addr}}, "wrong", testKey, "/image", "cat"); err == nil || !strings.Contains(err.Error(), "403") {
 		t.Fatalf("wrong token: %v", err)
 	}
-	out, err := fetch(ctx, addr, token, testKey, "/image", "cat")
+	out, err := fetch(ctx, &source{addrs: []string{addr}}, token, testKey, "/image", "cat")
 	if err != nil || out != "image bytes\n" {
 		t.Fatalf("image = %q, %v", out, err)
 	}
-	if _, err := fetch(ctx, addr, token, testKey, "/image", "cat"); err == nil || !strings.Contains(err.Error(), "410") {
+	if _, err := fetch(ctx, &source{addrs: []string{addr}}, token, testKey, "/image", "cat"); err == nil || !strings.Contains(err.Error(), "410") {
 		t.Fatalf("a part is sent once: %v", err)
 	}
-	if out, err := fetch(ctx, addr, token, testKey, "/data", "cat"); err != nil || out != "data bytes\n" {
+	if out, err := fetch(ctx, &source{addrs: []string{addr}}, token, testKey, "/data", "cat"); err != nil || out != "data bytes\n" {
 		t.Fatalf("data = %q, %v", out, err)
 	}
 	select {
@@ -65,7 +65,7 @@ func TestServeFailsWhenAPartFails(t *testing.T) {
 	go func() {
 		done <- serve(ctx, addr, token, testKey, map[string][]string{"/data": {"sh", "-c", "echo broken >&2; exit 3"}})
 	}()
-	_, _ = fetch(ctx, addr, token, testKey, "/data", "cat")
+	_, _ = fetch(ctx, &source{addrs: []string{addr}}, token, testKey, "/data", "cat")
 	if err := <-done; err == nil || !strings.Contains(err.Error(), "broken") {
 		t.Fatalf("serve = %v, want the part's error", err)
 	}
@@ -129,7 +129,7 @@ func TestTarRoundTrip(t *testing.T) {
 	ctx := context.Background()
 	done := make(chan error, 1)
 	go func() { done <- serve(ctx, addr, token, testKey, map[string][]string{"/data": create}) }()
-	if _, err := fetch(ctx, addr, token, testKey, "/data", extract...); err != nil {
+	if _, err := fetch(ctx, &source{addrs: []string{addr}}, token, testKey, "/data", extract...); err != nil {
 		t.Fatal(err)
 	}
 	if err := <-done; err != nil {

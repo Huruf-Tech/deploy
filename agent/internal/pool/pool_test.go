@@ -63,8 +63,10 @@ func (f *fake) Usage(_ context.Context, names []string, _ bool) (map[string]Usag
 	}
 	return all, nil
 }
-func (f *fake) Restore(context.Context, []string) error                    { return nil }
-func (f *fake) Send(context.Context, string, string, string, string) error { return f.sendErr }
+func (f *fake) Restore(context.Context, []string) error { return nil }
+func (f *fake) Send(context.Context, string, string, string, string, *protocol.MoveRelay) error {
+	return f.sendErr
+}
 func (f *fake) Isolate(_ context.Context, names []string) error {
 	f.isolated = names
 	return nil
@@ -80,7 +82,7 @@ func (f *fake) Forward(_ context.Context, forwards, added []protocol.PortForward
 	}
 	return waiting, nil
 }
-func (f *fake) Receive(_ context.Context, name string, size protocol.PartitionSize, weight int, _, _, _ string) error {
+func (f *fake) Receive(_ context.Context, name string, size protocol.PartitionSize, weight int, _, _, _ string, _ *protocol.MoveRelay) error {
 	if f.receiveErr != nil {
 		return f.receiveErr
 	}

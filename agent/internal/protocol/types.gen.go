@@ -398,7 +398,9 @@ type BuildRunPayloadPush struct {
 }
 
 type CacheClearPayload struct {
-	Project string `json:"project"`
+	Project string `json:"project,omitempty"`
+
+	All bool `json:"all"`
 }
 
 type DesiredSpec struct {
@@ -884,6 +886,31 @@ type PartitionSendPayload struct {
 	Token string `json:"token"`
 
 	Key string `json:"key"`
+
+	Relay *PartitionSendPayloadRelay `json:"relay,omitempty"`
+}
+
+type PartitionSendPayloadRelay struct {
+	// host:port of frps
+	Server string `json:"server"`
+
+	// This machine's tunnel user
+	User string `json:"user"`
+
+	// This machine's tunnel token
+	Token string `json:"token"`
+
+	// frps' certificate name
+	ServerName string `json:"serverName"`
+
+	Ca string `json:"ca"`
+
+	Image string `json:"image"`
+
+	Proxy string `json:"proxy"`
+
+	// The other machine: the source lets it in, the target reaches its tunnel
+	Peer string `json:"peer"`
 }
 
 type PartitionReceivePayload struct {
@@ -893,10 +920,58 @@ type PartitionReceivePayload struct {
 
 	Isolated bool `json:"isolated"`
 
-	// host:port
+	// host:port; empty when only the relay reaches the source
 	From string `json:"from"`
 
 	Token string `json:"token"`
 
 	Key string `json:"key"`
+
+	Relay *PartitionReceivePayloadRelay `json:"relay,omitempty"`
+}
+
+type PartitionReceivePayloadRelay struct {
+	// host:port of frps
+	Server string `json:"server"`
+
+	// This machine's tunnel user
+	User string `json:"user"`
+
+	// This machine's tunnel token
+	Token string `json:"token"`
+
+	// frps' certificate name
+	ServerName string `json:"serverName"`
+
+	Ca string `json:"ca"`
+
+	Image string `json:"image"`
+
+	Proxy string `json:"proxy"`
+
+	// The other machine: the source lets it in, the target reaches its tunnel
+	Peer string `json:"peer"`
+}
+
+type MoveRelay struct {
+	// host:port of frps
+	Server string `json:"server"`
+
+	// This machine's tunnel user
+	User string `json:"user"`
+
+	// This machine's tunnel token
+	Token string `json:"token"`
+
+	// frps' certificate name
+	ServerName string `json:"serverName"`
+
+	Ca string `json:"ca"`
+
+	Image string `json:"image"`
+
+	Proxy string `json:"proxy"`
+
+	// The other machine: the source lets it in, the target reaches its tunnel
+	Peer string `json:"peer"`
 }

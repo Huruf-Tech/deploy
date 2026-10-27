@@ -141,12 +141,14 @@ export const $commandType = z.enum([
 ]);
 
 /**
- * `cache.clear`, for a project's build servers ("Clear build cache", PLAN
- * §9.2): its BuildKit cache mounts go (their ids start with `<project>-`).
+ * `cache.clear` ("Clear build cache", PLAN §9.2): a project's BuildKit cache
+ * mounts (their ids start with `<project>-`) on its build servers, or with
+ * `all` a server's whole build cache and its dangling images.
  */
 export const $cacheClearPayload = z.object({
-  project: z.string().regex(/^[a-f0-9]{24}$/),
-});
+  project: z.string().regex(/^[a-f0-9]{24}$/).optional(),
+  all: z.boolean().default(false),
+}).refine((p) => p.all || p.project, "A project, or all");
 
 /**
  * `registry.delete`, for the server running the built-in registry: these
@@ -299,6 +301,28 @@ export const MOVE_PORT = 51830;
 const $moveKey = z.string().regex(/^[A-Za-z0-9+/]{43}=$/);
 
 /**
+ * A move through the control plane's tunnel server (frps, PLAN §14), for
+ * machines that can't open a port: the source serves a private (STCP) tunnel
+ * named `proxy`, guarded by the move's token; the target reaches it as a
+ * visitor. Both log in with their own tunnel credentials; the data stays
+ * encrypted with the move's key.
+ */
+export const $moveRelay = z.object({
+  server: z.string().max(255).describe("host:port of frps"),
+  user: z.string().regex(/^[a-f0-9]{24}$/).describe(
+    "This machine's tunnel user",
+  ),
+  token: z.string().max(200).describe("This machine's tunnel token"),
+  serverName: z.string().max(255).describe("frps' certificate name"),
+  ca: z.string().max(10_000),
+  image: z.string().max(255),
+  proxy: z.string().regex(/^move-[a-z0-9]{1,12}$/),
+  peer: z.string().regex(/^[a-f0-9]{24}$/).describe(
+    "The other machine: the source lets it in, the target reaches its tunnel",
+  ),
+});
+
+/**
  * `partition.send`, sealed (it carries the move's token and key): stops a
  * partition and serves its system files and data on `listen` for one
  * `partition.receive` (PLAN §26.10), encrypted with `key`. It starts the
@@ -309,6 +333,7 @@ export const $partitionSendPayload = z.object({
   listen: z.string().max(64).describe("host:port to serve on"),
   token: z.string().min(32).max(128),
   key: $moveKey,
+  relay: $moveRelay.optional(),
 });
 
 /**
@@ -320,9 +345,12 @@ export const $partitionReceivePayload = z.object({
   name: $partitionName,
   size: $partitionSize,
   isolated: z.boolean().default(false),
-  from: z.string().max(64).describe("host:port"),
+  from: z.string().max(64).describe(
+    "host:port; empty when only the relay reaches the source",
+  ),
   token: z.string().min(32).max(128),
   key: $moveKey,
+  relay: $moveRelay.optional(),
 });
 
 /** One host preflight result, reported by `docker.ensure`. */

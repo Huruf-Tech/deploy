@@ -195,8 +195,13 @@ Deno.test({
   sanitizeOps: false,
   sanitizeResources: false,
   fn: async (t) => {
-    const { ensureTunnelPort, ingressSpecFor, tunnelToken, TUNNEL_PORTS } =
-      await import("@/lib/domains/tunnels.ts");
+    const {
+      ensureTunnelPort,
+      ingressSpecFor,
+      moveRelay,
+      tunnelToken,
+      TUNNEL_PORTS,
+    } = await import("@/lib/domains/tunnels.ts");
     const ca = await Deno.makeTempFile({ suffix: ".pem" });
     await Deno.writeTextFile(ca, "-----BEGIN CERTIFICATE-----\nX\n");
     const config = Env.getAll<Record<string, string>>();
@@ -292,6 +297,28 @@ Deno.test({
         assertEquals((await proxy(port)).reject, false);
         assertEquals((await proxy(port + 1)).reject, true, "another port");
         assertEquals((await proxy(port, "http")).reject, true, "not tcp");
+        // A move's private tunnel (PLAN §26.10): only `move-<partition>`.
+        const stcp = (proxy_name: string) =>
+          frp("NewProxy", {
+            user: { user, metas: { token } },
+            proxy_name,
+            proxy_type: "stcp",
+          });
+        assertEquals((await stcp(`${user}.move-pabc123`)).reject, false);
+        assertEquals(
+          (await stcp(`${user}.ingress`)).reject,
+          true,
+          "a move only",
+        );
+        assertEquals((await stcp(`${user}.move-../x`)).reject, true);
+        // The relay a moving machine gets: the first tunnel server, its own
+        // credentials, the other machine as its peer.
+        const peer = new ObjectId();
+        const relay = (await moveRelay(active, peer, "pabc123"))!;
+        assertEquals(
+          [relay.server, relay.user, relay.token, relay.proxy, relay.peer],
+          ["203.0.113.10:7000", user, token, "move-pabc123", String(peer)],
+        );
         assertEquals(
           (await frp("Ping", { user, metas: { token } })).reject,
           true,

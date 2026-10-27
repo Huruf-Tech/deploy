@@ -48,9 +48,19 @@ func tarArgs(name string, create bool) []string {
 	return append(args, "-xpf", "-")
 }
 
-func (d *Sysbox) Send(ctx context.Context, name, listen, token, key string) (err error) {
+func (d *Sysbox) Send(ctx context.Context, name, listen, token, key string, relay *protocol.MoveRelay) (err error) {
 	if err := d.Stop(ctx, name); err != nil {
 		return err
+	}
+	// Reached through the tunnel server too (relay.go), for a target that
+	// can't connect to this machine.
+	if relay != nil {
+		stop, err := startRelay(ctx, relay, token, 0)
+		if err != nil {
+			_ = d.Start(context.WithoutCancel(ctx), name)
+			return err
+		}
+		defer stop()
 	}
 	defer func() {
 		if err != nil {
@@ -175,21 +185,42 @@ func serve(ctx context.Context, listen, token, key string, parts map[string][]st
 	return nil
 }
 
-func (d *Sysbox) Receive(ctx context.Context, name string, size protocol.PartitionSize, weight int, from, token, key string) error {
+func (d *Sysbox) Receive(ctx context.Context, name string, size protocol.PartitionSize, weight int, from, token, key string, relay *protocol.MoveRelay) error {
 	if err := ensureImage(ctx); err != nil {
 		return err
+	}
+	// The source's address, and its tunnel through the tunnel server: the
+	// first that answers is used for the whole move.
+	src := &source{}
+	if from != "" {
+		src.addrs = append(src.addrs, from)
+	}
+	if relay != nil {
+		port, err := freePort()
+		if err != nil {
+			return err
+		}
+		stop, err := startRelay(ctx, relay, token, port)
+		if err != nil {
+			return err
+		}
+		defer stop()
+		src.addrs = append(src.addrs, net.JoinHostPort("127.0.0.1", strconv.Itoa(port)))
+	}
+	if len(src.addrs) == 0 {
+		return errors.New("no way to reach the source machine")
 	}
 	if err := prepareDir(ctx, name, size); err != nil {
 		return err
 	}
-	if _, err := fetch(ctx, from, token, key, "/data", tarArgs(name, false)...); err != nil {
+	if _, err := fetch(ctx, src, token, key, "/data", tarArgs(name, false)...); err != nil {
 		return err
 	}
 	// Its system files came with its directory.
 	if _, err := os.Stat(filepath.Join(rootDir(name), "usr")); err == nil {
 		return runPartition(ctx, name, size, weight, image)
 	}
-	out, err := fetch(ctx, from, token, key, "/image", "docker", "load")
+	out, err := fetch(ctx, src, token, key, "/image", "docker", "load")
 	if err != nil {
 		return err
 	}
@@ -212,22 +243,48 @@ func (d *Sysbox) Receive(ctx context.Context, name string, size protocol.Partiti
 // fetch pipes one part into a command. Connecting is retried for moveWait:
 // the source may still be stopping the partition. A part that stops
 // arriving for moveWait fails.
-func fetch(ctx context.Context, from, token, key, path string, argv ...string) (string, error) {
+// source is where a move's parts come from: the addresses to try, and the
+// one that answered first, kept for the following parts.
+type source struct {
+	addrs  []string
+	chosen string
+}
+
+func (s *source) candidates() []string {
+	if s.chosen != "" {
+		return []string{s.chosen}
+	}
+	return s.addrs
+}
+
+func fetch(ctx context.Context, src *source, token, key, path string, argv ...string) (string, error) {
 	ctx, cancel := context.WithCancelCause(ctx)
 	defer cancel(nil)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+from+path, nil)
-	if err != nil {
-		return "", err
-	}
-	req.Header.Set("Authorization", "Bearer "+token)
 	var resp *http.Response
+	var err error
 	until := time.Now().Add(moveWait)
 	for {
-		if resp, err = http.DefaultClient.Do(req); err == nil {
+		for _, addr := range src.candidates() {
+			req, rerr := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+addr+path, nil)
+			if rerr != nil {
+				return "", rerr
+			}
+			req.Header.Set("Authorization", "Bearer "+token)
+			// A dead path fails fast, so the other one gets its turn.
+			client := &http.Client{Transport: &http.Transport{
+				DialContext:           (&net.Dialer{Timeout: 10 * time.Second}).DialContext,
+				ResponseHeaderTimeout: 2 * time.Minute,
+			}}
+			if resp, err = client.Do(req); err == nil {
+				src.chosen = addr
+				break
+			}
+		}
+		if resp != nil {
 			break
 		}
 		if time.Now().After(until) {
-			return "", fmt.Errorf("reaching %s: %w", from, err)
+			return "", fmt.Errorf("reaching the source machine: %w", err)
 		}
 		select {
 		case <-ctx.Done():
@@ -238,7 +295,7 @@ func fetch(ctx context.Context, from, token, key, path string, argv ...string) (
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 400))
-		return "", fmt.Errorf("%s%s: %s: %s", from, path, resp.Status, strings.TrimSpace(string(body)))
+		return "", fmt.Errorf("%s%s: %s: %s", src.chosen, path, resp.Status, strings.TrimSpace(string(body)))
 	}
 	var progress atomic.Int64
 	stalled := errors.New("the sending machine stopped sending " + path)

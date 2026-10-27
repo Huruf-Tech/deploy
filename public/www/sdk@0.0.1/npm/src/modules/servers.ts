@@ -7,6 +7,9 @@ import type { BaseSDK } from "../base.js";
 
 import { compile } from "path-to-regexp";
 
+export type clearCaches$return = {
+    servers: number;
+};
 export type count$query = {
     /** Client side filters */
     filters?: TFilters | undefined;
@@ -296,6 +299,7 @@ export type liveness$return = {
 
 export const serversModule = (sdk: typeof BaseSDK) => {
     const type = {} as unknown as {
+        clearCaches$return: clearCaches$return,
         count$query: count$query,
         count$return: count$return,
         get$params: get$params,
@@ -337,6 +341,34 @@ export const serversModule = (sdk: typeof BaseSDK) => {
 
     const methods = {
         type,
+        clearCaches(data?: {
+        params?: undefined,
+        query?: undefined,
+        body?: undefined,
+    } & TRequestOptions<clearCaches$return>) {
+        return sdk.resolveAxiosResponse(async () => {
+            sdk.checkPermission("servers", "clearCaches");
+
+            const method = "post";
+            const toPath = compile("servers/api/clearCaches");
+            const requestPayload = {
+                method,
+                url: toPath(sdk.resolvePathParams(data?.params)),
+                params: data?.query,
+                data: data?.body,
+                signal: data?.signal,
+                ...(data?.axiosConfig
+                ? sdk.resolveAxiosConfig(data.axiosConfig)
+                : undefined),
+            };
+
+            sdk.log("Sending Request:", requestPayload);
+
+            const res = await sdk._axios!.request(requestPayload);
+
+            return res;
+        }, data);
+    },
         count(data: {
         params?: undefined,
         query: count$query,
@@ -899,6 +931,7 @@ export const serversModule = (sdk: typeof BaseSDK) => {
     },
     } as const;
 
+    (methods.clearCaches as any).__scope = "servers";
     (methods.count as any).__scope = "servers";
     (methods.get as any).__scope = "servers";
     (methods.update as any).__scope = "servers";

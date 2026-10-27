@@ -56,9 +56,9 @@ type Driver interface {
 	Restore(ctx context.Context, names []string) error
 	// Send stops a partition and serves it on `listen` for one Receive; it
 	// starts it again if the transfer doesn't finish (PLAN §26.10).
-	Send(ctx context.Context, name, listen, token, key string) error
+	Send(ctx context.Context, name, listen, token, key string, relay *protocol.MoveRelay) error
 	// Receive pulls a partition from `from` and starts it here.
-	Receive(ctx context.Context, name string, size protocol.PartitionSize, weight int, from, token, key string) error
+	Receive(ctx context.Context, name string, size protocol.PartitionSize, weight int, from, token, key string, relay *protocol.MoveRelay) error
 	// Forward replaces the machine's ports forwarded into partitions (PLAN
 	// §27.3); `added` are new since the last call. It returns the partitions
 	// whose forwards wait for an address (not running yet).
@@ -422,7 +422,7 @@ func (m *Manager) Send(ctx context.Context, p protocol.PartitionSendPayload) (ma
 	case !ok:
 		return nil, fmt.Errorf("no partition %s", p.Name)
 	}
-	if err := m.Driver.Send(ctx, p.Name, p.Listen, p.Token, p.Key); err != nil {
+	if err := m.Driver.Send(ctx, p.Name, p.Listen, p.Token, p.Key, (*protocol.MoveRelay)(p.Relay)); err != nil {
 		return nil, err
 	}
 	return map[string]any{"name": p.Name, "sent": true}, nil
@@ -457,7 +457,7 @@ func (m *Manager) Receive(ctx context.Context, p protocol.PartitionReceivePayloa
 		return nil, err
 	}
 
-	if err := m.Driver.Receive(ctx, p.Name, p.Size, weight(entry), p.From, p.Token, p.Key); err != nil {
+	if err := m.Driver.Receive(ctx, p.Name, p.Size, weight(entry), p.From, p.Token, p.Key, (*protocol.MoveRelay)(p.Relay)); err != nil {
 		m.mu.Lock()
 		defer m.mu.Unlock()
 		_ = m.Driver.Remove(context.WithoutCancel(ctx), p.Name)

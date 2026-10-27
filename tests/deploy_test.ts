@@ -271,6 +271,17 @@ Deno.test({
             "payload.project": project,
           }).toArray();
           assert(clears.length > 0, "cache.clear sent to its builders");
+          // All of a workspace's caches at once: one per server.
+          const all = await call("POST", "/servers/api/clearCaches", {});
+          assertEquals(all.status, 200, JSON.stringify(all.json));
+          assert(all.json.servers > 0);
+          assertEquals(
+            await mongodb.db().collection("agentCommands").countDocuments({
+              type: "cache.clear",
+              "payload.all": true,
+            }),
+            all.json.servers,
+          );
           await call("POST", `/projects/api/${project}/deploy`, {});
           await pollAll();
           const build = agents[0].builds.at(-1)!;

@@ -1,3 +1,4 @@
+import { moveRelay } from "@/lib/domains/tunnels.ts";
 import { encodeBase64 } from "@std/encoding/base64";
 import {
   LIVE_RENTAL,
@@ -239,24 +240,34 @@ export async function movePartition(opts: {
     machine(opts.from, true),
     machine(opts.to, true),
   ]);
-  const from = moveAddress(source);
-  if (!from) throw Response.badRequest(`${source.name} has no address`);
   const token = encodeHex(crypto.getRandomValues(new Uint8Array(32)));
   const key = encodeBase64(crypto.getRandomValues(new Uint8Array(32)));
+  // Machines that can't open a port move through the tunnel server; the
+  // target uses whichever of the two answers first.
+  const [sourceRelay, targetRelay] = await Promise.all([
+    moveRelay(source._id, target._id, opts.name),
+    moveRelay(target._id, source._id, opts.name),
+  ]);
+  const from = moveAddress(source);
+  if (!from && !(sourceRelay && targetRelay)) {
+    throw Response.badRequest(`${source.name} has no address to move from`);
+  }
   const send: z.input<typeof $partitionSendPayload> = {
     name: opts.name,
     listen: `:${MOVE_PORT}`,
     token,
     key,
+    ...(sourceRelay && targetRelay ? { relay: sourceRelay } : {}),
   };
   const receive: z.input<typeof $partitionReceivePayload> = {
     name: opts.name,
     size: opts.size,
     // Only rentals move (PLAN §26.10), and they stay apart.
     isolated: true,
-    from,
+    from: from || "",
     token,
     key,
+    ...(sourceRelay && targetRelay ? { relay: targetRelay } : {}),
   };
   // The target first: it waits for the source, not the other way round.
   const received = await issueCommand({

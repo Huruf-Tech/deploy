@@ -6,6 +6,26 @@ const serversModule = (sdk) => {
     const type = {};
     const methods = {
         type,
+        clearCaches(data) {
+            return sdk.resolveAxiosResponse(async () => {
+                sdk.checkPermission("servers", "clearCaches");
+                const method = "post";
+                const toPath = (0, path_to_regexp_1.compile)("servers/api/clearCaches");
+                const requestPayload = {
+                    method,
+                    url: toPath(sdk.resolvePathParams(data?.params)),
+                    params: data?.query,
+                    data: data?.body,
+                    signal: data?.signal,
+                    ...(data?.axiosConfig
+                        ? sdk.resolveAxiosConfig(data.axiosConfig)
+                        : undefined),
+                };
+                sdk.log("Sending Request:", requestPayload);
+                const res = await sdk._axios.request(requestPayload);
+                return res;
+            }, data);
+        },
         count(data) {
             return sdk.resolveAxiosResponse(async () => {
                 sdk.checkPermission("servers", "count");
@@ -407,6 +427,7 @@ const serversModule = (sdk) => {
             }, data);
         },
     };
+    methods.clearCaches.__scope = "servers";
     methods.count.__scope = "servers";
     methods.get.__scope = "servers";
     methods.update.__scope = "servers";

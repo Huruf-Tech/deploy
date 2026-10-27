@@ -1,3 +1,4 @@
+import { clearAllBuildCaches } from "@/lib/deploy/deployments.ts";
 import z from "zod";
 import { Router } from "@/core/http/router.ts";
 import { Response } from "@/core/http/response.ts";
@@ -70,6 +71,21 @@ async function assertRemovable(id: ObjectId, tenant: ObjectId) {
 
 export default new Router("/api", function servers(router) {
   const $params = z.object({ id: $objectId });
+
+  // Every server drops its build cache and dangling images (PLAN §9.2).
+  router.post("/clearCaches", function clearCaches() {
+    const $return = z.object({ servers: z.number() });
+
+    return {
+      shape: () => ({ return: $return }),
+      handler: async (req) => {
+        const { tenant, user } = await withTenant(req);
+        return Response.json({
+          servers: await clearAllBuildCaches(tenant._id, user._id),
+        });
+      },
+    };
+  });
 
   createCRUD({
     router,

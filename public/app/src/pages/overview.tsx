@@ -39,6 +39,7 @@ import { StatusBadge, StatusDot } from "@/components/console/status"
 import { DataTable, type TColumn } from "@/components/console/data-table"
 import { EmptyState } from "@/components/console/empty-state"
 import { ControlPlaneSummary } from "@/pages/admin/ControlPlaneSummary"
+import { RentalNotice } from "@/pages/admin/RentalNotice"
 import { AiPrompt } from "@/pages/projects/AiPrompt"
 import { DeploymentStatus } from "@/pages/projects/shared"
 import { useCached } from "@/hooks/use-cached"
@@ -223,6 +224,7 @@ export default function Overview() {
       <Page className="flex flex-col gap-4 py-5">
         {header()}
         {verify}
+        <RentalNotice />
         <EmptyState
           icon={IconServer2}
           title={t("Your server pool is empty")}
@@ -477,6 +479,7 @@ export default function Overview() {
     <Page className="flex flex-col gap-4 py-5">
       {header(status)}
       {verify}
+      <RentalNotice />
 
       <StatStrip>
         <Stat
