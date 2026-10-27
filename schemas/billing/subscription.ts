@@ -74,7 +74,7 @@ export const $subscription = z.object({
       startedAt: z.date(),
       by: $objectId.meta({ ref: "users" }),
     }).optional(),
-    /** Using more disk than its size (system files aren't capped, PLAN §28). */
+    /** Using more disk than its size (what escapes its quota, PLAN §28). */
     overDisk: z.object({ since: z.date(), bytes: z.number() }).optional(),
     /** How the last move ended, for the admin. */
     lastMove: z.object({

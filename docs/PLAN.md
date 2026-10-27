@@ -1491,7 +1491,8 @@ The owner's decision (2026-10-27): no pool machines. An admin adds machines like
     - `makePoolMachine` and the remainder route are gone. `PATCH /rentalsAdmin/api/pool/:id` sets a platform machine's class (`null`: not for rent), whether it takes new rentals, and its cost.
     - Placement: the platform's machines of the rental's class taking rentals. A machine's free room is what it offers minus every partition it reports (its own and rentals) and rentals approved but not reported yet.
     - Capacity: per machine (rented, own, free memory; rentals; revenue against cost). The per-class spare share is gone.
-    - **Disk:** a rental's data keeps its hard quota. Its system files (packages, logs) have no cap outside a pool machine, so a rental using more than its size is flagged (`rental.overDisk`, shown on its machine's Rentals panel) and its owner told once.
+    - **Disk:** a partition's whole disk is capped at its size: a new one gets its own copy of the partition image's files (about 450 MB, part of its size) in its quota folder, its system folders (`/usr`, `/etc`, `/var`, `/home`, …) mounted from there. Only new entries right under `/` escape it (blocking them breaks Sysbox: a read-only root stops systemd; a locked layer stops restarts). An older partition gets its own copy when it moves. A rental using more than its size is still flagged (`rental.overDisk`, shown on its machine's Rentals panel) and its owner told once.
+    - **Verified locally:** a 3 GB partition stopped at 3 GB, packages and `/home` included; resize, restart and a move kept its files.
     - A machine's partition list marks rentals ("Rented: workspace · size"), which change through their rental, not the panel.
   - **Dashboard:**
     - Every machine shows its Partitions panel.
@@ -2428,5 +2429,5 @@ Needed for a resize that doesn't fit, or for draining a machine. An admin action
 - **No pool machines (owner, 2026-10-27).** Machines are added like any customer's (§27). Giving one a class makes its free capacity rentable; without a class it isn't for rent. "Takes new rentals" drains it; its monthly cost is for revenue against cost.
 - **Approval** picks one of the platform's machines of the rental's class with room and creates the customer's partition there (§26.9 otherwise unchanged: charging, renewal, suspension, moves, uptime).
 - **Isolation per rental:** the rules of §26.3 apply to rented partitions only, so the platform's own partitions and other tools on the machine keep their network.
-- **Disk:** a rental's data is capped (its quota); its system files aren't outside a pool machine. Usage over the size is flagged for the admin and the owner is told.
+- **Disk:** a partition's system files live in its quota folder, mounted over its system folders, so its whole disk is capped at its size; only entries right under `/` escape. Usage over the size is flagged for the admin and the owner is told. A move sends that folder alone; an older partition, whose system files are in its container, is converted on its move.
 - **Rentals on Phase 16 pool machines** keep working: their machines are machines with a class, and their partitions count as isolated.

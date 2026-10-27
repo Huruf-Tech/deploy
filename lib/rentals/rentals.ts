@@ -1005,7 +1005,8 @@ export class RentalService implements TRentalHooks {
       const before = sub.rental!.counters;
       const delta = counterDelta(before?.rx, p.rxBytes) +
         counterDelta(before?.tx, p.txBytes);
-      // Its system files (packages, logs) have no hard cap on a machine:
+      // Only files right under / or an older partition's system files escape
+      // its quota (PLAN §28):
       // past its size it's flagged for the admin, and its owner told once.
       const over = p.diskUsed > sub.rental!.size.diskGb * 2 ** 30;
       await subscriptionModel.updateOne({ _id: sub._id }, {

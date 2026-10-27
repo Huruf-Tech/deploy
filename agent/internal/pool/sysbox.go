@@ -31,7 +31,7 @@ const (
 	engineRoot = Root + "/.engine"
 	loopFile   = "/var/lib/huruf-pool.img"
 	image      = "huruf-partition"
-	// Each partition's own system files (apt, logs, /tmp), part of its disk size.
+	// An older partition's system files on a pool machine, part of its size.
 	rootGb = 3
 	// Our XFS project ids, far from the ones Docker assigns for --storage-opt.
 	projectBase = 1_000_000
@@ -51,6 +51,20 @@ func run(ctx context.Context, name string, args ...string) (string, error) {
 func container(name string) string { return "partition-" + name }
 func bridge(name string) string    { return "hp-" + name }
 func dir(name string) string       { return filepath.Join(Root, "p", name) }
+
+// systemDirs are mounted from the partition's own copy of its system files,
+// under its quota, so everything it writes counts in its disk size (PLAN §28).
+// Only new entries right under / stay in the container's own layer.
+var systemDirs = []string{"usr", "etc", "var", "opt", "root", "home", "srv", "mnt", "media", "tmp", "boot"}
+
+func rootDir(name string) string { return filepath.Join(dir(name), "root") }
+
+// ownRoot: made since its system files live under its quota (PLAN §28);
+// older partitions keep theirs in the container's layer.
+func ownRoot(name string) bool {
+	_, err := os.Stat(rootDir(name))
+	return err == nil
+}
 
 func projectID(name string) string {
 	h := fnv.New32a()
@@ -440,38 +454,48 @@ func memArgs(memMb int64) []string {
 	return []string{"--memory", fmt.Sprintf("%dm", memMb), "--memory-swap", fmt.Sprintf("%dm", memMb)}
 }
 
-// dataGb is what the quota allows: on a pool machine the size minus the
-// partition's system files (capped separately); on a machine all of it.
-func dataGb(ctx context.Context, size protocol.PartitionSize) int64 {
-	if dockerOnVolume(ctx) {
+// dataGb is what the quota allows: all of the size, but an older partition's
+// on a pool machine, whose system files are capped separately.
+func dataGb(ctx context.Context, name string, size protocol.PartitionSize) int64 {
+	if !ownRoot(name) && dockerOnVolume(ctx) {
 		return max(1, size.DiskGb-rootGb)
 	}
 	return size.DiskGb
 }
 
 func setQuota(ctx context.Context, name string, size protocol.PartitionSize) error {
-	_, err := run(ctx, "xfs_quota", "-x", "-c", fmt.Sprintf("limit -p bhard=%dg %s", dataGb(ctx, size), projectID(name)), Root)
+	_, err := run(ctx, "xfs_quota", "-x", "-c", fmt.Sprintf("limit -p bhard=%dg %s", dataGb(ctx, name, size), projectID(name)), Root)
 	return err
 }
 
-func (Sysbox) Create(ctx context.Context, name string, size protocol.PartitionSize, weight int) error {
-	// Another tool's cleanup (e.g. `docker image prune -a`) removes it once
-	// no partition uses it: build it again rather than fail.
+// ensureImage builds the partition image when it's gone: another tool's
+// cleanup (e.g. `docker image prune -a`) removes it once no partition uses it.
+func ensureImage(ctx context.Context) error {
 	if _, err := run(ctx, "docker", "image", "inspect", image); err != nil {
 		if err := buildImage(ctx); err != nil {
 			return fmt.Errorf("building the partition image: %w", err)
 		}
 	}
+	return nil
+}
+
+func (Sysbox) Create(ctx context.Context, name string, size protocol.PartitionSize, weight int) error {
+	if err := ensureImage(ctx); err != nil {
+		return err
+	}
 	if err := prepareDir(ctx, name, size); err != nil {
+		return err
+	}
+	if err := extractRoot(ctx, name, image); err != nil {
 		return err
 	}
 	return runPartition(ctx, name, size, weight, image)
 }
 
-// prepareDir makes the partition's data directory, under its disk quota.
+// prepareDir makes the partition's directory, under its disk quota.
 func prepareDir(ctx context.Context, name string, size protocol.PartitionSize) error {
 	d := dir(name)
-	for _, sub := range []string{"docker", "containerd", "agent"} {
+	for _, sub := range []string{"root", "docker", "containerd", "agent"} {
 		if err := os.MkdirAll(filepath.Join(d, sub), 0o755); err != nil {
 			return err
 		}
@@ -482,8 +506,23 @@ func prepareDir(ctx context.Context, name string, size protocol.PartitionSize) e
 	return setQuota(ctx, name, size)
 }
 
-// runPartition starts the partition's container from `img`: our image, or
-// the one a move brought its system files in.
+// extractRoot copies an image's filesystem into the partition's own root.
+func extractRoot(ctx context.Context, name, img string) error {
+	tmp := "huruf-root-" + name
+	_, _ = run(ctx, "docker", "rm", "-f", tmp)
+	if _, err := run(ctx, "docker", "create", "--name", tmp, img); err != nil {
+		return err
+	}
+	defer run(context.WithoutCancel(ctx), "docker", "rm", "-f", tmp)
+	if _, err := run(ctx, "bash", "-o", "pipefail", "-c",
+		fmt.Sprintf("docker export %s | tar -C %s --numeric-owner --xattrs --xattrs-include='*' -xpf -", tmp, rootDir(name))); err != nil {
+		return fmt.Errorf("copying the system files (over the disk size?): %w", err)
+	}
+	return nil
+}
+
+// runPartition starts the partition's container from `img`, its system files
+// mounted from its own root.
 func runPartition(ctx context.Context, name string, size protocol.PartitionSize, weight int, img string) error {
 	d := dir(name)
 	if _, err := run(ctx, "docker", "network", "inspect", bridge(name)); err != nil {
@@ -498,10 +537,8 @@ func runPartition(ctx context.Context, name string, size protocol.PartitionSize,
 		"-v", filepath.Join(d, "containerd") + ":/var/lib/containerd",
 		"-v", filepath.Join(d, "agent") + ":/var/lib/huruf-deploy-agent",
 		"--label", "huruf.partition=" + name}
-	// A pool machine's Docker is on the XFS volume, so system files get a cap;
-	// a machine's Docker stays where it was (PLAN §27.3) and can't cap them.
-	if dockerOnVolume(ctx) {
-		args = append(args, "--storage-opt", fmt.Sprintf("size=%dG", rootGb))
+	for _, sub := range systemDirs {
+		args = append(args, "-v", filepath.Join(rootDir(name), sub)+":/"+sub)
 	}
 	args = append(args, cpuArgs(size.Cpus, weight)...)
 	args = append(args, memArgs(size.MemMb)...)

@@ -9,7 +9,9 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -18,10 +20,11 @@ import (
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/protocol"
 )
 
-// Moving a partition (PLAN §26.10): the source stops it and serves two parts
-// over the mesh, its system files (the container committed to an image) and
-// its data directory (Docker's, containerd's and our agent's state, so the
-// agent keeps its identity). The target pulls both and starts it. WireGuard
+// Moving a partition (PLAN §26.10): the source stops it and serves its
+// directory over the mesh: its system files (PLAN §28), Docker's, containerd's
+// and our agent's state, so the agent keeps its identity. An older partition,
+// whose system files are in its container, also serves them committed to an
+// image, and the target copies them into its own root. The target starts it. WireGuard
 // encrypts the transfer; a one-time token, sealed to both machines, guards it.
 
 // movedLabel marks images a move committed, so Remove deletes them.
@@ -50,6 +53,9 @@ func (d Sysbox) Send(ctx context.Context, name, listen, token string) (err error
 			_ = d.Start(context.WithoutCancel(ctx), name)
 		}
 	}()
+	if ownRoot(name) {
+		return serve(ctx, listen, token, map[string][]string{"/data": tarArgs(name, true)})
+	}
 	tag := "huruf-move-" + name + ":" + strconv.FormatInt(time.Now().Unix(), 10)
 	if _, err := run(ctx, "docker", "commit", "--change", "LABEL "+movedLabel+"="+name, container(name), tag); err != nil {
 		return err
@@ -124,8 +130,18 @@ func serve(ctx context.Context, listen, token string, parts map[string][]string)
 }
 
 func (Sysbox) Receive(ctx context.Context, name string, size protocol.PartitionSize, weight int, from, token string) error {
+	if err := ensureImage(ctx); err != nil {
+		return err
+	}
 	if err := prepareDir(ctx, name, size); err != nil {
 		return err
+	}
+	if _, err := fetch(ctx, from, token, "/data", tarArgs(name, false)...); err != nil {
+		return err
+	}
+	// Its system files came with its directory.
+	if _, err := os.Stat(filepath.Join(rootDir(name), "usr")); err == nil {
+		return runPartition(ctx, name, size, weight, image)
 	}
 	out, err := fetch(ctx, from, token, "/image", "docker", "load")
 	if err != nil {
@@ -140,10 +156,11 @@ func (Sysbox) Receive(ctx context.Context, name string, size protocol.PartitionS
 	if img == "" {
 		return fmt.Errorf("docker load named no image: %s", tail(out, 200))
 	}
-	if _, err := fetch(ctx, from, token, "/data", tarArgs(name, false)...); err != nil {
+	defer run(context.WithoutCancel(ctx), "docker", "rmi", img)
+	if err := extractRoot(ctx, name, img); err != nil {
 		return err
 	}
-	return runPartition(ctx, name, size, weight, img)
+	return runPartition(ctx, name, size, weight, image)
 }
 
 // fetch pipes one part into a command. Connecting is retried for moveWait:
