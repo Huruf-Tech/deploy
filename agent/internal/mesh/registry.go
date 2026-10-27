@@ -5,8 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
+
+	"github.com/Huruf-Tech/huruf-deploy/agent/internal/sh"
 )
 
 // Manifest types a pushed image can have (BuildKit pushes OCI indexes).
@@ -51,7 +54,7 @@ func (m *Mesh) DeleteTags(ctx context.Context, tags []string) (map[string]any, e
 		}
 		inUse := map[string]bool{}
 		for _, tag := range all {
-			if !contains(names, tag) {
+			if !slices.Contains(names, tag) {
 				inUse[digests[tag]] = true
 			}
 		}
@@ -73,7 +76,11 @@ func (m *Mesh) DeleteTags(ctx context.Context, tags []string) (map[string]any, e
 		if collect == nil {
 			collect = func(ctx context.Context) error { return garbageCollect(ctx, reg.Image) }
 		}
-		if err := collect(ctx); err != nil {
+		// Run's check mustn't start the registry while it's collected.
+		m.collecting.Add(1)
+		err := collect(ctx)
+		m.collecting.Add(-1)
+		if err != nil {
 			return nil, err
 		}
 	}
@@ -87,25 +94,16 @@ func (m *Mesh) DeleteTags(ctx context.Context, tags []string) (map[string]any, e
 // fails plainly instead, and the restart also drops the registry's in-memory
 // record of which blobs exist.
 func garbageCollect(ctx context.Context, image string) error {
-	if _, err := run(ctx, "docker", "stop", "-t", "10", registryName); err != nil {
+	if _, err := sh.Run(ctx, "docker", "stop", "-t", "10", registryName); err != nil {
 		return err
 	}
 	// Always serve again, even if collecting fails.
-	defer func() { _, _ = run(context.Background(), "docker", "start", registryName) }()
-	_, err := run(ctx, "docker", "run", "--rm",
+	defer func() { _, _ = sh.Run(context.Background(), "docker", "start", registryName) }()
+	_, err := sh.Run(ctx, "docker", "run", "--rm",
 		"-v", "huruf-registry-data:/var/lib/registry",
 		"--entrypoint", "registry",
 		image, "garbage-collect", "--delete-untagged", "/etc/docker/registry/config.yml")
 	return err
-}
-
-func contains(list []string, s string) bool {
-	for _, x := range list {
-		if x == s {
-			return true
-		}
-	}
-	return false
 }
 
 // registryClient speaks the registry HTTP API over the mesh, with basic auth.

@@ -9,7 +9,6 @@ package cleanup
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -18,7 +17,9 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/Huruf-Tech/huruf-deploy/agent/internal/daemonjson"
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/pool"
+	"github.com/Huruf-Tech/huruf-deploy/agent/internal/sh"
 )
 
 const (
@@ -27,7 +28,6 @@ const (
 	unitFile   = "/etc/systemd/system/huruf-deploy-agent.service"
 	configDir  = "/etc/huruf-deploy-agent"
 	secretsDir = "/run/huruf-deploy"
-	daemonJSON = "/etc/docker/daemon.json"
 )
 
 // Volumes the agent creates by exact name: registry images and edge state.
@@ -57,7 +57,7 @@ type Options struct {
 	Teardown func(ctx context.Context) error
 	// RemovePartitions removes partitions and the host role's setup; tests
 	// replace it.
-	RemovePartitions func(ctx context.Context) (string, error)
+	RemovePartitions func(ctx context.Context) error
 	// Run executes a command; tests replace it.
 	Run func(ctx context.Context, name string, args ...string) (string, error)
 }
@@ -65,7 +65,7 @@ type Options struct {
 // Plan inspects the host and lists every step in run order.
 func Plan(ctx context.Context, o Options) []Step {
 	if o.Run == nil {
-		o.Run = run
+		o.Run = sh.Run
 	}
 	if o.RemovePartitions == nil {
 		o.RemovePartitions = pool.RemoveAll
@@ -85,16 +85,10 @@ func Plan(ctx context.Context, o Options) []Step {
 				ID:     "partitions",
 				Item:   fmt.Sprintf("%s with their projects and data: %s", plural(len(names), "partition"), strings.Join(names, ", ")),
 				Remove: true,
-				do: func(ctx context.Context) error {
-					_, err := o.RemovePartitions(ctx)
-					return err
-				},
+				do:     o.RemovePartitions,
 			})
 		} else {
-			add(Step{ID: "partitions", Item: "The partition volume, image and network rules", Remove: true, do: func(ctx context.Context) error {
-				_, err := o.RemovePartitions(ctx)
-				return err
-			}})
+			add(Step{ID: "partitions", Item: "The partition volume, image and network rules", Remove: true, do: o.RemovePartitions})
 		}
 		steps = append(steps, dockerSteps(ctx, o)...)
 	} else {
@@ -225,32 +219,19 @@ func dockerSteps(ctx context.Context, o Options) []Step {
 
 // dropRuntime removes sysbox-runc from daemon.json's runtimes.
 func dropRuntime() (bool, error) {
-	raw, err := os.ReadFile(daemonJSON)
-	if errors.Is(err, os.ErrNotExist) {
-		return false, nil
-	} else if err != nil {
+	config, err := daemonjson.Read()
+	if err != nil {
 		return false, err
 	}
-	config := map[string]json.RawMessage{}
-	if err := json.Unmarshal(raw, &config); err != nil {
-		return false, err
-	}
-	runtimes := map[string]json.RawMessage{}
-	_ = json.Unmarshal(config["runtimes"], &runtimes)
+	runtimes, _ := config["runtimes"].(map[string]any)
 	if _, ok := runtimes["sysbox-runc"]; !ok {
 		return false, nil
 	}
 	delete(runtimes, "sysbox-runc")
 	if len(runtimes) == 0 {
 		delete(config, "runtimes")
-	} else {
-		config["runtimes"], _ = json.Marshal(runtimes)
 	}
-	out, err := json.MarshalIndent(config, "", "  ")
-	if err != nil {
-		return false, err
-	}
-	return true, os.WriteFile(daemonJSON, append(out, '\n'), 0o644)
+	return true, daemonjson.Write(config)
 }
 
 // Execute runs the removals in order; a failure doesn't stop the rest.
@@ -284,12 +265,4 @@ func unique(list []string) []string {
 func exists(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil
-}
-
-func run(ctx context.Context, name string, args ...string) (string, error) {
-	out, err := exec.CommandContext(ctx, name, args...).CombinedOutput()
-	if err != nil {
-		return string(out), fmt.Errorf("%s: %w: %s", name, err, strings.TrimSpace(string(out)))
-	}
-	return string(out), nil
 }

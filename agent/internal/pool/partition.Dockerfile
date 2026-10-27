@@ -1,4 +1,4 @@
-# A partition of a pool machine (PLAN §26.3): a Sysbox system container that
+# A partition (PLAN §27): a Sysbox system container that
 # looks like a small Ubuntu 24.04 machine, with systemd and its own Docker, so
 # our agent installs and runs in it exactly as on a server.
 FROM ubuntu:24.04

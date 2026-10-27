@@ -31,7 +31,7 @@ export const $inventory = z.object({
   ),
 });
 
-/** A partition's size (PLAN §26): `cpus: 0` is uncapped (the remainder). */
+/** A partition's size (PLAN §26). */
 export const $partitionSize = z.object({
   cpus: z.number().min(0).max(512),
   memMb: z.number().int().min(256),
@@ -41,10 +41,9 @@ export const $partitionSize = z.object({
 /** Partition names are short: they become bridge names (`hp-<name>`, 15 chars max). */
 export const $partitionName = z.string().regex(/^[a-z0-9]{1,12}$/);
 
-/** One partition of a pool machine, reported with the summary (PLAN §26.5). */
+/** One partition of a machine, reported with the summary (PLAN §27). */
 export const $partitionUsage = z.object({
   name: $partitionName,
-  remainder: z.boolean(),
   state: z.string().describe("Docker state: running, exited…"),
   size: $partitionSize,
   cpuMicros: z.number().int().min(0).describe("CPU time used since it started"),
@@ -59,7 +58,7 @@ export const $resourceSummary = z.object({
   memFree: z.number().int().min(0),
   diskFree: z.number().int().min(0),
   partitions: z.array($partitionUsage).max(200).optional().describe(
-    "Pool machines only (PLAN §26)",
+    "Machines only (PLAN §27)",
   ),
 });
 
@@ -127,7 +126,6 @@ export const $commandType = z.enum([
   "stream.open",
   "stream.close",
   "build.run",
-  "server.prune",
   "agent.update",
   "registry.delete",
   "host.cleanup",
@@ -238,46 +236,27 @@ export const $dockerEnsurePayload = z.object({
 });
 
 /**
- * `pool.ensure` (PLAN §26.5): makes a server a pool machine: Sysbox, an XFS
- * volume with project quotas for partitions, Docker's data on it, the
- * partition network rules and image, then the usual host setup (`docker`).
- * For a fresh machine: it refuses when containers other than ours exist.
+ * `pool.ensure` (PLAN §27.3): host setup for partitions on any machine:
+ * Sysbox beside the Docker already there, partition data on a sparse XFS
+ * file with project quotas, the partition image. Runs at install and after an
+ * agent update.
  */
 export const $poolEnsurePayload = z.object({
-  /**
-   * `machine`: any server (PLAN §27.3): Sysbox beside the Docker already
-   * there, partition data on a sparse XFS file. `pool`: a machine Huruf rents
-   * out (§26.5): Docker's data on the partition volume, isolation rules.
-   */
-  mode: z.enum(["machine", "pool"]).default("pool"),
   /** What the machine keeps for itself; the rest is allocatable. */
   reserve: z.object({
     cpus: z.number().min(0),
     memMb: z.number().int().min(0),
     diskGb: z.number().int().min(0),
   }),
-  volume: z.object({
-    device: z.string().max(100).optional().describe(
-      "A block device for partition data; formatted XFS only when it has no filesystem",
-    ),
-    loopSizeGb: z.number().int().min(10).optional().describe(
-      "Without a device: a loop file this size; a machine's defaults to the free space (sparse)",
-    ),
-  }).default({}),
-  /** Private addresses partitions may still reach (the control plane in the same VPC). */
-  allowIps: z.array(z.string().max(64)).max(10).default([]),
-  docker: $dockerEnsurePayload.optional().describe("Pool machines' host setup"),
 });
 
 /**
  * `partition.create`, sealed (it carries a join token): a partition with our
- * agent inside, joining `install.tenant` (PLAN §26.5). `remainder` sizes it to
- * whatever isn't rented and keeps it so.
+ * agent inside, joining `install.tenant` (PLAN §27).
  */
 export const $partitionCreatePayload = z.object({
   name: $partitionName,
-  size: $partitionSize.optional().describe("Not for the remainder"),
-  remainder: z.boolean().default(false),
+  size: $partitionSize,
   isolated: z.boolean().default(false).describe(
     "A rental (PLAN §28): no reaching the machine, other partitions, the metadata endpoint, mail ports or private ranges",
   ),
@@ -299,7 +278,7 @@ export const $partitionResizePayload = z.object({
 /** `partition.stop`, `partition.start`, `partition.remove`. */
 export const $partitionNamePayload = z.object({ name: $partitionName });
 
-/** The port a pool machine serves a moving partition on, over the mesh. */
+/** The port a machine serves a moving partition on, over the mesh. */
 export const MOVE_PORT = 51830;
 
 /**
@@ -725,17 +704,16 @@ export const $eventsResponse = z.object({
 
 export type TAgentConfig = z.output<typeof $agentConfig>;
 export type TInventory = z.output<typeof $inventory>;
-export type THelloRequest = z.input<typeof $helloRequest>;
 export type THelloResponse = z.output<typeof $helloResponse>;
 export type TPollRequest = z.input<typeof $pollRequest>;
-export type TPollResponse = z.output<typeof $pollResponse>;
 export type TCommand = z.output<typeof $command>;
 export type TAgentEvent = z.output<typeof $agentEvent>;
 export type TBuildRunPayload = z.output<typeof $buildRunPayload>;
 export type TDesiredSpec = z.output<typeof $desiredSpec>;
 export type TWorkload = z.output<typeof $workload>;
 export type TWorkloadRelease = z.output<typeof $workloadRelease>;
-export type TMeshSpec = z.output<typeof $meshSpec>;
 export type TAlertSpec = z.output<typeof $alertSpec>;
 export type TPortForward = z.output<typeof $portForward>;
+export type TPartitionSize = z.output<typeof $partitionSize>;
+export type TPartitionUsage = z.output<typeof $partitionUsage>;
 export type TCapacityReport = z.output<typeof $capacityReport>;

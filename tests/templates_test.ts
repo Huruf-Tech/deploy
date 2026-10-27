@@ -1,5 +1,6 @@
 import { assert, assertEquals, assertMatch, assertThrows } from "@std/assert";
 import { ObjectId } from "mongodb";
+import { mongodb } from "@/database.ts";
 import { renderContent, TemplateError } from "@/lib/build/render.ts";
 import {
   templateModel,
@@ -224,6 +225,18 @@ Deno.test({
             (await tenantUsageModel.findOne({ tenant: tenantId }))?.templates,
             1,
           );
+          // A project still using it keeps it.
+          const user = await mongodb.db().collection("projects").insertOne({
+            tenant: tenantId,
+            template: { template: new ObjectId(mine), version: 2 },
+          });
+          assertEquals(
+            (await call("DELETE", `/templates/api/${mine}`)).status,
+            400,
+          );
+          await mongodb.db().collection("projects").deleteOne({
+            _id: user.insertedId,
+          });
           assertEquals(
             (await call("DELETE", `/templates/api/${mine}`)).status,
             200,

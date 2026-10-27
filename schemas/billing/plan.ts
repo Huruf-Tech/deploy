@@ -50,7 +50,7 @@ export const $planInput = z.object({
   name: z.string().min(1).max(50).meta({ canFilter: true }),
   /**
    * `workspace`: the tenant's plan (quotas and features). `server`: a rentable
-   * size of a pool machine (PLAN §26), with `resources`.
+   * size (PLAN §26), with `resources`.
    */
   kind: z.enum(["workspace", "server"]).default("workspace").meta({
     canFilter: true,
@@ -58,7 +58,7 @@ export const $planInput = z.object({
   resources: $planResources.optional(),
   /** Made from one customer's custom request: never offered as a size. */
   custom: z.boolean().optional(),
-  /** `server` plans: the class whose pool machines it runs on (PLAN §26.8). */
+  /** `server` plans: the class whose machines it runs on (PLAN §26.8). */
   class: $objectId.meta({ ref: "serverClasses" }).optional(),
   slug: z.string().min(1).max(50).regex(/^[a-z0-9-]+$/).meta({
     canFilter: true,

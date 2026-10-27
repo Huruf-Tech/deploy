@@ -94,7 +94,7 @@ export const prepareHost = async (
   });
 };
 
-/** `docker.ensure`'s values; pool machines get them inside `pool.ensure` (PLAN §26.5). */
+/** `docker.ensure`'s values (PLAN §16 Phase 2). */
 export const hostSetupPayload = async (server: ObjectId, tenant: ObjectId) => {
   // The tenant-unique subnet makes container IPs routable over the mesh (PLAN §8.2).
   const index = await ensureMeshIndex(server, tenant);

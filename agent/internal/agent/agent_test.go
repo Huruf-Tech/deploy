@@ -85,8 +85,7 @@ func (f *fakeControlPlane) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func TestAgentLoop(t *testing.T) {
-	seed := make([]byte, 32)
-	id := identity.FromSeed(seed)
+	id := testIdentity(t)
 	pub, _ := base64.RawURLEncoding.DecodeString(id.SignPublicKey())
 	plane := &fakeControlPlane{t: t, pubKey: pub}
 	server := httptest.NewServer(plane)
@@ -126,7 +125,7 @@ func TestAgentLoop(t *testing.T) {
 // Regression: events must be sent on the regular tick while the agent keeps
 // running, not only when a terminal wakes the sender or the agent stops.
 func TestEventsAreSentWithoutAWakeUp(t *testing.T) {
-	id := identity.FromSeed(make([]byte, 32))
+	id := testIdentity(t)
 	received := make(chan string, 1)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/agents/api/events" {
@@ -162,8 +161,7 @@ func TestEventsAreSentWithoutAWakeUp(t *testing.T) {
 // held, and after an empty hold (nextPollMs 0) the next poll comes at once,
 // not after the idle interval.
 func TestLongPollAsksToWaitAndComesStraightBack(t *testing.T) {
-	seed := make([]byte, 32)
-	id := identity.FromSeed(seed)
+	id := testIdentity(t)
 	wait := int64(25_000)
 	slow := protocol.AgentConfig{
 		Poll:              protocol.AgentConfigPoll{IdleMs: 2_000, ActiveMs: 2_000, TerminalMs: 2_000, WaitMs: &wait},
@@ -234,13 +232,72 @@ func TestLongPollAsksToWaitAndComesStraightBack(t *testing.T) {
 	}
 }
 
-func TestCapErrorKeepsStartAndEnd(t *testing.T) {
-	long := "docker run --name partition-x " + strings.Repeat("-v a:b ", 200) + "failed: no sysbox-mgr"
-	got := capError(long)
-	if len(got) > maxError || !strings.HasPrefix(got, "docker run") || !strings.HasSuffix(got, "no sysbox-mgr") {
-		t.Fatalf("capError = %d bytes: %q", len(got), got)
+func testIdentity(t *testing.T) *identity.Identity {
+	t.Helper()
+	id, err := identity.LoadOrCreate(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
 	}
-	if capError("short") != "short" {
-		t.Error("a short error stays as it is")
+	return id
+}
+
+// Stopping the agent (an update, systemd) lets a running command finish and
+// sends its result before Run returns.
+func TestShutdownWaitsForRunningCommands(t *testing.T) {
+	id := testIdentity(t)
+	var mu sync.Mutex
+	var polls int
+	var results []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		reply := func(v any) { _ = json.NewEncoder(w).Encode(v) }
+		mu.Lock()
+		defer mu.Unlock()
+		switch r.URL.Path {
+		case "/agents/api/hello":
+			reply(protocol.HelloResponse{Server: "s1", Status: "active", Config: config, Version: "v1", NextPollMs: 5})
+		case "/agents/api/poll":
+			polls++
+			commands := []protocol.Command{}
+			if polls == 1 {
+				commands = append(commands, protocol.Command{Seq: 1, Type: "slow"})
+			}
+			reply(protocol.PollResponse{NextPollMs: 5, ConfigVersion: "v1", Commands: commands})
+		case "/agents/api/events":
+			results = append(results, string(body))
+			reply(map[string]int{"applied": 1})
+		}
+	}))
+	defer server.Close()
+
+	store, err := state.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	started := make(chan struct{})
+	a := &Agent{
+		Tenant: "t1", Version: "test", Identity: id,
+		Client: transport.New(server.URL, id),
+		Store:  store,
+		Commands: commands.Registry{"slow": func(ctx context.Context, _ map[string]any) (map[string]any, error) {
+			close(started)
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(300 * time.Millisecond):
+				return map[string]any{"finished": true}, nil
+			}
+		}},
+		Log: slog.New(slog.NewTextHandler(io.Discard, nil)),
+	}
+	go func() { <-started; cancel() }()
+	if err := a.Run(ctx); err != nil {
+		t.Fatal(err)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if !strings.Contains(strings.Join(results, ""), `"finished":true`) {
+		t.Fatalf("the command's result wasn't sent: %v", results)
 	}
 }

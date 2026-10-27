@@ -1,10 +1,11 @@
 import z from "zod";
+import { platformTenantId } from "@/lib/billing/platform.ts";
+import { safetyLimit } from "@/lib/limits/safety.ts";
 import type { ObjectId } from "mongodb";
 import { Router } from "@/core/http/router.ts";
 import { bodyAsJson, queryAsJson } from "@/core/http/utils.ts";
 import { Response } from "@/core/http/response.ts";
 import { $objectId } from "@/core/utils/createCRUD.ts";
-import { readNumberSetting, readTextSetting } from "@/lib/core/settings.ts";
 import { withTenant } from "@/plugins/Huruf-Tech/thunder-core/utils/withTenant.ts";
 import { tenantOwner } from "@/lib/billing/owner.ts";
 import { tenantMemberModel } from "@/plugins/Huruf-Tech/thunder-core/schemas/tenantMember.ts";
@@ -23,6 +24,7 @@ import {
 import {
   $subscription,
   subscriptionModel,
+  WORKSPACE_KIND,
 } from "@/schemas/billing/subscription.ts";
 import {
   $subscriptionPeriod,
@@ -30,7 +32,7 @@ import {
 } from "@/schemas/billing/subscriptionPeriod.ts";
 import { tenantUsageModel } from "@/schemas/limits/tenantUsage.ts";
 import { projectModel } from "@/schemas/applications/project.ts";
-import { serverModel } from "@/schemas/infrastructure/server.ts";
+import { serverModel, SLOT_SERVERS } from "@/schemas/infrastructure/server.ts";
 import { templateModel } from "@/schemas/build/template.ts";
 import { alertRuleModel } from "@/schemas/monitoring/alert.ts";
 import { gitIntegrationModel } from "@/schemas/build/gitIntegration.ts";
@@ -53,7 +55,7 @@ async function usageOf(tenant: ObjectId) {
     registries,
     domains,
   ] = await Promise.all([
-    count(serverModel, { status: "active" }),
+    count(serverModel, SLOT_SERVERS),
     count(projectModel),
     count(tenantMemberModel),
     count(templateModel),
@@ -127,7 +129,7 @@ export default new Router("/api", function billing(router) {
               billingService.currentPeriod(tenant._id),
               subscriptionModel.findOne({
                 tenant: tenant._id,
-                kind: { $ne: "server" },
+                kind: WORKSPACE_KIND,
               }),
               usageOf(tenant._id),
               tenantUsageModel.findOne({ tenant: tenant._id }, {
@@ -171,13 +173,13 @@ export default new Router("/api", function billing(router) {
             : {}),
           usage,
           overLimitSince: counters?.overLimitSince,
-          graceDays: await readNumberSetting("PLAN_OVERLIMIT_GRACE_DAYS", 3),
+          graceDays: await safetyLimit("PLAN_OVERLIMIT_GRACE_DAYS"),
           wallets: wallets.map((w) => ({
             currency: w.currency,
             balance: w.balance,
           })),
           isOwner: user._id.equals(owner._id),
-          paymentsReady: !!await readTextSetting("PLATFORM_TENANT", ""),
+          paymentsReady: !!await platformTenantId(),
         });
       },
     };

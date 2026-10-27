@@ -10,7 +10,7 @@ import { HELD_HEADER } from "@/lib/agents/wakeups.ts";
 const started = new WeakMap<Request, number>();
 
 export default {
-  priority: 1_000,
+  priority: 2_000,
   pre: ({ req }) => {
     started.set(req, performance.now());
   },

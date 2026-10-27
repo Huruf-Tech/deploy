@@ -5,10 +5,11 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"os/exec"
+	"slices"
 	"strings"
 
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/protocol"
+	"github.com/Huruf-Tech/huruf-deploy/agent/internal/sh"
 )
 
 // What every machine has besides partitions (PLAN §27): ports forwarded into
@@ -18,16 +19,25 @@ import (
 // and each partition's private-network port (PLAN §27.3).
 const forwardTable = "huruf_forward"
 
-// dockerOnVolume: a pool machine's Docker keeps its data on the partition
-// volume (§26.5); a machine's stays where it was.
-func dockerOnVolume(ctx context.Context) bool {
-	out, err := run(ctx, "docker", "info", "--format", "{{.DockerRootDir}}")
-	return err == nil && strings.TrimSpace(out) == engineRoot
-}
-
-func containerIP(ctx context.Context, name string) string {
-	out, _ := run(ctx, "docker", "inspect", "-f", "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}", container(name))
-	return strings.TrimSpace(out)
+// containerIPs are these partitions' addresses; one that isn't running has none.
+func containerIPs(ctx context.Context, names []string) map[string]string {
+	ips := map[string]string{}
+	if len(names) == 0 {
+		return ips
+	}
+	args := []string{"inspect", "-f", "{{.Name}} {{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}"}
+	for _, name := range names {
+		args = append(args, container(name))
+	}
+	out, _ := sh.Run(ctx, "docker", args...) // a missing one fails it; the others are listed
+	for _, line := range strings.Split(out, "\n") {
+		if f := strings.Fields(line); len(f) == 2 {
+			if name, ok := strings.CutPrefix(f[0], "/"+container("")); ok {
+				ips[name] = f[1]
+			}
+		}
+	}
+	return ips
 }
 
 // acceptForwarded lets traffic we forwarded reach partition bridges: Docker
@@ -35,37 +45,34 @@ func containerIP(ctx context.Context, name string) string {
 // DOCKER-USER runs first in Docker's FORWARD chain.
 var acceptForwarded = []string{"DOCKER-USER", "-o", "hp-+", "-m", "conntrack", "--ctstate", "DNAT", "-j", "ACCEPT"}
 
-func ensureAcceptForwarded(ctx context.Context) error {
-	if _, err := run(ctx, "iptables", append([]string{"-C"}, acceptForwarded...)...); err == nil {
-		return nil
-	}
-	_, err := run(ctx, "iptables", append([]string{"-I"}, acceptForwarded...)...)
-	return err
-}
-
 // Forward replaces the machine's forwards. A partition that isn't running has
-// no address, so its forwards wait until it starts (Start re-applies them).
-// `added` are new since the last time: connection tracking may hold a flow
-// to that port from before the rule, which would never be forwarded.
-func (Sysbox) Forward(ctx context.Context, forwards, added []protocol.PortForward) error {
-	ips := map[string]string{}
+// no address, so its forwards wait until it runs. `added` are new since the
+// last time: connection tracking may hold a flow to that port from before
+// the rule, which would never be forwarded.
+func (d *Sysbox) Forward(ctx context.Context, forwards, added []protocol.PortForward) ([]string, error) {
+	var names []string
 	for _, f := range forwards {
-		if _, ok := ips[f.Partition]; !ok {
-			ips[f.Partition] = containerIP(ctx, f.Partition)
+		if !slices.Contains(names, f.Partition) && validName.MatchString(f.Partition) {
+			names = append(names, f.Partition)
 		}
 	}
-	cmd := exec.CommandContext(ctx, "nft", "-f", "-")
-	cmd.Stdin = strings.NewReader(forwardRules(forwards, ips))
-	if out, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("nft: %w: %s", err, strings.TrimSpace(string(out)))
+	ips := containerIPs(ctx, names)
+	var waiting []string
+	for _, name := range names {
+		if ips[name] == "" {
+			waiting = append(waiting, name)
+		}
 	}
-	if err := ensureAcceptForwarded(ctx); err != nil {
-		return err
+	if err := loadRules(ctx, forwardRules(forwards, ips)); err != nil {
+		return waiting, err
+	}
+	if err := sh.Iptables(ctx, true, acceptForwarded...); err != nil {
+		return waiting, err
 	}
 	for _, f := range added {
-		_, _ = run(ctx, "conntrack", "-D", "-p", f.Protocol, "--orig-port-dst", fmt.Sprint(f.Port))
+		_, _ = sh.Run(ctx, "conntrack", "-D", "-p", f.Protocol, "--orig-port-dst", fmt.Sprint(f.Port))
 	}
-	return nil
+	return waiting, nil
 }
 
 // forwardRules is the forward table for these partition addresses. Only
@@ -79,53 +86,45 @@ func forwardRules(forwards []protocol.PortForward, ips map[string]string) string
 			fmt.Fprintf(&rules, "    fib daddr type local %s dport %d dnat to %s:%d\n", f.Protocol, f.Port, ip, f.To)
 		}
 	}
-	return "table ip " + forwardTable + "\ndelete table ip " + forwardTable + "\ntable ip " + forwardTable + ` {
-  chain prerouting {
+	return replaceTable("ip", forwardTable, `  chain prerouting {
     type nat hook prerouting priority dstnat; policy accept;
-` + rules.String() + `  }
-}
-`
+`+rules.String()+`  }
+`)
 }
 
 // RemoveAll removes every partition with its data and everything the host
-// role set up for them (uninstall, PLAN §27.4). A pool machine's volume stays
-// when Docker's own data is on it. Missing pieces are skipped.
-func RemoveAll(ctx context.Context) (note string, err error) {
-	if ids := strings.Fields(must(run(ctx, "docker", "ps", "-aq", "--filter", "label=huruf.partition"))); len(ids) > 0 {
-		if _, err := run(ctx, "docker", append([]string{"rm", "-f"}, ids...)...); err != nil {
-			return "", err
+// role set up for them (uninstall, PLAN §27.4). Missing pieces are skipped.
+func RemoveAll(ctx context.Context) error {
+	if ids := strings.Fields(sh.Output(ctx, "docker", "ps", "-aq", "--filter", "label=huruf.partition")); len(ids) > 0 {
+		if _, err := sh.Run(ctx, "docker", append([]string{"rm", "-f"}, ids...)...); err != nil {
+			return err
 		}
 	}
-	for _, id := range strings.Fields(must(run(ctx, "docker", "network", "ls", "-q", "--filter", "name=hp-"))) {
-		_, _ = run(ctx, "docker", "network", "rm", id)
+	for _, id := range strings.Fields(sh.Output(ctx, "docker", "network", "ls", "-q", "--filter", "name=hp-")) {
+		_, _ = sh.Run(ctx, "docker", "network", "rm", id)
 	}
-	images := strings.Fields(must(run(ctx, "docker", "images", "-q", "--filter", "label="+movedLabel)))
-	if out, err := run(ctx, "docker", "images", "-q", image); err == nil {
-		images = append(images, strings.Fields(out)...)
-	}
+	images := strings.Fields(sh.Output(ctx, "docker", "images", "-q", "--filter", "label="+movedLabel))
+	images = append(images, strings.Fields(sh.Output(ctx, "docker", "images", "-q", image))...)
 	if len(images) > 0 {
-		_, _ = run(ctx, "docker", append([]string{"rmi", "-f"}, images...)...)
+		_, _ = sh.Run(ctx, "docker", append([]string{"rmi", "-f"}, images...)...)
 	}
 
-	_, _ = run(ctx, "nft", "delete", "table", "inet", table)
-	_, _ = run(ctx, "nft", "delete", "table", "ip", forwardTable)
-	_, _ = run(ctx, "nft", "delete", "table", "inet", isolateTable)
-	_ = os.Remove(isolateFile)
-	_, _ = run(ctx, "iptables", append([]string{"-D"}, acceptForwarded...)...)
-	_ = os.Remove(rulesFile)
+	_, _ = sh.Run(ctx, "nft", "delete", "table", "inet", table)
+	_, _ = sh.Run(ctx, "nft", "delete", "table", "ip", forwardTable)
+	_, _ = sh.Run(ctx, "nft", "delete", "table", "inet", isolateTable)
+	_ = sh.Iptables(ctx, false, acceptForwarded...)
 	if conf, err := os.ReadFile(nftablesConf); err == nil {
 		for _, file := range []string{rulesFile, isolateFile} {
 			conf = bytes.ReplaceAll(conf, []byte(`include "`+file+`"`+"\n"), nil)
 		}
 		_ = os.WriteFile(nftablesConf, conf, 0o755)
 	}
+	_ = os.Remove(rulesFile)
+	_ = os.Remove(isolateFile)
 
-	if dockerOnVolume(ctx) {
-		return "The partition volume stays: Docker's own data is on it (" + engineRoot + ")", nil
-	}
-	if _, err := run(ctx, "mountpoint", "-q", Root); err == nil {
-		if _, err := run(ctx, "umount", Root); err != nil {
-			return "", err
+	if _, err := sh.Run(ctx, "mountpoint", "-q", Root); err == nil {
+		if _, err := sh.Run(ctx, "umount", Root); err != nil {
+			return err
 		}
 	}
 	if fstab, err := os.ReadFile("/etc/fstab"); err == nil {
@@ -139,5 +138,5 @@ func RemoveAll(ctx context.Context) (note string, err error) {
 	}
 	_ = os.Remove(loopFile)
 	_ = os.Remove(Root)
-	return "", nil
+	return nil
 }

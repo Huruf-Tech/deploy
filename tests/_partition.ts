@@ -61,7 +61,6 @@ async function machineOf(tenant: ObjectId) {
     },
     pool: {
       status: "ready",
-      mode: "machine",
       allocatable: { cpus: 7.75, memMb: 15_872, diskGb: 190 },
       updatedAt: new Date(),
     },

@@ -337,6 +337,30 @@ Deno.test({
         await deliverAll();
         assertEquals(posts.length, before + 2);
         assertEquals(posts.at(-1)!.body.event, "alert.resolved");
+
+        // A claimed deploy has a deadline at once; cancelling it alerts nobody.
+        const { json: started } = await call(
+          "POST",
+          `/projects/api/${redis}/deploy`,
+          {},
+        );
+        const doc = await d.collection("deployments").findOne({
+          _id: new ObjectId(started.deployment),
+        });
+        assert(doc?.deadlineAt, "claimed with a deadline");
+        const cancelled = await call(
+          "POST",
+          `/projects/api/deployments/${started.deployment}/cancel`,
+        );
+        assertEquals(cancelled.status, 200, JSON.stringify(cancelled.json));
+        await deliverAll();
+        assertEquals(posts.length, before + 2, "a cancel isn't a failure");
+        assertEquals(
+          (await d.collection("deployments").findOne({
+            _id: new ObjectId(started.deployment),
+          }))?.status,
+          "cancelled",
+        );
       });
 
       await t.step(

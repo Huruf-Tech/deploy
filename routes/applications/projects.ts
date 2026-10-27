@@ -32,6 +32,7 @@ import {
   $projectUpdate,
   $projectVolume,
   projectModel,
+  workloadName,
 } from "@/schemas/applications/project.ts";
 import {
   $commit,
@@ -101,7 +102,8 @@ export default new Router("/api", function projects(router) {
             { _id: ObjectId; status: string; createdAt: Date; commit?: unknown }
           >([
             { $match: { project: { $in: ids } } },
-            { $sort: { createdAt: -1 } },
+            // The `projectHistory` index's order: no in-memory sort.
+            { $sort: { project: 1, createdAt: -1 } },
             {
               $group: {
                 _id: "$project",
@@ -289,9 +291,11 @@ export default new Router("/api", function projects(router) {
           ? []
           : project.placedOn.flatMap((server) =>
             release.services.flatMap((service) => {
-              const workload = release.services.length === 1
-                ? project.slug
-                : `${project.slug}-${service}`;
+              const workload = workloadName(
+                project.slug,
+                release.services.length,
+                service,
+              );
               return Array.from(
                 { length: project.replicasPerServer },
                 (_, i) => ({

@@ -94,13 +94,14 @@ export async function addDomain(
   }
   const now = new Date();
   const _id = new ObjectId();
+  const token = await ownershipToken(tenant, hostname);
   try {
     await domainModel.insertOne({
       _id,
       tenant,
       project: projectId,
       hostname,
-      token: await ownershipToken(tenant, hostname),
+      token,
       status: "pending",
       createdBy: user,
       createdAt: now,
@@ -115,11 +116,7 @@ export async function addDomain(
   }
   // Records already in place (e.g. re-adding a domain): verified right away.
   // Otherwise it waits for "Check now", as nothing is checked unprompted.
-  const ready = await checkDomain(
-    hostname,
-    await ownershipToken(tenant, hostname),
-  )
-    .catch(() => undefined);
+  const ready = await checkDomain(hostname, token).catch(() => undefined);
   if (ready?.ownership && ready.dns) await startCheck(tenant, _id);
   return _id;
 }

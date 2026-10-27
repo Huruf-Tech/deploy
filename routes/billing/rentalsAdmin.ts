@@ -1,4 +1,5 @@
 import z from "zod";
+import { platformTenant, platformTenantId } from "@/lib/billing/platform.ts";
 import { Router } from "@/core/http/router.ts";
 import { bodyAsJson, paramsAsJson } from "@/core/http/utils.ts";
 import { Response } from "@/core/http/response.ts";
@@ -6,16 +7,19 @@ import { $objectId } from "@/core/utils/createCRUD.ts";
 import { withAuthSession } from "@/plugins/Huruf-Tech/thunder-core/utils/withAuthSession.ts";
 import { tenantModel } from "@/plugins/Huruf-Tech/thunder-core/schemas/tenant.ts";
 import { rentals as rentalService } from "@/lib/services.ts";
-import { readTextSetting } from "@/lib/core/settings.ts";
 import { planModel } from "@/schemas/billing/plan.ts";
-import { subscriptionModel } from "@/schemas/billing/subscription.ts";
+import {
+  LIVE_RENTAL,
+  subscriptionModel,
+} from "@/schemas/billing/subscription.ts";
 import { serverClassModel } from "@/schemas/billing/serverClass.ts";
 import { serverModel } from "@/schemas/infrastructure/server.ts";
 import { ObjectId } from "mongodb";
 
 /**
- * Admin side of rentals (PLAN §26.8): the queue of requests and resizes,
- * placement on pool machines, approval, and the pool machines themselves.
+ * Admin side of rentals (PLAN §26.8, §28): the queue of requests and
+ * resizes, placement on the platform's machines, approval, and which
+ * machines are for rent.
  * Root only: no member policy grants this router.
  */
 export default new Router("/api", function rentalsAdmin(router) {
@@ -76,8 +80,6 @@ export default new Router("/api", function rentalsAdmin(router) {
       free: z.object({ memMb: z.number(), diskGb: z.number() }),
       cpuRoom: z.number(),
       fits: z.boolean(),
-      remainderShort: z.boolean(),
-      remainderUsesMb: z.number().optional(),
     }));
 
     return {
@@ -181,7 +183,7 @@ export default new Router("/api", function rentalsAdmin(router) {
     };
   });
 
-  // Moving a rental to another pool machine (PLAN §26.10).
+  // Moving a rental to another machine (PLAN §26.10).
   router.get("/:id/move", function moveTargets() {
     const $return = z.object({
       from: z.string().optional(),
@@ -193,8 +195,6 @@ export default new Router("/api", function rentalsAdmin(router) {
         free: z.object({ memMb: z.number(), diskGb: z.number() }),
         cpuRoom: z.number(),
         fits: z.boolean(),
-        remainderShort: z.boolean(),
-        remainderUsesMb: z.number().optional(),
         reachable: z.boolean().describe("Over the private network"),
       })),
     });
@@ -326,13 +326,14 @@ export default new Router("/api", function rentalsAdmin(router) {
           projection: { tenant: 1 },
         });
         if (!server) throw Response.notFound("Server not found");
-        const platform = server.tenant.toHexString() ===
-          await readTextSetting("PLATFORM_TENANT", "");
+        const platform = server.tenant.equals(
+          await platformTenantId() ?? new ObjectId(),
+        );
         const subs = platform
           ? await subscriptionModel.find({
             kind: "server",
             "rental.host": id,
-            status: { $in: ["active", "pastDue", "suspended"] },
+            status: { $in: [...LIVE_RENTAL] },
           }, { limit: 200 }).toArray()
           : [];
         const [tenants, plans, uptimes, targets] = await Promise.all([
@@ -408,7 +409,7 @@ export default new Router("/api", function rentalsAdmin(router) {
         const { matchedCount } = await serverModel.updateOne(
           {
             _id: id,
-            tenant: new ObjectId(await readTextSetting("PLATFORM_TENANT", "")),
+            tenant: await platformTenant(),
             "pool.status": { $exists: true },
           },
           {

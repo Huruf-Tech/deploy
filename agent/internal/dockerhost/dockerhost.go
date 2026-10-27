@@ -18,12 +18,14 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	"github.com/Huruf-Tech/huruf-deploy/agent/internal/daemonjson"
+	"github.com/Huruf-Tech/huruf-deploy/agent/internal/sh"
 )
 
 const (
-	daemonConfigPath = "/etc/docker/daemon.json"
-	edgeContainer    = "huruf-edge"
-	labelPrefix      = "deploy.huruf."
+	edgeContainer = "huruf-edge"
+	labelPrefix   = "deploy.huruf."
 )
 
 // Payload is decided by the control plane, so changing a limit never needs an agent release.
@@ -69,12 +71,9 @@ func Ensure(ctx context.Context, p Payload) (map[string]any, error) {
 		return map[string]any{"dockerVersion": dockerVersion(ctx), "checks": checks, "notes": notes}
 	}
 
-	if _, err := exec.LookPath("docker"); err != nil {
-		install, cancel := context.WithTimeout(ctx, 15*time.Minute)
-		defer cancel()
-		if _, err := run(install, "sh", "-c", "curl -fsSL https://get.docker.com | sh"); err != nil {
-			return result(), fmt.Errorf("installing Docker: %w", err)
-		}
+	if installed, err := InstallDocker(ctx); err != nil {
+		return result(), err
+	} else if installed {
 		notes = append(notes, "Docker installed")
 	}
 
@@ -84,7 +83,7 @@ func Ensure(ctx context.Context, p Payload) (map[string]any, error) {
 		}
 	}
 
-	existing, err := os.ReadFile(daemonConfigPath)
+	existing, err := os.ReadFile(daemonjson.Path)
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return result(), err
 	}
@@ -95,18 +94,18 @@ func Ensure(ctx context.Context, p Payload) (map[string]any, error) {
 	liveRestore := !p.Swarm && bytes.Contains(existing, []byte(`"live-restore": true`))
 	merged, changed, err := MergeDaemonConfig(existing, p)
 	if err != nil {
-		return result(), fmt.Errorf("%s is not valid JSON: %w", daemonConfigPath, err)
+		return result(), err
 	}
 	if changed {
 		if err := os.MkdirAll("/etc/docker", 0o755); err != nil {
 			return result(), err
 		}
-		if err := os.WriteFile(daemonConfigPath, merged, 0o644); err != nil {
+		if err := os.WriteFile(daemonjson.Path, merged, 0o644); err != nil {
 			return result(), err
 		}
 	}
 
-	if _, err := run(ctx, "systemctl", "enable", "--now", "docker"); err != nil {
+	if _, err := sh.Run(ctx, "systemctl", "enable", "--now", "docker"); err != nil {
 		return result(), fmt.Errorf("starting Docker: %w", err)
 	}
 	// The file can be right while the running Docker still predates it (an
@@ -117,22 +116,22 @@ func Ensure(ctx context.Context, p Payload) (map[string]any, error) {
 		// live-restore. On such a busy host, a reload (SIGHUP) applies what can
 		// change live: live-restore and the mesh's insecure registry, which the
 		// built-in registry needs. Log limits wait for the next restart.
-		if out, _ := run(ctx, "docker", "ps", "-q"); liveRestore || strings.TrimSpace(out) == "" {
-			if _, err := run(ctx, "systemctl", "restart", "docker"); err != nil {
+		if out, _ := sh.Run(ctx, "docker", "ps", "-q"); liveRestore || strings.TrimSpace(out) == "" {
+			if _, err := sh.Run(ctx, "systemctl", "restart", "docker"); err != nil {
 				// Never leave Docker down over our settings: put the old file back.
 				if changed {
 					if existing == nil {
-						_ = os.Remove(daemonConfigPath)
+						_ = os.Remove(daemonjson.Path)
 					} else {
-						_ = os.WriteFile(daemonConfigPath, existing, 0o644)
+						_ = os.WriteFile(daemonjson.Path, existing, 0o644)
 					}
-					if _, again := run(ctx, "systemctl", "restart", "docker"); again == nil {
-						return result(), fmt.Errorf("Docker didn't start with the new settings, so %s was restored: %w", daemonConfigPath, err)
+					if _, again := sh.Run(ctx, "systemctl", "restart", "docker"); again == nil {
+						return result(), fmt.Errorf("docker didn't start with the new settings, so %s was restored: %w", daemonjson.Path, err)
 					}
 				}
 				return result(), fmt.Errorf("restarting Docker: %w", err)
 			}
-		} else if _, err := run(ctx, "systemctl", "reload", "docker"); err == nil {
+		} else if _, err := sh.Run(ctx, "systemctl", "reload", "docker"); err == nil {
 			notes = append(notes, "Docker settings reloaded; log limits apply on the next Docker restart")
 		} else {
 			notes = append(notes, "Docker settings apply on the next Docker restart")
@@ -147,7 +146,7 @@ func Ensure(ctx context.Context, p Payload) (map[string]any, error) {
 	if p.MeshCidr != "" && !trustsRegistry(ctx, p.MeshCidr) {
 		notes = append(notes, fmt.Sprintf(
 			"Docker doesn't trust %s yet, so pulls from the built-in registry fail. Is Docker installed as a snap? It ignores %s; use Docker from get.docker.com.",
-			p.MeshCidr, daemonConfigPath))
+			p.MeshCidr, daemonjson.Path))
 	}
 
 	if note, err := ensureNetwork(ctx, p); err != nil {
@@ -164,11 +163,9 @@ func Ensure(ctx context.Context, p Payload) (map[string]any, error) {
 
 // MergeDaemonConfig sets the keys we manage and keeps every other key the user has.
 func MergeDaemonConfig(existing []byte, p Payload) (merged []byte, changed bool, err error) {
-	config := map[string]any{}
-	if len(bytes.TrimSpace(existing)) > 0 {
-		if err := json.Unmarshal(existing, &config); err != nil {
-			return nil, false, err
-		}
+	config, err := daemonjson.Parse(existing)
+	if err != nil {
+		return nil, false, err
 	}
 	before, _ := json.Marshal(config)
 
@@ -193,15 +190,28 @@ func MergeDaemonConfig(existing []byte, p Payload) (merged []byte, changed bool,
 	if bytes.Equal(before, after) {
 		return existing, false, nil
 	}
-	merged, err = json.MarshalIndent(config, "", "  ")
-	return append(merged, '\n'), true, err
+	return daemonjson.Encode(config), true, nil
+}
+
+// InstallDocker installs Docker from get.docker.com when the machine has
+// none; it reports whether it did.
+func InstallDocker(ctx context.Context) (bool, error) {
+	if _, err := exec.LookPath("docker"); err == nil {
+		return false, nil
+	}
+	install, cancel := context.WithTimeout(ctx, 15*time.Minute)
+	defer cancel()
+	if _, err := sh.Run(install, "sh", "-c", "curl -fsSL https://get.docker.com | sh"); err != nil {
+		return false, fmt.Errorf("installing Docker: %w", err)
+	}
+	return true, nil
 }
 
 // ensureNetwork creates the project network with the tenant-unique subnet.
 // One with another subnet is recreated while empty; otherwise it's reported,
 // since moving running containers would interrupt them.
 func ensureNetwork(ctx context.Context, p Payload) (note string, err error) {
-	out, inspectErr := run(ctx, "docker", "network", "inspect", "-f",
+	out, inspectErr := sh.Run(ctx, "docker", "network", "inspect", "-f",
 		`{{range .IPAM.Config}}{{.Subnet}}{{end}} {{len .Containers}}`, p.Network)
 	if inspectErr == nil {
 		fields := strings.Fields(out)
@@ -211,7 +221,7 @@ func ensureNetwork(ctx context.Context, p Payload) (note string, err error) {
 		if len(fields) == 2 && fields[1] != "0" {
 			return fmt.Sprintf("The project network uses %s, not %s; it moves once its containers are gone", fields[0], p.Subnet), nil
 		}
-		if _, err := run(ctx, "docker", "network", "rm", p.Network); err != nil {
+		if _, err := sh.Run(ctx, "docker", "network", "rm", p.Network); err != nil {
 			return "", fmt.Errorf("replacing network %s: %w", p.Network, err)
 		}
 	}
@@ -221,11 +231,11 @@ func ensureNetwork(ctx context.Context, p Payload) (note string, err error) {
 		args = append(args, "--subnet", p.Subnet)
 	}
 	withMesh := append(slices.Clone(args), "-o", "com.docker.network.bridge.trusted_host_interfaces="+meshInterface, p.Network)
-	if _, err := run(ctx, "docker", withMesh...); err == nil {
+	if _, err := sh.Run(ctx, "docker", withMesh...); err == nil {
 		return "", nil
 	}
 	// Docker before 28 has no such option, and no filter for it to lift.
-	if _, err := run(ctx, "docker", append(args, p.Network)...); err != nil {
+	if _, err := sh.Run(ctx, "docker", append(args, p.Network)...); err != nil {
 		return "", fmt.Errorf("creating network %s: %w", p.Network, err)
 	}
 	return "", nil
@@ -243,7 +253,7 @@ func ensureWireGuardTools(ctx context.Context) string {
 	}
 	install, cancel := context.WithTimeout(ctx, 5*time.Minute)
 	defer cancel()
-	if _, err := run(install, "sh", "-c", "DEBIAN_FRONTEND=noninteractive apt-get install -y wireguard-tools iproute2 || (apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y wireguard-tools iproute2)"); err != nil {
+	if _, err := sh.Run(install, "sh", "-c", "DEBIAN_FRONTEND=noninteractive apt-get install -y wireguard-tools iproute2 || (apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y wireguard-tools iproute2)"); err != nil {
 		return "Installing wireguard-tools failed: " + err.Error()
 	}
 	return "wireguard-tools installed"
@@ -252,14 +262,14 @@ func ensureWireGuardTools(ctx context.Context) string {
 // ensureEdge keeps the Caddy edge proxy running. It starts with no sites; the
 // agent configures routes through Caddy's admin API on 127.0.0.1:2019.
 func ensureEdge(ctx context.Context, image string) error {
-	state, err := run(ctx, "docker", "inspect", "-f", "{{.State.Running}}", edgeContainer)
+	state, err := sh.Run(ctx, "docker", "inspect", "-f", "{{.State.Running}}", edgeContainer)
 	switch {
 	case err == nil && strings.TrimSpace(state) == "true":
 		return nil
 	case err == nil:
-		_, err = run(ctx, "docker", "start", edgeContainer)
+		_, err = sh.Run(ctx, "docker", "start", edgeContainer)
 	default:
-		_, err = run(ctx, "docker", "run", "-d",
+		_, err = sh.Run(ctx, "docker", "run", "-d",
 			"--name", edgeContainer,
 			"--restart", "unless-stopped",
 			"--init", // reaps orphans, e.g. processes left by closed shells
@@ -279,18 +289,18 @@ func ensureEdge(ctx context.Context, image string) error {
 // trustsRegistry reports whether the running Docker treats cidr as an
 // insecure (HTTP) registry range.
 func trustsRegistry(ctx context.Context, cidr string) bool {
-	out, err := run(ctx, "docker", "info", "--format", "{{json .RegistryConfig.InsecureRegistryCIDRs}}")
+	out, err := sh.Run(ctx, "docker", "info", "--format", "{{json .RegistryConfig.InsecureRegistryCIDRs}}")
 	return err == nil && strings.Contains(out, `"`+cidr+`"`)
 }
 
 func waitForDocker(ctx context.Context) error {
 	deadline := time.Now().Add(60 * time.Second)
 	for {
-		if _, err := run(ctx, "docker", "info", "--format", "{{.ServerVersion}}"); err == nil {
+		if _, err := sh.Run(ctx, "docker", "info", "--format", "{{.ServerVersion}}"); err == nil {
 			return nil
 		}
 		if time.Now().After(deadline) {
-			return errors.New("Docker did not become ready within 60s")
+			return errors.New("docker did not become ready within 60s")
 		}
 		select {
 		case <-ctx.Done():
@@ -301,23 +311,11 @@ func waitForDocker(ctx context.Context) error {
 }
 
 func dockerVersion(ctx context.Context) string {
-	out, err := run(ctx, "docker", "version", "--format", "{{.Server.Version}}")
+	out, err := sh.Run(ctx, "docker", "version", "--format", "{{.Server.Version}}")
 	if err != nil {
 		return ""
 	}
 	return strings.TrimSpace(out)
-}
-
-func run(ctx context.Context, name string, args ...string) (string, error) {
-	out, err := exec.CommandContext(ctx, name, args...).CombinedOutput()
-	if err != nil {
-		tail := strings.TrimSpace(string(out))
-		if len(tail) > 300 {
-			tail = "…" + tail[len(tail)-300:]
-		}
-		return string(out), fmt.Errorf("%s: %w: %s", name, err, tail)
-	}
-	return string(out), nil
 }
 
 // Preflight reports host properties that affect workloads. They are warnings

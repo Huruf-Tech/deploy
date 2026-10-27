@@ -1,4 +1,5 @@
 import Stripe from "stripe";
+import { NOT_SET_UP } from "@/lib/billing/platform.ts";
 import type { ObjectId } from "mongodb";
 import { readTextSetting } from "@/lib/core/settings.ts";
 import type {
@@ -23,7 +24,7 @@ export class StripeGateway implements PaymentGateway {
 
   private async client() {
     const key = await readTextSetting("STRIPE_SECRET_KEY", "");
-    if (!key) throw new Error("Payments aren't set up yet");
+    if (!key) throw new Error(NOT_SET_UP);
     let client = this.clients.get(key);
     if (!client) {
       // One client per key: a rotated key gets a fresh client, the old one goes.

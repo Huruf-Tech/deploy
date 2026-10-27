@@ -3,6 +3,7 @@ package pool
 import (
 	"context"
 	"errors"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -16,14 +17,17 @@ type fake struct {
 	weights map[string]int
 	used    map[string]Usage
 	scripts []string
+	// Partitions that aren't running: no address to forward to.
+	down map[string]bool
 
 	sendErr, receiveErr error
 	forwards, added     []protocol.PortForward
-	isolated, allowIps  []string
+	forwardCalls        int
+	isolated            []string
 }
 
 func newFake() *fake {
-	return &fake{sizes: map[string]protocol.PartitionSize{}, weights: map[string]int{}, used: map[string]Usage{}}
+	return &fake{sizes: map[string]protocol.PartitionSize{}, weights: map[string]int{}, used: map[string]Usage{}, down: map[string]bool{}}
 }
 
 func (f *fake) Setup(context.Context, protocol.PoolEnsurePayload) (protocol.PartitionSize, map[string]any, error) {
@@ -47,20 +51,34 @@ func (f *fake) Exec(_ context.Context, _ string, script string) (string, error) 
 	f.scripts = append(f.scripts, script)
 	return "Agent installed", nil
 }
-func (f *fake) Usage(_ context.Context, name string) (Usage, error) {
-	u := f.used[name]
-	u.State = "running"
-	return u, nil
+func (f *fake) Usage(_ context.Context, names []string, _ bool) (map[string]Usage, error) {
+	all := map[string]Usage{}
+	for _, name := range names {
+		u := f.used[name]
+		u.State = "running"
+		if f.down[name] {
+			u.State = "exited"
+		}
+		all[name] = u
+	}
+	return all, nil
 }
 func (f *fake) Restore(context.Context, []string) error            { return nil }
 func (f *fake) Send(context.Context, string, string, string) error { return f.sendErr }
-func (f *fake) Isolate(_ context.Context, names, allowIps []string) error {
-	f.isolated, f.allowIps = names, allowIps
+func (f *fake) Isolate(_ context.Context, names []string) error {
+	f.isolated = names
 	return nil
 }
-func (f *fake) Forward(_ context.Context, forwards, added []protocol.PortForward) error {
+func (f *fake) Forward(_ context.Context, forwards, added []protocol.PortForward) ([]string, error) {
 	f.forwards, f.added = forwards, added
-	return nil
+	f.forwardCalls++
+	var waiting []string
+	for _, fw := range forwards {
+		if f.down[fw.Partition] {
+			waiting = append(waiting, fw.Partition)
+		}
+	}
+	return waiting, nil
 }
 func (f *fake) Receive(_ context.Context, name string, size protocol.PartitionSize, weight int, _, _ string) error {
 	if f.receiveErr != nil {
@@ -78,73 +96,71 @@ func setup(t *testing.T) (*Manager, *fake) {
 	t.Helper()
 	f := newFake()
 	m := &Manager{Driver: f, Path: filepath.Join(t.TempDir(), "pool.json")}
-	ctx := context.Background()
-	if _, err := m.Ensure(ctx, protocol.PoolEnsurePayload{}); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := m.Create(ctx, protocol.PartitionCreatePayload{Name: "huruf", Remainder: true, Install: install()}); err != nil {
+	if _, err := m.Ensure(context.Background(), protocol.PoolEnsurePayload{}); err != nil {
 		t.Fatal(err)
 	}
 	return m, f
 }
 
-func TestRemainderTakesEverything(t *testing.T) {
-	_, f := setup(t)
-	if got := f.sizes["huruf"]; got != (protocol.PartitionSize{Cpus: 0, MemMb: 7168, DiskGb: 100}) {
-		t.Errorf("remainder = %+v", got)
-	}
-	if f.weights["huruf"] != 2 {
-		t.Errorf("remainder weight = %d, want the least", f.weights["huruf"])
+func create(t *testing.T, m *Manager, name string, size protocol.PartitionSize, isolated bool) {
+	t.Helper()
+	if _, err := m.Create(context.Background(), protocol.PartitionCreatePayload{Name: name, Size: size, Isolated: isolated, Install: install()}); err != nil {
+		t.Fatal(err)
 	}
 }
 
-func TestRentalIsCarvedFromTheRemainder(t *testing.T) {
+func TestCreateAndRemove(t *testing.T) {
 	m, f := setup(t)
 	ctx := context.Background()
-	small := protocol.PartitionSize{Cpus: 1, MemMb: 2304, DiskGb: 25}
-	if _, err := m.Create(ctx, protocol.PartitionCreatePayload{Name: "salha", Size: &small, Install: install()}); err != nil {
-		t.Fatal(err)
-	}
-	if got := f.sizes["huruf"]; got.MemMb != 7168-2304 || got.DiskGb != 75 || got.Cpus != 0 {
-		t.Errorf("remainder after the rental = %+v", got)
-	}
-	if f.weights["salha"] != 1024 {
-		t.Errorf("rental weight = %d", f.weights["salha"])
+	create(t, m, "salha", protocol.PartitionSize{Cpus: 1, MemMb: 2304, DiskGb: 25}, false)
+	if f.sizes["salha"].MemMb != 2304 || f.weights["salha"] != 1024 {
+		t.Errorf("partition = %+v, weight %d", f.sizes["salha"], f.weights["salha"])
 	}
 	// The agent is installed with the join token, quoted for the shell.
 	last := f.scripts[len(f.scripts)-1]
 	if !strings.Contains(last, `--join-token 'tok'\''en'`) || !strings.Contains(last, "'https://cp.example/agents/api/install.sh'") {
 		t.Errorf("install script: %s", last)
 	}
-
-	// Removing it gives everything back.
 	if _, err := m.Remove(ctx, protocol.PartitionNamePayload{Name: "salha"}); err != nil {
 		t.Fatal(err)
 	}
-	if got := f.sizes["huruf"]; got.MemMb != 7168 || got.DiskGb != 100 {
-		t.Errorf("remainder after removal = %+v", got)
+	if _, ok := f.sizes["salha"]; ok {
+		t.Error("the partition is still there")
 	}
 }
 
-func TestTooBigOrRemainderInUse(t *testing.T) {
+func TestRefusesWhatDoesntFit(t *testing.T) {
 	m, f := setup(t)
 	ctx := context.Background()
 	huge := protocol.PartitionSize{Cpus: 1, MemMb: 8000, DiskGb: 25}
-	if _, err := m.Create(ctx, protocol.PartitionCreatePayload{Name: "big", Size: &huge, Install: install()}); err == nil {
+	if _, err := m.Create(ctx, protocol.PartitionCreatePayload{Name: "big", Size: huge, Install: install()}); err == nil {
 		t.Error("a partition bigger than the machine was created")
 	}
-	// Huruf's partition uses 6 GB: carving 2.25 GB would leave it 4.75 GB.
-	f.used["huruf"] = Usage{MemUsed: 6 << 30}
+	create(t, m, "first", protocol.PartitionSize{Cpus: 1, MemMb: 5000, DiskGb: 25}, false)
 	small := protocol.PartitionSize{Cpus: 1, MemMb: 2304, DiskGb: 25}
-	_, err := m.Create(ctx, protocol.PartitionCreatePayload{Name: "salha", Size: &small, Install: install()})
-	if err == nil || !strings.Contains(err.Error(), "free memory there first") {
+	if _, err := m.Create(ctx, protocol.PartitionCreatePayload{Name: "second", Size: small, Install: install()}); err == nil || !strings.Contains(err.Error(), "2168 MB") {
 		t.Fatalf("expected a refusal, got %v", err)
 	}
-	if _, ok := f.sizes["salha"]; ok {
+	if _, ok := f.sizes["second"]; ok {
 		t.Error("the partition was created anyway")
 	}
-	if f.sizes["huruf"].MemMb != 7168 {
-		t.Error("the remainder shrank anyway")
+}
+
+func TestRefusesBeforeSetupAndBadNames(t *testing.T) {
+	ctx := context.Background()
+	m := &Manager{Driver: newFake(), Path: filepath.Join(t.TempDir(), "pool.json")}
+	size := protocol.PartitionSize{Cpus: 1, MemMb: 512, DiskGb: 10}
+	if _, err := m.Create(ctx, protocol.PartitionCreatePayload{Name: "p1", Size: size, Install: install()}); err == nil || !strings.Contains(err.Error(), "isn't set up for partitions") {
+		t.Fatalf("create before setup: %v", err)
+	}
+	m, _ = setup(t)
+	for _, name := range []string{"", "../etc", "P1", "a b", "abcdefghijklm"} {
+		if _, err := m.Create(ctx, protocol.PartitionCreatePayload{Name: name, Size: size, Install: install()}); err == nil {
+			t.Errorf("created %q", name)
+		}
+		if _, err := m.Remove(ctx, protocol.PartitionNamePayload{Name: name}); err == nil {
+			t.Errorf("removed %q", name)
+		}
 	}
 }
 
@@ -152,15 +168,18 @@ func TestResize(t *testing.T) {
 	m, f := setup(t)
 	ctx := context.Background()
 	small := protocol.PartitionSize{Cpus: 1, MemMb: 2048, DiskGb: 25}
-	if _, err := m.Create(ctx, protocol.PartitionCreatePayload{Name: "salha", Size: &small, Install: install()}); err != nil {
-		t.Fatal(err)
-	}
+	create(t, m, "salha", small, false)
+	create(t, m, "other", small, false)
 	medium := protocol.PartitionSize{Cpus: 2, MemMb: 4096, DiskGb: 50}
 	if _, err := m.Resize(ctx, protocol.PartitionResizePayload{Name: "salha", Size: medium}); err != nil {
 		t.Fatal(err)
 	}
-	if f.sizes["salha"] != medium || f.sizes["huruf"].MemMb != 7168-4096 || f.weights["salha"] != 2048 {
-		t.Errorf("after growing: %+v / %+v", f.sizes["salha"], f.sizes["huruf"])
+	if f.sizes["salha"] != medium || f.weights["salha"] != 2048 {
+		t.Errorf("after growing: %+v", f.sizes["salha"])
+	}
+	// Growing past what the others leave is refused.
+	if _, err := m.Resize(ctx, protocol.PartitionResizePayload{Name: "salha", Size: protocol.PartitionSize{Cpus: 2, MemMb: 6000, DiskGb: 50}}); err == nil {
+		t.Error("grew past the machine")
 	}
 	// Shrinking below what the partition uses is refused.
 	f.used["salha"] = Usage{MemUsed: 3 << 30}
@@ -171,24 +190,40 @@ func TestResize(t *testing.T) {
 	if _, err := m.Resize(ctx, protocol.PartitionResizePayload{Name: "salha", Size: small}); err != nil {
 		t.Fatal(err)
 	}
-	if f.sizes["huruf"].MemMb != 7168-2048 {
-		t.Errorf("the remainder didn't get the memory back: %+v", f.sizes["huruf"])
+	if _, err := m.Resize(ctx, protocol.PartitionResizePayload{Name: "nope", Size: small}); err == nil {
+		t.Error("resized an unknown partition")
 	}
-	// The remainder isn't resized by hand.
-	if _, err := m.Resize(ctx, protocol.PartitionResizePayload{Name: "huruf", Size: small}); err == nil {
-		t.Error("resized the remainder by hand")
+}
+
+// A resized rental stays a rental: isolated now and after a restart.
+func TestResizeKeepsIsolation(t *testing.T) {
+	m, f := setup(t)
+	ctx := context.Background()
+	create(t, m, "prent", protocol.PartitionSize{Cpus: 1, MemMb: 1024, DiskGb: 10}, true)
+	if _, err := m.Resize(ctx, protocol.PartitionResizePayload{Name: "prent", Size: protocol.PartitionSize{Cpus: 1, MemMb: 2048, DiskGb: 20}}); err != nil {
+		t.Fatal(err)
+	}
+	create(t, m, "pown", protocol.PartitionSize{Cpus: 1, MemMb: 1024, DiskGb: 10}, false) // re-applies the rules
+	if len(f.isolated) != 1 || f.isolated[0] != "prent" {
+		t.Fatalf("isolated after a resize = %v", f.isolated)
+	}
+	again := &Manager{Driver: f, Path: m.Path}
+	if err := again.Restore(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if len(f.isolated) != 1 || f.isolated[0] != "prent" {
+		t.Fatalf("isolated after a restart = %v", f.isolated)
 	}
 }
 
 func TestUsageAndState(t *testing.T) {
 	m, f := setup(t)
 	small := protocol.PartitionSize{Cpus: 0.5, MemMb: 1024, DiskGb: 10}
-	if _, err := m.Create(context.Background(), protocol.PartitionCreatePayload{Name: "salha", Size: &small, Install: install()}); err != nil {
-		t.Fatal(err)
-	}
+	create(t, m, "salha", small, false)
+	create(t, m, "abc", small, false)
 	f.used["salha"] = Usage{MemUsed: 100, RxBytes: 5, TxBytes: 7}
 	usage := m.Usage(context.Background())
-	if len(usage) != 2 || usage[0].Name != "huruf" || !usage[0].Remainder || usage[1].TxBytes != 7 || usage[1].Size.Cpus != 0.5 {
+	if len(usage) != 2 || usage[0].Name != "abc" || usage[1].TxBytes != 7 || usage[1].Size.Cpus != 0.5 {
 		t.Errorf("usage = %+v", usage)
 	}
 
@@ -199,35 +234,48 @@ func TestUsageAndState(t *testing.T) {
 	}
 	// Creating a partition that exists only re-runs the install.
 	before := len(f.scripts)
-	if _, err := again.Create(context.Background(), protocol.PartitionCreatePayload{Name: "salha", Size: &small, Install: install()}); err != nil {
-		t.Fatal(err)
-	}
+	create(t, again, "salha", small, false)
 	if len(f.scripts) != before+1 || f.sizes["salha"] != small {
 		t.Error("re-creating changed more than the install")
 	}
 }
 
-func TestMoveSendsRentalsOnly(t *testing.T) {
-	m, _ := setup(t)
-	ctx := context.Background()
-	if _, err := m.Send(ctx, protocol.PartitionSendPayload{Name: "huruf"}); err == nil {
-		t.Error("sending the remainder should fail")
+// A state file from an older agent: keys it no longer knows are ignored, a
+// rental stays isolated.
+func TestReadsAnOlderStateFile(t *testing.T) {
+	f := newFake()
+	path := filepath.Join(t.TempDir(), "pool.json")
+	old := `{"allocatable":{"cpus":2,"memMb":7168,"diskGb":100},"pool":false,"allowIps":["10.0.0.5"],
+"partitions":{"prent":{"size":{"cpus":1,"memMb":1024,"diskGb":10},"isolated":true},"pown":{"size":{"cpus":1,"memMb":1024,"diskGb":10}}}}`
+	if err := os.WriteFile(path, []byte(old), 0o600); err != nil {
+		t.Fatal(err)
 	}
-	if _, err := m.Send(ctx, protocol.PartitionSendPayload{Name: "nope"}); err == nil {
+	m := &Manager{Driver: f, Path: path}
+	if err := m.Restore(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if len(f.isolated) != 1 || f.isolated[0] != "prent" {
+		t.Fatalf("isolated = %v", f.isolated)
+	}
+	if got := m.Usage(context.Background()); len(got) != 2 {
+		t.Fatalf("usage = %+v", got)
+	}
+}
+
+func TestSendKnownPartitionsOnly(t *testing.T) {
+	m, _ := setup(t)
+	if _, err := m.Send(context.Background(), protocol.PartitionSendPayload{Name: "nope"}); err == nil {
 		t.Error("sending an unknown partition should fail")
 	}
 }
 
-func TestReceiveCarvesAndGivesBack(t *testing.T) {
+func TestReceiveReservesAndGivesBack(t *testing.T) {
 	m, f := setup(t)
 	ctx := context.Background()
-	size := protocol.PartitionSize{Cpus: 1, MemMb: 2176, DiskGb: 25}
+	size := protocol.PartitionSize{Cpus: 1, MemMb: 4096, DiskGb: 25}
 	f.receiveErr = errors.New("connection reset")
 	if _, err := m.Receive(ctx, protocol.PartitionReceivePayload{Name: "pmoved", Size: size}); err == nil {
 		t.Fatal("a failed transfer should fail")
-	}
-	if got := f.sizes["huruf"]; got.MemMb != 7168 || got.DiskGb != 100 {
-		t.Errorf("remainder after a failed receive = %+v, want everything back", got)
 	}
 	if _, ok := f.sizes["pmoved"]; ok {
 		t.Error("the failed partition should be gone")
@@ -235,16 +283,12 @@ func TestReceiveCarvesAndGivesBack(t *testing.T) {
 
 	f.receiveErr = nil
 	if _, err := m.Receive(ctx, protocol.PartitionReceivePayload{Name: "pmoved", Size: size}); err != nil {
-		t.Fatal(err)
-	}
-	if got := f.sizes["huruf"]; got.MemMb != 7168-2176 || got.DiskGb != 75 {
-		t.Errorf("remainder = %+v, want what the move took carved off", got)
+		t.Fatal(err) // the failed one gave its size back
 	}
 	if _, err := m.Receive(ctx, protocol.PartitionReceivePayload{Name: "pmoved", Size: size}); err == nil {
 		t.Error("receiving a partition twice should fail")
 	}
-	big := protocol.PartitionSize{Cpus: 1, MemMb: 8000, DiskGb: 10}
-	if _, err := m.Receive(ctx, protocol.PartitionReceivePayload{Name: "ptoobig", Size: big}); err == nil {
+	if _, err := m.Receive(ctx, protocol.PartitionReceivePayload{Name: "ptoobig", Size: size}); err == nil {
 		t.Error("a partition that doesn't fit should be refused")
 	}
 }
@@ -262,6 +306,7 @@ func TestForwardsAppliedOnMachinesOnly(t *testing.T) {
 	}
 
 	m, f := setup(t)
+	create(t, m, "huruf", protocol.PartitionSize{Cpus: 1, MemMb: 1024, DiskGb: 10}, false)
 	web := protocol.PortForward{Protocol: "tcp", Port: 8080, Partition: "huruf", To: 8080}
 	mesh := protocol.PortForward{Protocol: "udp", Port: 51821, Partition: "huruf", To: 51820}
 	if err := m.ApplyForwards(ctx, []protocol.PortForward{mesh}); err != nil {
@@ -279,11 +324,38 @@ func TestForwardsAppliedOnMachinesOnly(t *testing.T) {
 	}
 }
 
+// A forward to a partition that isn't running yet (after a reboot) is
+// applied once the partition runs.
+func TestForwardsWaitForTheirPartition(t *testing.T) {
+	m, f := setup(t)
+	ctx := context.Background()
+	create(t, m, "p1", protocol.PartitionSize{Cpus: 1, MemMb: 1024, DiskGb: 10}, false)
+	f.down["p1"] = true
+	if err := m.ApplyForwards(ctx, []protocol.PortForward{{Protocol: "tcp", Port: 8080, Partition: "p1", To: 8080}}); err != nil {
+		t.Fatal(err)
+	}
+	calls := f.forwardCalls
+	m.Usage(ctx)
+	if f.forwardCalls != calls {
+		t.Fatal("re-applied while the partition is down")
+	}
+	f.down["p1"] = false
+	m.Usage(ctx)
+	if f.forwardCalls != calls+1 {
+		t.Fatal("not re-applied once the partition runs")
+	}
+	m.Usage(ctx)
+	if f.forwardCalls != calls+1 {
+		t.Fatal("re-applied with nothing left to apply")
+	}
+}
+
 // A change holding the lock (host setup, installing an agent) mustn't stall
 // the poll: usage comes from the last report meanwhile.
 func TestUsageNeverWaitsOnAChange(t *testing.T) {
 	m, _ := setup(t)
 	ctx := context.Background()
+	create(t, m, "p1", protocol.PartitionSize{Cpus: 1, MemMb: 1024, DiskGb: 10}, false)
 	first := m.Usage(ctx)
 	if len(first) == 0 {
 		t.Fatal("no usage")
@@ -307,15 +379,11 @@ func TestOnlyRentalsAreIsolated(t *testing.T) {
 	m, f := setup(t)
 	ctx := context.Background()
 	own := protocol.PartitionSize{Cpus: 1, MemMb: 1024, DiskGb: 10}
-	if _, err := m.Create(ctx, protocol.PartitionCreatePayload{Name: "pown", Size: &own, Install: install()}); err != nil {
-		t.Fatal(err)
-	}
+	create(t, m, "pown", own, false)
 	if len(f.isolated) != 0 {
 		t.Fatalf("own partition isolated: %v", f.isolated)
 	}
-	if _, err := m.Create(ctx, protocol.PartitionCreatePayload{Name: "prent", Size: &own, Isolated: true, Install: install()}); err != nil {
-		t.Fatal(err)
-	}
+	create(t, m, "prent", own, true)
 	if len(f.isolated) != 1 || f.isolated[0] != "prent" {
 		t.Fatalf("isolated = %v", f.isolated)
 	}
@@ -324,5 +392,16 @@ func TestOnlyRentalsAreIsolated(t *testing.T) {
 	}
 	if len(f.isolated) != 0 {
 		t.Fatalf("removed rental still isolated: %v", f.isolated)
+	}
+}
+
+func TestParsesQuotaAndCounters(t *testing.T) {
+	quota := parseQuotaReport("Project quota on /srv/huruf-pool (/dev/loop0)\n#0 0 0 0 00 [------]\n#" + projectID("p1") + "   2048   0  10485760  00 [------]\n")
+	if quota[projectID("p1")] != 2048*1024 {
+		t.Fatalf("quota = %v", quota)
+	}
+	counters := parseCounters(`{"nftables":[{"metainfo":{}},{"table":{"name":"huruf_pool"}},{"counter":{"name":"out_p1","bytes":7}},{"counter":{"name":"in_p1","bytes":5}},{"rule":{"expr":[{"counter":"out_p1"}]}}]}`)
+	if counters["out_p1"] != 7 || counters["in_p1"] != 5 {
+		t.Fatalf("counters = %v", counters)
 	}
 }

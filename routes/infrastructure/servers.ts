@@ -24,7 +24,10 @@ import {
   removeOwnPartition,
   resizeOwnPartition,
 } from "@/lib/pool/partitions.ts";
-import { subscriptionModel } from "@/schemas/billing/subscription.ts";
+import {
+  LIVE_RENTAL,
+  subscriptionModel,
+} from "@/schemas/billing/subscription.ts";
 import type { ObjectId } from "mongodb";
 import { latestAgent, requestAgentUpdate } from "@/lib/agents/updates.ts";
 import {
@@ -40,7 +43,7 @@ import {
 
 /**
  * A rented partition goes when its rental is canceled (PLAN §26.9), and a
- * pool machine only once no rental lives on it (draining, PLAN §26.7).
+ * machine only once no rental lives on it (draining, PLAN §26.7, §28).
  */
 async function assertRemovable(id: ObjectId, tenant: ObjectId) {
   const doc = await serverModel.findOne({ _id: id, tenant }, {
@@ -53,14 +56,14 @@ async function assertRemovable(id: ObjectId, tenant: ObjectId) {
   }
   const rented = doc?.pool && await subscriptionModel.countDocuments({
     kind: "server",
-    status: { $in: ["active", "pastDue", "suspended"] },
+    status: { $in: [...LIVE_RENTAL] },
     $or: [{ "rental.host": id }, { "rental.move.to": id }],
   });
   if (rented) {
     throw Response.badRequest(
       `${rented} rented partition${
         rented === 1 ? "" : "s"
-      } live on this pool machine: stop it taking rentals and move them to other machines first`,
+      } live on this machine: stop it taking rentals and move them to other machines first`,
     );
   }
 }

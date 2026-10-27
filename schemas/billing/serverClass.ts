@@ -3,8 +3,8 @@ import { mongodb } from "@/database.ts";
 
 /**
  * A class of rentable capacity (PLAN §26.8): what customers get ("Shared
- * CPU", "Dedicated CPU") and its rate card. Pool machines and server plans
- * (sizes) belong to one class. Rates are cents per month.
+ * CPU", "Dedicated CPU") and its rate card. Machines for rent and server
+ * plans (sizes) belong to one class (PLAN §28). Rates are cents per month.
  */
 export const $serverClassInput = z.object({
   name: z.string().min(1).max(50).meta({ canFilter: true }),

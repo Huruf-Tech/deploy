@@ -15,23 +15,27 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/protocol"
+	"github.com/Huruf-Tech/huruf-deploy/agent/internal/sh"
 )
 
 // Moving a partition (PLAN §26.10): the source stops it and serves its
 // directory over the mesh: its system files (PLAN §28), Docker's, containerd's
 // and our agent's state, so the agent keeps its identity. An older partition,
 // whose system files are in its container, also serves them committed to an
-// image, and the target copies them into its own root. The target starts it. WireGuard
-// encrypts the transfer; a one-time token, sealed to both machines, guards it.
+// image, and the target copies them into its own root. The target starts it.
+// WireGuard encrypts the transfer; a one-time token, sealed to both machines,
+// guards it.
 
 // movedLabel marks images a move committed, so Remove deletes them.
 const movedLabel = "huruf.moved"
 
-// moveWait is how long either side waits for the other between parts: the
-// source may still be stopping the partition, the target may poll later.
+// moveWait is how long either side waits on the other: for the next part to
+// be fetched (the source may still be stopping the partition, the target may
+// poll later) or for the next bytes of one.
 var moveWait = 15 * time.Minute
 
 // tarArgs keeps owners, xattrs (overlay whiteouts and opaque dirs in the
@@ -44,7 +48,7 @@ func tarArgs(name string, create bool) []string {
 	return append(args, "-xpf", "-")
 }
 
-func (d Sysbox) Send(ctx context.Context, name, listen, token string) (err error) {
+func (d *Sysbox) Send(ctx context.Context, name, listen, token string) (err error) {
 	if err := d.Stop(ctx, name); err != nil {
 		return err
 	}
@@ -57,24 +61,61 @@ func (d Sysbox) Send(ctx context.Context, name, listen, token string) (err error
 		return serve(ctx, listen, token, map[string][]string{"/data": tarArgs(name, true)})
 	}
 	tag := "huruf-move-" + name + ":" + strconv.FormatInt(time.Now().Unix(), 10)
-	if _, err := run(ctx, "docker", "commit", "--change", "LABEL "+movedLabel+"="+name, container(name), tag); err != nil {
+	if _, err := sh.Run(ctx, "docker", "commit", "--change", "LABEL "+movedLabel+"="+name, container(name), tag); err != nil {
 		return err
 	}
-	defer run(context.WithoutCancel(ctx), "docker", "rmi", tag)
+	defer sh.Run(context.WithoutCancel(ctx), "docker", "rmi", tag)
 	return serve(ctx, listen, token, map[string][]string{
 		"/image": {"docker", "save", tag},
 		"/data":  tarArgs(name, true),
 	})
 }
 
+// counted counts the bytes written through it.
+type counted struct {
+	io.Writer
+	n *atomic.Int64
+}
+
+func (c counted) Write(p []byte) (int, error) {
+	n, err := c.Writer.Write(p)
+	c.n.Add(int64(n))
+	return n, err
+}
+
+// idle calls fn once `progress` stops moving for `after`; stop ends the watch.
+func idle(progress *atomic.Int64, after time.Duration, fn func()) (stop func()) {
+	done := make(chan struct{})
+	go func() {
+		tick := time.NewTicker(after / 4)
+		defer tick.Stop()
+		last, since := progress.Load(), time.Now()
+		for {
+			select {
+			case <-done:
+				return
+			case <-tick.C:
+				if n := progress.Load(); n != last {
+					last, since = n, time.Now()
+				} else if time.Since(since) >= after {
+					fn()
+					return
+				}
+			}
+		}
+	}()
+	return func() { close(done) }
+}
+
 // serve sends each part once, to requests bearing the token. It returns when
-// all were sent, on the first failure, or when nobody asks for moveWait.
+// all were sent, on the first failure, or when nothing moves for moveWait:
+// no request for the next part, or no bytes of the current one.
 func serve(ctx context.Context, listen, token string, parts map[string][]string) error {
 	ln, err := net.Listen("tcp", listen)
 	if err != nil {
 		return err
 	}
-	starts := make(chan struct{}, len(parts))
+	var progress atomic.Int64
 	results := make(chan error, len(parts))
 	var mu sync.Mutex
 	sent := map[string]bool{}
@@ -93,13 +134,13 @@ func serve(ctx context.Context, listen, token string, parts map[string][]string)
 				http.Error(w, "already sent", http.StatusGone)
 				return
 			}
-			starts <- struct{}{}
+			progress.Add(1)
 			w.Header().Set("Content-Type", "application/octet-stream")
 			var stderr bytes.Buffer
 			cmd := exec.CommandContext(r.Context(), argv[0], argv[1:]...)
-			cmd.Stdout, cmd.Stderr = w, &stderr
+			cmd.Stdout, cmd.Stderr = counted{w, &progress}, &stderr
 			if err := cmd.Run(); err != nil {
-				results <- fmt.Errorf("sending %s: %w: %s", path, err, strings.TrimSpace(tail(stderr.String(), 400)))
+				results <- fmt.Errorf("sending %s: %w: %s", path, err, sh.Tail(strings.TrimSpace(stderr.String()), 400))
 				return
 			}
 			results <- nil
@@ -107,20 +148,20 @@ func serve(ctx context.Context, listen, token string, parts map[string][]string)
 	}
 	srv := &http.Server{Handler: mux, ReadHeaderTimeout: 10 * time.Second}
 	go srv.Serve(ln)
+	// Closing drops a stalled receiver's connection, which ends its part.
 	defer srv.Close()
 
-	deadline := time.After(moveWait)
+	stalled := make(chan struct{})
+	defer idle(&progress, moveWait, func() { close(stalled) })()
 	for pending := len(parts); pending > 0; {
 		select {
-		case <-starts:
-			deadline = nil // a part is on its way: no limit on how long it takes
 		case err := <-results:
 			if err != nil {
 				return err
 			}
 			pending--
-			deadline = time.After(moveWait)
-		case <-deadline:
+			progress.Add(1)
+		case <-stalled:
 			return errors.New("the receiving machine didn't fetch the partition in time")
 		case <-ctx.Done():
 			return ctx.Err()
@@ -129,7 +170,7 @@ func serve(ctx context.Context, listen, token string, parts map[string][]string)
 	return nil
 }
 
-func (Sysbox) Receive(ctx context.Context, name string, size protocol.PartitionSize, weight int, from, token string) error {
+func (d *Sysbox) Receive(ctx context.Context, name string, size protocol.PartitionSize, weight int, from, token string) error {
 	if err := ensureImage(ctx); err != nil {
 		return err
 	}
@@ -154,9 +195,9 @@ func (Sysbox) Receive(ctx context.Context, name string, size protocol.PartitionS
 		}
 	}
 	if img == "" {
-		return fmt.Errorf("docker load named no image: %s", tail(out, 200))
+		return fmt.Errorf("docker load named no image: %s", sh.Tail(out, 200))
 	}
-	defer run(context.WithoutCancel(ctx), "docker", "rmi", img)
+	defer sh.Run(context.WithoutCancel(ctx), "docker", "rmi", img)
 	if err := extractRoot(ctx, name, img); err != nil {
 		return err
 	}
@@ -164,8 +205,11 @@ func (Sysbox) Receive(ctx context.Context, name string, size protocol.PartitionS
 }
 
 // fetch pipes one part into a command. Connecting is retried for moveWait:
-// the source may still be stopping the partition.
+// the source may still be stopping the partition. A part that stops
+// arriving for moveWait fails.
 func fetch(ctx context.Context, from, token, path string, argv ...string) (string, error) {
+	ctx, cancel := context.WithCancelCause(ctx)
+	defer cancel(nil)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+from+path, nil)
 	if err != nil {
 		return "", err
@@ -191,11 +235,17 @@ func fetch(ctx context.Context, from, token, path string, argv ...string) (strin
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 400))
 		return "", fmt.Errorf("%s%s: %s: %s", from, path, resp.Status, strings.TrimSpace(string(body)))
 	}
+	var progress atomic.Int64
+	stalled := errors.New("the sending machine stopped sending " + path)
+	defer idle(&progress, moveWait, func() { cancel(stalled) })()
 	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...)
-	cmd.Stdin = resp.Body
+	cmd.Stdin = io.TeeReader(resp.Body, counted{io.Discard, &progress})
 	out, err := cmd.CombinedOutput()
+	if errors.Is(context.Cause(ctx), stalled) {
+		return string(out), stalled
+	}
 	if err != nil {
-		return string(out), fmt.Errorf("receiving %s: %w: %s", path, err, strings.TrimSpace(tail(string(out), 400)))
+		return string(out), fmt.Errorf("receiving %s: %w: %s", path, err, sh.Tail(strings.TrimSpace(string(out)), 400))
 	}
 	return string(out), nil
 }

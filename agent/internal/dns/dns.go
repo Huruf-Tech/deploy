@@ -51,7 +51,6 @@ func (s *Server) Set(records map[string][]string) {
 	s.mu.Unlock()
 }
 
-// Serve listens on addr (UDP) until ctx ends.
 // Serve listens on addr (UDP) until ctx ends. A localOnly listener (the mesh
 // address, asked by peers) answers from this server's records only, so peer
 // queries never fan out again.
@@ -85,9 +84,7 @@ func (s *Server) Serve(ctx context.Context, addr string, localOnly ...bool) erro
 	}
 }
 
-// Answer builds the response for one query packet, or nil to drop it.
-func (s *Server) Answer(query []byte) []byte { return s.answer(query, false) }
-
+// answer builds the response for one query packet, or nil to drop it.
 func (s *Server) answer(query []byte, localOnly bool) []byte {
 	name, qtype, end, err := parseQuestion(query)
 	if err != nil {

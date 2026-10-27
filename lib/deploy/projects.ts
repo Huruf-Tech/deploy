@@ -1,3 +1,5 @@
+import { tenantCreator } from "@/lib/core/tenants.ts";
+import { asBadRequest } from "@/lib/core/errors.ts";
 import { ObjectId, type WithId } from "mongodb";
 import { Response } from "@/core/http/response.ts";
 import { isDuplicateKeyError } from "@/database.ts";
@@ -27,6 +29,7 @@ import { storageModel } from "@/schemas/infrastructure/storage.ts";
 import {
   $projectRuntime,
   hasLocalVolumes,
+  projectGroupModel,
   projectModel,
   type TProject,
   type TProjectInput,
@@ -39,7 +42,6 @@ import {
 import { serverModel } from "@/schemas/infrastructure/server.ts";
 import { serverLeaseModel } from "@/schemas/infrastructure/serverLease.ts";
 import { registryModel } from "@/schemas/infrastructure/serverSpec.ts";
-import { tenantModel } from "@/plugins/Huruf-Tech/thunder-core/schemas/tenant.ts";
 import type { TTemplateInput } from "@/schemas/build/template.ts";
 
 /** Ports the edge proxy can't take: SSH, DNS, Caddy's admin API. */
@@ -90,22 +92,9 @@ export const toEnvKey = (key: string) =>
 export const isSecretInput = (input: TTemplateInput) =>
   input.type === "secret" || !!input.generate;
 
-const tenantOwner = async (tenant: ObjectId) =>
-  (await tenantModel.findOne({ _id: tenant }, {
-    projection: { createdBy: 1 },
-  }))!
-    .createdBy;
-
-const asBadRequest = async <T>(fn: () => T | Promise<T>) => {
-  try {
-    return await fn();
-  } catch (error) {
-    if (error instanceof TemplateError || error instanceof ComposeError) {
-      throw Response.badRequest(error.message);
-    }
-    throw error;
-  }
-};
+/** Template and compose errors are the user's: a 400 with their message. */
+const userInput = <T>(fn: () => T) =>
+  asBadRequest(fn, TemplateError, ComposeError);
 
 /**
  * Free-to-allocate per server = capacity − reservations of the projects
@@ -277,6 +266,7 @@ export async function createProject(opts: {
 }) {
   const { tenant, user, input } = opts;
   const _id = new ObjectId();
+  await assertGroup(tenant, input.group);
 
   if (input.source.type === "github") {
     const integration = await usableIntegration(
@@ -320,7 +310,7 @@ export async function createProject(opts: {
       );
     }
 
-    const { values } = await asBadRequest(() =>
+    const { values } = userInput(() =>
       resolveInputs(content.inputs, input.inputs)
     );
     for (const field of content.inputs) {
@@ -328,11 +318,11 @@ export async function createProject(opts: {
         secrets[toEnvKey(field.key)] = String(values[field.key]);
       } else templateInputs[field.key] = values[field.key];
     }
-    const { files } = await asBadRequest(() =>
+    const { files } = await userInput(() =>
       renderContent(doc.kind, content, values, { cacheKey: "validate" })
     );
     if (kind === "service") {
-      const services = await asBadRequest(() =>
+      const services = userInput(() =>
         parseCompose(files["compose.yaml"], `huruf-${_id}-`)
       );
       composeVolumes = services.some((s) => s.volumes.length > 0);
@@ -474,7 +464,7 @@ export async function createProject(opts: {
     throw error;
   }
 
-  const viewer = { user: await tenantOwner(tenant), tenant, project: _id };
+  const viewer = { user: await tenantCreator(tenant), tenant, project: _id };
   const owner = { scope: "project" as const, tenant, project: _id };
   // The user's own variables first: they win over generated template inputs.
   if (input.variables.length) {
@@ -533,8 +523,17 @@ export async function updateProject(opts: {
   }
   const volumes = patch.volumes ?? project.volumes;
   await assertVolumes(tenant, volumes);
+  await assertGroup(tenant, patch.group);
+  // A template change brings its own compose file.
+  const template = (patch.template || patch.templateVersion) &&
+      project.template
+    ? {
+      template: patch.template ?? project.template.template,
+      version: patch.templateVersion,
+    }
+    : undefined;
   const hasVolumes = hasLocalVolumes(volumes) ||
-    await hasComposeVolumes(project, patch.compose);
+    await hasComposeVolumes(project, patch.compose, template);
   assertVolumeRules({
     hasVolumes,
     servers,
@@ -595,9 +594,6 @@ export async function updateProject(opts: {
     }
     $set.template = { template: template._id, version: content.version };
   }
-  if (patch.inputs) {
-    $set.templateInputs = { ...project.templateInputs, ...patch.inputs };
-  }
   if (patch.compose && project.source.type === "compose") {
     $set.composeEnc = await sealCompose(tenant, id, patch.compose);
   }
@@ -638,11 +634,15 @@ const sameServers = (a: ObjectId[], b: ObjectId[]) =>
 
 /** Validates a pasted compose file; `${VAR}`s may be set as variables later. */
 const checkCompose = (text: string, id: ObjectId) =>
-  asBadRequest(() =>
+  userInput(() =>
     parseCompose(interpolate(text, {}, { lenient: true }), `huruf-${id}-`)
   );
 
-async function hasComposeVolumes(project: WithId<TProject>, pasted?: string) {
+async function hasComposeVolumes(
+  project: WithId<TProject>,
+  pasted?: string,
+  template?: { template: ObjectId; version?: number },
+) {
   if (project.source.type === "compose") {
     const text = pasted ?? await openCompose(project);
     return (await checkCompose(text, project._id)).some((s) =>
@@ -651,17 +651,22 @@ async function hasComposeVolumes(project: WithId<TProject>, pasted?: string) {
   }
   if (project.build.mode !== "compose" || !project.template) return false;
   const { content } = await getTemplate(
-    project.template.template,
+    template?.template ?? project.template.template,
     project.tenant,
-    project.template.version,
+    template ? template.version : project.template.version,
   );
   return /^\s*volumes:\s*$/m.test(content.compose ?? "");
 }
 
-/**
- * Removes the project: running containers go away on the next spec, then
- * releases, deployments and project variables are deleted.
- */
+/** A project's folder is one of its tenant's. */
+async function assertGroup(tenant: ObjectId, group?: ObjectId | null) {
+  if (
+    group && !await projectGroupModel.countDocuments({ _id: group, tenant })
+  ) {
+    throw Response.notFound("Folder not found");
+  }
+}
+
 /**
  * A server is gone (PLAN §27.4): projects that ran only there go with it
  * (their containers and data went with the server); the others drop it.
@@ -682,6 +687,10 @@ export async function detachServer(tenant: ObjectId, server: ObjectId) {
   }
 }
 
+/**
+ * Removes the project: running containers go away on the next spec, then
+ * releases, deployments and project variables are deleted.
+ */
 export async function deleteProject(tenant: ObjectId, id: ObjectId) {
   const project = await getProject(tenant, id);
   const active = await deploymentModel.find(

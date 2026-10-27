@@ -48,7 +48,7 @@ func privateIP() string {
 	return conn.LocalAddr().(*net.UDPAddr).IP.String()
 }
 
-// Cores is what the agent may use: the partition's CPU limit (PLAN §26), else
+// Cores is what the agent may use: the partition's CPU limit (PLAN §27), else
 // the machine's cores.
 func Cores() float64 {
 	if cpus := cgroup.CPUs(); cpus > 0 {
@@ -75,28 +75,16 @@ func MemoryFree() int64 {
 	return meminfo()["MemAvailable"]
 }
 
-// cappedRoot: a partition's system files are capped at a few GB on a pool
-// machine (pool.rootGb); a bigger root is the host's disk.
-const cappedRoot = 4 << 30
-
-// DataDisk is the system disk plus Docker's data disk when that's another
-// filesystem. A partition keeps Docker's data on its own quota (PLAN §26), so
-// its size is the two together; on most servers they're the same disk.
+// DataDisk is Docker's data disk: the system disk, or another filesystem
+// mounted for Docker. In a partition that's its quota'd directory (PLAN
+// §28), whose size is the partition's whole disk; its "/" is the machine's.
 func DataDisk() (total, free int64) {
-	total, free = disk("/")
 	var root, data syscall.Statfs_t
 	if syscall.Statfs("/", &root) == nil && syscall.Statfs("/var/lib/docker", &data) == nil &&
 		root.Fsid != data.Fsid {
-		t, f := disk("/var/lib/docker")
-		// A partition: its data volume, plus its system files when they're
-		// capped (a pool machine's 3 GB). On a customer's machine they live
-		// on the host's whole disk, which isn't the partition's (PLAN §27.3).
-		if total > cappedRoot {
-			return t, f
-		}
-		total, free = total+t, free+f
+		return disk("/var/lib/docker")
 	}
-	return total, free
+	return disk("/")
 }
 
 // Sampler computes CPU usage between consecutive calls: from the partition's

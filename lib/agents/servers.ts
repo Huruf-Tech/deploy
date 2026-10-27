@@ -1,3 +1,4 @@
+import { isDuplicateKeyError } from "@/database.ts";
 import { type ClientSession, ObjectId } from "mongodb";
 import { Response } from "@/core/http/response.ts";
 import { entitlements, quotaGuard, rateLimiter } from "@/lib/services.ts";
@@ -183,7 +184,7 @@ export const registerAgent = async (
     };
   } catch (error) {
     // A concurrent hello with the same key won: report its state instead.
-    if ((error as { code?: number }).code === 11000) {
+    if (isDuplicateKeyError(error)) {
       return registerAgent(hello, fingerprint, clientIp);
     }
     throw error;
@@ -232,31 +233,39 @@ const registerJoinedAgent = async (
     throw Response.forbidden("Your plan's server limit is reached");
   }
   const host = rental?.host ?? partition?.host;
-  const meshPort = host ? await nextMeshPort(host) : undefined;
+  const mesh = host ? await meshPlacement(host) : undefined;
 
   const now = new Date();
-  const { insertedId } = await serverModel.insertOne({
-    tenant,
-    name: rental?.name ?? partition?.label ?? hello.inventory.hostname,
-    labels: {},
-    status: "active",
-    identity: {
-      signPublicKey: hello.signPublicKey,
-      boxPublicKey: hello.boxPublicKey,
-      fingerprint,
-    },
-    installMethod: "ssh",
-    provider: {
-      kind,
-      ...(host ? { host, meshPort } : {}),
-      ...(partition ? { partition: partition.name } : {}),
-      ...(rental ? { subscription: rental.subscription } : {}),
-    },
-    inventory: hello.inventory,
-    acceptedBy: session.createdBy,
-    acceptedAt: now,
-    createdAt: now,
-  });
+  let insertedId: ObjectId;
+  try {
+    ({ insertedId } = await serverModel.insertOne({
+      tenant,
+      name: rental?.name ?? partition?.label ?? hello.inventory.hostname,
+      labels: {},
+      status: "active",
+      identity: {
+        signPublicKey: hello.signPublicKey,
+        boxPublicKey: hello.boxPublicKey,
+        fingerprint,
+      },
+      installMethod: "ssh",
+      provider: {
+        kind,
+        ...(host ? { host, meshPort: mesh!.meshPort } : {}),
+        ...(partition ? { partition: partition.name } : {}),
+        ...(rental ? { subscription: rental.subscription } : {}),
+      },
+      inventory: hello.inventory,
+      acceptedBy: session.createdBy,
+      acceptedAt: now,
+      createdAt: now,
+    }));
+  } catch (error) {
+    // The same agent saying hello twice at once: the other one registered
+    // it; this one gives its slot back and retries as the existing server.
+    if (kind === "partition") await quotaGuard.release(tenant, "servers");
+    throw error;
+  }
   forgetAgent(fingerprint);
   await openLease(insertedId, tenant);
   await bootstrapSessionModel.updateOne({ _id: session._id }, {
@@ -268,14 +277,9 @@ const registerJoinedAgent = async (
     });
   }
   if (host) {
-    // Peers reach its private network through its machine's forwarded port.
-    const machine = await serverModel.findOne({ _id: host }, {
-      projection: { "inventory.publicIp": 1, "inventory.privateIp": 1 },
-    });
-    const ip = machine?.inventory?.publicIp || machine?.inventory?.privateIp;
-    if (ip) {
+    if (mesh!.endpoint) {
       await serverModel.updateOne({ _id: insertedId }, {
-        $set: { "mesh.endpoint": `${ip}:${meshPort}` },
+        $set: { "mesh.endpoint": mesh!.endpoint },
       });
     }
     await prepareHost(insertedId, tenant, session.createdBy);
@@ -292,14 +296,26 @@ const registerJoinedAgent = async (
 };
 
 /** The next UDP port a machine forwards to a partition's private network. */
-const nextMeshPort = async (host: ObjectId) => {
-  const [last] = await serverModel.find({ "provider.host": host }, {
-    projection: { "provider.meshPort": 1 },
-    sort: { "provider.meshPort": -1 },
-    limit: 1,
-  }).toArray();
+/**
+ * Where a partition's private network is reached (PLAN §27): the next free
+ * UDP port its machine forwards to it, and the machine's address with it.
+ */
+export const meshPlacement = async (host: ObjectId) => {
+  const [[last], machine] = await Promise.all([
+    serverModel.find({ "provider.host": host }, {
+      projection: { "provider.meshPort": 1 },
+      sort: { "provider.meshPort": -1 },
+      limit: 1,
+    }).toArray(),
+    serverModel.findOne({ _id: host }, {
+      projection: { "inventory.publicIp": 1, "inventory.privateIp": 1 },
+    }),
+  ]);
   // ponytail: two partitions registering at once could pick the same port; a unique index on (host, meshPort) if that happens.
-  return Math.max(MESH_PORT, last?.provider?.meshPort ?? MESH_PORT) + 1;
+  const meshPort = Math.max(MESH_PORT, last?.provider?.meshPort ?? MESH_PORT) +
+    1;
+  const ip = machine?.inventory?.publicIp || machine?.inventory?.privateIp;
+  return { meshPort, endpoint: ip ? `${ip}:${meshPort}` : undefined };
 };
 
 /** Gate for every way of adding a server (PLAN §20.3 safety limits). */
@@ -446,16 +462,14 @@ export const releaseServer = async (
   const doc = await serverModel.findOne(
     { _id: server, tenant },
     {
-      projection: { status: 1, "provider.kind": 1, "pool.status": 1 },
+      projection: { status: 1, "provider.kind": 1 },
       session,
     },
   );
   if (doc?.status !== "active") return;
 
   // Partitions take a slot; machines and rentals don't (PLAN §26.6 D, §27.2).
-  // A server from before partitions (`byo` without host setup) took one.
-  const kind = doc.provider?.kind;
-  if (kind === "partition" || (kind === "byo" && !doc.pool)) {
+  if (doc.provider?.kind === "partition") {
     await quotaGuard.release(tenant, "servers", session);
   }
   await serverLeaseModel.deleteOne({ _id: server }, { session });

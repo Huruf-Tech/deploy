@@ -32,12 +32,11 @@ export const $server = $serverUpdate.extend({
   /**
    * PLAN §27: `machine`: where our agent runs as a host, with no projects of
    * its own. `partition`: one of a machine's partitions (`host`), where
-   * projects run. `rented`: a partition of one of Huruf's pool machines,
-   * paid by `subscription` (§26). `byo`: a server from before partitions,
-   * running projects itself (reinstall it).
+   * projects run. `rented`: a partition on one of the platform's machines,
+   * paid by `subscription` (§26, §28).
    */
   provider: z.object({
-    kind: z.enum(["machine", "partition", "rented", "byo"]),
+    kind: z.enum(["machine", "partition", "rented"]),
     host: $objectId.meta({ ref: "servers", canFilter: true }).optional(),
     /** The partition's name on its machine (`p` + 11 hex). */
     partition: z.string().optional(),
@@ -77,18 +76,14 @@ export const $server = $serverUpdate.extend({
     error: z.string().optional(),
     reportedAt: z.date().optional(),
   }).optional(),
-  /** Machines (PLAN §26.5, §27): what host setup (`pool.ensure`) reported. */
+  /** Machines (PLAN §27.3): what host setup (`pool.ensure`) reported. */
   pool: z.object({
     status: z.enum(["pending", "ready", "failed"]),
-    /** `pool`: a machine Huruf rents out (§26.5); otherwise any machine (§27.3). */
-    mode: z.enum(["machine", "pool"]).optional(),
     /** What partitions may use in all, after the machine's reserve. */
     allocatable: $partitionSize.optional(),
-    sysbox: z.string().optional(),
-    notes: z.array(z.string()).optional(),
     error: z.string().optional(),
     updatedAt: z.date(),
-    /** Set by admins (PLAN §26.7): the class it rents, whether it takes new rentals, its cost. */
+    /** Set by admins on the platform's machines (PLAN §28): the class it rents, whether it takes new rentals, its cost. */
     class: $objectId.meta({ ref: "serverClasses" }).optional(),
     accepting: z.boolean().optional(),
     /** What the machine costs Huruf a month (cents), for cost vs revenue. */
@@ -102,5 +97,11 @@ export const $server = $serverUpdate.extend({
 });
 
 export type TServer = z.output<typeof $server>;
+
+/** The servers that take a plan slot (PLAN §27.2): partitions; machines and rentals don't. */
+export const SLOT_SERVERS = {
+  status: "active",
+  "provider.kind": "partition",
+} as const;
 
 export const serverModel = mongodb.db().collection<TServer>("servers");

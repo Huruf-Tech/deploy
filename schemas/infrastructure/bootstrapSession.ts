@@ -1,6 +1,7 @@
 import z from "zod";
 import { mongodb } from "@/database.ts";
 import { $objectId } from "@/core/utils/createCRUD.ts";
+import { $partitionSize } from "@/schemas/protocol/agent.ts";
 
 /**
  * One SSH wizard install (PLAN §4.3). SSH credentials are never stored: only
@@ -22,6 +23,8 @@ export const $bootstrapSession = z.object({
     name: z.string(),
     /** The server's name in the dashboard. */
     label: z.string().optional(),
+    /** What it takes on its machine until the machine reports it. */
+    size: $partitionSize.optional(),
     /** The machine's `partition.create`: its result says how creating went. */
     command: $objectId.meta({ ref: "agentCommands" }).optional(),
   }).optional(),

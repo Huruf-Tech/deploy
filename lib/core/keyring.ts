@@ -1,3 +1,5 @@
+import { decodeBase64, encodeBase64 } from "@std/encoding/base64";
+import { isDuplicateKeyError } from "@/database.ts";
 import type { Collection } from "mongodb";
 import type { TKeyring, TKeyringOwner } from "@/schemas/crypto/keyring.ts";
 import { BoundedCache } from "@/lib/core/boundedCache.ts";
@@ -6,9 +8,8 @@ const FORMAT = "v1";
 // Rotation re-wraps every data key in place (scripts/rewrapKeyring.ts) and bumps the doc's keyVersion.
 const KEY_VERSION = 1;
 
-const toBase64 = (bytes: Uint8Array) => btoa(String.fromCharCode(...bytes));
-const fromBase64 = (text: string) =>
-  Uint8Array.from(atob(text), (c) => c.charCodeAt(0));
+const toBase64 = encodeBase64;
+const fromBase64 = decodeBase64;
 
 /** AAD: the owner, plus an optional context (e.g. the record id) to stop swaps within one owner. */
 const ownerTag = (owner: TKeyringOwner, context?: string) =>
@@ -153,7 +154,7 @@ export class Keyring {
       });
     } catch (error) {
       // Another request created this owner's key first: use theirs.
-      if ((error as { code?: number }).code === 11000) {
+      if (isDuplicateKeyError(error)) {
         return await this.resolveDataKey(owner);
       }
       throw error;

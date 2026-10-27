@@ -165,6 +165,8 @@ Deno.test({
       deliveredSeq: 0,
     });
     let rental: ObjectId;
+    // A project on the rented server, gone with the rental.
+    let onRental = "";
     const sub = async () => (await subscriptionModel.findOne({ _id: rental }))!;
     // Ends the rental's current period, as if a month had passed.
     const endPeriod = async (extra: object = {}) => {
@@ -293,6 +295,15 @@ Deno.test({
           });
           assertEquals(exposed.status, 400, JSON.stringify(exposed.json));
           assert(JSON.stringify(exposed.json).includes("custom domain"));
+          const kept = await customer.call("POST", "/projects/api", {
+            name: "api",
+            slug: "api",
+            source: { type: "image", image: "nginx:1.27" },
+            runtime: { port: 80 },
+            servers: [server._id.toString()],
+          });
+          assertEquals(kept.status, 200, JSON.stringify(kept.json));
+          onRental = kept.json._id;
         },
       );
 
@@ -301,7 +312,6 @@ Deno.test({
         const usage = (rx: number, tx: number) =>
           rentals.recordUsage(host, [{
             name,
-            remainder: false,
             state: "running",
             size: { cpus: 1, memMb: 2176, diskGb: 25 },
             cpuMicros: 0,
@@ -349,7 +359,14 @@ Deno.test({
           assertEquals(res.status, 200, JSON.stringify(res.json));
           assert((await sub()).rental!.pendingChange);
           const before = await balance();
+          // Not taking new rentals doesn't stop the ones there from growing.
+          await serverModel.updateOne({ _id: host }, {
+            $set: { "pool.accepting": false },
+          });
           await rentals.approveResize(rental, platform.user);
+          await serverModel.updateOne({ _id: host }, {
+            $unset: { "pool.accepting": "" },
+          });
           assertEquals((await sub()).plan, medium);
           assert(await balance() < before, "charged");
           assert(
@@ -450,7 +467,6 @@ Deno.test({
             $set: {
               "resources.partitions": [{
                 name: "pown",
-                remainder: false,
                 state: "running",
                 size: { cpus: 1, memMb: 2048, diskGb: 20 },
                 cpuMicros: 0,
@@ -700,6 +716,13 @@ Deno.test({
             removes + 1,
           );
           assertEquals(await serverModel.countDocuments({ _id: server }), 0);
+          assertEquals(
+            await mongodb.db().collection("projects").countDocuments({
+              _id: new ObjectId(onRental),
+            }),
+            0,
+            "its projects went with it",
+          );
           await mailed(/was deleted/);
         },
       );
@@ -737,11 +760,23 @@ Deno.test({
           404,
           "nothing left to approve",
         );
-        // An admin deletes an approved rental now.
+        // Two admins approving at once: charged and created once.
         const c =
           (await customer.call("POST", "/rentals/api/request", { plan: small }))
             .json.rental;
-        await rentals.approve(new ObjectId(c), host, platform.user);
+        const creates = (await commands("partition.create")).length;
+        const charged = await balance();
+        const approvals = await Promise.allSettled([
+          rentals.approve(new ObjectId(c), host, platform.user),
+          rentals.approve(new ObjectId(c), host, platform.user),
+        ]);
+        assertEquals(
+          approvals.filter((a) => a.status === "fulfilled").length,
+          1,
+        );
+        assertEquals((await commands("partition.create")).length, creates + 1);
+        assertEquals(await balance(), charged - 2_200);
+        // An admin deletes an approved rental now.
         const removes = (await commands("partition.remove")).length;
         await rentals.terminate(new ObjectId(c), "Terms violation");
         assertEquals(

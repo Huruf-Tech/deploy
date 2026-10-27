@@ -1,5 +1,5 @@
 // Package cgroup reads the limits and usage of the cgroup the agent runs in.
-// In a partition of a pool machine (PLAN §26) that is the partition's size,
+// In a partition (PLAN §27) that is the partition's size,
 // which /proc doesn't show: /proc/meminfo and the CPU count are the whole
 // machine's. On a plain machine the agent sees the root cgroup: no limits.
 package cgroup

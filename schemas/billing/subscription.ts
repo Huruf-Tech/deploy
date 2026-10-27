@@ -44,7 +44,7 @@ export const $subscription = z.object({
   /** `server` subscriptions: the rental (PLAN §26). */
   rental: z.object({
     class: $objectId.meta({ ref: "serverClasses" }),
-    /** The pool machine and partition, once approved. */
+    /** The machine and partition, once approved. */
     host: $objectId.meta({ ref: "servers" }).optional(),
     partition: z.string().optional(),
     /** The partition's size: the plan's resources plus the overhead. */
@@ -73,7 +73,7 @@ export const $subscription = z.object({
     }).optional(),
     /** Release warnings sent (days before release). */
     warned: z.array(z.number().int()).optional(),
-    /** A move to another pool machine under way (PLAN §26.10). */
+    /** A move to another machine under way (PLAN §26.10). */
     move: z.object({
       to: $objectId.meta({ ref: "servers" }),
       /** The target's `partition.receive`: its result ends the move. */
@@ -97,6 +97,17 @@ export const $subscription = z.object({
 });
 
 export type TSubscription = z.output<typeof $subscription>;
+
+/**
+ * A workspace subscription, plan or period (PLAN §26): anything but `server`,
+ * since those written before rentals have no kind.
+ */
+export const WORKSPACE_KIND = { $ne: "server" as const };
+
+/** Rentals whose partition exists and is paid for (PLAN §26.9). */
+export const LIVE_RENTAL = ["active", "pastDue", "suspended"] as const;
+/** Rentals that run: a suspended one is stopped on purpose. */
+export const RUNNING_RENTAL = ["active", "pastDue"] as const;
 export type TSubscriptionKind = z.output<typeof $subscriptionKind>;
 
 export const subscriptionModel = mongodb.db().collection<TSubscription>(

@@ -10,7 +10,6 @@ import (
 	"log/slog"
 	"math/rand/v2"
 	"net/http"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -20,6 +19,7 @@ import (
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/identity"
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/protocol"
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/reconcile"
+	"github.com/Huruf-Tech/huruf-deploy/agent/internal/sh"
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/state"
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/transport"
 )
@@ -30,6 +30,13 @@ const (
 	maxPendingEvents = 10_000
 	eventBatch       = 64
 	sendEvery        = 500 * time.Millisecond
+	// On shutdown (an update, systemd stopping the agent), running commands
+	// get this long to finish, then they're canceled: a long build or move
+	// fails and is reported, and what they undo on failure (a partition send
+	// starts the partition again) gets cancelGrace. systemd's own stop
+	// timeout (90 s by default) can cut both shorter.
+	shutdownGrace = 2 * time.Minute
+	cancelGrace   = time.Minute
 )
 
 type Agent struct {
@@ -53,7 +60,7 @@ type Agent struct {
 	Monitor interface {
 		SetSpec(spec protocol.DesiredSpec)
 	}
-	// A pool machine's partitions, sent with the summary (PLAN §26.5); may be nil.
+	// A machine's partitions, sent with the summary (PLAN §27); may be nil.
 	Partitions func(ctx context.Context) []protocol.PartitionUsage
 	// Applies a machine's forwards into its partitions (PLAN §27.3); may be nil.
 	Forwards func(ctx context.Context, forwards []protocol.PortForward) error
@@ -64,7 +71,7 @@ type Agent struct {
 	registered    bool
 	lastStatus    string
 	lastSummary   time.Time
-	// The size sent with the last hello: a partition resized live (PLAN §26)
+	// The size sent with the last hello: a partition resized live (PLAN §27.2)
 	// says hello again, so the control plane sees its new size.
 	size        [3]float64
 	sampler     host.Sampler
@@ -74,12 +81,19 @@ type Agent struct {
 	mu          sync.Mutex // guards events: commands finish on their own goroutines
 	wake        chan struct{}
 	events      []any
+	// Commands run on their own goroutines, in commandCtx: it outlives Run's
+	// ctx, so a shutdown can let them finish.
+	commandCtx context.Context
+	running    sync.WaitGroup
 }
 
 // Run polls until ctx is cancelled or the tenant rejects this server. Events
 // are sent by a separate loop every 500 ms, so stream output never waits for
 // the next poll (5 s when idle).
 func (a *Agent) Run(ctx context.Context) error {
+	commands, cancelCommands := context.WithCancel(context.WithoutCancel(ctx))
+	defer cancelCommands()
+	a.commandCtx = commands
 	sending, stopSending := context.WithCancel(context.Background())
 	sent := make(chan struct{})
 	go func() { a.sendLoop(sending); close(sent) }()
@@ -93,6 +107,12 @@ func (a *Agent) Run(ctx context.Context) error {
 		go a.Reconciler.Run(ctx, a.ReconcileInterval)
 	}
 	defer func() {
+		// Their results are sent before the agent exits.
+		if !a.waitCommands(shutdownGrace) {
+			a.Log.Warn("commands still running; canceling them", "after", shutdownGrace)
+			cancelCommands()
+			a.waitCommands(cancelGrace)
+		}
 		stopSending()
 		<-sent
 		// Last results (e.g. of the command that preceded a rejection).
@@ -151,13 +171,24 @@ func (a *Agent) step(ctx context.Context) (wait time.Duration, stop bool, err er
 		request.Summary = &summary
 	}
 
-	var response struct {
-		protocol.PollResponse
-		Status string `json:"status"`
-	}
-	status, err := a.Client.Post(ctx, "/agents/api/poll", request, &response)
+	var raw json.RawMessage
+	status, err := a.Client.Post(ctx, "/agents/api/poll", request, &raw)
 	if err != nil {
 		return 0, false, err
+	}
+	var response protocol.PollResponse
+	var refusal protocol.PollRefusal
+	if len(raw) > 0 {
+		into := any(&response)
+		if status == http.StatusForbidden {
+			into = &refusal
+		}
+		if err := json.Unmarshal(raw, into); err != nil {
+			return 0, false, fmt.Errorf("/agents/api/poll: invalid response: %w", err)
+		}
+	}
+	if status == http.StatusForbidden {
+		response.NextPollMs, response.ConfigVersion = refusal.NextPollMs, refusal.ConfigVersion
 	}
 	if response.ConfigVersion != "" && response.ConfigVersion != a.configVersion {
 		if err := a.refreshConfig(ctx); err != nil {
@@ -188,18 +219,18 @@ func (a *Agent) step(ctx context.Context) (wait time.Duration, stop bool, err er
 				a.Streams.Input(session, items)
 			}
 		}
-		if err := a.runCommands(ctx, response.Commands); err != nil {
+		if err := a.runCommands(response.Commands); err != nil {
 			return 0, false, err
 		}
 	case http.StatusForbidden:
-		switch response.Status {
+		switch refusal.Status {
 		case "rejected":
 			a.Log.Error("this server was rejected by the tenant; stopping")
 			return 0, true, nil
 		case "unknown":
 			a.registered = false // removed from the dashboard: register again
 		default:
-			a.setStatus(response.Status, "waiting for approval", "pairingCode", a.Identity.PairingCode())
+			a.setStatus(refusal.Status, "waiting for approval", "pairingCode", a.Identity.PairingCode())
 		}
 	}
 
@@ -323,7 +354,7 @@ func (a *Agent) refreshConfig(ctx context.Context) error {
 // it (at-most-once: a restart never re-runs it; the control plane re-issues
 // idempotent work such as docker.ensure), then runs it in the background so
 // long commands never stop the poll loop and the lease stays alive.
-func (a *Agent) runCommands(ctx context.Context, list []protocol.Command) error {
+func (a *Agent) runCommands(list []protocol.Command) error {
 	for _, command := range list {
 		if a.Store.IsDone(command.Seq) {
 			if err := a.Store.Received(command.Seq); err != nil {
@@ -334,16 +365,32 @@ func (a *Agent) runCommands(ctx context.Context, list []protocol.Command) error 
 		if err := a.Store.Received(command.Seq, command.Seq); err != nil {
 			return err
 		}
-		go a.execute(ctx, command)
+		a.running.Add(1)
+		go func() {
+			defer a.running.Done()
+			a.execute(a.commandCtx, command)
+		}()
 	}
 	return nil
+}
+
+// waitCommands waits up to `limit` for running commands; false if some still run.
+func (a *Agent) waitCommands(limit time.Duration) bool {
+	done := make(chan struct{})
+	go func() { a.running.Wait(); close(done) }()
+	select {
+	case <-done:
+		return true
+	case <-time.After(limit):
+		return false
+	}
 }
 
 func (a *Agent) execute(ctx context.Context, command protocol.Command) {
 	result, runErr := a.Commands.Run(ctx, command.Type, command.Payload)
 	data := protocol.CommandResultEventData{Seq: command.Seq, Ok: runErr == nil, Result: result}
 	if runErr != nil {
-		data.Error = capError(runErr.Error())
+		data.Error = sh.Cap(runErr.Error(), maxError)
 	}
 	a.Log.Info("ran command", "seq", command.Seq, "type", command.Type, "ok", data.Ok, "error", data.Error)
 
@@ -356,17 +403,6 @@ func (a *Agent) execute(ctx context.Context, command protocol.Command) {
 // maxError is the protocol's limit on a result's error: the control plane
 // refuses a longer one, and a refused event would hold back every later one.
 const maxError = 500
-
-// capError keeps an error within maxError bytes: its start says what ran,
-// its end why it failed.
-func capError(s string) string {
-	if len(s) <= maxError {
-		return s
-	}
-	const head, gap = 200, " … "
-	tail := maxError - head - len(gap)
-	return strings.ToValidUTF8(s[:head], "") + gap + strings.ToValidUTF8(s[len(s)-tail:], "")
-}
 
 // Enqueue adds an event for the next send; safe from any goroutine. The queue
 // is bounded: when full, the oldest events are dropped.

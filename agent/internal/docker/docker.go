@@ -25,6 +25,7 @@ import (
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/cgroup"
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/protocol"
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/reconcile"
+	"github.com/Huruf-Tech/huruf-deploy/agent/internal/sh"
 )
 
 // Images we build carry this label (set by build.run); only those are garbage-collected.
@@ -138,7 +139,7 @@ func (d *Docker) Start(ctx context.Context, spec reconcile.ContainerSpec) (recon
 	if rel.MemoryMb != nil {
 		args = append(args, "--memory", fmt.Sprintf("%dm", *rel.MemoryMb))
 	} else if limit := cgroup.MemoryMax(); limit > 0 {
-		// In a partition (PLAN §26) /proc/meminfo shows the whole machine: a
+		// In a partition (PLAN §27) /proc/meminfo shows the whole machine: a
 		// limit lets runtimes that size themselves from cgroups (Node, Java,
 		// Go) see the partition's memory instead.
 		args = append(args, "--memory", strconv.FormatInt(limit, 10))
@@ -203,6 +204,10 @@ func (d *Docker) writeFiles(name string, files map[string]string) (string, error
 		return "", err
 	}
 	for key, value := range files {
+		// A file name, never a path out of the directory.
+		if key == "" || key == "." || key == ".." || strings.ContainsAny(key, `/\`) {
+			return "", fmt.Errorf("invalid file variable name %q", key)
+		}
 		if err := os.WriteFile(filepath.Join(dir, key), []byte(value), 0o444); err != nil {
 			return "", err
 		}
@@ -355,10 +360,7 @@ func (d *Docker) tail(ctx context.Context, id string) string {
 		}
 		lines = append(lines, line)
 	}
-	out = strings.TrimSpace(strings.Join(lines, "\n"))
-	if len(out) > 400 {
-		out = "…" + out[len(out)-400:]
-	}
+	out = sh.Tail(strings.TrimSpace(strings.Join(lines, "\n")), 400)
 	if out == "" {
 		return "no output"
 	}
@@ -387,31 +389,10 @@ func Gateway(ctx context.Context, network string) (string, error) {
 	return strings.TrimSpace(out), err
 }
 
-// run executes a command; `env` is added to the agent's environment.
-// run executes a command; tests replace it.
-var run = runCommand
-
-func runCommand(ctx context.Context, env []string, name string, args ...string) (string, error) {
-	cmd := exec.CommandContext(ctx, name, args...)
-	if env != nil {
-		cmd.Env = append(os.Environ(), env...)
-	}
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		tail := strings.TrimSpace(string(out))
-		if len(tail) > 300 {
-			tail = "…" + tail[len(tail)-300:]
-		}
-		return string(out), fmt.Errorf("%s %s: %w: %s", name, firstArg(args), err, tail)
-	}
-	return string(out), nil
-}
-
-func firstArg(args []string) string {
-	if len(args) == 0 {
-		return ""
-	}
-	return args[0]
+// run executes a command, `env` added to the agent's environment; tests
+// replace it.
+var run = func(ctx context.Context, env []string, name string, args ...string) (string, error) {
+	return sh.RunWith(ctx, nil, env, name, args...)
 }
 
 // The rclone volume plugin keeps its config and cache here (PLAN §11).

@@ -1,3 +1,4 @@
+import { isDuplicateKeyError } from "@/database.ts";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { ObjectId } from "mongodb";
 import type { WithId } from "mongodb";
@@ -13,7 +14,10 @@ import {
 import { walletModel } from "@/plugins/Huruf-Tech/thunder-core/schemas/wallet.ts";
 import { walletLedgerModel } from "@/plugins/Huruf-Tech/thunder-core/schemas/walletLedger.ts";
 import { readNumberSetting, readTextSetting } from "@/lib/core/settings.ts";
-import { subscriptionModel } from "@/schemas/billing/subscription.ts";
+import {
+  subscriptionModel,
+  WORKSPACE_KIND,
+} from "@/schemas/billing/subscription.ts";
 import { subscriptionPeriodModel } from "@/schemas/billing/subscriptionPeriod.ts";
 import type { RateLimiter } from "@/lib/core/rateLimiter.ts";
 import {
@@ -478,7 +482,7 @@ export class PaymentService {
     const now = new Date();
     const granted = await subscriptionPeriodModel.findOne({
       tenant,
-      scope: { $ne: "server" },
+      scope: WORKSPACE_KIND,
       kind: "complimentary",
       periodStart: { $lte: now },
       periodEnd: { $gt: now },
@@ -535,12 +539,18 @@ export class PaymentService {
   }
 
   /** The wallet's balance and its latest entries (PLAN §25.5, Billing page). */
+  /** The wallet's balance alone: one indexed read. */
+  async balance(tenant: ObjectId) {
+    const wallet = await walletModel.findOne(
+      { tenant, currency: PAYMENTS_CURRENCY },
+      { projection: { balance: 1 } },
+    );
+    return wallet?.balance ?? 0;
+  }
+
   async statement(tenant: ObjectId, limit = 100) {
-    const [wallet, entries] = await Promise.all([
-      walletModel.findOne(
-        { tenant, currency: PAYMENTS_CURRENCY },
-        { projection: { balance: 1 } },
-      ),
+    const [balance, entries] = await Promise.all([
+      this.balance(tenant),
       walletLedgerModel.find(
         { tenant, currency: PAYMENTS_CURRENCY },
         {
@@ -557,7 +567,7 @@ export class PaymentService {
         },
       ).toArray(),
     ]);
-    return { balance: wallet?.balance ?? 0, entries };
+    return { balance, entries };
   }
 
   /**
@@ -709,7 +719,7 @@ export class PaymentService {
       expiresAt: kept ? undefined : new Date(Date.now() + EVENT_TTL_MS),
     }).catch((error) => {
       // A concurrent delivery recorded it first.
-      if ((error as { code?: number }).code !== 11000) throw error;
+      if (!isDuplicateKeyError(error)) throw error;
     });
   }
 

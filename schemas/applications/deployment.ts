@@ -48,7 +48,6 @@ export const $release = z.object({
   /** Encrypted JSON array of service specs (tenant key, bound to this release). */
   specEnc: z.string(),
   services: z.array(z.string()).describe("Service names, for status tracking"),
-  deployment: $objectId.meta({ ref: "deployments" }),
   createdBy: $objectId.meta({ ref: "users" }).optional(),
   createdAt: z.date(),
 });

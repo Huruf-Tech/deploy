@@ -83,16 +83,16 @@ func create(dir, path string) (*Identity, error) {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, err
 	}
-	if err := os.WriteFile(path, data, 0o600); err != nil {
+	// Written whole or not at all: a crash mid-write mustn't leave a corrupt
+	// identity, which would make the server register as a new one.
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, data, 0o600); err != nil {
+		return nil, err
+	}
+	if err := os.Rename(tmp, path); err != nil {
 		return nil, err
 	}
 	return &Identity{sign: sign, box: box}, nil
-}
-
-// FromSeed builds an identity from a fixed seed (tests).
-func FromSeed(seed []byte) *Identity {
-	box, _ := ecdh.X25519().NewPrivateKey(seed)
-	return &Identity{sign: ed25519.NewKeyFromSeed(seed), box: box}
 }
 
 func (i *Identity) SignPublicKey() string {

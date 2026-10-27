@@ -69,9 +69,9 @@ func TestPartitionsRemovedThroughThePool(t *testing.T) {
 	steps := Plan(context.Background(), Options{
 		StateDir: t.TempDir(),
 		Run:      fakeDocker,
-		RemovePartitions: func(context.Context) (string, error) {
+		RemovePartitions: func(context.Context) error {
 			called = true
-			return "", nil
+			return nil
 		},
 	})
 	only := []Step{}

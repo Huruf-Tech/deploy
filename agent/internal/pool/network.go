@@ -4,10 +4,10 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
 	"os"
-	"os/exec"
 	"strings"
+
+	"github.com/Huruf-Tech/huruf-deploy/agent/internal/sh"
 )
 
 // Partition network rules (PLAN §26.3), in our own nftables table so they
@@ -21,35 +21,49 @@ const (
 	nftablesConf = "/etc/nftables.conf"
 )
 
+// replaceTable is nft input that replaces a whole table: declaring it first
+// lets the delete succeed when it doesn't exist yet.
+func replaceTable(family, name, body string) string {
+	t := "table " + family + " " + name
+	return t + "\n" + "delete " + t + "\n" + t + " {\n" + body + "}\n"
+}
+
+// loadRules applies nft input in one transaction.
+func loadRules(ctx context.Context, rules string) error {
+	_, err := sh.RunInput(ctx, rules, "nft", "-f", "-")
+	return err
+}
+
+// persist keeps rules for boot in `file`, included by nftables.conf.
+func persist(file, rules string) error {
+	if err := os.WriteFile(file, []byte(rules), 0o644); err != nil {
+		return err
+	}
+	conf, _ := os.ReadFile(nftablesConf)
+	include := []byte(`include "` + file + `"`)
+	if bytes.Contains(conf, include) {
+		return nil
+	}
+	if len(conf) == 0 {
+		conf = []byte("#!/usr/sbin/nft -f\n")
+	}
+	return os.WriteFile(nftablesConf, append(append(conf, include...), '\n'), 0o755)
+}
+
 // applyRules loads the traffic counters' table. Rentals are isolated one by
 // one in their own table (isolate.go, PLAN §28).
 func applyRules(ctx context.Context) error {
-	rules := `table inet ` + table + `
-delete table inet ` + table + `
-table inet ` + table + ` {
-  chain count {
+	rules := replaceTable("inet", table, `  chain count {
     type filter hook forward priority -20; policy accept;
   }
-}
-`
-	if err := os.WriteFile(rulesFile, []byte(rules), 0o644); err != nil {
+`)
+	if err := loadRules(ctx, rules); err != nil {
 		return err
 	}
-	if out, err := exec.CommandContext(ctx, "nft", "-f", rulesFile).CombinedOutput(); err != nil {
-		return fmt.Errorf("nft: %w: %s", err, strings.TrimSpace(string(out)))
+	if err := persist(rulesFile, rules); err != nil {
+		return err
 	}
-	conf, _ := os.ReadFile(nftablesConf)
-	include := []byte(`include "` + rulesFile + `"`)
-	if !bytes.Contains(conf, include) {
-		if len(conf) == 0 {
-			conf = []byte("#!/usr/sbin/nft -f\n")
-		}
-		conf = append(append(conf, include...), '\n')
-		if err := os.WriteFile(nftablesConf, conf, 0o755); err != nil {
-			return err
-		}
-	}
-	_, err := run(ctx, "systemctl", "enable", "nftables")
+	_, err := sh.Run(ctx, "systemctl", "enable", "nftables")
 	return err
 }
 
@@ -57,7 +71,7 @@ table inet ` + table + ` {
 // machine. They live in memory: re-applied rules or a reboot restart them at
 // 0, which readers treat as a reset.
 func ensureCounters(ctx context.Context, name string) error {
-	if _, err := run(ctx, "nft", "list", "counter", "inet", table, "out_"+name); err == nil {
+	if _, err := sh.Run(ctx, "nft", "list", "counter", "inet", table, "out_"+name); err == nil {
 		return nil
 	}
 	for _, rule := range [][]string{
@@ -66,7 +80,7 @@ func ensureCounters(ctx context.Context, name string) error {
 		{"add", "rule", "inet", table, "count", "iifname", bridge(name), "oifname", "!=", "hp-*", "counter", "name", "out_" + name},
 		{"add", "rule", "inet", table, "count", "oifname", bridge(name), "iifname", "!=", "hp-*", "counter", "name", "in_" + name},
 	} {
-		if _, err := run(ctx, "nft", rule...); err != nil {
+		if _, err := sh.Run(ctx, "nft", rule...); err != nil {
 			return err
 		}
 	}
@@ -74,41 +88,41 @@ func ensureCounters(ctx context.Context, name string) error {
 }
 
 func delCounters(ctx context.Context, name string) {
-	out, _ := run(ctx, "nft", "-a", "list", "chain", "inet", table, "count")
+	out := sh.Output(ctx, "nft", "-a", "list", "chain", "inet", table, "count")
 	for _, line := range strings.Split(out, "\n") {
 		if strings.Contains(line, `"`+bridge(name)+`"`) {
 			if i := strings.LastIndex(line, "# handle "); i >= 0 {
-				_, _ = run(ctx, "nft", "delete", "rule", "inet", table, "count", "handle", strings.TrimSpace(line[i+9:]))
+				_, _ = sh.Run(ctx, "nft", "delete", "rule", "inet", table, "count", "handle", strings.TrimSpace(line[i+9:]))
 			}
 		}
 	}
-	_, _ = run(ctx, "nft", "delete", "counter", "inet", table, "out_"+name)
-	_, _ = run(ctx, "nft", "delete", "counter", "inet", table, "in_"+name)
+	_, _ = sh.Run(ctx, "nft", "delete", "counter", "inet", table, "out_"+name)
+	_, _ = sh.Run(ctx, "nft", "delete", "counter", "inet", table, "in_"+name)
 }
 
-// readCounters returns the bytes out and in since the partition was created.
-func readCounters(ctx context.Context, name string) (out, in int64) {
-	read := func(counter string) int64 {
-		raw, err := run(ctx, "nft", "-j", "list", "counter", "inet", table, counter)
-		if err != nil {
-			return 0
-		}
-		var doc struct {
-			Nftables []struct {
-				Counter *struct {
-					Bytes int64 `json:"bytes"`
-				} `json:"counter"`
-			} `json:"nftables"`
-		}
-		if json.Unmarshal([]byte(raw), &doc) != nil {
-			return 0
-		}
-		for _, item := range doc.Nftables {
-			if item.Counter != nil {
-				return item.Counter.Bytes
-			}
-		}
-		return 0
+// readCounters is every counter's bytes (out_<name> and in_<name>), since
+// its partition was created.
+func readCounters(ctx context.Context) map[string]int64 {
+	return parseCounters(sh.Output(ctx, "nft", "-j", "list", "table", "inet", table))
+}
+
+func parseCounters(raw string) map[string]int64 {
+	var doc struct {
+		Nftables []struct {
+			Counter *struct {
+				Name  string `json:"name"`
+				Bytes int64  `json:"bytes"`
+			} `json:"counter"`
+		} `json:"nftables"`
 	}
-	return read("out_" + name), read("in_" + name)
+	counters := map[string]int64{}
+	if json.Unmarshal([]byte(raw), &doc) != nil {
+		return counters
+	}
+	for _, item := range doc.Nftables {
+		if item.Counter != nil {
+			counters[item.Counter.Name] = item.Counter.Bytes
+		}
+	}
+	return counters
 }

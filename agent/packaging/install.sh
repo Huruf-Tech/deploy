@@ -77,6 +77,8 @@ EnvironmentFile=/etc/huruf-deploy-agent/agent.env
 ExecStart=/usr/local/bin/huruf-deploy-agent -state-dir /var/lib/huruf-deploy-agent
 Restart=always
 RestartSec=5
+# Running commands get up to 3 minutes to finish when the agent stops.
+TimeoutStopSec=240
 StateDirectory=huruf-deploy-agent
 StateDirectoryMode=0700
 

@@ -88,7 +88,8 @@ export default new Router("/api", function controlPlane(router) {
 
   router.get("/alerts", function alerts() {
     const $query = z.object({
-      open: z.coerce.boolean().optional(),
+      open: z.enum(["true", "false"]).transform((v) => v === "true")
+        .optional(),
       limit: z.coerce.number().int().min(1).max(200).default(50),
     });
     return {

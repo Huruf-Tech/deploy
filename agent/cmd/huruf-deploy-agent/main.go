@@ -14,7 +14,6 @@ import (
 	"log/slog"
 	"net"
 	"os"
-	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"sync/atomic"
@@ -36,6 +35,7 @@ import (
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/pool"
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/protocol"
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/reconcile"
+	"github.com/Huruf-Tech/huruf-deploy/agent/internal/sh"
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/state"
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/streams"
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/transport"
@@ -52,6 +52,9 @@ const (
 	secretsDir = "/run/huruf-deploy/secrets"
 	// Written when the dashboard removes the server; the uninstall deletes it.
 	uninstallingMarker = "uninstalling"
+	// The uninstall stops the agent seconds after it's scheduled: a marker
+	// this old means it didn't run, and the agent connects again.
+	uninstallTimeout = 10 * time.Minute
 )
 
 func main() {
@@ -69,17 +72,12 @@ func main() {
 		fmt.Println(version)
 		return
 	}
+	log := slog.New(slog.NewTextHandler(os.Stdout, nil))
 	// Removed from the dashboard: wait for the scheduled uninstall to stop
 	// this service instead of polling (a poll would register it again).
-	if _, err := os.Stat(filepath.Join(*stateDir, uninstallingMarker)); err == nil {
-		fmt.Println("uninstalling: not connecting to the control plane")
-		wait := make(chan os.Signal, 1)
-		signal.Notify(wait, os.Interrupt, syscall.SIGTERM)
-		<-wait
+	if !waitForUninstall(filepath.Join(*stateDir, uninstallingMarker), log) {
 		return
 	}
-
-	log := slog.New(slog.NewTextHandler(os.Stdout, nil))
 	if *url == "" || *tenant == "" {
 		log.Error("missing configuration: set HURUF_DEPLOY_URL and HURUF_DEPLOY_TENANT (or -url and -tenant)")
 		os.Exit(2)
@@ -160,29 +158,29 @@ func main() {
 	a.Monitor = usage
 	streamManager.Capacity = usage
 	go usage.Run(ctx)
-	// A pool machine's host role (PLAN §26.5): partitions running our agent.
-	pools := &pool.Manager{Driver: pool.Sysbox{}, Path: filepath.Join(*stateDir, "pool.json")}
+	// A machine's host role (PLAN §27): partitions running our agent.
+	pools := &pool.Manager{Driver: &pool.Sysbox{}, Path: filepath.Join(*stateDir, "pool.json")}
 	if err := pools.Restore(ctx); err != nil {
 		log.Warn("restoring partitions", "error", err)
 	}
 	a.Partitions = pools.Usage
 	// A machine's forwards into its partitions come with its desired state (PLAN §27.3).
 	a.Forwards = pools.ApplyForwards
-	a.Commands["pool.ensure"] = commands.Typed(pools.Ensure)
+	a.Commands["pool.ensure"] = commands.Handle(pools.Ensure)
 	a.Commands["partition.create"] = commands.Sealed(id.Open, pools.Create)
-	a.Commands["partition.resize"] = commands.Typed(pools.Resize)
-	a.Commands["partition.stop"] = commands.Typed(pools.Stop)
-	a.Commands["partition.start"] = commands.Typed(pools.Start)
-	a.Commands["partition.remove"] = commands.Typed(pools.Remove)
+	a.Commands["partition.resize"] = commands.Handle(pools.Resize)
+	a.Commands["partition.stop"] = commands.Handle(pools.Stop)
+	a.Commands["partition.start"] = commands.Handle(pools.Start)
+	a.Commands["partition.remove"] = commands.Handle(pools.Remove)
 	a.Commands["partition.send"] = commands.Sealed(id.Open, pools.Send)
 	a.Commands["partition.receive"] = commands.Sealed(id.Open, pools.Receive)
 	// The built-in registry lives with the mesh: it deletes images of releases that are gone.
-	a.Commands["registry.delete"] = commands.Typed(func(ctx context.Context, p protocol.RegistryDeletePayload) (map[string]any, error) {
+	a.Commands["registry.delete"] = commands.Handle(func(ctx context.Context, p protocol.RegistryDeletePayload) (map[string]any, error) {
 		return network.DeleteTags(ctx, p.Tags)
 	})
 	// The dashboard's "Remove server": the plan, and with dryRun false the
 	// uninstall runs in its own unit, so stopping this service doesn't stop it.
-	a.Commands["host.cleanup"] = commands.Typed(func(ctx context.Context, p protocol.HostCleanupPayload) (map[string]any, error) {
+	a.Commands["host.cleanup"] = commands.Handle(func(ctx context.Context, p protocol.HostCleanupPayload) (map[string]any, error) {
 		steps := cleanup.Plan(ctx, cleanup.Options{
 			StateDir: *stateDir, RemoveSysbox: p.RemoveSysbox, Teardown: network.Teardown,
 		})
@@ -199,9 +197,9 @@ func main() {
 		if p.RemoveSysbox {
 			args = append(args, "-remove-sysbox")
 		}
-		if out, err := exec.CommandContext(ctx, "systemd-run", args...).CombinedOutput(); err != nil {
+		if _, err := sh.Run(ctx, "systemd-run", args...); err != nil {
 			_ = os.Remove(filepath.Join(*stateDir, uninstallingMarker))
-			return nil, fmt.Errorf("scheduling the uninstall: %w: %s", err, out)
+			return nil, fmt.Errorf("scheduling the uninstall: %w", err)
 		}
 		log.Info("uninstalling: stopping now; the uninstall starts in 2 s")
 		// Once this result is queued (after the handler returns), Run stops
@@ -228,6 +226,31 @@ func main() {
 		log.Error("agent stopped", "error", err)
 		os.Exit(1)
 	}
+}
+
+// waitForUninstall holds the agent while a scheduled uninstall should stop
+// it; false when it was stopped meanwhile. An uninstall that didn't come
+// (its unit failed) leaves the marker past uninstallTimeout: it's removed
+// and the agent carries on, so the control plane sees the server again.
+func waitForUninstall(marker string, log *slog.Logger) bool {
+	info, err := os.Stat(marker)
+	if err != nil {
+		return true
+	}
+	if left := uninstallTimeout - time.Since(info.ModTime()); left > 0 {
+		log.Info("uninstalling: not connecting to the control plane", "waitingFor", left.Round(time.Second))
+		stop := make(chan os.Signal, 1)
+		signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
+		defer signal.Stop(stop)
+		select {
+		case <-stop:
+			return false
+		case <-time.After(left):
+		}
+	}
+	log.Warn("the scheduled uninstall didn't run; connecting again")
+	_ = os.Remove(marker)
+	return true
 }
 
 // serveDNS answers .internal names on the project network's gateway, once

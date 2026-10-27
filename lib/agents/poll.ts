@@ -217,7 +217,7 @@ const poll = async (
     serverModel.updateOne({ _id: identity.server }, {
       $set: { resources: { ...request.summary, reportedAt: now } },
     }),
-    // A pool machine's partitions: rentals' traffic and lazy renewal (PLAN §26).
+    // A machine's partitions: rentals' traffic and lazy renewal (PLAN §26).
     request.summary?.partitions?.length &&
     rentals.recordUsage(identity.server, request.summary.partitions)
       .catch((e) => console.warn("[rentals] usage:", e)),
@@ -375,20 +375,9 @@ const ingestCommandResults = async (
       // A move ends with the target's result (PLAN §26.10).
       await rentals.moveFinished(_id, event.data);
     } else if (type === "docker.ensure" || type === "pool.ensure") {
-      // `pool.ensure` runs the usual host setup inside (PLAN §26.5).
       if (type === "pool.ensure") {
         await recordPoolSetup(identity.server, event.data);
-      }
-      // A machine (PLAN §27) runs no projects: only a pool machine's setup
-      // carries the usual host setup.
-      if (type === "docker.ensure") {
-        await recordHostSetup(identity.server, event.data);
-      } else if (event.data.result?.host) {
-        await recordHostSetup(identity.server, {
-          ...event.data,
-          result: event.data.result.host as typeof event.data.result,
-        });
-      }
+      } else await recordHostSetup(identity.server, event.data);
       // A prepared host gets its spec, private network included (PLAN §8.2).
       if (event.data.ok) await refreshSpecs([identity.server]);
     } else await onBuildResult(identity.server, seq, event.data);

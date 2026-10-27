@@ -76,7 +76,7 @@ Deno.test({
         assertEquals(doc.provider.kind, "machine");
         assertEquals(await slots(), 0, "a machine takes no plan slot");
         const setup = await last(machine, "pool.ensure");
-        assertEquals((setup.payload as { mode: string }).mode, "machine");
+        assert(setup, "its host setup is issued");
         // Projects can't go there.
         const res = await call("POST", "/projects/api", {
           name: "web",
@@ -125,6 +125,13 @@ Deno.test({
           ]),
           [[firstName, true, true, "apps"]],
         );
+        // Not reported yet, it takes its room all the same.
+        const overlapping = await call(
+          "POST",
+          `/servers/api/${machine}/partitions`,
+          { size: { cpus: 2, memMb: 15_872 - 4096 + 512, diskGb: 50 } },
+        );
+        assertEquals(overlapping.status, 400, JSON.stringify(overlapping.json));
         const create = await last(machine, "partition.create");
         const payload = JSON.parse(
           await openSealed(
@@ -293,7 +300,6 @@ Deno.test({
             $set: {
               "resources.partitions": [{
                 name: "p00000000009",
-                remainder: false,
                 state: "running",
                 size: { cpus: 1, memMb: 1024, diskGb: 10 },
                 cpuMicros: 0,
@@ -317,7 +323,6 @@ Deno.test({
             $push: {
               "resources.partitions": {
                 name: "p00000000010",
-                remainder: false,
                 state: "running",
                 size: { cpus: 1, memMb: 1024, diskGb: 10 },
                 cpuMicros: 0,

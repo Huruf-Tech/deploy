@@ -1,12 +1,15 @@
 import { ObjectId, type WithId } from "mongodb";
-import type z from "zod";
+import { platformTenant } from "@/lib/billing/platform.ts";
 import { Response } from "@/core/http/response.ts";
 import { Logger } from "@/core/utils/logger.ts";
-import { readNumberSetting, readTextSetting } from "@/lib/core/settings.ts";
+import { readNumberSetting } from "@/lib/core/settings.ts";
 import type { BillingService, TRentalHooks } from "@/lib/billing/billing.ts";
 import type { PaymentService } from "@/lib/payments/payments.ts";
 import { notifyOwner } from "@/lib/billing/notify.ts";
-import { releaseServer } from "@/lib/agents/servers.ts";
+import { retireServer } from "@/lib/agents/retire.ts";
+import { meshPlacement } from "@/lib/agents/servers.ts";
+import { refreshSpecs } from "@/lib/deploy/specs.ts";
+import { freeOf, takenOn } from "@/lib/pool/room.ts";
 import {
   createPartition,
   movePartition,
@@ -23,25 +26,25 @@ import {
   type TServerClass,
 } from "@/schemas/billing/serverClass.ts";
 import {
+  LIVE_RENTAL as LIVE,
+  RUNNING_RENTAL as RUNNING,
   subscriptionModel,
   type TSubscription,
 } from "@/schemas/billing/subscription.ts";
-import { subscriptionPeriodModel } from "@/schemas/billing/subscriptionPeriod.ts";
+import {
+  subscriptionPeriodModel,
+  type TSubscriptionPeriod,
+} from "@/schemas/billing/subscriptionPeriod.ts";
 import {
   TopupStatus,
   walletTopupModel,
 } from "@/plugins/Huruf-Tech/thunder-core/schemas/walletTopup.ts";
 import { serverModel } from "@/schemas/infrastructure/server.ts";
 import { serverLeaseModel } from "@/schemas/infrastructure/serverLease.ts";
-import type { $partitionUsage } from "@/schemas/protocol/agent.ts";
+import type { TPartitionUsage } from "@/schemas/protocol/agent.ts";
 
 const DAY_MS = 24 * 60 * 60_000;
 const GB = 1e9;
-/** Rentals whose partition exists and is paid for. */
-const LIVE = ["active", "pastDue", "suspended"] as const;
-/** Rentals that run (a suspended one is stopped on purpose). */
-const RUNNING = ["active", "pastDue"] as const;
-type TSizeSum = { cpus: number; memMb: number; diskGb: number };
 
 const log = (text: string) => Logger.warn(`[rentals] ${text}`);
 
@@ -96,8 +99,8 @@ type TRental = NonNullable<TSubscription["rental"]>;
 type TSub = WithId<TSubscription> & { rental: TRental };
 
 /**
- * Rentals (PLAN §26): a customer rents a partition of one of Huruf's pool
- * machines. Built on the existing pieces: a size is a server plan, a rental
+ * Rentals (PLAN §26, §28): a customer rents a partition on one of the
+ * platform's machines. Built on the existing pieces: a size is a server plan, a rental
  * is a server subscription, the partition joins the customer's tenant as an
  * ordinary (rented) server. This service adds requests and approval,
  * placement, traffic, and what happens to the partition when a rental isn't
@@ -111,14 +114,6 @@ export class RentalService implements TRentalHooks {
 
   private overheadMb() {
     return readNumberSetting("PARTITION_OVERHEAD_MB", 128);
-  }
-
-  private async platformTenant() {
-    const id = await readTextSetting("PLATFORM_TENANT", "");
-    if (!ObjectId.isValid(id)) {
-      throw Response.badRequest("Payments aren't set up yet");
-    }
-    return new ObjectId(id);
   }
 
   /** Active classes, and the sizes this tenant may rent in them. */
@@ -283,62 +278,31 @@ export class RentalService implements TRentalHooks {
 
   /** The customer withdraws a request; the money stays in their wallet. */
   async withdraw(tenant: ObjectId, id: ObjectId) {
-    const { modifiedCount } = await subscriptionModel.updateOne(
+    const sub = await subscriptionModel.findOneAndUpdate(
       { _id: id, tenant, kind: "server", status: "requested" },
       { $set: { status: "canceled", updatedAt: new Date() } },
     );
-    if (!modifiedCount) throw Response.badRequest("No request to withdraw");
+    if (!sub) throw Response.badRequest("No request to withdraw");
+    await this.dropCustomPlan(sub.plan);
   }
 
-  /**
-   * What's taken on each machine (PLAN §28): every partition it reports, the
-   * platform's own and rentals alike, plus rentals approved but not reported
-   * yet. A pool machine's remainder (§26.4) yields, so it doesn't count.
-   */
-  private async takenOn(
-    machines: {
-      _id: ObjectId;
-      resources?: { partitions?: z.output<typeof $partitionUsage>[] };
-    }[],
-  ) {
-    const subs = await subscriptionModel.find({
-      kind: "server",
-      "rental.host": { $in: machines.map((m) => m._id) },
-      status: { $in: [...LIVE] },
-    }, {
-      projection: { "rental.host": 1, "rental.size": 1, "rental.partition": 1 },
-    }).toArray();
-    const taken = new Map<string, TSizeSum>();
-    for (const m of machines) {
-      const reported = (m.resources?.partitions ?? []).filter((p) =>
-        !p.remainder
-      );
-      const pending = subs.filter((s) =>
-        s.rental!.host!.equals(m._id) &&
-        !reported.some((p) => p.name === s.rental!.partition)
-      );
-      taken.set(
-        String(m._id),
-        [...reported.map((p) => p.size), ...pending.map((s) => s.rental!.size)]
-          .reduce(
-            (a, size) => ({
-              cpus: a.cpus + size.cpus,
-              memMb: a.memMb + size.memMb,
-              diskGb: a.diskGb + size.diskGb,
-            }),
-            { cpus: 0, memMb: 0, diskGb: 0 },
-          ),
-      );
-    }
-    return taken;
+  /** A custom size nobody rents any more goes (one is made per request, §26.6 A). */
+  private async dropCustomPlan(plan: ObjectId) {
+    const inUse = await subscriptionModel.countDocuments({
+      $or: [{ plan }, { nextPlan: plan }, {
+        "rental.pendingChange.plan": plan,
+      }],
+      status: { $nin: ["canceled", "rejected", "released"] },
+    }, { limit: 1 });
+    if (!inUse) await planModel.deleteOne({ _id: plan, custom: true });
   }
 
   /**
    * The platform's machines of the rental's class (PLAN §28: a machine is for
    * rent once an admin gives it a class) that can take `size` (§26.7):
    * memory and disk never overcommit, CPU up to the class's ratio. Fullest
-   * first, so whole machines stay free. `remainderShort`: the remainder would
-   * have to give back memory it uses (the agent refuses then).
+   * first, so whole machines stay free. `extra` is a resize's growth on the
+   * rental's own machine, which may have stopped taking new rentals.
    */
   async placement(
     id: ObjectId,
@@ -348,27 +312,23 @@ export class RentalService implements TRentalHooks {
     const cls = await serverClassModel.findOne({ _id: sub.rental.class });
     const size = extra ?? sub.rental.size;
     const machines = await serverModel.find({
-      tenant: await this.platformTenant(),
+      tenant: await platformTenant(),
       status: "active",
       "pool.status": "ready",
       "pool.class": sub.rental.class,
-      "pool.accepting": { $ne: false },
-      ...(extra ? { _id: sub.rental.host } : {}),
+      ...(extra
+        ? { _id: sub.rental.host }
+        : { "pool.accepting": { $ne: false } }),
     }, {
       projection: { name: 1, pool: 1, "resources.partitions": 1 },
       limit: 200,
     }).toArray();
-    const used = await this.takenOn(machines);
+    const used = await takenOn(machines);
     return machines.map((m) => {
-      const all = m.pool!.allocatable!;
-      const u = used.get(String(m._id)) ?? { cpus: 0, memMb: 0, diskGb: 0 };
-      const free = {
-        memMb: all.memMb - u.memMb,
-        diskGb: all.diskGb - u.diskGb,
-      };
-      const cpuRoom = all.cpus * (cls?.cpuOvercommit ?? 1) - u.cpus;
-      const remainder = m.resources?.partitions?.find((p) => p.remainder);
-      const keeps = free.memMb - size.memMb;
+      const u = used.get(String(m._id))!;
+      const free = freeOf(m, u);
+      const cpuRoom = m.pool!.allocatable!.cpus * (cls?.cpuOvercommit ?? 1) -
+        u.cpus;
       return {
         server: String(m._id),
         name: m.name,
@@ -376,10 +336,6 @@ export class RentalService implements TRentalHooks {
         cpuRoom,
         fits: free.memMb >= size.memMb && free.diskGb >= size.diskGb &&
           cpuRoom >= size.cpus,
-        remainderShort: !!remainder && remainder.memUsed > keeps * 2 ** 20,
-        remainderUsesMb: remainder
-          ? Math.round(remainder.memUsed / 2 ** 20)
-          : undefined,
       };
     }).sort((a, b) =>
       Number(b.fits) - Number(a.fits) || a.free.memMb - b.free.memMb
@@ -387,7 +343,7 @@ export class RentalService implements TRentalHooks {
   }
 
   /**
-   * An admin approves a request on a pool machine (PLAN §26.9): the first
+   * An admin approves a request on a machine of its class (PLAN §26.9, §28): the first
    * month is charged, then the partition is created; its agent joins the
    * customer's tenant as a rented server.
    */
@@ -399,11 +355,7 @@ export class RentalService implements TRentalHooks {
     if (!spot?.fits) {
       throw Response.badRequest("That machine has no room for this rental");
     }
-    if (spot.remainderShort) {
-      throw Response.badRequest(
-        `Huruf's partition there uses ${spot.remainderUsesMb} MB: free memory there first, or pick another machine`,
-      );
-    }
+    // Throws when another approval or a withdraw got there first.
     await this.billing.activate(id, admin);
     const name = partitionName(id);
     await subscriptionModel.updateOne({ _id: id }, {
@@ -453,7 +405,7 @@ export class RentalService implements TRentalHooks {
 
   async reject(id: ObjectId, reason: string) {
     const sub = await this.rentalOf(id, { status: "requested" });
-    await subscriptionModel.updateOne({ _id: id }, {
+    await subscriptionModel.updateOne({ _id: id, status: "requested" }, {
       $set: {
         status: "rejected",
         "rental.rejectedReason": reason,
@@ -465,6 +417,7 @@ export class RentalService implements TRentalHooks {
       text: `Your request for a rented server wasn't approved: ${reason}\n\n` +
         `Nothing was charged; the money you added stays in your wallet.`,
     }).catch((e) => log(`reject notice: ${e}`));
+    await this.dropCustomPlan(sub.plan);
   }
 
   /** The customer asks for another size; an admin approves it (PLAN §26.9). */
@@ -487,6 +440,11 @@ export class RentalService implements TRentalHooks {
         updatedAt: new Date(),
       },
     });
+    // A resize asked for before this one is replaced.
+    const replaced = sub.rental.pendingChange?.plan;
+    if (replaced && !replaced.equals(plan._id)) {
+      await this.dropCustomPlan(replaced);
+    }
   }
 
   /**
@@ -513,7 +471,7 @@ export class RentalService implements TRentalHooks {
         memMb: Math.max(0, size.memMb - sub.rental.size.memMb),
         diskGb: Math.max(0, size.diskGb - sub.rental.size.diskGb),
       });
-      if (!spot?.fits || spot.remainderShort) {
+      if (!spot?.fits) {
         throw Response.badRequest(
           "It doesn't fit on its machine: move the rental to one with room first, or free room there",
         );
@@ -522,7 +480,7 @@ export class RentalService implements TRentalHooks {
     const result = await this.billing.subscribe(sub.tenant, admin, plan._id, {
       kind: "server",
       subscription: id,
-    });
+    }, { customerAway: true });
     if (result.result === "pending") {
       throw Response.badRequest(
         "The customer's bank wants them to confirm the payment: ask them to add funds first",
@@ -546,6 +504,9 @@ export class RentalService implements TRentalHooks {
       subject: "{workspace}: your resize wasn't approved",
       text: `Your rented server's resize wasn't approved: ${reason}`,
     }).catch((e) => log(`resize notice: ${e}`));
+    if (sub.rental.pendingChange) {
+      await this.dropCustomPlan(sub.rental.pendingChange.plan);
+    }
   }
 
   private async applySize(sub: TSub, size: TRental["size"]) {
@@ -628,15 +589,11 @@ export class RentalService implements TRentalHooks {
 
   // --- Billing's rental hooks (PLAN §26.9) ---
 
-  async overage(sub: WithId<TSubscription>) {
-    const ended = await subscriptionPeriodModel.findOne(
-      { subscription: sub._id, periodEnd: { $lte: new Date() } },
-      { sort: { periodEnd: -1 } },
-    );
-    if (!ended?.resourcesSnapshot || !sub.rental) return null;
+  overage(sub: WithId<TSubscription>, period: WithId<TSubscriptionPeriod>) {
+    if (!period.resourcesSnapshot || !sub.rental) return null;
     return overageOf(
-      ended.usage?.trafficBytes ?? 0,
-      ended.resourcesSnapshot.trafficGb,
+      period.usage?.trafficBytes ?? 0,
+      period.resourcesSnapshot.trafficGb,
       sub.rental.trafficRatePerGb,
     );
   }
@@ -713,16 +670,13 @@ export class RentalService implements TRentalHooks {
     if (sub.rental) await this.release(sub as TSub, "canceled");
   }
 
-  /** Deletes the partition and its data, and the customer's server record. */
+  /** Deletes the partition and its data, and the customer's server with its projects. */
   private async release(sub: TSub, status: "released" | "canceled") {
     if (sub.rental.host && sub.rental.partition) {
       await removePartition(sub.rental.host, sub.rental.partition)
         .catch((e) => log(`remove ${sub.rental.partition}: ${e}`));
     }
-    if (sub.server) {
-      await releaseServer(sub.server, sub.tenant);
-      await serverModel.deleteOne({ _id: sub.server, tenant: sub.tenant });
-    }
+    if (sub.server) await retireServer(sub.tenant, sub.server);
     await subscriptionModel.updateOne({ _id: sub._id }, {
       $set: { status, updatedAt: new Date() },
     });
@@ -771,7 +725,7 @@ export class RentalService implements TRentalHooks {
   }
 
   /**
-   * An admin moves a rental to another pool machine of its class: the
+   * An admin moves a rental to another machine of its class: the
    * partition stops, its data is copied over the private network, and it
    * starts there with the same server, projects and domains.
    */
@@ -780,11 +734,6 @@ export class RentalService implements TRentalHooks {
     const spot = targets.find((m) => m.server === String(to));
     if (!spot?.fits) {
       throw Response.badRequest("That machine has no room for this rental");
-    }
-    if (spot.remainderShort) {
-      throw Response.badRequest(
-        `Huruf's partition there uses ${spot.remainderUsesMb} MB: free memory there first, or pick another machine`,
-      );
     }
     if (!spot.reachable) {
       throw Response.badRequest(
@@ -878,10 +827,18 @@ export class RentalService implements TRentalHooks {
     );
     if (!modifiedCount) return; // another result or a cancel got there first
     if (outcome.ok) {
+      // Its private network is reached through the new machine's port now.
       if (sub.server) {
+        const { meshPort, endpoint } = await meshPlacement(move.to);
         await serverModel.updateOne({ _id: sub.server }, {
-          $set: { "provider.host": move.to },
+          $set: {
+            "provider.host": move.to,
+            "provider.meshPort": meshPort,
+            ...(endpoint ? { "mesh.endpoint": endpoint } : {}),
+          },
+          ...(endpoint ? {} : { $unset: { "mesh.endpoint": "" } }),
         });
+        await refreshSpecs([from, move.to, sub.server]);
       }
       await removePartition(from, partition)
         .catch((e) => log(`remove the moved ${partition}: ${e}`));
@@ -992,7 +949,7 @@ export class RentalService implements TRentalHooks {
     const [classes, machines] = await Promise.all([
       serverClassModel.find({}, { projection: { name: 1 } }).toArray(),
       serverModel.find({
-        tenant: await this.platformTenant(),
+        tenant: await platformTenant(),
         status: "active",
         "pool.status": "ready",
         "pool.class": { $exists: true },
@@ -1003,7 +960,7 @@ export class RentalService implements TRentalHooks {
       }).toArray(),
     ]);
     const [taken, subs] = await Promise.all([
-      this.takenOn(machines),
+      takenOn(machines),
       subscriptionModel.find({
         kind: "server",
         "rental.host": { $in: machines.map((m) => m._id) },
@@ -1047,25 +1004,21 @@ export class RentalService implements TRentalHooks {
   // --- Traffic (PLAN §26.6) ---
 
   /**
-   * A pool machine's partitions from its summary: each rental's traffic since
-   * the last reading goes to its current period, and a rental due for renewal
+   * A machine's partitions from its summary: each rental's traffic since the
+   * last reading goes to its current period, and a rental due for renewal
    * renews here too, so an idle customer still renews (PLAN §26.6 B).
    */
-  async recordUsage(
-    host: ObjectId,
-    partitions: z.output<typeof $partitionUsage>[],
-  ) {
-    const rented = partitions.filter((p) => !p.remainder);
-    if (!rented.length) return;
+  async recordUsage(host: ObjectId, partitions: TPartitionUsage[]) {
+    if (!partitions.length) return;
     const subs = await subscriptionModel.find({
       kind: "server",
       "rental.host": host,
-      "rental.partition": { $in: rented.map((p) => p.name) },
-      status: { $in: ["active", "pastDue", "suspended"] },
+      "rental.partition": { $in: partitions.map((p) => p.name) },
+      status: { $in: [...LIVE] },
     }).toArray();
     const now = new Date();
     for (const sub of subs) {
-      const p = rented.find((x) => x.name === sub.rental!.partition)!;
+      const p = partitions.find((x) => x.name === sub.rental!.partition)!;
       const before = sub.rental!.counters;
       const delta = counterDelta(before?.rx, p.rxBytes) +
         counterDelta(before?.tx, p.txBytes);
@@ -1100,22 +1053,20 @@ export class RentalService implements TRentalHooks {
             `Free some space (old images, logs, packages) or ask for a bigger size.`,
         }).catch((e) => log(`disk notice: ${e}`));
       }
+      // The latest period: traffic while a renewal waits counts in the
+      // period it follows, so its overage is charged with the renewal.
       if (delta > 0) {
-        await subscriptionPeriodModel.updateOne(
-          {
-            subscription: sub._id,
-            periodStart: { $lte: now },
-            periodEnd: { $gt: now },
-          },
+        await subscriptionPeriodModel.findOneAndUpdate(
+          { subscription: sub._id, periodStart: { $lte: now } },
           { $inc: { "usage.trafficBytes": delta } },
+          { sort: { periodStart: -1 }, projection: { _id: 1 } },
         );
       }
       const due = sub.currentPeriodEnd && sub.currentPeriodEnd <= now &&
         (!sub.nextRenewalAttemptAt || sub.nextRenewalAttemptAt <= now);
+      // Only this rental: the poll waits on it (PLAN §20).
       if (due) {
-        await this.billing.renewIfDue(sub.tenant).catch((e) =>
-          log(`renew: ${e}`)
-        );
+        await this.billing.renewOne(sub, now).catch((e) => log(`renew: ${e}`));
       }
     }
   }

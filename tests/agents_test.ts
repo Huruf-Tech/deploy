@@ -104,16 +104,10 @@ Deno.test({
             payload: Record<string, unknown>;
           }[];
           assertEquals(command.type, "pool.ensure");
-          assertEquals(command.payload.mode, "machine");
-          assertEquals(
-            command.payload.docker,
-            undefined,
-            "no projects run on it",
-          );
+          assertEquals(Object.keys(command.payload), ["reserve"]);
 
           const doc = await serverModel.findOne({ _id: server });
           assertEquals(doc?.provider.kind, "machine");
-          assertEquals(doc?.pool?.mode, "machine");
         },
       );
 

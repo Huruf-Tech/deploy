@@ -18,6 +18,7 @@ import (
 
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/docker"
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/protocol"
+	"github.com/Huruf-Tech/huruf-deploy/agent/internal/sh"
 )
 
 // Older logs are deleted (PLAN §20.4).
@@ -130,7 +131,7 @@ func (b *Builder) run(ctx context.Context, p protocol.BuildRunPayload, log io.Wr
 		return nil, errors.New("docker build failed; see the build log")
 	}
 
-	imageID, err := output(ctx, "docker", "image", "inspect", "-f", "{{.Id}}", p.Image)
+	imageID, err := sh.Run(ctx, "docker", "image", "inspect", "-f", "{{.Id}}", p.Image)
 	if err != nil {
 		return nil, err
 	}
@@ -146,7 +147,7 @@ func (b *Builder) run(ctx context.Context, p protocol.BuildRunPayload, log io.Wr
 		logf("Pushing %s", p.Push.Image)
 		auth := protocol.RegistryAuth{Registry: p.Push.Registry, Username: p.Push.Username, Password: p.Push.Password}
 		err := docker.WithLogin(ctx, auth, func(config string) error {
-			if _, err := output(ctx, "docker", "tag", p.Image, p.Push.Image); err != nil {
+			if _, err := sh.Run(ctx, "docker", "tag", p.Image, p.Push.Image); err != nil {
 				return err
 			}
 			return stream(ctx, log, nil, "docker", "--config", config, "push", p.Push.Image)
@@ -232,14 +233,6 @@ func stream(ctx context.Context, log io.Writer, env []string, name string, args 
 	cmd.Env = append(os.Environ(), env...)
 	cmd.Stdout, cmd.Stderr = log, log
 	return cmd.Run()
-}
-
-func output(ctx context.Context, name string, args ...string) (string, error) {
-	out, err := exec.CommandContext(ctx, name, args...).CombinedOutput()
-	if err != nil {
-		return "", fmt.Errorf("%s %s: %w: %s", name, args[0], err, strings.TrimSpace(string(out)))
-	}
-	return string(out), nil
 }
 
 // redact hides credentials in a URL before it is logged.

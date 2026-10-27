@@ -1,3 +1,5 @@
+import { isDuplicateKeyError } from "@/database.ts";
+import { asBadRequest } from "@/lib/core/errors.ts";
 import { ObjectId, type WithId } from "mongodb";
 import type z from "zod";
 import { Response } from "@/core/http/response.ts";
@@ -97,9 +99,13 @@ const ownersOf = (viewer: TViewer): TVariableOwner[] => [
 
 type TLayer = [string, Record<string, string>];
 
+/** At most this many other projects a viewer's references reach, chains included. */
+const MAX_REFERENCED_PROJECTS = 20;
+
 /**
  * The viewer's layers, lowest precedence first, plus reference-only layers
- * for other projects named in references (`${{shop-db.PASSWORD}}`, PLAN §12).
+ * for other projects named in references (`${{shop-db.PASSWORD}}`, PLAN §12),
+ * and the projects those name in turn.
  */
 const layersOf = async (viewer: TViewer) => {
   const owners = ownersOf(viewer);
@@ -110,39 +116,39 @@ const layersOf = async (viewer: TViewer) => {
     ),
   );
 
-  const named = [
-    ...referencedScopes(layers.flatMap(([, values]) => Object.values(values))),
-  ].filter((scope) => !["global", "tenant", "project"].includes(scope));
-  const others = named.length
-    ? await projectModel.find(
-      { tenant: viewer.tenant, slug: { $in: named } },
-      { projection: { slug: 1 }, limit: 20 },
-    ).toArray()
-    : [];
-  const refOnly: TLayer[] = await Promise.all(
-    others.map(async (p) =>
-      [
-        p.slug,
-        await valuesOf({
-          scope: "project",
-          tenant: viewer.tenant,
-          project: p._id,
-        }),
-      ] as TLayer
-    ),
-  );
-  return { layers, refOnly, docs: docs.flat() };
-};
-
-const asBadRequest = <T>(fn: () => T) => {
-  try {
-    return fn();
-  } catch (error) {
-    if (error instanceof VariableReferenceError) {
-      throw Response.badRequest(error.message);
+  const refOnly: TLayer[] = [];
+  const seen = new Set(["global", "tenant", "project"]);
+  let next = layers;
+  while (true) {
+    const named = [
+      ...referencedScopes(next.flatMap(([, values]) => Object.values(values))),
+    ].filter((scope) => !seen.has(scope));
+    if (!named.length) break;
+    named.forEach((scope) => seen.add(scope));
+    if (seen.size - 3 > MAX_REFERENCED_PROJECTS) {
+      throw Response.badRequest(
+        `Variables reference more than ${MAX_REFERENCED_PROJECTS} other projects`,
+      );
     }
-    throw error;
+    const others = await projectModel.find(
+      { tenant: viewer.tenant, slug: { $in: named } },
+      { projection: { slug: 1 }, limit: MAX_REFERENCED_PROJECTS },
+    ).toArray();
+    next = await Promise.all(
+      others.map(async (p) =>
+        [
+          p.slug,
+          await valuesOf({
+            scope: "project",
+            tenant: viewer.tenant,
+            project: p._id,
+          }),
+        ] as TLayer
+      ),
+    );
+    refOnly.push(...next);
   }
+  return { layers, refOnly, docs: docs.flat() };
 };
 
 /**
@@ -166,8 +172,7 @@ const assertNoCycle = async (
         scope === owner.scope ? { ...values, [key]: value } : values,
       ]),
       { allowMissing: true, refOnly },
-    )
-  );
+    ), VariableReferenceError);
 };
 
 /** Values of secrets are left out; they are read one at a time with `revealVariable`. */
@@ -220,7 +225,7 @@ export async function createVariable(opts: {
       updatedAt: now,
     });
   } catch (error) {
-    if ((error as { code?: number }).code === 11000) {
+    if (isDuplicateKeyError(error)) {
       throw Response.badRequest(`${opts.key} already exists in this scope`);
     }
     throw error;
@@ -275,8 +280,8 @@ export async function importVariables(opts: {
 }) {
   const existing = new Map(
     (await variableModel.find(ownerFilter(opts.owner), {
-      projection: { key: 1 },
-    }).toArray()).map((v) => [v.key, v._id]),
+      projection: { key: 1, isSecret: 1 },
+    }).toArray()).map((v) => [v.key, { _id: v._id, isSecret: v.isSecret }]),
   );
   const result = {
     created: [] as string[],
@@ -284,11 +289,17 @@ export async function importVariables(opts: {
     skipped: [] as string[],
   };
   for (const { key, value, isSecret } of opts.items) {
-    const id = existing.get(key);
-    if (id && !opts.overwrite) {
+    const current = existing.get(key);
+    if (current && !opts.overwrite) {
       result.skipped.push(key);
-    } else if (id) {
-      await updateVariable({ ...opts, id, value, settings: { isSecret } });
+    } else if (current) {
+      // An import can make a value secret, never reveal one.
+      await updateVariable({
+        ...opts,
+        id: current._id,
+        value,
+        settings: { isSecret: current.isSecret || isSecret },
+      });
       result.updated.push(key);
     } else {
       const created = await createVariable({
@@ -297,7 +308,7 @@ export async function importVariables(opts: {
         value,
         settings: { isSecret, kind: "env", stage: "runtime" },
       });
-      existing.set(key, created);
+      existing.set(key, { _id: created, isSecret });
       result.created.push(key);
     }
   }
@@ -339,7 +350,10 @@ export async function resolveVariableSet(
   viewer: TViewer,
 ): Promise<TResolved[]> {
   const { layers, refOnly, docs } = await layersOf(viewer);
-  const values = asBadRequest(() => resolveReferences(layers, { refOnly }));
+  const values = asBadRequest(
+    () => resolveReferences(layers, { refOnly }),
+    VariableReferenceError,
+  );
 
   // Docs come in scope order, so the last one for a key is the winning scope's.
   const settings = new Map(docs.map((doc) => [doc.key, doc]));

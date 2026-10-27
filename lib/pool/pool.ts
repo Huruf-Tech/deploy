@@ -1,8 +1,8 @@
 import { ObjectId } from "mongodb";
 import type z from "zod";
 import { Response } from "@/core/http/response.ts";
-import { readNumberSetting, readTextSetting } from "@/lib/core/settings.ts";
-import { hostSetupPayload, issueCommand } from "@/lib/agents/commands.ts";
+import { readNumberSetting } from "@/lib/core/settings.ts";
+import { issueCommand } from "@/lib/agents/commands.ts";
 import { agentEndpoints, createJoinToken } from "@/lib/agents/bootstrap.ts";
 import { sealTo } from "@/lib/agents/sealing.ts";
 import { serverModel } from "@/schemas/infrastructure/server.ts";
@@ -21,10 +21,9 @@ import {
 type TPartitionSize = z.output<typeof $partitionSize>;
 
 /**
- * Pool machines and their partitions (PLAN §26.5): a pool machine is one of
- * the platform tenant's servers, split into partitions that each run our
- * agent and join a tenant. The agent's host role does the work; these issue
- * its commands.
+ * Machines and their partitions (PLAN §27): every agent is a host; a
+ * partition runs our agent and joins a tenant (its owner's, or a renter's,
+ * §28). The agent's host role does the work; these issue its commands.
  */
 
 /** Partition names become bridge names (`hp-<name>`): `p` + 11 hex of an id. */
@@ -66,40 +65,16 @@ const reserve = async () => ({
 /**
  * Host setup on any machine (PLAN §27.3): Sysbox beside the Docker already
  * there, partition data on a sparse XFS file. Runs at install and again
- * after an agent update; a pool machine re-runs its own setup.
+ * after an agent update.
  */
 export async function setUpMachine(server: ObjectId, createdBy?: ObjectId) {
   const doc = await machine(server, false);
-  if (doc.pool?.mode === "pool") {
-    return await issuePoolEnsure(doc, "pool", {}, createdBy);
-  }
-  return await issuePoolEnsure(doc, "machine", {}, createdBy);
-}
-
-async function issuePoolEnsure(
-  doc: Awaited<ReturnType<typeof machine>>,
-  mode: "machine" | "pool",
-  volume: z.input<typeof $poolEnsurePayload>["volume"],
-  createdBy?: ObjectId,
-) {
   await serverModel.updateOne({ _id: doc._id }, {
-    $set: {
-      "pool.status": "pending",
-      "pool.mode": mode,
-      "pool.updatedAt": new Date(),
-    },
+    $set: { "pool.status": "pending", "pool.updatedAt": new Date() },
     $unset: { "pool.error": "" },
   });
-  const pool = mode === "pool";
   const payload: z.input<typeof $poolEnsurePayload> = {
-    mode,
     reserve: await reserve(),
-    volume,
-    allowIps: pool
-      ? (await readTextSetting("POOL_ALLOW_IPS", "")).split(/[\s,]+/)
-        .filter(Boolean)
-      : [],
-    ...(pool ? { docker: await hostSetupPayload(doc._id, doc.tenant) } : {}),
   };
   return await issueCommand({
     server: doc._id,
@@ -123,12 +98,6 @@ export async function recordPoolSetup(
       ...(result.allocatable
         ? { "pool.allocatable": result.allocatable as TPartitionSize }
         : {}),
-      ...(typeof result.sysbox === "string"
-        ? { "pool.sysbox": result.sysbox }
-        : {}),
-      ...(Array.isArray(result.notes)
-        ? { "pool.notes": result.notes as string[] }
-        : {}),
       ...(outcome.error ? { "pool.error": outcome.error.slice(0, 1_000) } : {}),
       "pool.updatedAt": new Date(),
     },
@@ -138,14 +107,13 @@ export async function recordPoolSetup(
 /**
  * A partition on a machine, with our agent inside joining `tenant`
  * through a one-time join token (`partition.create`, sealed: it carries the
- * token). The remainder is sized by the machine; a rental needs `size`.
+ * token).
  */
 export async function createPartition(opts: {
   host: ObjectId;
   name: string;
   tenant: ObjectId;
-  size?: TPartitionSize;
-  remainder?: boolean;
+  size: TPartitionSize;
   createdBy: ObjectId;
   /** A rental: the server its agent creates is `rented`, named so (PLAN §26). */
   rental?: { subscription: ObjectId; name: string };
@@ -164,6 +132,7 @@ export async function createPartition(opts: {
     partition: {
       host: doc._id,
       name: opts.name,
+      size: opts.size,
       ...(opts.label ? { label: opts.label } : {}),
     },
     ...(opts.rental ? { rental: { host: doc._id, ...opts.rental } } : {}),
@@ -171,8 +140,7 @@ export async function createPartition(opts: {
   const { controlPlaneUrl, downloadBase } = await agentEndpoints();
   const payload: z.input<typeof $partitionCreatePayload> = {
     name: opts.name,
-    ...(opts.size ? { size: opts.size } : {}),
-    remainder: opts.remainder ?? false,
+    size: opts.size,
     isolated,
     install: {
       url: controlPlaneUrl,
@@ -213,10 +181,10 @@ async (host: ObjectId, name: string, createdBy?: ObjectId) => {
 /** Suspends a partition: everything in it stops, data and size are kept. */
 export const stopPartition = partitionCommand("partition.stop");
 export const startPartition = partitionCommand("partition.start");
-/** Deletes a partition and its data; its size goes back to the remainder. */
+/** Deletes a partition and its data. */
 export const removePartition = partitionCommand("partition.remove");
 
-/** Resizes a rented partition live; the remainder gives or takes the difference. */
+/** Resizes a partition live. */
 export async function resizePartition(
   host: ObjectId,
   name: string,
@@ -234,7 +202,7 @@ export async function resizePartition(
 }
 
 /**
- * Moves a partition between pool machines (PLAN §26.10): the source stops it
+ * Moves a partition between machines (PLAN §26.10): the source stops it
  * and serves it on its mesh address, the target pulls it and starts it. Both
  * commands are sealed: they carry the move's one-time token. The control
  * plane removes the source's copy once the target reports it running.

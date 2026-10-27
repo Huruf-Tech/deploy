@@ -1,10 +1,10 @@
 import { type Filter, ObjectId, type WithId } from "mongodb";
+import { safetyLimit } from "@/lib/limits/safety.ts";
 import type z from "zod";
 import { Logger } from "@/core/utils/logger.ts";
 import { isDuplicateKeyError } from "@/database.ts";
 import { keyring } from "@/lib/services.ts";
 import { send, type TNotice } from "@/lib/monitoring/channels.ts";
-import { readNumberSetting } from "@/lib/core/settings.ts";
 import {
   alertEventModel,
   alertRuleModel,
@@ -396,4 +396,4 @@ export const deliverInBackground = () => {
 
 /** Default grace for `agentOffline` rules (PLAN §3.4). */
 export const offlineGraceSec = () =>
-  readNumberSetting("ALERT_AGENT_OFFLINE_GRACE_SEC", 20);
+  safetyLimit("ALERT_AGENT_OFFLINE_GRACE_SEC");

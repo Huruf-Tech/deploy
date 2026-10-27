@@ -13,6 +13,7 @@ import (
 
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/edge"
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/protocol"
+	"github.com/Huruf-Tech/huruf-deploy/agent/internal/sh"
 )
 
 const tunnelPrefix = "huruf-tunnel-"
@@ -34,10 +35,10 @@ func (m *Mesh) applyTunnels(ctx context.Context, spec *protocol.DesiredSpecIngre
 		}
 	}
 
-	out, _ := run(ctx, "docker", "ps", "-a", "--filter", "label=deploy.huruf.role=tunnel", "--format", "{{.Names}}")
+	out, _ := sh.Run(ctx, "docker", "ps", "-a", "--filter", "label=deploy.huruf.role=tunnel", "--format", "{{.Names}}")
 	for _, name := range strings.Fields(out) {
 		if !wanted[name] {
-			_, _ = run(ctx, "docker", "rm", "-f", name)
+			_, _ = sh.Run(ctx, "docker", "rm", "-f", name)
 			_ = os.RemoveAll(filepath.Join(m.Dir, "tunnel", name))
 		}
 	}
@@ -55,9 +56,9 @@ func (m *Mesh) applyTunnel(ctx context.Context, name, addr string, spec *protoco
 	config := FrpcConfig(host, port, spec)
 	sum := sha256.Sum256([]byte(config + "\x00" + spec.Ca + "\x00" + spec.Image))
 	fingerprint := hex.EncodeToString(sum[:8])
-	state, err := run(ctx, "docker", "inspect", "-f", `{{index .Config.Labels "deploy.huruf.tunnel"}}`, name)
+	state, err := sh.Run(ctx, "docker", "inspect", "-f", `{{index .Config.Labels "deploy.huruf.tunnel"}}`, name)
 	if err == nil && strings.TrimSpace(state) == fingerprint {
-		_, _ = run(ctx, "docker", "start", name) // no-op when running
+		_, _ = sh.Run(ctx, "docker", "start", name) // no-op when running
 		return nil
 	}
 
@@ -71,8 +72,8 @@ func (m *Mesh) applyTunnel(ctx context.Context, name, addr string, spec *protoco
 	if err := os.WriteFile(filepath.Join(dir, "ca.pem"), []byte(spec.Ca), 0o644); err != nil {
 		return err
 	}
-	_, _ = run(ctx, "docker", "rm", "-f", name)
-	_, err = run(ctx, "docker", "run", "-d", "--name", name,
+	_, _ = sh.Run(ctx, "docker", "rm", "-f", name)
+	_, err = sh.Run(ctx, "docker", "run", "-d", "--name", name,
 		"--restart", "unless-stopped",
 		"--network", "host",
 		"--label", "deploy.huruf.managed=true",

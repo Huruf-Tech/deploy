@@ -1,9 +1,17 @@
 package identity
 
 import (
+	"crypto/ecdh"
+	"crypto/ed25519"
 	"testing"
 	"time"
 )
+
+// fromSeed builds an identity from a fixed seed.
+func fromSeed(seed []byte) *Identity {
+	box, _ := ecdh.X25519().NewPrivateKey(seed)
+	return &Identity{sign: ed25519.NewKeyFromSeed(seed), box: box}
+}
 
 // Vectors produced by the control plane's lib/agents/signing.ts with the same
 // seed, so a drift between the Go and TypeScript implementations fails here.
@@ -12,7 +20,7 @@ func TestMatchesControlPlaneSigning(t *testing.T) {
 	for i := range seed {
 		seed[i] = byte(i)
 	}
-	id := FromSeed(seed)
+	id := fromSeed(seed)
 
 	check := func(name, got, want string) {
 		if got != want {
@@ -50,7 +58,7 @@ func TestOpenReadsWhatTheControlPlaneSealed(t *testing.T) {
 	for i := range seed {
 		seed[i] = byte(i + 1)
 	}
-	id := FromSeed(seed)
+	id := fromSeed(seed)
 	if got := id.BoxPublicKey(); got != "B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw" {
 		t.Fatalf("box public key = %s", got)
 	}
@@ -58,7 +66,7 @@ func TestOpenReadsWhatTheControlPlaneSealed(t *testing.T) {
 	if err != nil || string(plain) != "sealed by the control plane" {
 		t.Fatalf("Open = %q, %v", plain, err)
 	}
-	if _, err := FromSeed(make([]byte, 32)).Open("s1.y-Rk7yXPSuRoBWI1s2hCjOV1DMPqO4UoixBbUTQaNW3uzUmh62ucEYn5qIEjdbqDymANQ3suXDYYPEdMVY7oT4BUH4JjWn7ibty6Z6QPFbiGyUMu9NXr"); err == nil {
+	if _, err := fromSeed(make([]byte, 32)).Open("s1.y-Rk7yXPSuRoBWI1s2hCjOV1DMPqO4UoixBbUTQaNW3uzUmh62ucEYn5qIEjdbqDymANQ3suXDYYPEdMVY7oT4BUH4JjWn7ibty6Z6QPFbiGyUMu9NXr"); err == nil {
 		t.Fatal("another key opened it")
 	}
 }

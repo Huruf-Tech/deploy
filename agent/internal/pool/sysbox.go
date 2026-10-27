@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	_ "embed"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"hash/fnv"
@@ -14,38 +13,43 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
+	"github.com/Huruf-Tech/huruf-deploy/agent/internal/daemonjson"
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/dockerhost"
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/protocol"
+	"github.com/Huruf-Tech/huruf-deploy/agent/internal/sh"
 )
 
 //go:embed partition.Dockerfile
 var partitionDockerfile []byte
 
 const (
-	// Root is the XFS volume (mounted with prjquota) partitions live on;
-	// Docker's own data moves there too, so --storage-opt size works.
-	Root       = "/srv/huruf-pool"
-	engineRoot = Root + "/.engine"
-	loopFile   = "/var/lib/huruf-pool.img"
-	image      = "huruf-partition"
-	// An older partition's system files on a pool machine, part of its size.
-	rootGb = 3
-	// Our XFS project ids, far from the ones Docker assigns for --storage-opt.
+	// Root is the XFS volume (mounted with prjquota) partitions live on.
+	Root     = "/srv/huruf-pool"
+	loopFile = "/var/lib/huruf-pool.img"
+	image    = "huruf-partition"
+	// Partitions' XFS project ids start here.
 	projectBase = 1_000_000
+	// How old an older partition's measured container layer may be in a
+	// usage report.
+	layerTTL = 10 * time.Minute
 )
 
 // Sysbox makes partitions as Sysbox system containers (PLAN §26.3).
-type Sysbox struct{}
+type Sysbox struct {
+	layers layerSizes
+}
 
-func run(ctx context.Context, name string, args ...string) (string, error) {
-	out, err := exec.CommandContext(ctx, name, args...).CombinedOutput()
-	if err != nil {
-		return string(out), fmt.Errorf("%s %s: %w: %s", name, strings.Join(args, " "), err, strings.TrimSpace(tail(string(out), 400)))
-	}
-	return string(out), nil
+// layerSizes are older partitions' container layer sizes: measuring walks
+// their system files, too slow for every poll.
+type layerSizes struct {
+	mu    sync.Mutex
+	sizes map[string]int64
+	at    time.Time
+	busy  bool
 }
 
 func container(name string) string { return "partition-" + name }
@@ -72,48 +76,29 @@ func projectID(name string) string {
 	return strconv.Itoa(projectBase + int(h.Sum32()%1_000_000))
 }
 
-func (Sysbox) Setup(ctx context.Context, p protocol.PoolEnsurePayload) (protocol.PartitionSize, map[string]any, error) {
+func (d *Sysbox) Setup(ctx context.Context, p protocol.PoolEnsurePayload) (protocol.PartitionSize, map[string]any, error) {
 	notes := []string{}
 	result := map[string]any{"notes": &notes}
 	none := protocol.PartitionSize{}
-	pool := p.Mode == "pool"
 
 	packages := "fuse3 xfsprogs nftables kmod conntrack"
-	if _, err := run(ctx, "sh", "-c", "DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "+packages); err != nil {
-		if _, err2 := run(ctx, "sh", "-c", "apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "+packages); err2 != nil {
+	if _, err := sh.Run(ctx, "sh", "-c", "DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "+packages); err != nil {
+		if _, err2 := sh.Run(ctx, "sh", "-c", "apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "+packages); err2 != nil {
 			return none, result, err2
 		}
 	}
-	if err := ensureDocker(ctx, &notes); err != nil {
+	if installed, err := dockerhost.InstallDocker(ctx); err != nil {
 		return none, result, err
+	} else if installed {
+		notes = append(notes, "Docker installed")
 	}
 	if err := ensureSysbox(ctx, &notes); err != nil {
 		return none, result, err
 	}
 	// Partitions' private network runs WireGuard, which needs the module here.
-	_, _ = run(ctx, "modprobe", "wireguard")
-	if err := ensureVolume(ctx, p.Volume, pool, &notes); err != nil {
+	_, _ = sh.Run(ctx, "modprobe", "wireguard")
+	if err := ensureVolume(ctx, &notes); err != nil {
 		return none, result, err
-	}
-	if pool {
-		if err := ensureEngine(ctx, &notes); err != nil {
-			return none, result, err
-		}
-	}
-	if pool && p.Docker != nil {
-		// The usual host setup (edge proxy, project network), now on the pool layout.
-		host, err := dockerhost.Ensure(ctx, dockerhost.Payload{
-			LogMaxSize: p.Docker.LogMaxSize,
-			LogMaxFile: int(p.Docker.LogMaxFile),
-			EdgeImage:  p.Docker.EdgeImage,
-			Network:    p.Docker.Network,
-			Subnet:     p.Docker.Subnet,
-			MeshCidr:   p.Docker.MeshCidr,
-		})
-		result["host"] = host
-		if err != nil {
-			return none, result, err
-		}
 	}
 	if err := buildImage(ctx); err != nil {
 		return none, result, err
@@ -121,8 +106,13 @@ func (Sysbox) Setup(ctx context.Context, p protocol.PoolEnsurePayload) (protocol
 	if err := applyRules(ctx); err != nil {
 		return none, result, err
 	}
-	existing, _ := run(ctx, "docker", "ps", "-a", "--filter", "label=huruf.partition", "--format", `{{.Label "huruf.partition"}}`)
-	if err := (Sysbox{}).Restore(ctx, strings.Fields(existing)); err != nil {
+	var existing []string
+	for _, name := range strings.Fields(sh.Output(ctx, "docker", "ps", "-a", "--filter", "label=huruf.partition", "--format", `{{.Label "huruf.partition"}}`)) {
+		if validName.MatchString(name) {
+			existing = append(existing, name)
+		}
+	}
+	if err := d.Restore(ctx, existing); err != nil {
 		return none, result, err
 	}
 
@@ -139,7 +129,7 @@ func (Sysbox) Setup(ctx context.Context, p protocol.PoolEnsurePayload) (protocol
 	if allocatable.Cpus <= 0 || allocatable.MemMb < 256 || allocatable.DiskGb < 5 {
 		return none, result, fmt.Errorf("nothing left for partitions after the reserve: %+v", allocatable)
 	}
-	if out, err := run(ctx, "sysbox-runc", "--version"); err == nil {
+	if out, err := sh.Run(ctx, "sysbox-runc", "--version"); err == nil {
 		for _, line := range strings.Split(out, "\n") {
 			if v, ok := strings.CutPrefix(strings.TrimSpace(line), "version:"); ok {
 				result["sysbox"] = strings.TrimSpace(v)
@@ -158,20 +148,6 @@ func memTotalMb() int64 {
 		}
 	}
 	return 0
-}
-
-// ensureDocker installs Docker when the machine has none.
-func ensureDocker(ctx context.Context, notes *[]string) error {
-	if _, err := exec.LookPath("docker"); err == nil {
-		return nil
-	}
-	install, cancel := context.WithTimeout(ctx, 15*time.Minute)
-	defer cancel()
-	if _, err := run(install, "sh", "-c", "curl -fsSL https://get.docker.com | sh"); err != nil {
-		return fmt.Errorf("installing Docker: %w", err)
-	}
-	*notes = append(*notes, "Docker installed")
-	return nil
 }
 
 // sysboxVersion is the release partitions are tested with (spikes 16a, 17a).
@@ -195,66 +171,43 @@ A=$(dpkg --print-architecture)
 curl -fsSL -o /tmp/sysbox.deb "https://downloads.nestybox.com/sysbox/releases/$V/sysbox-ce_${V#v}-0.linux_$A.deb"
 DEBIAN_FRONTEND=noninteractive apt-get install -y -qq /tmp/sysbox.deb
 rm -f /tmp/sysbox.deb`
-		if _, err := run(ctx, "sh", "-c", script); err != nil {
+		if _, err := sh.Run(ctx, "sh", "-c", script); err != nil {
 			return fmt.Errorf("installing Sysbox: %w", err)
 		}
 		*notes = append(*notes, "Sysbox installed")
 	}
 	// Its installer registers the runtime and reloads Docker; make sure.
-	if out, _ := run(ctx, "docker", "info", "--format", "{{json .Runtimes}}"); !strings.Contains(out, "sysbox-runc") {
+	if out, _ := sh.Run(ctx, "docker", "info", "--format", "{{json .Runtimes}}"); !strings.Contains(out, "sysbox-runc") {
 		if err := addRuntime(); err != nil {
 			return err
 		}
-		if _, err := run(ctx, "systemctl", "reload", "docker"); err != nil {
+		if _, err := sh.Run(ctx, "systemctl", "reload", "docker"); err != nil {
 			return err
 		}
 	}
-	_, _ = run(ctx, "systemctl", "reset-failed", "sysbox", "sysbox-mgr", "sysbox-fs")
-	if _, err := run(ctx, "systemctl", "enable", "--now", "sysbox"); err != nil {
+	_, _ = sh.Run(ctx, "systemctl", "reset-failed", "sysbox", "sysbox-mgr", "sysbox-fs")
+	if _, err := sh.Run(ctx, "systemctl", "enable", "--now", "sysbox"); err != nil {
 		return err
 	}
 	// sysbox-mgr takes a few seconds to come up.
 	for range 30 {
-		if _, err := run(ctx, "systemctl", "is-active", "sysbox-mgr", "sysbox-fs"); err == nil {
+		if _, err := sh.Run(ctx, "systemctl", "is-active", "sysbox-mgr", "sysbox-fs"); err == nil {
 			return nil
 		}
-		time.Sleep(2 * time.Second)
-	}
-	_, err := run(ctx, "systemctl", "is-active", "sysbox-mgr", "sysbox-fs")
-	return err
-}
-
-const daemonJSON = "/etc/docker/daemon.json"
-
-// readDaemonConfig reads daemon.json; missing or empty is {}.
-func readDaemonConfig() (map[string]any, error) {
-	config := map[string]any{}
-	raw, err := os.ReadFile(daemonJSON)
-	if err != nil && !errors.Is(err, os.ErrNotExist) {
-		return nil, err
-	}
-	if len(bytes.TrimSpace(raw)) > 0 {
-		if err := json.Unmarshal(raw, &config); err != nil {
-			return nil, fmt.Errorf("%s is not valid JSON: %w", daemonJSON, err)
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(2 * time.Second):
 		}
 	}
-	return config, nil
-}
-
-// writeDaemonConfig writes daemon.json indented: Sysbox's installer only
-// recognises keys on their own indented lines.
-func writeDaemonConfig(config map[string]any) error {
-	if err := os.MkdirAll("/etc/docker", 0o755); err != nil {
-		return err
-	}
-	out, _ := json.MarshalIndent(config, "", "  ")
-	return os.WriteFile(daemonJSON, append(out, '\n'), 0o644)
+	_, err := sh.Run(ctx, "systemctl", "is-active", "sysbox-mgr", "sysbox-fs")
+	return err
 }
 
 // pinNetworkDefaults writes `bip` (docker0's address now) and Docker's
 // built-in address pools when daemon.json doesn't set them.
 func pinNetworkDefaults(ctx context.Context) error {
-	config, err := readDaemonConfig()
+	config, err := daemonjson.Read()
 	if err != nil {
 		return err
 	}
@@ -265,7 +218,7 @@ func pinNetworkDefaults(ctx context.Context) error {
 	}
 	if !hasBip {
 		bip := "172.17.0.1/16"
-		if f := strings.Fields(must(run(ctx, "ip", "-4", "-o", "addr", "show", "docker0"))); len(f) > 3 {
+		if f := strings.Fields(sh.Output(ctx, "ip", "-4", "-o", "addr", "show", "docker0")); len(f) > 3 {
 			bip = f[3]
 		}
 		config["bip"] = bip
@@ -277,14 +230,12 @@ func pinNetworkDefaults(ctx context.Context) error {
 		}
 		config["default-address-pools"] = append(pools, map[string]any{"base": "192.168.0.0/16", "size": 20})
 	}
-	return writeDaemonConfig(config)
+	return daemonjson.Write(config)
 }
-
-func must(out string, _ error) string { return out }
 
 // addRuntime registers sysbox-runc in daemon.json.
 func addRuntime() error {
-	config, err := readDaemonConfig()
+	config, err := daemonjson.Read()
 	if err != nil {
 		return err
 	}
@@ -294,62 +245,51 @@ func addRuntime() error {
 	}
 	runtimes["sysbox-runc"] = map[string]any{"path": "/usr/bin/sysbox-runc"}
 	config["runtimes"] = runtimes
-	return writeDaemonConfig(config)
+	return daemonjson.Write(config)
 }
 
-// ensureVolume mounts the XFS volume with project quotas: a device (formatted
-// only when it has no filesystem) or a loop file.
-func ensureVolume(ctx context.Context, v protocol.PoolEnsurePayloadVolume, pool bool, notes *[]string) error {
-	if _, err := run(ctx, "mountpoint", "-q", Root); err == nil {
+// ensureVolume mounts the XFS volume with project quotas, on a sparse loop
+// file: it takes only what partitions write, up to the disk's free space
+// when it was made.
+func ensureVolume(ctx context.Context, notes *[]string) error {
+	if _, err := sh.Run(ctx, "mountpoint", "-q", Root); err == nil {
 		return checkQuota(ctx)
 	}
-	source, options := v.Device, "defaults,prjquota"
-	if source == "" {
-		size := int64(0)
-		switch {
-		case v.LoopSizeGb != nil:
-			size = *v.LoopSizeGb
-		case pool:
-			return errors.New("give a device or loopSizeGb for the pool volume")
-		default:
-			// Sparse: it takes only what partitions write, up to today's free space.
-			var st syscall.Statfs_t
-			if err := syscall.Statfs(filepath.Dir(loopFile), &st); err != nil {
-				return err
-			}
-			if size = int64(st.Bavail) * st.Bsize >> 30; size < 10 {
-				return fmt.Errorf("only %d GB free on %s: partitions need at least 10", size, filepath.Dir(loopFile))
-			}
-		}
-		source, options = loopFile, "loop,prjquota"
-		if _, err := os.Stat(loopFile); errors.Is(err, os.ErrNotExist) {
-			if _, err := run(ctx, "truncate", "-s", fmt.Sprintf("%dG", size), loopFile); err != nil {
-				return err
-			}
-		}
-	}
-	if fs, _ := run(ctx, "blkid", "-o", "value", "-s", "TYPE", source); strings.TrimSpace(fs) == "" {
-		if _, err := run(ctx, "mkfs.xfs", "-q", source); err != nil {
+	const options = "loop,prjquota"
+	if _, err := os.Stat(loopFile); errors.Is(err, os.ErrNotExist) {
+		var st syscall.Statfs_t
+		if err := syscall.Statfs(filepath.Dir(loopFile), &st); err != nil {
 			return err
 		}
-		*notes = append(*notes, "Formatted "+source+" as XFS")
+		size := int64(st.Bavail) * st.Bsize >> 30
+		if size < 10 {
+			return fmt.Errorf("only %d GB free on %s: partitions need at least 10", size, filepath.Dir(loopFile))
+		}
+		if _, err := sh.Run(ctx, "truncate", "-s", fmt.Sprintf("%dG", size), loopFile); err != nil {
+			return err
+		}
+	}
+	if fs, _ := sh.Run(ctx, "blkid", "-o", "value", "-s", "TYPE", loopFile); strings.TrimSpace(fs) == "" {
+		if _, err := sh.Run(ctx, "mkfs.xfs", "-q", loopFile); err != nil {
+			return err
+		}
+		*notes = append(*notes, "Formatted "+loopFile+" as XFS")
 	} else if strings.TrimSpace(fs) != "xfs" {
-		return fmt.Errorf("%s holds a %s filesystem; the pool volume must be XFS", source, strings.TrimSpace(fs))
+		return fmt.Errorf("%s holds a %s filesystem; the partition volume must be XFS", loopFile, strings.TrimSpace(fs))
 	}
 	if err := os.MkdirAll(Root, 0o755); err != nil {
 		return err
 	}
-	if _, err := run(ctx, "mount", "-o", options, source, Root); err != nil {
+	if _, err := sh.Run(ctx, "mount", "-o", options, loopFile, Root); err != nil {
 		return err
 	}
-	line := fmt.Sprintf("%s %s xfs %s 0 0\n", source, Root, options)
 	fstab, _ := os.ReadFile("/etc/fstab")
 	if !bytes.Contains(fstab, []byte(" "+Root+" ")) {
 		f, err := os.OpenFile("/etc/fstab", os.O_APPEND|os.O_WRONLY, 0o644)
 		if err != nil {
 			return err
 		}
-		_, err = f.WriteString(line)
+		_, err = fmt.Fprintf(f, "%s %s xfs %s 0 0\n", loopFile, Root, options)
 		f.Close()
 		if err != nil {
 			return err
@@ -359,77 +299,13 @@ func ensureVolume(ctx context.Context, v protocol.PoolEnsurePayloadVolume, pool 
 }
 
 func checkQuota(ctx context.Context) error {
-	out, err := run(ctx, "xfs_quota", "-x", "-c", "state -p", Root)
+	out, err := sh.Run(ctx, "xfs_quota", "-x", "-c", "state -p", Root)
 	if err != nil {
 		return err
 	}
 	if !strings.Contains(out, "Enforcement: ON") {
 		return fmt.Errorf("%s isn't mounted with prjquota", Root)
 	}
-	return nil
-}
-
-// ensureEngine moves Docker's data onto the pool volume with overlay2 (so
-// --storage-opt size caps partitions' system files) and registers Sysbox.
-// Only on a fresh machine: anything but our own containers is refused.
-func ensureEngine(ctx context.Context, notes *[]string) error {
-	const path = "/etc/docker/daemon.json"
-	existing, err := os.ReadFile(path)
-	if err != nil && !errors.Is(err, os.ErrNotExist) {
-		return err
-	}
-	config := map[string]any{}
-	if len(bytes.TrimSpace(existing)) > 0 {
-		if err := json.Unmarshal(existing, &config); err != nil {
-			return fmt.Errorf("%s is not valid JSON: %w", path, err)
-		}
-	}
-	before, _ := json.Marshal(config)
-	config["data-root"] = engineRoot
-	config["storage-driver"] = "overlay2"
-	features, _ := config["features"].(map[string]any)
-	if features == nil {
-		features = map[string]any{}
-	}
-	features["containerd-snapshotter"] = false
-	config["features"] = features
-	runtimes, _ := config["runtimes"].(map[string]any)
-	if runtimes == nil {
-		runtimes = map[string]any{}
-	}
-	runtimes["sysbox-runc"] = map[string]any{"path": "/usr/bin/sysbox-runc"}
-	config["runtimes"] = runtimes
-	after, _ := json.Marshal(config)
-	if bytes.Equal(before, after) {
-		return nil
-	}
-
-	names, _ := run(ctx, "docker", "ps", "-a", "--format", "{{.Names}}")
-	for _, n := range strings.Fields(names) {
-		if strings.HasPrefix(n, "partition-") {
-			return fmt.Errorf("partition %s runs on this machine: remove its partitions before making it a pool machine", strings.TrimPrefix(n, "partition-"))
-		}
-		if !strings.HasPrefix(n, "huruf-") {
-			return fmt.Errorf("container %s runs on this machine: a pool machine must start empty", n)
-		}
-	}
-	// Ours (the edge proxy, the tunnel) come back on the new data root.
-	for _, n := range strings.Fields(names) {
-		_, _ = run(ctx, "docker", "rm", "-f", n)
-	}
-	merged, _ := json.MarshalIndent(config, "", "  ")
-	if err := os.MkdirAll(engineRoot, 0o711); err != nil {
-		return err
-	}
-	if err := os.WriteFile(path, append(merged, '\n'), 0o644); err != nil {
-		return err
-	}
-	if _, err := run(ctx, "systemctl", "restart", "docker"); err != nil {
-		_ = os.WriteFile(path, existing, 0o644)
-		_, _ = run(ctx, "systemctl", "restart", "docker")
-		return fmt.Errorf("Docker didn't start on the pool layout, so %s was restored: %w", path, err)
-	}
-	*notes = append(*notes, "Docker moved to the pool volume (overlay2, Sysbox runtime)")
 	return nil
 }
 
@@ -442,7 +318,7 @@ func buildImage(ctx context.Context) error {
 	if err := os.WriteFile(filepath.Join(tmp, "Dockerfile"), partitionDockerfile, 0o644); err != nil {
 		return err
 	}
-	_, err = run(ctx, "docker", "build", "-q", "-t", image, tmp)
+	_, err = sh.Run(ctx, "docker", "build", "-q", "-t", image, tmp)
 	return err
 }
 
@@ -454,24 +330,16 @@ func memArgs(memMb int64) []string {
 	return []string{"--memory", fmt.Sprintf("%dm", memMb), "--memory-swap", fmt.Sprintf("%dm", memMb)}
 }
 
-// dataGb is what the quota allows: all of the size, but an older partition's
-// on a pool machine, whose system files are capped separately.
-func dataGb(ctx context.Context, name string, size protocol.PartitionSize) int64 {
-	if !ownRoot(name) && dockerOnVolume(ctx) {
-		return max(1, size.DiskGb-rootGb)
-	}
-	return size.DiskGb
-}
-
+// setQuota caps the partition's directory at its whole disk size.
 func setQuota(ctx context.Context, name string, size protocol.PartitionSize) error {
-	_, err := run(ctx, "xfs_quota", "-x", "-c", fmt.Sprintf("limit -p bhard=%dg %s", dataGb(ctx, name, size), projectID(name)), Root)
+	_, err := sh.Run(ctx, "xfs_quota", "-x", "-c", fmt.Sprintf("limit -p bhard=%dg %s", size.DiskGb, projectID(name)), Root)
 	return err
 }
 
 // ensureImage builds the partition image when it's gone: another tool's
 // cleanup (e.g. `docker image prune -a`) removes it once no partition uses it.
 func ensureImage(ctx context.Context) error {
-	if _, err := run(ctx, "docker", "image", "inspect", image); err != nil {
+	if _, err := sh.Run(ctx, "docker", "image", "inspect", image); err != nil {
 		if err := buildImage(ctx); err != nil {
 			return fmt.Errorf("building the partition image: %w", err)
 		}
@@ -479,7 +347,7 @@ func ensureImage(ctx context.Context) error {
 	return nil
 }
 
-func (Sysbox) Create(ctx context.Context, name string, size protocol.PartitionSize, weight int) error {
+func (d *Sysbox) Create(ctx context.Context, name string, size protocol.PartitionSize, weight int) error {
 	if err := ensureImage(ctx); err != nil {
 		return err
 	}
@@ -500,7 +368,7 @@ func prepareDir(ctx context.Context, name string, size protocol.PartitionSize) e
 			return err
 		}
 	}
-	if _, err := run(ctx, "xfs_quota", "-x", "-c", fmt.Sprintf("project -s -p %s %s", d, projectID(name)), Root); err != nil {
+	if _, err := sh.Run(ctx, "xfs_quota", "-x", "-c", fmt.Sprintf("project -s -p %s %s", d, projectID(name)), Root); err != nil {
 		return err
 	}
 	return setQuota(ctx, name, size)
@@ -509,24 +377,60 @@ func prepareDir(ctx context.Context, name string, size protocol.PartitionSize) e
 // extractRoot copies an image's filesystem into the partition's own root.
 func extractRoot(ctx context.Context, name, img string) error {
 	tmp := "huruf-root-" + name
-	_, _ = run(ctx, "docker", "rm", "-f", tmp)
-	if _, err := run(ctx, "docker", "create", "--name", tmp, img); err != nil {
+	_, _ = sh.Run(ctx, "docker", "rm", "-f", tmp)
+	if _, err := sh.Run(ctx, "docker", "create", "--name", tmp, img); err != nil {
 		return err
 	}
-	defer run(context.WithoutCancel(ctx), "docker", "rm", "-f", tmp)
-	if _, err := run(ctx, "bash", "-o", "pipefail", "-c",
-		fmt.Sprintf("docker export %s | tar -C %s --numeric-owner --xattrs --xattrs-include='*' -xpf -", tmp, rootDir(name))); err != nil {
+	defer sh.Run(context.WithoutCancel(ctx), "docker", "rm", "-f", tmp)
+	if err := pipe(ctx, []string{"docker", "export", tmp},
+		[]string{"tar", "-C", rootDir(name), "--numeric-owner", "--xattrs", "--xattrs-include=*", "-xpf", "-"}); err != nil {
 		return fmt.Errorf("copying the system files (over the disk size?): %w", err)
 	}
 	return nil
+}
+
+// pipe runs `from | to`, without a shell.
+func pipe(ctx context.Context, from, to []string) error {
+	r, w, err := os.Pipe()
+	if err != nil {
+		return err
+	}
+	var fromErr, toOut bytes.Buffer
+	src := exec.CommandContext(ctx, from[0], from[1:]...)
+	src.Stdout, src.Stderr = w, &fromErr
+	dst := exec.CommandContext(ctx, to[0], to[1:]...)
+	dst.Stdin, dst.Stdout, dst.Stderr = r, &toOut, &toOut
+	if err := src.Start(); err != nil {
+		r.Close()
+		w.Close()
+		return err
+	}
+	// Only the children hold the pipe now: a failing reader stops the writer.
+	w.Close()
+	err = dst.Start()
+	r.Close()
+	if err != nil {
+		_ = src.Process.Kill()
+		_ = src.Wait()
+		return err
+	}
+	// Both may fail: a full disk stops the reader, then the writer.
+	var errs []error
+	if err := dst.Wait(); err != nil {
+		errs = append(errs, fmt.Errorf("%s: %w: %s", to[0], err, sh.Tail(strings.TrimSpace(toOut.String()), 300)))
+	}
+	if err := src.Wait(); err != nil {
+		errs = append(errs, fmt.Errorf("%s: %w: %s", from[0], err, sh.Tail(strings.TrimSpace(fromErr.String()), 300)))
+	}
+	return errors.Join(errs...)
 }
 
 // runPartition starts the partition's container from `img`, its system files
 // mounted from its own root.
 func runPartition(ctx context.Context, name string, size protocol.PartitionSize, weight int, img string) error {
 	d := dir(name)
-	if _, err := run(ctx, "docker", "network", "inspect", bridge(name)); err != nil {
-		if _, err := run(ctx, "docker", "network", "create", "--driver", "bridge",
+	if _, err := sh.Run(ctx, "docker", "network", "inspect", bridge(name)); err != nil {
+		if _, err := sh.Run(ctx, "docker", "network", "create", "--driver", "bridge",
 			"--opt", "com.docker.network.bridge.name="+bridge(name), bridge(name)); err != nil {
 			return err
 		}
@@ -542,14 +446,14 @@ func runPartition(ctx context.Context, name string, size protocol.PartitionSize,
 	}
 	args = append(args, cpuArgs(size.Cpus, weight)...)
 	args = append(args, memArgs(size.MemMb)...)
-	if _, err := run(ctx, "docker", append(args, img)...); err != nil {
+	if _, err := sh.Run(ctx, "docker", append(args, img)...); err != nil {
 		return err
 	}
 	return ensureCounters(ctx, name)
 }
 
 // Restore re-adds what doesn't survive a reboot: the traffic counters.
-func (Sysbox) Restore(ctx context.Context, names []string) error {
+func (d *Sysbox) Restore(ctx context.Context, names []string) error {
 	for _, name := range names {
 		if err := ensureCounters(ctx, name); err != nil {
 			return err
@@ -558,60 +462,132 @@ func (Sysbox) Restore(ctx context.Context, names []string) error {
 	return nil
 }
 
-func (Sysbox) Resize(ctx context.Context, name string, size protocol.PartitionSize, weight int) error {
+func (d *Sysbox) Resize(ctx context.Context, name string, size protocol.PartitionSize, weight int) error {
 	args := append([]string{"update"}, cpuArgs(size.Cpus, weight)...)
 	args = append(args, memArgs(size.MemMb)...)
-	if _, err := run(ctx, "docker", append(args, container(name))...); err != nil {
+	if _, err := sh.Run(ctx, "docker", append(args, container(name))...); err != nil {
 		return err
 	}
 	return setQuota(ctx, name, size)
 }
 
-func (Sysbox) Stop(ctx context.Context, name string) error {
-	_, err := run(ctx, "docker", "stop", "-t", "60", container(name))
+func (d *Sysbox) Stop(ctx context.Context, name string) error {
+	_, err := sh.Run(ctx, "docker", "stop", "-t", "60", container(name))
 	return err
 }
 
-func (Sysbox) Start(ctx context.Context, name string) error {
-	_, err := run(ctx, "docker", "start", container(name))
+func (d *Sysbox) Start(ctx context.Context, name string) error {
+	_, err := sh.Run(ctx, "docker", "start", container(name))
 	return err
 }
 
-func (Sysbox) Remove(ctx context.Context, name string) error {
-	if out, err := run(ctx, "docker", "rm", "-f", container(name)); err != nil && !strings.Contains(out, "No such container") {
+func (d *Sysbox) Remove(ctx context.Context, name string) error {
+	if out, err := sh.Run(ctx, "docker", "rm", "-f", container(name)); err != nil && !strings.Contains(out, "No such container") {
 		return err
 	}
-	_, _ = run(ctx, "docker", "network", "rm", bridge(name))
+	_, _ = sh.Run(ctx, "docker", "network", "rm", bridge(name))
 	delCounters(ctx, name)
-	_, _ = run(ctx, "xfs_quota", "-x", "-c", "limit -p bhard=0 "+projectID(name), Root)
+	_, _ = sh.Run(ctx, "xfs_quota", "-x", "-c", "limit -p bhard=0 "+projectID(name), Root)
 	// The system files a move brought in.
-	if ids, _ := run(ctx, "docker", "images", "-q", "--filter", "label="+movedLabel+"="+name); strings.TrimSpace(ids) != "" {
-		_, _ = run(ctx, "docker", append([]string{"rmi", "-f"}, strings.Fields(ids)...)...)
+	if ids := strings.Fields(sh.Output(ctx, "docker", "images", "-q", "--filter", "label="+movedLabel+"="+name)); len(ids) > 0 {
+		_, _ = sh.Run(ctx, "docker", append([]string{"rmi", "-f"}, ids...)...)
 	}
 	return os.RemoveAll(dir(name))
 }
 
-func (Sysbox) Exec(ctx context.Context, name, script string) (string, error) {
-	return run(ctx, "docker", "exec", container(name), "bash", "-c", script)
+func (d *Sysbox) Exec(ctx context.Context, name, script string) (string, error) {
+	return sh.Run(ctx, "docker", "exec", container(name), "bash", "-c", script)
 }
 
-func (Sysbox) Usage(ctx context.Context, name string) (Usage, error) {
-	out, err := run(ctx, "docker", "inspect", "-f", "{{.State.Status}} {{.Id}}", container(name))
-	if err != nil {
-		return Usage{}, err
+// Usage reads every partition at once: one docker inspect, one quota report
+// and one counter listing, whatever their number.
+func (d *Sysbox) Usage(ctx context.Context, names []string, exact bool) (map[string]Usage, error) {
+	if len(names) == 0 {
+		return map[string]Usage{}, nil
 	}
-	fields := strings.Fields(out)
-	if len(fields) != 2 {
-		return Usage{}, fmt.Errorf("unexpected docker inspect output: %q", out)
+	containers := make([]string, len(names))
+	for i, name := range names {
+		containers[i] = container(name)
 	}
-	u := Usage{State: fields[0]}
-	if cg := cgroupDir(fields[1]); cg != "" {
-		u.MemUsed = max(0, readInt(cg, "memory.current")-statValue(cg, "memory.stat", "inactive_file"))
-		u.CPUMicros = statValue(cg, "cpu.stat", "usage_usec")
+	// A missing container fails the command; the others are still listed.
+	out, err := sh.Run(ctx, "docker", append([]string{"inspect", "-f", "{{.Name}} {{.State.Status}} {{.Id}}"}, containers...)...)
+	quota := projectUsage(ctx)
+	counters := readCounters(ctx)
+	result := map[string]Usage{}
+	var older []string
+	for _, line := range strings.Split(out, "\n") {
+		f := strings.Fields(line)
+		if len(f) != 3 {
+			continue
+		}
+		name, ok := strings.CutPrefix(f[0], "/"+container(""))
+		if !ok || !validName.MatchString(name) {
+			continue
+		}
+		u := Usage{State: f[1], DiskUsed: quota[projectID(name)], TxBytes: counters["out_"+name], RxBytes: counters["in_"+name]}
+		if cg := cgroupDir(f[2]); cg != "" {
+			u.MemUsed = max(0, readInt(cg, "memory.current")-statValue(cg, "memory.stat", "inactive_file"))
+			u.CPUMicros = statValue(cg, "cpu.stat", "usage_usec")
+		}
+		if !ownRoot(name) {
+			older = append(older, name)
+		}
+		result[name] = u
 	}
-	u.DiskUsed = projectUsedBytes(ctx, name)
-	u.TxBytes, u.RxBytes = readCounters(ctx, name)
-	return u, nil
+	if len(result) == 0 && err != nil {
+		return nil, err
+	}
+	// An older partition's system files are in its container's layer.
+	for name, size := range d.layerSizes(ctx, older, exact) {
+		if u, ok := result[name]; ok {
+			u.DiskUsed += size
+			result[name] = u
+		}
+	}
+	return result, nil
+}
+
+// layerSizes measures these containers' layers now (`exact`), or returns
+// the last measurement and refreshes it in the background when stale.
+func (d *Sysbox) layerSizes(ctx context.Context, names []string, exact bool) map[string]int64 {
+	if len(names) == 0 {
+		return nil
+	}
+	if exact {
+		return measureLayers(ctx, names)
+	}
+	c := &d.layers
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if !c.busy && time.Since(c.at) > layerTTL {
+		c.busy = true
+		go func() {
+			measure, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Minute)
+			defer cancel()
+			sizes := measureLayers(measure, names)
+			c.mu.Lock()
+			c.sizes, c.at, c.busy = sizes, time.Now(), false
+			c.mu.Unlock()
+		}()
+	}
+	return c.sizes // replaced, never changed: safe to read after unlocking
+}
+
+func measureLayers(ctx context.Context, names []string) map[string]int64 {
+	containers := make([]string, len(names))
+	for i, name := range names {
+		containers[i] = container(name)
+	}
+	out, _ := sh.Run(ctx, "docker", append([]string{"inspect", "-s", "-f", "{{.Name}} {{.SizeRw}}"}, containers...)...)
+	sizes := map[string]int64{}
+	for _, line := range strings.Split(out, "\n") {
+		if f := strings.Fields(line); len(f) == 2 {
+			if name, ok := strings.CutPrefix(f[0], "/"+container("")); ok {
+				sizes[name], _ = strconv.ParseInt(f[1], 10, 64)
+			}
+		}
+	}
+	return sizes
 }
 
 // cgroupDir finds a container's cgroup (systemd or cgroupfs driver).
@@ -644,23 +620,19 @@ func statValue(cg, file, key string) int64 {
 	return 0
 }
 
-// projectUsedBytes adds the quota'd data to the partition's system files.
-func projectUsedBytes(ctx context.Context, name string) int64 {
-	out, err := run(ctx, "xfs_quota", "-x", "-c", "report -p -b -N", Root)
-	if err != nil {
-		return 0
-	}
-	var used int64
+// projectUsage is the bytes each XFS project (partition directory) uses.
+func projectUsage(ctx context.Context) map[string]int64 {
+	return parseQuotaReport(sh.Output(ctx, "xfs_quota", "-x", "-c", "report -p -b -N", Root))
+}
+
+func parseQuotaReport(out string) map[string]int64 {
+	used := map[string]int64{}
 	for _, line := range strings.Split(out, "\n") {
 		f := strings.Fields(line)
-		if len(f) >= 2 && f[0] == "#"+projectID(name) {
+		if len(f) >= 2 && strings.HasPrefix(f[0], "#") {
 			kb, _ := strconv.ParseInt(f[1], 10, 64)
-			used = kb * 1024
+			used[f[0][1:]] = kb * 1024
 		}
-	}
-	if size, err := run(ctx, "docker", "inspect", "-s", "-f", "{{.SizeRw}}", container(name)); err == nil {
-		n, _ := strconv.ParseInt(strings.TrimSpace(size), 10, 64)
-		used += n
 	}
 	return used
 }

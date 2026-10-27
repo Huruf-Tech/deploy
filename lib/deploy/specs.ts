@@ -7,7 +7,7 @@ import { sealTo } from "@/lib/agents/sealing.ts";
 import { PROJECT_NETWORK } from "@/lib/agents/commands.ts";
 import { builtinRegistry, meshSpecFor } from "@/lib/network/mesh.ts";
 import { ingressSpecFor } from "@/lib/domains/tunnels.ts";
-import { projectModel } from "@/schemas/applications/project.ts";
+import { projectModel, workloadName } from "@/schemas/applications/project.ts";
 import {
   deploymentModel,
   releaseModel,
@@ -213,7 +213,7 @@ export async function computeSpec(
       const single = services.length === 1;
       workloads.push({
         project: project._id.toHexString(),
-        name: single ? project.slug : `${project.slug}-${service.name}`,
+        name: workloadName(project.slug, services.length, service.name),
         dnsNames: [
           single
             ? `${project.slug}.internal`
@@ -427,21 +427,24 @@ export async function refreshSpecs(servers: ObjectId[]) {
     ).values(),
   ];
 
-  for (const server of unique) {
-    const doc = await serverModel.findOne(
-      { _id: server, status: "active" },
-      { projection: { tenant: 1, "identity.boxPublicKey": 1 } },
-    );
-    if (!doc) continue;
-
+  // One read each for every server's key and stored spec; specs are
+  // computed a few servers at a time (PLAN §20).
+  const [docs, stored] = await Promise.all([
+    serverModel.find({ _id: { $in: unique }, status: "active" }, {
+      projection: { tenant: 1, "identity.boxPublicKey": 1 },
+    }).toArray(),
+    serverSpecModel.find({ _id: { $in: unique } }, {
+      projection: { hash: 1, version: 1 },
+    }).toArray(),
+  ]);
+  const refresh = async (doc: (typeof docs)[number]) => {
+    const server = doc._id;
     const spec = await computeSpec(server);
     const hash = createHashSync(SupportedHashAlg.SHA_1, JSON.stringify(spec));
-    const current = await serverSpecModel.findOne({ _id: server }, {
-      projection: { hash: 1, version: 1 },
-    });
+    const current = stored.find((s) => s._id.equals(server));
     if (current?.hash === hash) {
       versions.set(server.toHexString(), current.version);
-      continue;
+      return;
     }
 
     const lease = await serverLeaseModel.findOneAndUpdate(
@@ -453,7 +456,7 @@ export async function refreshSpecs(servers: ObjectId[]) {
       },
       { returnDocument: "after", projection: { desiredVersion: 1 } },
     );
-    if (!lease) continue;
+    if (!lease) return;
     const version = lease.desiredVersion;
     const sealed = await sealTo(
       doc.identity.boxPublicKey,
@@ -480,6 +483,12 @@ export async function refreshSpecs(servers: ObjectId[]) {
     }
     serverWakeups.wake(server.toHexString()); // its held poll, if here
     versions.set(server.toHexString(), version);
+  };
+  for (let i = 0; i < docs.length; i += SPEC_CONCURRENCY) {
+    await Promise.all(docs.slice(i, i + SPEC_CONCURRENCY).map(refresh));
   }
   return versions;
 }
+
+/** Servers whose specs are computed at once in a refresh. */
+const SPEC_CONCURRENCY = 8;

@@ -23,9 +23,11 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/protocol"
+	"github.com/Huruf-Tech/huruf-deploy/agent/internal/sh"
 )
 
 const (
@@ -46,6 +48,11 @@ type Mesh struct {
 
 	// collect frees deleted images' space; tests replace it.
 	collect func(context.Context) error
+
+	// applyMu serializes applying specs: the poll's and Run's retries.
+	applyMu sync.Mutex
+	// collecting > 0: the registry is stopped for garbage collection.
+	collecting atomic.Int32
 
 	mu       sync.Mutex
 	last     *protocol.DesiredSpec // retried while it fails
@@ -88,9 +95,6 @@ func (m *Mesh) Teardown(ctx context.Context) error {
 	return nil
 }
 
-// KeyPath is where the WireGuard private key lives.
-func (m *Mesh) KeyPath() string { return m.keyPath() }
-
 func (m *Mesh) privateKey() ([]byte, error) {
 	raw, err := os.ReadFile(m.keyPath())
 	if errors.Is(err, os.ErrNotExist) {
@@ -127,10 +131,16 @@ func (m *Mesh) saveKey(raw []byte) error {
 // Apply makes the interface, peers, routes, registry and ingress tunnels
 // match the spec. A nil mesh tears the interface down; tunnels don't need it.
 func (m *Mesh) Apply(ctx context.Context, spec protocol.DesiredSpec) error {
+	m.applyMu.Lock()
+	defer m.applyMu.Unlock()
 	m.mu.Lock()
 	m.last, m.spec, m.registry = &spec, spec.Mesh, spec.Registry
 	m.mu.Unlock()
+	return m.apply(ctx, spec)
+}
 
+// apply runs with applyMu held.
+func (m *Mesh) apply(ctx context.Context, spec protocol.DesiredSpec) error {
 	err := m.applyMesh(ctx, spec.Mesh)
 	if err == nil {
 		err = m.applyRegistry(ctx, spec.Registry)
@@ -150,26 +160,26 @@ func (m *Mesh) Apply(ctx context.Context, spec protocol.DesiredSpec) error {
 }
 
 func (m *Mesh) applyMesh(ctx context.Context, spec *protocol.MeshSpec) error {
-	_, exists := run(ctx, "ip", "link", "show", Interface)
+	_, exists := sh.Run(ctx, "ip", "link", "show", Interface)
 	if spec == nil {
 		if exists == nil {
-			_, _ = run(ctx, "ip", "link", "del", Interface)
+			_, _ = sh.Run(ctx, "ip", "link", "del", Interface)
 		}
-		forwardRules(ctx, "-D")
+		forwardRules(ctx, false)
 		return nil
 	}
 	if _, err := exec.LookPath("wg"); err != nil {
 		return errors.New("wireguard-tools isn't installed; run host setup again")
 	}
 	if exists != nil {
-		if _, err := run(ctx, "ip", "link", "add", Interface, "type", "wireguard"); err != nil {
+		if _, err := sh.Run(ctx, "ip", "link", "add", Interface, "type", "wireguard"); err != nil {
 			return fmt.Errorf("creating %s (does the kernel have WireGuard?): %w", Interface, err)
 		}
 	}
 	if _, err := m.privateKey(); err != nil {
 		return err
 	}
-	if _, err := run(ctx, "wg", "set", Interface, "private-key", m.keyPath(), "listen-port", strconv.FormatInt(spec.ListenPort, 10)); err != nil {
+	if _, err := sh.Run(ctx, "wg", "set", Interface, "private-key", m.keyPath(), "listen-port", strconv.FormatInt(spec.ListenPort, 10)); err != nil {
 		return err
 	}
 
@@ -182,21 +192,21 @@ func (m *Mesh) applyMesh(ctx context.Context, spec *protocol.MeshSpec) error {
 		if peer.Endpoint != "" {
 			args = append(args, "endpoint", peer.Endpoint)
 		}
-		if _, err := run(ctx, "wg", args...); err != nil {
+		if _, err := sh.Run(ctx, "wg", args...); err != nil {
 			return fmt.Errorf("peer %s: %w", peer.Server, err)
 		}
 	}
-	current, _ := run(ctx, "wg", "show", Interface, "peers")
+	current, _ := sh.Run(ctx, "wg", "show", Interface, "peers")
 	for _, key := range strings.Fields(current) {
 		if !wanted[key] {
-			_, _ = run(ctx, "wg", "set", Interface, "peer", key, "remove")
+			_, _ = sh.Run(ctx, "wg", "set", Interface, "peer", key, "remove")
 		}
 	}
 
-	if _, err := run(ctx, "ip", "address", "replace", spec.Address, "dev", Interface); err != nil {
+	if _, err := sh.Run(ctx, "ip", "address", "replace", spec.Address, "dev", Interface); err != nil {
 		return err
 	}
-	if _, err := run(ctx, "ip", "link", "set", Interface, "up"); err != nil {
+	if _, err := sh.Run(ctx, "ip", "link", "set", Interface, "up"); err != nil {
 		return err
 	}
 
@@ -204,34 +214,27 @@ func (m *Mesh) applyMesh(ctx context.Context, spec *protocol.MeshSpec) error {
 	routes := map[string]bool{}
 	for _, peer := range spec.Peers {
 		routes[peer.Subnet] = true
-		if _, err := run(ctx, "ip", "route", "replace", peer.Subnet, "dev", Interface); err != nil {
+		if _, err := sh.Run(ctx, "ip", "route", "replace", peer.Subnet, "dev", Interface); err != nil {
 			return err
 		}
 	}
-	table, _ := run(ctx, "ip", "route", "show", "dev", Interface)
+	table, _ := sh.Run(ctx, "ip", "route", "show", "dev", Interface)
 	for _, line := range strings.Split(table, "\n") {
 		fields := strings.Fields(line)
 		if len(fields) > 0 && strings.Contains(fields[0], "/") && !routes[fields[0]] && fields[0] != prefixOf(spec.Address) {
-			_, _ = run(ctx, "ip", "route", "del", fields[0], "dev", Interface)
+			_, _ = sh.Run(ctx, "ip", "route", "del", fields[0], "dev", Interface)
 		}
 	}
 
-	forwardRules(ctx, "-I")
+	forwardRules(ctx, true)
 	return nil
 }
 
 // forwardRules lets mesh traffic through Docker's forwarding filter (the
-// DOCKER-USER chain is where Docker expects such rules). `-D` removes them.
-func forwardRules(ctx context.Context, action string) {
+// DOCKER-USER chain is where Docker expects such rules), or removes them.
+func forwardRules(ctx context.Context, present bool) {
 	for _, dir := range []string{"-i", "-o"} {
-		rule := []string{"DOCKER-USER", dir, Interface, "-j", "ACCEPT"}
-		_, missing := run(ctx, "iptables", append([]string{"-C"}, rule...)...)
-		switch {
-		case action == "-I" && missing != nil:
-			_, _ = run(ctx, "iptables", append([]string{"-I"}, rule...)...)
-		case action == "-D" && missing == nil:
-			_, _ = run(ctx, "iptables", append([]string{"-D"}, rule...)...)
-		}
+		_ = sh.Iptables(ctx, present, "DOCKER-USER", dir, Interface, "-j", "ACCEPT")
 	}
 }
 
@@ -255,10 +258,10 @@ const htpasswdVersion = "2"
 // applyRegistry runs the registry on the primary server, bound to its mesh
 // address only, with basic auth (PLAN §8.4).
 func (m *Mesh) applyRegistry(ctx context.Context, spec *protocol.DesiredSpecRegistry) error {
-	state, err := run(ctx, "docker", "inspect", "-f", `{{index .Config.Labels "deploy.huruf.registry"}}`, registryName)
+	state, err := sh.Run(ctx, "docker", "inspect", "-f", `{{index .Config.Labels "deploy.huruf.registry"}}`, registryName)
 	if spec == nil {
 		if err == nil {
-			_, _ = run(ctx, "docker", "rm", "-f", registryName)
+			_, _ = sh.Run(ctx, "docker", "rm", "-f", registryName)
 		}
 		return nil
 	}
@@ -268,18 +271,21 @@ func (m *Mesh) applyRegistry(ctx context.Context, spec *protocol.DesiredSpecRegi
 	sum := sha256.Sum256([]byte(spec.Listen + "\x00" + spec.Username + "\x00" + spec.Password + "\x00" + spec.Image + "\x00" + htpasswdVersion))
 	fingerprint := hex.EncodeToString(sum[:8])
 	if err == nil && strings.TrimSpace(state) == fingerprint {
-		_, _ = run(ctx, "docker", "start", registryName) // no-op when running
+		if m.collecting.Load() == 0 {
+			_, _ = sh.Run(ctx, "docker", "start", registryName) // no-op when running
+		}
 		return nil
 	}
 
 	// The registry checks this hash on every request (each layer of a pull):
 	// Caddy's default bcrypt cost 14 takes seconds per check on a small
 	// server, enough to stall pulls. Cost 10 is 16 times cheaper and still
-	// bcrypt; older Caddy without the flag falls back to its default.
-	hash, err := run(ctx, "docker", "exec", "huruf-edge", "caddy", "hash-password",
-		"--plaintext", spec.Password, "--bcrypt-cost", "10")
+	// bcrypt; older Caddy without the flag falls back to its default. The
+	// password goes on stdin, never on a command line (`ps` shows those).
+	// Caddy reads one line: the password ends with a newline.
+	hash, err := sh.RunInput(ctx, spec.Password+"\n", "docker", "exec", "-i", "huruf-edge", "caddy", "hash-password", "--bcrypt-cost", "10")
 	if err != nil {
-		hash, err = run(ctx, "docker", "exec", "huruf-edge", "caddy", "hash-password", "--plaintext", spec.Password)
+		hash, err = sh.RunInput(ctx, spec.Password+"\n", "docker", "exec", "-i", "huruf-edge", "caddy", "hash-password")
 	}
 	if err != nil {
 		return fmt.Errorf("hashing the registry password: %w", err)
@@ -293,8 +299,8 @@ func (m *Mesh) applyRegistry(ctx context.Context, spec *protocol.DesiredSpecRegi
 		return err
 	}
 
-	_, _ = run(ctx, "docker", "rm", "-f", registryName)
-	_, err = run(ctx, "docker", "run", "-d", "--name", registryName,
+	_, _ = sh.Run(ctx, "docker", "rm", "-f", registryName)
+	_, err = sh.Run(ctx, "docker", "run", "-d", "--name", registryName,
 		"--restart", "unless-stopped",
 		"--label", "deploy.huruf.managed=true",
 		"--label", "deploy.huruf.registry="+fingerprint,
@@ -320,26 +326,47 @@ func (m *Mesh) Run(ctx context.Context, interval func() time.Duration) {
 		case <-ctx.Done():
 			return
 		case <-time.After(interval()):
-			m.mu.Lock()
-			retry := m.lastErr != "" && m.last != nil
-			last := m.last
-			m.mu.Unlock()
-			if retry {
-				_ = m.Apply(ctx, *last) // e.g. wireguard-tools arrived with host setup
-				continue
-			}
-			// The registry container can vanish (a prune, a failed Docker
-			// restart); applyRegistry is a no-op `docker start` while it exists.
-			if last != nil && last.Registry != nil {
-				if err := m.applyRegistry(ctx, last.Registry); err != nil {
-					m.mu.Lock()
-					m.lastErr = err.Error()
-					m.mu.Unlock()
-				}
-			}
-			m.report(false)
+			m.check(ctx)
 		}
 	}
+}
+
+// check retries a spec that failed (e.g. wireguard-tools arrived with host
+// setup), or restarts a registry container that vanished (a prune, a failed
+// Docker restart). A newer spec applied meanwhile wins: this one is skipped.
+func (m *Mesh) check(ctx context.Context) {
+	m.mu.Lock()
+	last, failed := m.last, m.lastErr != ""
+	m.mu.Unlock()
+	m.recheck(ctx, last, failed)
+}
+
+func (m *Mesh) recheck(ctx context.Context, last *protocol.DesiredSpec, failed bool) {
+	if last == nil {
+		m.report(false)
+		return
+	}
+	m.applyMu.Lock()
+	defer m.applyMu.Unlock()
+	m.mu.Lock()
+	current := m.last == last
+	m.mu.Unlock()
+	if !current {
+		return
+	}
+	if failed {
+		_ = m.apply(ctx, *last)
+		return
+	}
+	// applyRegistry is a no-op `docker start` while the container exists.
+	if last.Registry != nil {
+		if err := m.applyRegistry(ctx, last.Registry); err != nil {
+			m.mu.Lock()
+			m.lastErr = err.Error()
+			m.mu.Unlock()
+		}
+	}
+	m.report(false)
 }
 
 // report emits a status when the reachability changed, or every 10 minutes.
@@ -378,14 +405,14 @@ func (m *Mesh) report(force bool) {
 		Data: protocol.MeshStatusEventData{PublicKey: key, Peers: peers},
 	}
 	if lastErr != "" {
-		event.Data.Error = truncate(lastErr, 500)
+		event.Data.Error = sh.Cap(lastErr, 500)
 	}
 	m.Emit(event)
 }
 
 // latestHandshakes reads `wg show wg0 latest-handshakes` (public key → time).
 func latestHandshakes(ctx context.Context) map[string]time.Time {
-	out, err := run(ctx, "wg", "show", Interface, "latest-handshakes")
+	out, err := sh.Run(ctx, "wg", "show", Interface, "latest-handshakes")
 	result := map[string]time.Time{}
 	if err != nil {
 		return result
@@ -429,19 +456,4 @@ func (m *Mesh) Address() string {
 	}
 	ip, _, _ := strings.Cut(m.spec.Address, "/")
 	return ip
-}
-
-func truncate(s string, n int) string {
-	if len(s) <= n {
-		return s
-	}
-	return s[:n-1] + "…"
-}
-
-func run(ctx context.Context, name string, args ...string) (string, error) {
-	out, err := exec.CommandContext(ctx, name, args...).CombinedOutput()
-	if err != nil {
-		return string(out), fmt.Errorf("%s %s: %w: %s", name, strings.Join(args[:min(2, len(args))], " "), err, truncate(strings.TrimSpace(string(out)), 300))
-	}
-	return string(out), nil
 }

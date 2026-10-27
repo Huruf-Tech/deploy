@@ -1,11 +1,7 @@
 package pool
 
 import (
-	"bytes"
 	"context"
-	"fmt"
-	"os"
-	"os/exec"
 	"strings"
 )
 
@@ -20,7 +16,7 @@ const (
 )
 
 // isolateRules is the table for these rented partitions' bridges.
-func isolateRules(bridges, allowIps []string) string {
+func isolateRules(bridges []string) string {
 	elements := ""
 	if len(bridges) > 0 {
 		quoted := make([]string, len(bridges))
@@ -29,19 +25,12 @@ func isolateRules(bridges, allowIps []string) string {
 		}
 		elements = "\n    elements = { " + strings.Join(quoted, ", ") + " }"
 	}
-	allow := ""
-	for _, ip := range allowIps {
-		allow += fmt.Sprintf("    iifname @rented ip daddr %s accept\n", ip)
-	}
-	return `table inet ` + isolateTable + `
-delete table inet ` + isolateTable + `
-table inet ` + isolateTable + ` {
-  set rented {
-    type ifname;` + elements + `
+	return replaceTable("inet", isolateTable, `  set rented {
+    type ifname;`+elements+`
   }
   chain forward {
     type filter hook forward priority -10; policy accept;
-` + allow + `    # A rental never reaches another partition (or is reached from one), the
+    # A rental never reaches another partition (or is reached from one), the
     # cloud's metadata endpoint (the machine's credentials), mail ports, or
     # the machine's private network.
     iifname @rented oifname "hp-*" drop
@@ -56,34 +45,18 @@ table inet ` + isolateTable + ` {
     iifname @rented ct state established,related accept
     iifname @rented drop
   }
-}
-`
+`)
 }
 
 // Isolate applies the rules to these partitions and keeps them for boot.
-func (Sysbox) Isolate(ctx context.Context, names, allowIps []string) error {
+func (d *Sysbox) Isolate(ctx context.Context, names []string) error {
 	bridges := make([]string, len(names))
 	for i, n := range names {
 		bridges[i] = bridge(n)
 	}
-	rules := isolateRules(bridges, allowIps)
-	cmd := exec.CommandContext(ctx, "nft", "-f", "-")
-	cmd.Stdin = strings.NewReader(rules)
-	if out, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("nft: %w: %s", err, strings.TrimSpace(string(out)))
-	}
-	if err := os.WriteFile(isolateFile, []byte(rules), 0o644); err != nil {
+	rules := isolateRules(bridges)
+	if err := loadRules(ctx, rules); err != nil {
 		return err
 	}
-	conf, _ := os.ReadFile(nftablesConf)
-	include := []byte(`include "` + isolateFile + `"`)
-	if !bytes.Contains(conf, include) {
-		if len(conf) == 0 {
-			conf = []byte("#!/usr/sbin/nft -f\n")
-		}
-		if err := os.WriteFile(nftablesConf, append(append(conf, include...), '\n'), 0o755); err != nil {
-			return err
-		}
-	}
-	return nil
+	return persist(isolateFile, rules)
 }

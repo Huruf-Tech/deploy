@@ -12,6 +12,7 @@ import { safetyFlag, safetyLimit } from "@/lib/limits/safety.ts";
 import { assertCanAddServers, serverLiveness } from "@/lib/agents/servers.ts";
 import { isPublicAddress } from "@/lib/agents/addresses.ts";
 import { bootstrapSessionModel } from "@/schemas/infrastructure/bootstrapSession.ts";
+import type { TPartitionSize } from "@/schemas/protocol/agent.ts";
 
 const SESSION_TTL_MS = 2 * 60 * 60_000;
 const INSTALL_TIMEOUT_MS = 15 * 60_000;
@@ -107,7 +108,7 @@ const exec = (client: Client, command: string, stdin?: string) =>
 
 /**
  * A one-time join token for `tenant` (PLAN §4.3): an agent installed with it
- * activates without pairing. The SSH wizard and pool partitions (PLAN §26.5)
+ * activates without pairing. The SSH wizard and partitions (PLAN §27)
  * both install this way; the session records where it went.
  */
 export const createJoinToken = async (opts: {
@@ -116,7 +117,12 @@ export const createJoinToken = async (opts: {
   host: string;
   port: number;
   username: string;
-  partition?: { host: ObjectId; name: string; label?: string };
+  partition?: {
+    host: ObjectId;
+    name: string;
+    label?: string;
+    size?: TPartitionSize;
+  };
   rental?: { host: ObjectId; subscription: ObjectId; name: string };
 }) => {
   const token = encodeBase64Url(crypto.getRandomValues(new Uint8Array(32)));

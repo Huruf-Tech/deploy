@@ -1,3 +1,5 @@
+import { projectModel } from "@/schemas/applications/project.ts";
+import { asBadRequest } from "@/lib/core/errors.ts";
 import { type ClientSession, ObjectId } from "mongodb";
 import { Response } from "@/core/http/response.ts";
 import { isDuplicateKeyError, mongodb } from "@/database.ts";
@@ -27,17 +29,6 @@ const visibleFilter = (tenant: ObjectId) => ({
   }],
 });
 
-const asBadRequest = <T>(fn: () => T) => {
-  try {
-    return fn();
-  } catch (error) {
-    if (error instanceof TemplateError) {
-      throw Response.badRequest(error.message);
-    }
-    throw error;
-  }
-};
-
 /** A version must carry the source its kind renders, and it must parse. */
 const checkContent = (kind: TKind, content: TTemplateContent) => {
   const source = kind === "app" ? content.dockerfile : content.compose;
@@ -57,7 +48,7 @@ const checkContent = (kind: TKind, content: TTemplateContent) => {
 };
 
 const assertContent = (kind: TKind, content: TTemplateContent) =>
-  asBadRequest(() => checkContent(kind, content));
+  asBadRequest(() => checkContent(kind, content), TemplateError);
 
 /**
  * Whether a version would deploy: valid content that renders with its
@@ -295,8 +286,17 @@ export async function updateTemplateMeta(
   if (!matchedCount) throw Response.notFound("Template not found");
 }
 
-// ponytail: projects pinning the template are not checked yet; that guard lands with projects (Phase 6).
+/** A template in use by a project stays: its next deploy needs it. */
 export async function deleteTemplate(id: ObjectId, tenant: ObjectId) {
+  const used = await projectModel.countDocuments(
+    { tenant, "template.template": id },
+    { limit: 1 },
+  );
+  if (used) {
+    throw Response.badRequest(
+      "Projects use this template: move them to another one first",
+    );
+  }
   await transaction(async (session) => {
     const { deletedCount } = await templateModel.deleteOne(
       { _id: id, scope: "tenant", tenant },
@@ -320,8 +320,12 @@ export async function previewTemplate(opts: {
     opts.tenant,
     opts.version,
   );
-  return asBadRequest(() =>
-    renderContent(template.kind, content, opts.inputs, { cacheKey: "preview" })
+  return asBadRequest(
+    () =>
+      renderContent(template.kind, content, opts.inputs, {
+        cacheKey: "preview",
+      }),
+    TemplateError,
   );
 }
 

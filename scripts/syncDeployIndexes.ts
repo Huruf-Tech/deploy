@@ -122,6 +122,14 @@ export const syncDeployIndexes = async () => {
       { tenant: 1, periodEnd: -1 },
       { name: "tenantPeriods" },
     ),
+    // A replayed charge's period is refused by its ledger reference.
+    subscriptionPeriodModel.createIndex(
+      { ledgerReference: 1 },
+      {
+        name: "ledgerReference",
+        partialFilterExpression: { ledgerReference: { $exists: true } },
+      },
+    ),
     // QuotaGuard relies on this being unique.
     tenantUsageModel.createIndex(
       { tenant: 1 },
@@ -137,6 +145,14 @@ export const syncDeployIndexes = async () => {
       { name: "uniqueFingerprint", unique: true },
     ),
     serverModel.createIndex({ tenant: 1, status: 1 }, { name: "tenantStatus" }),
+    // A machine's partitions, and the next free private-network port on it.
+    serverModel.createIndex(
+      { "provider.host": 1, "provider.meshPort": -1 },
+      {
+        name: "hostPartitions",
+        partialFilterExpression: { "provider.host": { $exists: true } },
+      },
+    ),
     // Unaccepted servers disappear once their pairing code expires.
     serverModel.createIndex(
       { pairingExpiresAt: 1 },
@@ -205,6 +221,14 @@ export const syncDeployIndexes = async () => {
     bootstrapSessionModel.createIndex(
       { expiresAt: 1 },
       { name: "ttl", expireAfterSeconds: 0 },
+    ),
+    // Partitions being created on a machine (room and its partition list).
+    bootstrapSessionModel.createIndex(
+      { "partition.host": 1, status: 1 },
+      {
+        name: "partitionHost",
+        partialFilterExpression: { "partition.host": { $exists: true } },
+      },
     ),
 
     // One key per scope owner (a project is its own owner); also serves
@@ -351,6 +375,11 @@ export const syncDeployIndexes = async () => {
     }),
     alertEventModel.createIndex({ tenant: 1, firedAt: -1 }, {
       name: "history",
+    }),
+    // Resolved alerts are kept 90 days; open ones have no resolvedAt.
+    alertEventModel.createIndex({ resolvedAt: 1 }, {
+      name: "resolvedTtl",
+      expireAfterSeconds: 90 * 24 * 60 * 60,
     }),
     alertEventModel.createIndex({ server: 1, metric: 1 }, {
       name: "server",

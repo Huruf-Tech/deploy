@@ -63,7 +63,7 @@ for (let i = 0; i < count; i++) {
       fingerprint: await fingerprintOf(state.signPublicKey),
     },
     installMethod: "manual",
-    provider: { kind: "byo" },
+    provider: { kind: "partition" },
     inventory: {
       hostname: state.hostname,
       os: "load",

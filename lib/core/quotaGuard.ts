@@ -1,3 +1,4 @@
+import { isDuplicateKeyError } from "@/database.ts";
 import type {
   ClientSession,
   Collection,
@@ -9,9 +10,6 @@ import type {
   TCountQuota,
   TTenantUsage,
 } from "@/schemas/limits/tenantUsage.ts";
-
-const isDuplicateKey = (error: unknown) =>
-  (error as { code?: number }).code === 11000;
 
 /**
  * Count quotas via one atomic conditional increment (PLAN §20.3): no
@@ -46,7 +44,7 @@ export class QuotaGuard {
         });
         return result.modifiedCount + result.upsertedCount === 1;
       } catch (error) {
-        if (!isDuplicateKey(error)) throw error;
+        if (!isDuplicateKeyError(error)) throw error;
       }
     }
 

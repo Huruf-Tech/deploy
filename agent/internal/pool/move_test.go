@@ -2,6 +2,7 @@ package pool
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"os"
 	"path/filepath"
@@ -79,6 +80,40 @@ func TestServeGivesUpWhenNobodyComes(t *testing.T) {
 	}
 }
 
+// A receiver that stops reading fails the send, so the source starts the
+// partition again instead of waiting forever.
+func TestServeGivesUpOnAStalledReceiver(t *testing.T) {
+	defer func(w time.Duration) { moveWait = w }(moveWait)
+	moveWait = 300 * time.Millisecond
+	addr, token := freeAddr(t), strings.Repeat("t", 32)
+	done := make(chan error, 1)
+	go func() {
+		done <- serve(context.Background(), addr, token, map[string][]string{"/data": {"yes"}})
+	}()
+	var conn net.Conn
+	for i := 0; i < 50; i++ {
+		var err error
+		if conn, err = net.Dial("tcp", addr); err == nil {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if conn == nil {
+		t.Fatal("serve didn't listen")
+	}
+	defer conn.Close()
+	// Asks for the part, then never reads it.
+	fmt.Fprintf(conn, "GET /data HTTP/1.1\r\nHost: x\r\nAuthorization: Bearer %s\r\n\r\n", token)
+	select {
+	case err := <-done:
+		if err == nil || !strings.Contains(err.Error(), "in time") {
+			t.Fatalf("serve = %v", err)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("serve kept waiting on a stalled receiver")
+	}
+}
+
 // A real copy through tar: what the partition's data goes through.
 func TestTarRoundTrip(t *testing.T) {
 	src, dst := t.TempDir(), t.TempDir()
@@ -122,10 +157,10 @@ func TestForwardRulesMatchTheMachineOnly(t *testing.T) {
 }
 
 func TestIsolateRulesNameTheRentals(t *testing.T) {
-	rules := isolateRules([]string{"hp-pa", "hp-pb"}, []string{"10.0.0.5"})
+	rules := isolateRules([]string{"hp-pa", "hp-pb"})
 	for _, want := range []string{
 		`elements = { "hp-pa", "hp-pb" }`,
-		"iifname @rented ip daddr 10.0.0.5 accept",
+		"ip daddr { 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16 } ct state new drop",
 		`iifname @rented oifname "hp-*" drop`,
 		`iifname "hp-*" oifname @rented drop`,
 		"iifname @rented drop",
@@ -134,7 +169,26 @@ func TestIsolateRulesNameTheRentals(t *testing.T) {
 			t.Fatalf("missing %q in\n%s", want, rules)
 		}
 	}
-	if strings.Contains(isolateRules(nil, nil), "elements") {
+	if strings.Contains(isolateRules(nil), "elements") {
 		t.Fatal("an empty set has no elements line")
+	}
+}
+
+// A reader that fails stops the writer (no hang), and both errors are kept.
+func TestPipeStopsTheWriterWhenTheReaderFails(t *testing.T) {
+	done := make(chan error, 1)
+	go func() {
+		done <- pipe(context.Background(), []string{"yes"}, []string{"sh", "-c", "head -c 10 >/dev/null; echo full >&2; exit 3"})
+	}()
+	select {
+	case err := <-done:
+		if err == nil || !strings.Contains(err.Error(), "full") {
+			t.Fatalf("pipe = %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("the writer kept running")
+	}
+	if err := pipe(context.Background(), []string{"echo", "hi"}, []string{"cat"}); err != nil {
+		t.Fatal(err)
 	}
 }

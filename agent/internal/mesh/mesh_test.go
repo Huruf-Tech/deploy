@@ -1,9 +1,14 @@
 package mesh
 
 import (
+	"context"
+	"io"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/Huruf-Tech/huruf-deploy/agent/internal/protocol"
 )
 
 func TestKeyMovesToKeyDirAndKeepsItsPublicKey(t *testing.T) {
@@ -44,5 +49,16 @@ func TestFreshServerGetsAKeyInKeyDir(t *testing.T) {
 	second, _ := m.PublicKey()
 	if first == "" || first != second {
 		t.Fatalf("key not stable: %q %q", first, second)
+	}
+}
+
+// A retry of a spec that failed never undoes a newer one applied meanwhile.
+func TestRetryYieldsToANewerSpec(t *testing.T) {
+	m := &Mesh{Dir: t.TempDir(), KeyDir: t.TempDir(), Log: slog.New(slog.NewTextHandler(io.Discard, nil))}
+	old, newer := &protocol.DesiredSpec{Version: 1}, &protocol.DesiredSpec{Version: 2}
+	m.last, m.lastErr = newer, "wg missing"
+	m.recheck(context.Background(), old, true)
+	if m.lastErr != "wg missing" || m.last != newer {
+		t.Fatalf("the older spec was applied: lastErr %q", m.lastErr)
 	}
 }

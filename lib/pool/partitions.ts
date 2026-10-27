@@ -1,24 +1,25 @@
 import { ObjectId } from "mongodb";
-import type z from "zod";
 import { Response } from "@/core/http/response.ts";
 import { entitlements } from "@/lib/services.ts";
-import { releaseServer } from "@/lib/agents/servers.ts";
+import { retireServer } from "@/lib/agents/retire.ts";
 import {
   createPartition,
   partitionName,
   removePartition,
   resizePartition,
 } from "@/lib/pool/pool.ts";
-import { serverModel } from "@/schemas/infrastructure/server.ts";
+import { serverModel, SLOT_SERVERS } from "@/schemas/infrastructure/server.ts";
 import { bootstrapSessionModel } from "@/schemas/infrastructure/bootstrapSession.ts";
 import { agentCommandModel } from "@/schemas/infrastructure/agentCommand.ts";
-import { subscriptionModel } from "@/schemas/billing/subscription.ts";
+import {
+  LIVE_RENTAL,
+  subscriptionModel,
+} from "@/schemas/billing/subscription.ts";
 import { planModel } from "@/schemas/billing/plan.ts";
 import { tenantModel } from "@/plugins/Huruf-Tech/thunder-core/schemas/tenant.ts";
 import { detachServer } from "@/lib/deploy/projects.ts";
-import type { $partitionSize } from "@/schemas/protocol/agent.ts";
-
-type TSize = z.output<typeof $partitionSize>;
+import { freeOf, takenOn } from "@/lib/pool/room.ts";
+import type { TPartitionSize as TSize } from "@/schemas/protocol/agent.ts";
 
 /**
  * A tenant's own partitions (PLAN §27.2): the customer gives part of a
@@ -41,25 +42,6 @@ async function ownMachine(tenant: ObjectId, id: ObjectId) {
   return doc;
 }
 
-/** What's left on a machine: its allocatable capacity minus its partitions. */
-export const freeOn = (
-  doc: Awaited<ReturnType<typeof ownMachine>>,
-) => {
-  const all = doc.pool!.allocatable!;
-  const used = (doc.resources?.partitions ?? []).reduce(
-    (u, p) => ({
-      memMb: u.memMb + p.size.memMb,
-      diskGb: u.diskGb + p.size.diskGb,
-    }),
-    { memMb: 0, diskGb: 0 },
-  );
-  return {
-    cpus: all.cpus,
-    memMb: all.memMb - used.memMb,
-    diskGb: all.diskGb - used.diskGb,
-  };
-};
-
 export async function createOwnPartition(opts: {
   tenant: ObjectId;
   machine: ObjectId;
@@ -68,21 +50,21 @@ export async function createOwnPartition(opts: {
   size: TSize;
 }) {
   const doc = await ownMachine(opts.tenant, opts.machine);
-  const free = freeOn(doc);
+  const free = freeOf(doc, (await takenOn([doc])).get(String(doc._id))!);
+  const cpus = doc.pool!.allocatable!.cpus;
   if (
-    opts.size.cpus > free.cpus || opts.size.memMb > free.memMb ||
+    opts.size.cpus > cpus || opts.size.memMb > free.memMb ||
     opts.size.diskGb > free.diskGb
   ) {
     throw Response.badRequest(
-      `At most ${free.cpus} vCPU, ${free.memMb} MB of memory and ${free.diskGb} GB of disk are free on ${doc.name}`,
+      `At most ${cpus} vCPU, ${free.memMb} MB of memory and ${free.diskGb} GB of disk are free on ${doc.name}`,
     );
   }
   // The slot is taken when its agent joins; fail early if there's none.
   const { limits } = await entitlements.resolve(opts.tenant);
   const servers = await serverModel.countDocuments({
     tenant: opts.tenant,
-    status: "active",
-    "provider.kind": { $in: ["partition", "byo"] },
+    ...SLOT_SERVERS,
   });
   if (servers >= limits.servers) {
     throw Response.forbidden(`Your plan allows ${limits.servers} servers`);
@@ -151,13 +133,13 @@ export async function removeOwnPartition(opts: {
     await subscriptionModel.countDocuments({
       "rental.host": opts.machine,
       "rental.partition": opts.name,
-      status: { $in: ["active", "pastDue", "suspended"] },
+      status: { $in: [...LIVE_RENTAL] },
     });
   if (rented) {
     throw Response.badRequest("A rented partition goes with its rental");
   }
   const reported = machine.resources?.partitions?.some((p) =>
-    p.name === opts.name && !p.remainder
+    p.name === opts.name
   );
   // Being created (or failed to be): its join token goes, so it can't join later.
   const { modifiedCount: creating } = await bootstrapSessionModel.updateMany({
@@ -170,11 +152,7 @@ export async function removeOwnPartition(opts: {
     throw Response.notFound("No partition with this name on this machine");
   }
   const { command } = await removePartition(opts.machine, opts.name);
-  if (doc) {
-    await detachServer(opts.tenant, doc._id);
-    await releaseServer(doc._id, opts.tenant);
-    await serverModel.deleteOne({ _id: doc._id, tenant: opts.tenant });
-  }
+  if (doc) await retireServer(opts.tenant, doc._id);
   return { command: String(command) };
 }
 
@@ -203,11 +181,7 @@ export async function onServerDeleted(id: ObjectId, tenant: ObjectId) {
       "provider.host": id,
       "provider.kind": "partition",
     }, { projection: { _id: 1 } }).toArray();
-    for (const p of partitions) {
-      await detachServer(tenant, p._id);
-      await releaseServer(p._id, tenant);
-      await serverModel.deleteOne({ _id: p._id });
-    }
+    for (const p of partitions) await retireServer(tenant, p._id);
   }
 }
 
@@ -223,9 +197,7 @@ export async function partitionsOf(tenant: ObjectId, machine: ObjectId) {
     { projection: { "resources.partitions": 1 } },
   );
   if (!doc) throw Response.notFound("No machine with this id");
-  const reported = (doc.resources?.partitions ?? []).filter((p) =>
-    !p.remainder
-  );
+  const reported = doc.resources?.partitions ?? [];
   const [servers, sessions] = await Promise.all([
     serverModel.find({ tenant, "provider.host": machine }, {
       projection: { name: 1, "provider.partition": 1 },
@@ -241,7 +213,7 @@ export async function partitionsOf(tenant: ObjectId, machine: ObjectId) {
   const rentals = await subscriptionModel.find({
     kind: "server",
     "rental.host": machine,
-    status: { $in: ["active", "pastDue", "suspended"] },
+    status: { $in: [...LIVE_RENTAL] },
   }, { projection: { tenant: 1, plan: 1, "rental.partition": 1 } }).toArray();
   const [tenants, plans] = await Promise.all([
     tenantModel.find({ _id: { $in: rentals.map((r) => r.tenant) } }, {

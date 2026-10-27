@@ -1,3 +1,4 @@
+import { encodeBase64Url } from "@std/encoding/base64url";
 import handlebars from "handlebars";
 import type {
   TTemplateContent,
@@ -24,8 +25,7 @@ export function assertValidSource(source: string) {
 }
 
 const generatePassword = () =>
-  btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(24))))
-    .replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  encodeBase64Url(crypto.getRandomValues(new Uint8Array(24)));
 
 /**
  * Validates and coerces the user's values against the version's inputs.

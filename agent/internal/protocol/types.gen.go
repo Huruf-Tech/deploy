@@ -138,14 +138,12 @@ type ResourceSummary struct {
 
 	DiskFree int64 `json:"diskFree"`
 
-	// Pool machines only (PLAN §26)
+	// Machines only (PLAN §27)
 	Partitions []PartitionUsage `json:"partitions,omitempty"`
 }
 
 type PartitionUsage struct {
 	Name string `json:"name"`
-
-	Remainder bool `json:"remainder"`
 
 	// Docker state: running, exited…
 	State string `json:"state"`
@@ -195,7 +193,7 @@ type PollResponse struct {
 type Command struct {
 	Seq int64 `json:"seq"`
 
-	// One of: ping, docker.ensure, stream.open, stream.close, build.run, server.prune, agent.update, registry.delete, host.cleanup, pool.ensure, partition.create, partition.resize, partition.stop, partition.start, partition.remove, partition.send, partition.receive
+	// One of: ping, docker.ensure, stream.open, stream.close, build.run, agent.update, registry.delete, host.cleanup, pool.ensure, partition.create, partition.resize, partition.stop, partition.start, partition.remove, partition.send, partition.receive
 	Type string `json:"type"`
 
 	Payload map[string]any `json:"payload"`
@@ -828,17 +826,7 @@ type HostCleanupPayload struct {
 }
 
 type PoolEnsurePayload struct {
-	// One of: machine, pool
-	Mode string `json:"mode"`
-
 	Reserve PoolEnsurePayloadReserve `json:"reserve"`
-
-	Volume PoolEnsurePayloadVolume `json:"volume"`
-
-	AllowIps []string `json:"allowIps"`
-
-	// Pool machines' host setup
-	Docker *PoolEnsurePayloadDocker `json:"docker,omitempty"`
 }
 
 type PoolEnsurePayloadReserve struct {
@@ -849,40 +837,10 @@ type PoolEnsurePayloadReserve struct {
 	DiskGb int64 `json:"diskGb"`
 }
 
-type PoolEnsurePayloadVolume struct {
-	// A block device for partition data; formatted XFS only when it has no filesystem
-	Device string `json:"device,omitempty"`
-
-	// Without a device: a loop file this size; a machine's defaults to the free space (sparse)
-	LoopSizeGb *int64 `json:"loopSizeGb,omitempty"`
-}
-
-type PoolEnsurePayloadDocker struct {
-	// Per-container log file size, e.g. 10m
-	LogMaxSize string `json:"logMaxSize"`
-
-	LogMaxFile int64 `json:"logMaxFile"`
-
-	// Caddy image for the edge proxy
-	EdgeImage string `json:"edgeImage"`
-
-	// Local Docker network for projects
-	Network string `json:"network"`
-
-	// The network's subnet, unique in the tenant (e.g. 10.210.3.0/24), so container IPs route over the mesh
-	Subnet string `json:"subnet,omitempty"`
-
-	// Mesh addresses (e.g. 10.209.0.0/16): trusted as an insecure registry (traffic is WireGuard-encrypted)
-	MeshCidr string `json:"meshCidr,omitempty"`
-}
-
 type PartitionCreatePayload struct {
 	Name string `json:"name"`
 
-	// Not for the remainder
-	Size *PartitionSize `json:"size,omitempty"`
-
-	Remainder bool `json:"remainder"`
+	Size PartitionSize `json:"size"`
 
 	// A rental (PLAN §28): no reaching the machine, other partitions, the metadata endpoint, mail ports or private ranges
 	Isolated bool `json:"isolated"`

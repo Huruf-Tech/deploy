@@ -1,3 +1,4 @@
+import { encodeBase64Url } from "@std/encoding/base64url";
 import { createSign } from "node:crypto";
 
 export class GitHubError extends Error {
@@ -6,10 +7,7 @@ export class GitHubError extends Error {
   }
 }
 
-const base64url = (data: string | Uint8Array) =>
-  btoa(
-    typeof data === "string" ? data : String.fromCharCode(...data),
-  ).replace(/=+$/, "").replace(/\+/g, "-").replace(/\//g, "_");
+const base64url = encodeBase64Url;
 
 /**
  * A 9-minute RS256 JWT that authenticates as the GitHub App. node:crypto reads

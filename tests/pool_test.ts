@@ -84,8 +84,7 @@ Deno.test({
           await setUpMachine(host);
           const command = await latest("pool.ensure");
           const payload = command.payload as Record<string, unknown>;
-          assertEquals(payload.mode, "machine");
-          assertEquals(payload.docker, undefined, "no projects run on it");
+          assertEquals(Object.keys(payload), ["reserve"]);
           assertEquals(
             (payload.reserve as Record<string, number>).memMb,
             512,
@@ -126,9 +125,6 @@ Deno.test({
                 ok: true,
                 result: {
                   allocatable: { cpus: 1.75, memMb: 7168, diskGb: 90 },
-                  sysbox: "sysbox-runc version 0.7.1",
-                  notes: ["Sysbox installed"],
-                  host: { dockerVersion: "29.1.3", checks: [], notes: [] },
                 },
               },
             }],
@@ -136,16 +132,12 @@ Deno.test({
           const doc = (await serverModel.findOne({ _id: host }))!;
           assertEquals(doc.pool!.status, "ready");
           assertEquals(doc.pool!.allocatable!.memMb, 7168);
-          assertEquals(
-            doc.setup!.status,
-            "ready",
-            "the host setup inside is recorded too",
-          );
+          assertEquals(doc.setup, undefined, "a machine runs no projects");
         },
       );
 
       await t.step(
-        "a rented partition joins the customer's tenant",
+        "a partition joins its tenant",
         async () => {
           const name = partitionName(new ObjectId());
           assertEquals(name.length, 12);
@@ -201,9 +193,8 @@ Deno.test({
           diskFree: 1,
           partitions: [{
             name: "huruf",
-            remainder: true,
             state: "running",
-            size: { cpus: 0, memMb: 4864, diskGb: 65 },
+            size: { cpus: 1, memMb: 4864, diskGb: 65 },
             cpuMicros: 1,
             memUsed: 2,
             diskUsed: 3,
@@ -211,7 +202,7 @@ Deno.test({
             txBytes: 5,
           }],
         });
-        assertEquals(summary.partitions![0].size.cpus, 0);
+        assertEquals(summary.partitions![0].size.memMb, 4864);
       });
     } finally {
       config.PLATFORM_TENANT = previous;

@@ -66,6 +66,21 @@ Deno.test({
             true,
           ]);
 
+          // Importing it again as plain text doesn't reveal the secret.
+          await call("POST", "/variables/api/import", {
+            scope: "tenant",
+            overwrite: true,
+            variables: [{ key: "API_TOKEN", value: "new", isSecret: false }],
+          });
+          const { json: after } = await call(
+            "GET",
+            "/variables/api?scope=tenant",
+          );
+          const kept = after.find((v: { key: string }) =>
+            v.key === "API_TOKEN"
+          );
+          assertEquals([kept.value, kept.isSecret], [undefined, true]);
+
           const bad = await call("POST", "/variables/api/import", {
             scope: "tenant",
             variables: [{ key: "1BAD", value: "x" }],

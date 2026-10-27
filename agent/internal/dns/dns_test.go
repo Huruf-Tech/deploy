@@ -33,7 +33,7 @@ func TestAnswersInternalNamesWithEveryReplica(t *testing.T) {
 	s := &Server{}
 	s.Set(map[string][]string{"shop.internal": {"172.18.0.4", "172.18.0.5"}})
 
-	resp := s.Answer(query("Shop.Internal", typeA))
+	resp := s.answer(query("Shop.Internal", typeA), false)
 	if id := binary.BigEndian.Uint16(resp[0:2]); id != 0x1234 {
 		t.Fatalf("id = %x", id)
 	}
@@ -53,12 +53,12 @@ func TestUnknownInternalNamesAreNXDOMAIN(t *testing.T) {
 	s := &Server{}
 	s.Set(map[string][]string{"shop.internal": {"172.18.0.4"}})
 
-	resp := s.Answer(query("db.internal", typeA))
+	resp := s.answer(query("db.internal", typeA), false)
 	if rcode := resp[3] & 0x0f; rcode != 3 {
 		t.Fatalf("rcode = %d, want NXDOMAIN", rcode)
 	}
 	for _, name := range []string{"shop.internal", "db.internal"} {
-		if resp := s.Answer(query(name, typeAAAA)); binary.BigEndian.Uint16(resp[6:8]) != 0 || resp[3]&0x0f != 0 {
+		if resp := s.answer(query(name, typeAAAA), false); binary.BigEndian.Uint16(resp[6:8]) != 0 || resp[3]&0x0f != 0 {
 			t.Fatalf("AAAA for %s should be an empty NOERROR (it may live on a peer)", name)
 		}
 	}
@@ -79,7 +79,7 @@ func TestOtherNamesAreForwarded(t *testing.T) {
 	}()
 
 	s := &Server{upstream: upstream.LocalAddr().String()}
-	resp := s.Answer(query("example.com", typeA))
+	resp := s.answer(query("example.com", typeA), false)
 	if string(resp[:3]) != "ok:" {
 		t.Fatalf("not forwarded: %q", resp)
 	}
@@ -108,7 +108,7 @@ func TestInternalNamesIncludePeerReplicas(t *testing.T) {
 	local := &Server{Peers: func() []string { return []string{"127.0.0.2", "127.0.0.3"} }}
 	local.Set(map[string][]string{"db.internal": {"10.210.1.7"}})
 
-	resp := local.Answer(query("db.internal", typeA))
+	resp := local.answer(query("db.internal", typeA), false)
 	if got := aRecords(resp); len(got) != 2 || !got[0].Equal(net.ParseIP("10.210.1.7")) || !got[1].Equal(net.ParseIP("10.210.2.5")) {
 		t.Fatalf("answers = %v", got)
 	}

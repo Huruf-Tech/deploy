@@ -37,7 +37,7 @@ type Sampler struct {
 }
 
 // Sample is the machine's usage, or the partition's within its limits
-// (PLAN §26): the host package reads both.
+// (PLAN §27): the host package reads both.
 func (s *Sampler) Sample() protocol.MetricsSample {
 	now := time.Now()
 	rx, tx := netBytes()

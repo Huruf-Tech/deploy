@@ -1,3 +1,4 @@
+import { tenantCreator } from "@/lib/core/tenants.ts";
 import { ObjectId, type WithId } from "mongodb";
 import { Response } from "@/core/http/response.ts";
 import { isDuplicateKeyError } from "@/database.ts";
@@ -19,7 +20,11 @@ import { isSecretInput, openCompose, toEnvKey } from "@/lib/deploy/projects.ts";
 import { forStage, resolveVariableSet } from "@/lib/variables/variables.ts";
 import { builtinRegistry, meshServers, reachable } from "@/lib/network/mesh.ts";
 import { dropBuiltinImages } from "@/lib/deploy/registryCleanup.ts";
-import { projectModel, type TProject } from "@/schemas/applications/project.ts";
+import {
+  projectModel,
+  type TProject,
+  workloadName,
+} from "@/schemas/applications/project.ts";
 import {
   deploymentModel,
   releaseModel,
@@ -30,7 +35,6 @@ import {
 import { serverModel } from "@/schemas/infrastructure/server.ts";
 import { serverLeaseModel } from "@/schemas/infrastructure/serverLease.ts";
 import { registryModel } from "@/schemas/infrastructure/serverSpec.ts";
-import { tenantModel } from "@/plugins/Huruf-Tech/thunder-core/schemas/tenant.ts";
 import { onDeployFailed, onDeploySucceeded } from "@/lib/monitoring/alerts.ts";
 import type { TBuildRunPayload } from "@/schemas/protocol/agent.ts";
 import { keyring } from "@/lib/services.ts";
@@ -54,11 +58,8 @@ const log = {
 
 const now = () => new Date();
 
-const owner = async (tenant: ObjectId) =>
-  (await tenantModel.findOne({ _id: tenant }, {
-    projection: { createdBy: 1 },
-  }))!
-    .createdBy;
+/** How long a claimed deployment may take to issue its build. */
+const CLAIM_MS = 10 * 60_000;
 
 const message = (error: unknown) =>
   error instanceof Response
@@ -146,19 +147,33 @@ export async function startNext(project: ObjectId) {
     { sort: { createdAt: 1 } },
   );
   if (!next) return;
+  let claimed;
   try {
-    const claimed = await deploymentModel.findOneAndUpdate(
+    // A deadline from the start: a claim whose request dies before the build
+    // is issued still expires, instead of blocking the project's queue.
+    claimed = await deploymentModel.findOneAndUpdate(
       { _id: next._id, status: "queued" },
-      { $set: { status: "building", active: true, startedAt: now() } },
+      {
+        $set: {
+          status: "building",
+          active: true,
+          startedAt: now(),
+          deadlineAt: new Date(Date.now() + CLAIM_MS),
+        },
+      },
       { returnDocument: "after" },
     );
-    if (!claimed) return;
+  } catch (error) {
+    if (isDuplicateKeyError(error)) return; // another deployment is running
+    throw error;
+  }
+  if (!claimed) return;
+  try {
     await projectModel.updateOne({ _id: project }, {
       $set: { status: "deploying" },
     });
     await start(claimed);
   } catch (error) {
-    if (isDuplicateKeyError(error)) return; // another deployment is running
     await fail(next._id, message(error));
   }
 }
@@ -188,7 +203,7 @@ async function start(deployment: TDeploymentDoc) {
   const commit = deployment.commit ??
     await source.commit(project, deployment.ref ?? defaultRef(project));
   const variables = await resolveVariableSet({
-    user: await owner(project.tenant),
+    user: await tenantCreator(project.tenant),
     tenant: project.tenant,
     project: project._id,
   });
@@ -229,7 +244,6 @@ async function start(deployment: TDeploymentDoc) {
     ...(commit ? { commit } : {}),
     specEnc: await sealReleaseSpec(project.tenant, releaseId, services),
     services: services.map((s) => s.name),
-    deployment: deployment._id,
     ...(deployment.triggeredBy ? { createdBy: deployment.triggeredBy } : {}),
     createdAt: now(),
   };
@@ -246,7 +260,6 @@ async function start(deployment: TDeploymentDoc) {
     return await beginRollout(deployment._id);
   }
 
-  // Image distribution (PLAN §8.4).
   // Image distribution (PLAN §8.4): external registry, else the built-in one
   // when every target reaches the primary over the mesh, else build everywhere.
   const registry = await registryFor(project);
@@ -674,15 +687,17 @@ export async function onWorkloadStatus(
   }
 
   if (status.state === "failed") {
+    const error = status.error ?? "the new release didn't become healthy";
+    await deploymentModel.updateOne({ _id: deployment._id }, {
+      $set: {
+        "rollout.servers.$[s].state": "failed",
+        "rollout.servers.$[s].error": error.slice(0, 500),
+      },
+    }, { arrayFilters: [{ "s.server": server }] });
     const name =
       (await serverModel.findOne({ _id: server }, { projection: { name: 1 } }))
         ?.name;
-    return await fail(
-      deployment._id,
-      `${name ?? "A server"}: ${
-        status.error ?? "the new release didn't become healthy"
-      }`,
-    );
+    return await fail(deployment._id, `${name ?? "A server"}: ${error}`);
   }
 
   const updated = await deploymentModel.findOneAndUpdate(
@@ -702,10 +717,10 @@ export async function onWorkloadStatus(
   const slug =
     (await projectModel.findOne({ _id: project }, { projection: { slug: 1 } }))
       ?.slug;
-  const expected = release!.services.length === 1
-    ? [slug]
-    : release!.services.map((s) => `${slug}-${s}`);
-  if (!expected.every((w) => entry.healthy.includes(w!))) return;
+  const expected = release!.services.map((s) =>
+    workloadName(slug!, release!.services.length, s)
+  );
+  if (!expected.every((w) => entry.healthy.includes(w))) return;
 
   const marked = await deploymentModel.updateOne(
     { _id: deployment._id, status: "deploying" },
@@ -799,12 +814,31 @@ async function complete(id: ObjectId) {
   // Prune first, so the refreshed specs stop keeping pruned images.
   if (before) {
     await pruneReleases(deployment.project, before.tenant, deployment.release!);
+    await pruneHistory(deployment.project);
   }
   // Servers the project left drop it; the others drop the finished rollout's extra state.
   await refreshSpecs([...deployment.servers, ...(before?.placedOn ?? [])]);
   log.info(`Deployment ${id} is healthy`);
   await onDeploySucceeded(deployment.project);
   await startNext(deployment.project);
+}
+
+/** Deployments kept per project, newest first; older ones go (PLAN §20). */
+const HISTORY_KEPT = 100;
+
+async function pruneHistory(project: ObjectId) {
+  const [oldest] = await deploymentModel.find({ project }, {
+    sort: { createdAt: -1 },
+    skip: HISTORY_KEPT - 1,
+    limit: 1,
+    projection: { createdAt: 1 },
+  }).toArray();
+  if (!oldest) return;
+  await deploymentModel.deleteMany({
+    project,
+    createdAt: { $lt: oldest.createdAt },
+    status: { $in: ["healthy", "failed", "cancelled"] },
+  });
 }
 
 /** Keeps the newest N releases (plan `releasesKept`) plus the active one. */
@@ -829,15 +863,20 @@ async function pruneReleases(
 }
 
 /**
- * Fails a deployment and reverts: servers already switched get the active
- * release back through their spec (auto-revert, PLAN §10).
+ * Fails (or cancels) a deployment and reverts: servers already switched get
+ * the active release back through their spec (auto-revert, PLAN §10). Only
+ * a failure alerts.
  */
-export async function fail(id: ObjectId, error: string) {
+export async function fail(
+  id: ObjectId,
+  error: string,
+  status: "failed" | "cancelled" = "failed",
+) {
   const deployment = await deploymentModel.findOneAndUpdate(
     { _id: id, status: { $in: ["queued", ...ACTIVE] } },
     {
       $set: {
-        status: "failed",
+        status,
         finishedAt: now(),
         errorSummary: error.slice(0, 480),
       },
@@ -846,8 +885,10 @@ export async function fail(id: ObjectId, error: string) {
     { returnDocument: "before" },
   );
   if (!deployment) return;
-  log.warn(`Deployment ${id} failed: ${error}`);
-  await onDeployFailed(deployment, error);
+  if (status === "failed") {
+    log.warn(`Deployment ${id} failed: ${error}`);
+    await onDeployFailed(deployment, error);
+  }
 
   if (deployment.rollout) await refreshSpecs(deployment.servers);
   const project = await projectModel.findOne({ _id: deployment.project }, {
@@ -873,10 +914,10 @@ export async function fail(id: ObjectId, error: string) {
 }
 
 /** Builds and rollouts past their deadline fail (a server went offline, a build hung). */
-export async function expireStale(project?: ObjectId) {
+export async function expireStale(project: ObjectId) {
   const stale = await deploymentModel.find(
     {
-      ...(project ? { project } : {}),
+      project,
       status: { $in: [...ACTIVE] },
       deadlineAt: { $lt: now() },
     },
@@ -908,10 +949,7 @@ export async function cancel(tenant: ObjectId, id: ObjectId) {
   if (!ACTIVE.includes(deployment.status as typeof ACTIVE[number])) {
     throw Response.badRequest("This deployment has finished");
   }
-  await fail(id, "Cancelled");
-  await deploymentModel.updateOne({ _id: id }, {
-    $set: { status: "cancelled" },
-  });
+  await fail(id, "Cancelled", "cancelled");
 }
 
 /** Rollback = a deployment of a kept release, without rebuilding (PLAN §10). */

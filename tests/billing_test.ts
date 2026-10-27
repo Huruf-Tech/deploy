@@ -4,6 +4,7 @@ import { ObjectId } from "mongodb";
 import "@/serve.base.ts";
 import { mongodb } from "@/database.ts";
 import { billing, entitlements } from "@/lib/services.ts";
+import { addInterval, prorate } from "@/lib/billing/billing.ts";
 import { Wallet } from "@/plugins/Huruf-Tech/thunder-core/lib/wallet.ts";
 import { Env } from "@/core/utils/env.ts";
 import { Mailer } from "@/plugins/Huruf-Tech/thunder-core/lib/mailer.ts";
@@ -15,6 +16,28 @@ import { serverLeaseModel } from "@/schemas/infrastructure/serverLease.ts";
 import { testSession } from "./_session.ts";
 
 // Plans, subscriptions and lazy renewal (PLAN §16 Phase 10, §22).
+
+Deno.test("billing: month ends and proration", () => {
+  const day = (iso: string) => new Date(`${iso}T10:00:00Z`);
+  assertEquals(addInterval(day("2026-01-31"), "month"), day("2026-02-28"));
+  assertEquals(addInterval(day("2028-01-31"), "month"), day("2028-02-29"));
+  assertEquals(addInterval(day("2026-03-15"), "month"), day("2026-04-15"));
+  assertEquals(addInterval(day("2028-02-29"), "year"), day("2029-02-28"));
+  // Half a $20 period charged with $10 of overage credits $10, not $15.
+  const start = day("2026-01-01");
+  const end = day("2026-01-31");
+  const half = new Date((start.getTime() + end.getTime()) / 2);
+  assertEquals(
+    prorate({
+      kind: "paid",
+      amount: 3_000,
+      overage: { gb: 10, amount: 1_000 },
+      periodStart: start,
+      periodEnd: end,
+    }, half),
+    1_000,
+  );
+});
 
 Deno.test({
   name: "billing: upgrade, private plans, renewal once, Free fallback, limits",
@@ -211,6 +234,8 @@ Deno.test({
             tenant: tenantId,
             status: "active",
             name: `s-${_id}`,
+            // Only partitions take a plan slot (PLAN §27.2).
+            provider: { kind: "partition" },
             identity: { fingerprint: `test-${_id}` },
           })));
           await serverLeaseModel.insertMany(servers.map((_id) => ({
@@ -261,6 +286,73 @@ Deno.test({
             0,
             "back within the quota",
           );
+        },
+      );
+      await t.step(
+        "a plan no longer offered still renews",
+        async () => {
+          await Wallet.transfer({
+            fromTenant: platform.tenantId,
+            toTenant: tenantId,
+            amount: 5_000,
+            currency: "usd",
+            allowOverdraft: true,
+            overdraftLimit: 1_000_000,
+            description: "test credit",
+            idempotencyKey: crypto.randomUUID(),
+          });
+          await planModel.updateOne({ _id: plans[0] }, {
+            $set: { active: false },
+          });
+          await subscriptionModel.updateOne({ tenant: tenantId }, {
+            $unset: { nextRenewalAttemptAt: "" },
+          });
+          await billing.renewIfDue(tenantId);
+          const sub = await subscriptionModel.findOne({ tenant: tenantId });
+          assertEquals(
+            sub!.status,
+            "active",
+            "no longer offered, still renews",
+          );
+          assertEquals(sub!.pastDueSince, undefined);
+          assertEquals(await balance(), 4_000);
+          await planModel.updateOne({ _id: plans[0] }, {
+            $set: { active: true },
+          });
+        },
+      );
+
+      await t.step(
+        "subscribing again after a lapse is charged, once per double click",
+        async () => {
+          const paid = () =>
+            subscriptionPeriodModel.countDocuments({
+              tenant: tenantId,
+              kind: "paid",
+            });
+          for (const attempt of [1, 2]) {
+            await call("POST", "/billing/api/cancel");
+            await endPeriod();
+            await billing.renewIfDue(tenantId);
+            assertEquals(
+              (await subscriptionModel.findOne({ tenant: tenantId }))!.status,
+              "canceled",
+            );
+            const before = [await balance(), await paid()];
+            const results = await Promise.all(
+              Array.from(
+                { length: attempt },
+                () =>
+                  call("POST", "/billing/api/subscribe", { plan: plans[0] }),
+              ),
+            );
+            assert(results.some((r) => r.json.result === "active"));
+            assertEquals(
+              [await balance(), await paid()],
+              [before[0] - 2_000, before[1] + 1],
+              `lapse ${attempt}: charged once`,
+            );
+          }
         },
       );
     } finally {
