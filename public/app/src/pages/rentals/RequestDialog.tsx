@@ -260,8 +260,18 @@ export function RequestDialog({
               </p>
             ) : null}
             {quote && !quote.fits && (
-              <p className="mt-1 text-xs text-destructive-foreground">
-                {t("The machine has no room for this size.")}
+              <p
+                className={
+                  resize
+                    ? "mt-1 text-xs text-warning-foreground"
+                    : "mt-1 text-xs text-destructive-foreground"
+                }
+              >
+                {resize
+                  ? t(
+                      "Its machine has no room for this size now. You can still ask: the owner can move your server to a machine with room, then accept."
+                    )
+                  : t("The machine has no room for this size.")}
               </p>
             )}
             {quote && (
@@ -316,7 +326,9 @@ export function RequestDialog({
             onClick={() => (community ? setConfirming(true) : submit())}
             disabled={
               busy ||
-              !quote?.fits ||
+              !quote ||
+              // A resize can be asked for without room (the owner can move it).
+              (!resize && !quote.fits) ||
               (!resize && !waived) ||
               (community && !riskAccepted)
             }

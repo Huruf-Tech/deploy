@@ -107,6 +107,9 @@ export default new Router("/api", function hosting(router) {
       resizeTo: z.object({
         plan: z.string(),
         price: z.number(),
+        fits: z.boolean().describe(
+          "Fits on its machine now; else move it to one with room first",
+        ),
       }).optional().describe("A resize asks for this"),
       requestedAt: z.date(),
       autoAcceptError: z.string().optional().describe(
@@ -135,7 +138,8 @@ export default new Router("/api", function hosting(router) {
         ]);
         const plan = (id?: ObjectId) =>
           id && plans.find((p) => p._id.equals(id));
-        return Response.json(subs.map((s) => {
+        const fits = await Promise.all(subs.map((s) => rentals.resizeFits(s)));
+        return Response.json(subs.map((s, i) => {
           const r = s.rental!;
           const next = plan(r.pendingChange?.plan);
           return {
@@ -150,7 +154,13 @@ export default new Router("/api", function hosting(router) {
             ...(r.whole ? { whole: true } : {}),
             termMonths: r.term?.months,
             ...(next
-              ? { resizeTo: { plan: next.name, price: next.price.amount } }
+              ? {
+                resizeTo: {
+                  plan: next.name,
+                  price: next.price.amount,
+                  fits: fits[i],
+                },
+              }
               : {}),
             requestedAt: r.pendingChange?.requestedAt ?? s.startedAt,
             autoAcceptError: r.autoAcceptError,

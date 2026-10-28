@@ -525,6 +525,13 @@ export function OwnerRequests({
                   </>
                 )}
               </span>
+              {r.resizeTo && !r.resizeTo.fits && (
+                <span className="block text-xs text-warning-foreground">
+                  {t(
+                    "It doesn't fit on this machine now: propose a move to a machine with room (in the rentals below), then accept."
+                  )}
+                </span>
+              )}
               {r.autoAcceptError && (
                 <span className="block text-xs text-destructive">
                   {t("Didn't start at once: {{reason}}", {

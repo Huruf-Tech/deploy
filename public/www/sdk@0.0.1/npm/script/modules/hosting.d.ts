@@ -106,6 +106,8 @@ export type requests$return = {
     resizeTo?: {
         plan: string;
         price: number;
+        /** Fits on its machine now; else move it to one with room first */
+        fits: boolean;
     } | undefined;
     requestedAt: Date;
     /** Why it didn't start at once, on a machine that accepts at once */

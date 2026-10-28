@@ -397,6 +397,25 @@ Deno.test({
       await t.step(
         "a bigger size, approved, is prorated and applied live",
         async () => {
+          // Too big for its machine: asked for anyway, the owner sees it
+          // doesn't fit, and accepting waits for a move.
+          const big = await customer.call(
+            "POST",
+            `/rentals/api/${rental}/resize`,
+            { vcpu: 2, memMb: 16_384, diskGb: 50 },
+          );
+          assertEquals(big.status, 200, JSON.stringify(big.json));
+          const inbox = await platform.call("GET", "/hosting/api/requests");
+          const row = inbox.json.find((r: { _id: string }) =>
+            r._id === String(rental)
+          );
+          assertEquals(row.resizeTo.fits, false, JSON.stringify(row));
+          assertEquals(
+            (await refused(() => rentals.approveResize(rental, platform.user)))
+              ?.status,
+            400,
+          );
+
           // The resize dialog's price: by the rental alone, on its machine.
           const quoted = await customer.call(
             "GET",

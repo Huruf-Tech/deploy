@@ -530,7 +530,8 @@ export class RentalService implements TRentalHooks {
       q.size.memMb === sub.rental.size.memMb &&
       q.size.diskGb === sub.rental.size.diskGb
     ) throw Response.badRequest("That's the current size");
-    if (!q.fits) throw Response.badRequest("Its machine has no room for that");
+    // Room isn't needed to ask: its owner can move it to a machine with
+    // room first (PLAN §30.8); accepting checks the room then.
     const plan = await this.rentalPlan(tenant, q);
     await subscriptionModel.updateOne({ _id: id }, {
       $set: {
@@ -550,6 +551,23 @@ export class RentalService implements TRentalHooks {
       current: sub.rental.size,
       machine: await this.machineOf(sub.rental.host!),
     });
+  }
+
+  /** Whether a rental's waiting resize fits on its machine now. */
+  async resizeFits(sub: WithId<TSubscription>) {
+    const pending = sub.rental?.pendingChange;
+    if (!pending) return true;
+    const plan = await rentalPlanModel.findOne({ _id: pending.plan }, {
+      projection: { resources: 1 },
+    });
+    if (!plan?.resources) return false;
+    const size = partitionSize(plan.resources, await this.overheadMb());
+    const now = sub.rental!.size;
+    return (await this.placement(sub._id, {
+      cpus: Math.max(0, size.cpus - now.cpus),
+      memMb: Math.max(0, size.memMb - now.memMb),
+      diskGb: Math.max(0, size.diskGb - now.diskGb),
+    })).fits;
   }
 
   /** A machine for rent, even one that stopped taking new rentals. */
