@@ -162,6 +162,7 @@ const sysboxVersion = "v0.7.1"
 // unless daemon.json has them, so they're written first with the values
 // Docker uses already, which changes nothing. Then it only reloads Docker.
 func ensureSysbox(ctx context.Context, notes *[]string) error {
+	allowSysboxFuse(ctx, notes)
 	if _, err := exec.LookPath("sysbox-runc"); err != nil {
 		if err := pinNetworkDefaults(ctx); err != nil {
 			return err
@@ -449,6 +450,11 @@ func runPartition(ctx context.Context, name string, size protocol.PartitionSize,
 	args = append(args, memArgs(size.MemMb)...)
 	args = append(args, lxcfsArgs()...)
 	if _, err := sh.Run(ctx, "docker", append(args, img)...); err != nil {
+		// A container created but never started would hold its mounts and
+		// name, failing the retry: it goes. A running one is never touched.
+		if strings.TrimSpace(sh.Output(ctx, "docker", "inspect", "-f", "{{.State.Status}}", container(name))) == "created" {
+			_, _ = sh.Run(ctx, "docker", "rm", "-f", container(name))
+		}
 		return err
 	}
 	return ensureCounters(ctx, name)
