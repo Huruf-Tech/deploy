@@ -2610,5 +2610,8 @@ An admin decides on the dispute's own page: the reason, what was bought, every m
 - Abuse reports have their own page for admins: the report, how the reporter relates to the machine (owner, renter or neither), the reporter's record (reports made and found valid), the machine, its owner and earlier reports on it; an admin closes it as valid or not, which counts in the reporter's record.
 - An acceptable-use policy and abuse reports (mail ports are already blocked); owners warned that their connection is exposed and that many residential ISPs forbid servers.
 
+### 30.12 Testing tool: fast-forward (admins)
+For testing renewals and the money (owner, 2026-10-29): Admin → Rentals → a machine's rentals → **Fast-forward** moves one subscription's dates N days into the past (periods, renewal, term, a waiting proposal or resize, its earnings' holds), then runs what would run when it's looked at: the renewal when due, ended months maturing, held earnings released. Real money moves as it would (the customer's wallet and card are charged). **Off unless `ADMIN_FAST_FORWARD` is set** (test environments only); each use adds to the subscription's `fastForwardDays`. `lib/market/fastForward.ts`, `POST /rentalsAdmin/api/:id/fastForward {days}`.
+
 ### 30.11 Laws to check before launch (a lawyer's review)
 Money transmission and identity checks once payouts exist; tax reporting for marketplaces (EU DAC7, US 1099-K, UK) and VAT on the commission; data protection (owners are sub-processors; the region is shown); notice and takedown; sanctions screening; consumer refunds (the EU waiver in §30.5).

@@ -22,6 +22,7 @@ import { serverModel } from "@/schemas/infrastructure/server.ts";
 import { subscriptionModel } from "@/schemas/billing/subscription.ts";
 import { $machineView, machineView } from "@/lib/market/machineView.ts";
 import { disputeDetail, reportDetail } from "@/lib/market/review.ts";
+import { fastForward, fastForwardEnabled } from "@/lib/market/fastForward.ts";
 
 /** A machine as a dispute or report shows it: measured facts and record. */
 const $reviewMachine = z.object({
@@ -445,6 +446,35 @@ export default new Router("/api", function rentalsAdmin(router) {
       handler: async (req) => {
         const { id } = $params.parse(paramsAsJson(req));
         return Response.json(await reportDetail(id));
+      },
+    };
+  });
+
+  // A testing tool: a subscription as if days had passed (off unless set).
+  router.get("/fastForward", function fastForwardStatus() {
+    const $return = z.object({ enabled: z.boolean() });
+
+    return {
+      shape: () => ({ return: $return }),
+      handler: async () =>
+        Response.json({ enabled: await fastForwardEnabled() }),
+    };
+  });
+
+  router.post("/:id/fastForward", function fastForwardSubscription() {
+    const $body = z.object({ days: z.number().int().min(1).max(400) });
+    const $return = z.object({
+      status: z.string(),
+      currentPeriodEnd: z.date().optional(),
+      fastForwardDays: z.number(),
+    });
+
+    return {
+      shape: () => ({ params: $params, body: $body, return: $return }),
+      handler: async (req) => {
+        const { id } = $params.parse(paramsAsJson(req));
+        const { days } = $body.parse(await bodyAsJson(req));
+        return Response.json(await fastForward(id, days));
       },
     };
   });

@@ -428,6 +428,20 @@ export type report$return = {
         createdAt: Date;
     }[];
 };
+export type fastForwardStatus$return = {
+    enabled: boolean;
+};
+export type fastForwardSubscription$params = {
+    id?: string;
+};
+export type fastForwardSubscription$body = {
+    days: number;
+};
+export type fastForwardSubscription$return = {
+    status: string;
+    currentPeriodEnd?: Date | undefined;
+    fastForwardDays: number;
+};
 export type listDisputes$query = {
     status?: ("open" | "resolved" | "all") | undefined;
 };
@@ -533,6 +547,10 @@ export const rentalsAdminModule = (sdk: typeof BaseSDK) => {
         dispute$return: dispute$return,
         report$params: report$params,
         report$return: report$return,
+        fastForwardStatus$return: fastForwardStatus$return,
+        fastForwardSubscription$params: fastForwardSubscription$params,
+        fastForwardSubscription$body: fastForwardSubscription$body,
+        fastForwardSubscription$return: fastForwardSubscription$return,
         listDisputes$query: listDisputes$query,
         listDisputes$return: listDisputes$return,
         resolveDispute$params: resolveDispute$params,
@@ -912,6 +930,62 @@ export const rentalsAdminModule = (sdk: typeof BaseSDK) => {
             return res;
         }, data);
     },
+        fastForwardStatus(data?: {
+        params?: undefined,
+        query?: undefined,
+        body?: undefined,
+    } & TRequestOptions<fastForwardStatus$return>) {
+        return sdk.resolveAxiosResponse(async () => {
+            sdk.checkPermission("rentalsAdmin", "fastForwardStatus");
+
+            const method = "get";
+            const toPath = compile("rentalsAdmin/api/fastForward");
+            const requestPayload = {
+                method,
+                url: toPath(sdk.resolvePathParams(data?.params)),
+                params: data?.query,
+                data: data?.body,
+                signal: data?.signal,
+                ...(data?.axiosConfig
+                ? sdk.resolveAxiosConfig(data.axiosConfig)
+                : undefined),
+            };
+
+            sdk.log("Sending Request:", requestPayload);
+
+            const res = await sdk._axios!.request(requestPayload);
+
+            return res;
+        }, data);
+    },
+        fastForwardSubscription(data: {
+        params: fastForwardSubscription$params,
+        query?: undefined,
+        body: fastForwardSubscription$body,
+    } & TRequestOptions<fastForwardSubscription$return>) {
+        return sdk.resolveAxiosResponse(async () => {
+            sdk.checkPermission("rentalsAdmin", "fastForwardSubscription");
+
+            const method = "post";
+            const toPath = compile("rentalsAdmin/api/:id/fastForward");
+            const requestPayload = {
+                method,
+                url: toPath(sdk.resolvePathParams(data?.params)),
+                params: data?.query,
+                data: data?.body,
+                signal: data?.signal,
+                ...(data?.axiosConfig
+                ? sdk.resolveAxiosConfig(data.axiosConfig)
+                : undefined),
+            };
+
+            sdk.log("Sending Request:", requestPayload);
+
+            const res = await sdk._axios!.request(requestPayload);
+
+            return res;
+        }, data);
+    },
         listDisputes(data: {
         params?: undefined,
         query: listDisputes$query,
@@ -1095,6 +1169,8 @@ export const rentalsAdminModule = (sdk: typeof BaseSDK) => {
     (methods.machine as any).__scope = "rentalsAdmin";
     (methods.dispute as any).__scope = "rentalsAdmin";
     (methods.report as any).__scope = "rentalsAdmin";
+    (methods.fastForwardStatus as any).__scope = "rentalsAdmin";
+    (methods.fastForwardSubscription as any).__scope = "rentalsAdmin";
     (methods.listDisputes as any).__scope = "rentalsAdmin";
     (methods.resolveDispute as any).__scope = "rentalsAdmin";
     (methods.listReverts as any).__scope = "rentalsAdmin";

@@ -423,6 +423,20 @@ export type report$return = {
         createdAt: Date;
     }[];
 };
+export type fastForwardStatus$return = {
+    enabled: boolean;
+};
+export type fastForwardSubscription$params = {
+    id?: string;
+};
+export type fastForwardSubscription$body = {
+    days: number;
+};
+export type fastForwardSubscription$return = {
+    status: string;
+    currentPeriodEnd?: Date | undefined;
+    fastForwardDays: number;
+};
 export type listDisputes$query = {
     status?: ("open" | "resolved" | "all") | undefined;
 };
@@ -527,6 +541,10 @@ export declare const rentalsAdminModule: (sdk: typeof BaseSDK) => {
         dispute$return: dispute$return;
         report$params: report$params;
         report$return: report$return;
+        fastForwardStatus$return: fastForwardStatus$return;
+        fastForwardSubscription$params: fastForwardSubscription$params;
+        fastForwardSubscription$body: fastForwardSubscription$body;
+        fastForwardSubscription$return: fastForwardSubscription$return;
         listDisputes$query: listDisputes$query;
         listDisputes$return: listDisputes$return;
         resolveDispute$params: resolveDispute$params;
@@ -681,6 +699,28 @@ export declare const rentalsAdminModule: (sdk: typeof BaseSDK) => {
         then: <TResult1 = report$return, TResult2 = never>(onfulfilled?: ((value: report$return) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
         catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<report$return | TResult>;
         finally: (onfinally?: (() => void) | null | undefined) => Promise<report$return>;
+    };
+    readonly fastForwardStatus: (data?: {
+        params?: undefined;
+        query?: undefined;
+        body?: undefined;
+    } & TRequestOptions<fastForwardStatus$return>) => {
+        readonly raw: Promise<import("axios").AxiosResponse<fastForwardStatus$return, any, {}, any>>;
+        readonly data: Promise<fastForwardStatus$return>;
+        then: <TResult1 = fastForwardStatus$return, TResult2 = never>(onfulfilled?: ((value: fastForwardStatus$return) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+        catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<fastForwardStatus$return | TResult>;
+        finally: (onfinally?: (() => void) | null | undefined) => Promise<fastForwardStatus$return>;
+    };
+    readonly fastForwardSubscription: (data: {
+        params: fastForwardSubscription$params;
+        query?: undefined;
+        body: fastForwardSubscription$body;
+    } & TRequestOptions<fastForwardSubscription$return>) => {
+        readonly raw: Promise<import("axios").AxiosResponse<fastForwardSubscription$return, any, {}, any>>;
+        readonly data: Promise<fastForwardSubscription$return>;
+        then: <TResult1 = fastForwardSubscription$return, TResult2 = never>(onfulfilled?: ((value: fastForwardSubscription$return) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+        catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<fastForwardSubscription$return | TResult>;
+        finally: (onfinally?: (() => void) | null | undefined) => Promise<fastForwardSubscription$return>;
     };
     readonly listDisputes: (data: {
         params?: undefined;

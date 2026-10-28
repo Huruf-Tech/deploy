@@ -7,6 +7,7 @@ import { Mailer } from "@/plugins/Huruf-Tech/thunder-core/lib/mailer.ts";
 import { Wallet } from "@/plugins/Huruf-Tech/thunder-core/lib/wallet.ts";
 import { disputes, earnings, rentals } from "@/lib/services.ts";
 import { HOLD_MS } from "@/lib/market/earnings.ts";
+import { fastForward } from "@/lib/market/fastForward.ts";
 import {
   COMMUNITY_CONSENT_VERSION,
   communityConsent,
@@ -99,6 +100,8 @@ Deno.test({
     const config = Env.getAll<Record<string, string>>();
     const previous = config.PLATFORM_TENANT;
     config.PLATFORM_TENANT = platform.tenantId.toHexString();
+    const fastForwardWas = config.ADMIN_FAST_FORWARD;
+    config.ADMIN_FAST_FORWARD = "true";
     Mailer.onSendMail = () => {};
     const { publicKey } = await seedKeys();
     const d = mongodb.db();
@@ -532,6 +535,43 @@ Deno.test({
         },
       );
 
+      await t.step("fast-forward: a month passes, then its hold", async () => {
+        const res = await customer.call("POST", "/rentals/api/request", {
+          machine: m2,
+          vcpu: 0.5,
+          memMb: 1024,
+          diskGb: 10,
+          termMonths: 1,
+          waiveWithdrawal: true,
+          communityConsent: COMMUNITY_CONSENT_VERSION,
+        });
+        assertEquals(res.status, 200, JSON.stringify(res.json));
+        const id = new ObjectId(res.json.rental);
+        await rentals.approve(id, owner.user, owner.tenantId);
+        const held = (await earnings.summary(owner.tenantId)).held;
+        const wallet = await balance(customer.tenantId);
+        // A month on: it renews (charged again) and its first month matures.
+        const month = await fastForward(id, 31);
+        assertEquals(month.status, "active");
+        assert(month.currentPeriodEnd! > new Date(), "renewed");
+        assert(await balance(customer.tenantId) < wallet, "charged");
+        const periods = await subscriptionPeriodModel.find({
+          subscription: id,
+        }).toArray();
+        assertEquals(periods.length, 2);
+        assert(periods.some((p) => p.settled), "the first month matured");
+        assert((await earnings.summary(owner.tenantId)).held > held);
+        // Its 14 days of hold pass: claimable.
+        const before = (await earnings.summary(owner.tenantId)).available;
+        await fastForward(id, 15);
+        assert((await earnings.summary(owner.tenantId)).available > before);
+        assertEquals(
+          (await subscriptionModel.findOne({ _id: id }))!.fastForwardDays,
+          46,
+        );
+        await rentals.terminate(id);
+      });
+
       await t.step("the same person on both sides is linked", async () => {
         assertEquals(await linked(customer.tenantId, owner.tenantId), false);
         await d.collection("paymentCards").updateMany(
@@ -542,6 +582,7 @@ Deno.test({
       });
     } finally {
       config.PLATFORM_TENANT = previous;
+      config.ADMIN_FAST_FORWARD = fastForwardWas;
       Mailer.onSendMail = undefined;
       const tenants = [platform.tenantId, owner.tenantId, customer.tenantId];
       await Promise.all([

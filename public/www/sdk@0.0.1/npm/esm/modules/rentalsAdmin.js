@@ -263,6 +263,46 @@ export const rentalsAdminModule = (sdk) => {
                 return res;
             }, data);
         },
+        fastForwardStatus(data) {
+            return sdk.resolveAxiosResponse(async () => {
+                sdk.checkPermission("rentalsAdmin", "fastForwardStatus");
+                const method = "get";
+                const toPath = compile("rentalsAdmin/api/fastForward");
+                const requestPayload = {
+                    method,
+                    url: toPath(sdk.resolvePathParams(data?.params)),
+                    params: data?.query,
+                    data: data?.body,
+                    signal: data?.signal,
+                    ...(data?.axiosConfig
+                        ? sdk.resolveAxiosConfig(data.axiosConfig)
+                        : undefined),
+                };
+                sdk.log("Sending Request:", requestPayload);
+                const res = await sdk._axios.request(requestPayload);
+                return res;
+            }, data);
+        },
+        fastForwardSubscription(data) {
+            return sdk.resolveAxiosResponse(async () => {
+                sdk.checkPermission("rentalsAdmin", "fastForwardSubscription");
+                const method = "post";
+                const toPath = compile("rentalsAdmin/api/:id/fastForward");
+                const requestPayload = {
+                    method,
+                    url: toPath(sdk.resolvePathParams(data?.params)),
+                    params: data?.query,
+                    data: data?.body,
+                    signal: data?.signal,
+                    ...(data?.axiosConfig
+                        ? sdk.resolveAxiosConfig(data.axiosConfig)
+                        : undefined),
+                };
+                sdk.log("Sending Request:", requestPayload);
+                const res = await sdk._axios.request(requestPayload);
+                return res;
+            }, data);
+        },
         listDisputes(data) {
             return sdk.resolveAxiosResponse(async () => {
                 sdk.checkPermission("rentalsAdmin", "listDisputes");
@@ -397,6 +437,8 @@ export const rentalsAdminModule = (sdk) => {
     methods.machine.__scope = "rentalsAdmin";
     methods.dispute.__scope = "rentalsAdmin";
     methods.report.__scope = "rentalsAdmin";
+    methods.fastForwardStatus.__scope = "rentalsAdmin";
+    methods.fastForwardSubscription.__scope = "rentalsAdmin";
     methods.listDisputes.__scope = "rentalsAdmin";
     methods.resolveDispute.__scope = "rentalsAdmin";
     methods.listReverts.__scope = "rentalsAdmin";

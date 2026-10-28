@@ -387,6 +387,13 @@ export const queries = {
       async ({ signal }) =>
         await ThunderSDK.rentalsAdmin.report({ params: { id }, signal })
     ),
+  /** Whether the fast-forward testing tool is on (ADMIN_FAST_FORWARD). */
+  fastForward: () =>
+    query(["rentalsAdmin", "fastForward"], async ({ signal }) =>
+      can("rentalsAdmin", "fastForwardStatus")
+        ? await ThunderSDK.rentalsAdmin.fastForwardStatus({ signal })
+        : { enabled: false }
+    ),
   abuseReports: (status: "open" | "closed" | "all" = "open") =>
     query(["rentalsAdmin", "reports", status], async ({ signal }) =>
       can("rentalsAdmin", "listReports")

@@ -1955,5 +1955,19 @@
   "Resize accepted: it applies now": "قُبل تغيير الحجم: يُطبّق الآن",
   "Next size: {{plan}} from {{date}}": "الحجم التالي: {{plan}} من {{date}}",
   "Next size": "الحجم التالي",
-  "{{plan}} at {{price}} a month, from {{date}}": "{{plan}} بسعر {{price}} شهريًا، من {{date}}"
+  "{{plan}} at {{price}} a month, from {{date}}": "{{plan}} بسعر {{price}} شهريًا، من {{date}}",
+  "Fast-forward": "تقديم الوقت",
+  "Fast-forward {{what}}": "تقديم الوقت لـ {{what}}",
+  "For testing: its dates move into the past, then what would happen runs: the renewal when due (the customer is charged), the month maturing (downtime refunded, the owner's share held), held earnings released. Real money moves.": "للاختبار: تُنقل تواريخه إلى الماضي، ثم يجري ما كان سيحدث: التجديد عند حلوله (يُخصم من العميل)، ونضج الشهر (استرداد وقت التوقف وحجز حصة المالك)، وتحرير الأرباح المحجوزة. يتحرك مال حقيقي.",
+  "To the end of this month": "حتى نهاية هذا الشهر",
+  "+14 days (the earnings hold)": "+14 يومًا (حجز الأرباح)",
+  "+30 days": "+30 يومًا",
+  "{{days}} days later: {{status}}, paid until {{date}}": "بعد {{days}} يومًا: {{status}}، مدفوع حتى {{date}}",
+  "Could not fast-forward it": "تعذّر تقديم الوقت",
+  "Fast-forward {{count}} days": "قدّم الوقت {{count}} يومًا",
+  "Fast-forward {{count}} days_zero": "قدّم الوقت {{count}} يومًا",
+  "Fast-forward {{count}} days_one": "قدّم الوقت {{count}} يومًا",
+  "Fast-forward {{count}} days_two": "قدّم الوقت {{count}} يومًا",
+  "Fast-forward {{count}} days_few": "قدّم الوقت {{count}} يومًا",
+  "Fast-forward {{count}} days_many": "قدّم الوقت {{count}} يومًا"
 }

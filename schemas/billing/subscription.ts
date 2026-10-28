@@ -131,6 +131,8 @@ export const $subscription = z.object({
     }).optional(),
   }).optional(),
   startedAt: z.date(),
+  /** Days an admin fast-forwarded it with the testing tool (`lib/market/fastForward.ts`). */
+  fastForwardDays: z.number().optional(),
   createdBy: $objectId.meta({ ref: "users" }),
   updatedAt: z.date(),
 });

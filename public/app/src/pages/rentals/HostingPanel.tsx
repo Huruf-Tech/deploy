@@ -23,6 +23,7 @@ import { queries } from "@/lib/queries"
 import { errorMessage } from "@/lib/utils"
 import { isMachine, type TServer } from "@/pages/servers/server"
 import { MoveDialog } from "./MoveDialog"
+import { FastForwardDialog } from "./FastForwardDialog"
 import { PromptDialog } from "./PromptDialog"
 import { useIsOwner } from "./rental"
 
@@ -641,6 +642,10 @@ export function MachineRentals({
     label: string
     action: "suspend" | "terminate" | "refund"
   }>()
+  // The testing tool, when it's on (admins).
+  const fastForwardOn = !!useCached(queries.fastForward()).data?.enabled
+  const [forwarding, setForwarding] =
+    React.useState<TMachine["rentals"][number]>()
   if (!info.rentals.length) return null
 
   const act = async (
@@ -855,6 +860,11 @@ export function MachineRentals({
                           {t("Suspend")}
                         </button>
                       )}
+                  {fastForwardOn && admin("fastForwardSubscription") && (
+                    <button type="button" onClick={() => setForwarding(r)}>
+                      {t("Fast-forward")}
+                    </button>
+                  )}
                   {admin("refund") && (
                     <button
                       type="button"
@@ -936,6 +946,15 @@ export function MachineRentals({
         reasonLabel={t("Reason for the customer (optional)")}
         onConfirm={(reason) => acting && act(acting.id, acting.action, reason)}
       />
+      {forwarding && (
+        <FastForwardDialog
+          rental={forwarding._id}
+          label={labelOf(forwarding)}
+          periodEnd={forwarding.currentPeriodEnd}
+          onOpenChange={(open) => !open && setForwarding(undefined)}
+          onDone={onChanged}
+        />
+      )}
       {moving && (
         <MoveDialog
           rental={moving.id}

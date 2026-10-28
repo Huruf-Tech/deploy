@@ -1955,5 +1955,19 @@
   "Resize accepted: it applies now": "Resize accepted: it applies now",
   "Next size: {{plan}} from {{date}}": "Next size: {{plan}} from {{date}}",
   "Next size": "Next size",
-  "{{plan}} at {{price}} a month, from {{date}}": "{{plan}} at {{price}} a month, from {{date}}"
+  "{{plan}} at {{price}} a month, from {{date}}": "{{plan}} at {{price}} a month, from {{date}}",
+  "Fast-forward": "Fast-forward",
+  "Fast-forward {{what}}": "Fast-forward {{what}}",
+  "For testing: its dates move into the past, then what would happen runs: the renewal when due (the customer is charged), the month maturing (downtime refunded, the owner's share held), held earnings released. Real money moves.": "For testing: its dates move into the past, then what would happen runs: the renewal when due (the customer is charged), the month maturing (downtime refunded, the owner's share held), held earnings released. Real money moves.",
+  "To the end of this month": "To the end of this month",
+  "+14 days (the earnings hold)": "+14 days (the earnings hold)",
+  "+30 days": "+30 days",
+  "{{days}} days later: {{status}}, paid until {{date}}": "{{days}} days later: {{status}}, paid until {{date}}",
+  "Could not fast-forward it": "Could not fast-forward it",
+  "Fast-forward {{count}} days": "Fast-forward {{count}} days",
+  "Fast-forward {{count}} days_zero": "Fast-forward {{count}} days",
+  "Fast-forward {{count}} days_one": "Fast-forward {{count}} day",
+  "Fast-forward {{count}} days_two": "Fast-forward {{count}} days",
+  "Fast-forward {{count}} days_few": "Fast-forward {{count}} days",
+  "Fast-forward {{count}} days_many": "Fast-forward {{count}} days"
 }
