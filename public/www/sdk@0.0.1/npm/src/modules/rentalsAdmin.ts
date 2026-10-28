@@ -105,6 +105,74 @@ export type refund$return = {
     /** Cents refunded */
     amount: number;
 };
+export type machine$params = {
+    id?: string;
+};
+export type machine$return = {
+    rent?: {
+        enabled: boolean;
+        autoAccept: boolean;
+        prices: {
+            vcpu: number;
+            memGb: number;
+            diskGb: number;
+            whole?: number | undefined;
+            trafficGb: number;
+        };
+    } | undefined;
+    accepting: boolean;
+    monthlyCost?: number | undefined;
+    security: {
+        /** Cents held for this machine */
+        amount: number;
+        /** Its whole monthly price, minus commission */
+        cap: number;
+    };
+    /** Percent, from the workspace plan */
+    commission: number;
+    rentals: {
+        _id: string;
+        partition?: string | undefined;
+        tenantName?: string | undefined;
+        plan?: string | undefined;
+        /** Cents per month */
+        price: number;
+        size: {
+            cpus: number;
+            memMb: number;
+            diskGb: number;
+        };
+        whole?: boolean | undefined;
+        status: string;
+        held?: boolean | undefined;
+        uptime?: number | undefined;
+        overDisk?: number | undefined;
+        term?: {
+            months: number;
+            until?: Date | undefined;
+        } | undefined;
+        endAt?: Date | undefined;
+        currentPeriodEnd?: Date | undefined;
+        moving?: {
+            to: string;
+            toName?: string | undefined;
+            startedAt: Date;
+        } | undefined;
+        proposal?: {
+            to: string;
+            toName?: string | undefined;
+            expiresAt: Date;
+        } | undefined;
+        lastMove?: {
+            from: string;
+            to: string;
+            at: Date;
+            error?: string | undefined;
+        } | undefined;
+    }[];
+    /** Cents per month from live rentals */
+    revenue: number;
+};
 export type listDisputes$query = {
     status?: ("open" | "resolved") | undefined;
 };
@@ -191,6 +259,8 @@ export const rentalsAdminModule = (sdk: typeof BaseSDK) => {
         refund$params: refund$params,
         refund$body: refund$body,
         refund$return: refund$return,
+        machine$params: machine$params,
+        machine$return: machine$return,
         listDisputes$query: listDisputes$query,
         listDisputes$return: listDisputes$return,
         resolveDispute$params: resolveDispute$params,
@@ -484,6 +554,34 @@ export const rentalsAdminModule = (sdk: typeof BaseSDK) => {
             return res;
         }, data);
     },
+        machine(data: {
+        params: machine$params,
+        query?: undefined,
+        body?: undefined,
+    } & TRequestOptions<machine$return>) {
+        return sdk.resolveAxiosResponse(async () => {
+            sdk.checkPermission("rentalsAdmin", "machine");
+
+            const method = "get";
+            const toPath = compile("rentalsAdmin/api/machines/:id");
+            const requestPayload = {
+                method,
+                url: toPath(sdk.resolvePathParams(data?.params)),
+                params: data?.query,
+                data: data?.body,
+                signal: data?.signal,
+                ...(data?.axiosConfig
+                ? sdk.resolveAxiosConfig(data.axiosConfig)
+                : undefined),
+            };
+
+            sdk.log("Sending Request:", requestPayload);
+
+            const res = await sdk._axios!.request(requestPayload);
+
+            return res;
+        }, data);
+    },
         listDisputes(data: {
         params?: undefined,
         query: listDisputes$query,
@@ -664,6 +762,7 @@ export const rentalsAdminModule = (sdk: typeof BaseSDK) => {
     (methods.waiting as any).__scope = "rentalsAdmin";
     (methods.recreatePartition as any).__scope = "rentalsAdmin";
     (methods.refund as any).__scope = "rentalsAdmin";
+    (methods.machine as any).__scope = "rentalsAdmin";
     (methods.listDisputes as any).__scope = "rentalsAdmin";
     (methods.resolveDispute as any).__scope = "rentalsAdmin";
     (methods.listReverts as any).__scope = "rentalsAdmin";

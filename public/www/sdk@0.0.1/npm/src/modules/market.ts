@@ -81,6 +81,7 @@ export type machines$return = {
 }[];
 export type quote$query = {
     machine?: string;
+    rental?: string | undefined;
     whole?: ("true" | "false") | undefined;
     vcpu?: number | undefined;
     memMb?: number | undefined;

@@ -100,6 +100,74 @@ export type refund$return = {
     /** Cents refunded */
     amount: number;
 };
+export type machine$params = {
+    id?: string;
+};
+export type machine$return = {
+    rent?: {
+        enabled: boolean;
+        autoAccept: boolean;
+        prices: {
+            vcpu: number;
+            memGb: number;
+            diskGb: number;
+            whole?: number | undefined;
+            trafficGb: number;
+        };
+    } | undefined;
+    accepting: boolean;
+    monthlyCost?: number | undefined;
+    security: {
+        /** Cents held for this machine */
+        amount: number;
+        /** Its whole monthly price, minus commission */
+        cap: number;
+    };
+    /** Percent, from the workspace plan */
+    commission: number;
+    rentals: {
+        _id: string;
+        partition?: string | undefined;
+        tenantName?: string | undefined;
+        plan?: string | undefined;
+        /** Cents per month */
+        price: number;
+        size: {
+            cpus: number;
+            memMb: number;
+            diskGb: number;
+        };
+        whole?: boolean | undefined;
+        status: string;
+        held?: boolean | undefined;
+        uptime?: number | undefined;
+        overDisk?: number | undefined;
+        term?: {
+            months: number;
+            until?: Date | undefined;
+        } | undefined;
+        endAt?: Date | undefined;
+        currentPeriodEnd?: Date | undefined;
+        moving?: {
+            to: string;
+            toName?: string | undefined;
+            startedAt: Date;
+        } | undefined;
+        proposal?: {
+            to: string;
+            toName?: string | undefined;
+            expiresAt: Date;
+        } | undefined;
+        lastMove?: {
+            from: string;
+            to: string;
+            at: Date;
+            error?: string | undefined;
+        } | undefined;
+    }[];
+    /** Cents per month from live rentals */
+    revenue: number;
+};
 export type listDisputes$query = {
     status?: ("open" | "resolved") | undefined;
 };
@@ -185,6 +253,8 @@ export declare const rentalsAdminModule: (sdk: typeof BaseSDK) => {
         refund$params: refund$params;
         refund$body: refund$body;
         refund$return: refund$return;
+        machine$params: machine$params;
+        machine$return: machine$return;
         listDisputes$query: listDisputes$query;
         listDisputes$return: listDisputes$return;
         resolveDispute$params: resolveDispute$params;
@@ -304,6 +374,17 @@ export declare const rentalsAdminModule: (sdk: typeof BaseSDK) => {
         then: <TResult1 = refund$return, TResult2 = never>(onfulfilled?: ((value: refund$return) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
         catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<refund$return | TResult>;
         finally: (onfinally?: (() => void) | null | undefined) => Promise<refund$return>;
+    };
+    readonly machine: (data: {
+        params: machine$params;
+        query?: undefined;
+        body?: undefined;
+    } & TRequestOptions<machine$return>) => {
+        readonly raw: Promise<import("axios").AxiosResponse<machine$return, any, {}, any>>;
+        readonly data: Promise<machine$return>;
+        then: <TResult1 = machine$return, TResult2 = never>(onfulfilled?: ((value: machine$return) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+        catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<machine$return | TResult>;
+        finally: (onfinally?: (() => void) | null | undefined) => Promise<machine$return>;
     };
     readonly listDisputes: (data: {
         params?: undefined;

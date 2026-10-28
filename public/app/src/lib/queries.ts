@@ -25,13 +25,6 @@ type TQueryOf<F extends (...args: never[]) => unknown> = NonNullable<
   NonNullable<Parameters<F>[0]> extends { query?: infer Q } ? Q : never
 >
 
-export type TRentalQuote = {
-  class: string
-  vcpu: number
-  memMb: number
-  diskGb: number
-}
-
 export const queries = {
   me: () =>
     query(["me"], async ({ signal }) => await ThunderSDK.me.get({ signal })),
@@ -265,44 +258,84 @@ export const queries = {
     query(["rentals", "list"], async ({ signal }) =>
       can("rentals", "list") ? await ThunderSDK.rentals.list({ signal }) : []
     ),
-  catalog: () =>
+  /** The market (PLAN §30.4): machines for rent, filtered. */
+  market: (filters: TQueryOf<typeof ThunderSDK.market.machines>) =>
     query(
-      ["rentals", "catalog"],
-      async ({ signal }) => await ThunderSDK.rentals.catalog({ signal })
-    ),
-  /** A custom size's price; nothing to quote, or a failed quote, is null. */
-  rentalQuote: (size?: TRentalQuote) =>
-    query(
-      size
-        ? [
-            "rentals",
-            "quote",
-            size.class,
-            ...[size.vcpu, size.memMb, size.diskGb].map(String),
-          ]
-        : ["rentals", "quote"],
+      [
+        "market",
+        "machines",
+        ...Object.entries(filters)
+          .filter(([, v]) => v !== undefined && v !== "")
+          .map(([k, v]) => `${k}=${v}`)
+          .sort(),
+      ],
       async ({ signal }) =>
-        size
-          ? await ThunderSDK.rentals
-              .quote({ query: size, signal })
+        await ThunderSDK.market.machines({ query: filters, signal })
+    ),
+  /** A size's price on a machine; nothing to quote, or a failed quote, is null. */
+  marketQuote: (q?: TQueryOf<typeof ThunderSDK.market.quote>) =>
+    query(
+      q
+        ? ["market", "quote", ...Object.entries(q).map(([k, v]) => `${k}=${v}`)]
+        : ["market", "quote"],
+      async ({ signal }) =>
+        q
+          ? await ThunderSDK.market
+              .quote({ query: q, signal })
               .catch(() => null)
           : null
     ),
-  serverClasses: () =>
+  /** Where an owner's proposal can go instead (PLAN §30.8). */
+  proposalTargets: (rental: string) =>
     query(
-      ["serverClasses", "all"],
+      ["rentals", rental, "proposalTargets"],
       async ({ signal }) =>
-        await ThunderSDK.serverClasses.get({
-          params: {},
-          query: { limit: 50 },
+        await ThunderSDK.rentals.proposalTargets({
+          params: { id: rental },
           signal,
         })
     ),
-  rentalQueue: () =>
-    query(
-      ["rentalsAdmin", "queue"],
-      async ({ signal }) => await ThunderSDK.rentalsAdmin.queue({ signal })
+
+  /** One of the workspace's machines for rent: prices, rentals, security. */
+  hostingMachine: (server: string) =>
+    query(["hosting", "machine", server], async ({ signal }) =>
+      can("hosting", "machine")
+        ? await ThunderSDK.hosting.machine({ params: { id: server }, signal })
+        : null
     ),
+  /** Requests and resizes waiting for this workspace's machines. */
+  hostingRequests: () =>
+    query(["hosting", "requests"], async ({ signal }) =>
+      can("hosting", "requests")
+        ? await ThunderSDK.hosting.requests({ signal })
+        : []
+    ),
+  /** Empty `rental`: nothing to read. */
+  /** Any machine's rentals, for admins (community machines included). */
+  adminMachine: (server: string) =>
+    query(
+      ["rentalsAdmin", "machine", server],
+      async ({ signal }) =>
+        await ThunderSDK.rentalsAdmin.machine({
+          params: { id: server },
+          signal,
+        })
+    ),
+  hostingMoveTargets: (rental: string) =>
+    query(["hosting", "move", rental], async ({ signal }) =>
+      rental
+        ? await ThunderSDK.hosting.moveTargets({
+            params: { id: rental },
+            signal,
+          })
+        : null
+    ),
+  earnings: () =>
+    query(
+      ["earnings"],
+      async ({ signal }) => await ThunderSDK.earnings.summary({ signal })
+    ),
+
   /** Approved rentals still without a server: stuck, or being set up. */
   rentalWaiting: () =>
     query(["rentalsAdmin", "waiting"], async ({ signal }) =>
@@ -315,31 +348,36 @@ export const queries = {
       ["rentalsAdmin", "capacity"],
       async ({ signal }) => await ThunderSDK.rentalsAdmin.capacity({ signal })
     ),
-  /** Machines a rental request could be placed on. */
-  placementFor: (rental: string) =>
-    query(
-      ["rentalsAdmin", "placement", rental],
-      async ({ signal }) =>
-        await ThunderSDK.rentalsAdmin.placement({
-          params: { id: rental },
-          signal,
-        })
-    ),
+  /** Empty `rental`: nothing to read. */
   moveTargets: (rental: string) =>
-    query(
-      ["rentalsAdmin", "move", rental],
-      async ({ signal }) =>
-        await ThunderSDK.rentalsAdmin.moveTargets({
-          params: { id: rental },
-          signal,
-        })
+    query(["rentalsAdmin", "move", rental], async ({ signal }) =>
+      rental
+        ? await ThunderSDK.rentalsAdmin.moveTargets({
+            params: { id: rental },
+            signal,
+          })
+        : null
     ),
-  /** The rentals on one of the platform's machines. */
-  machineRentals: (server: string) =>
-    query(
-      ["rentalsAdmin", "pool", server],
-      async ({ signal }) =>
-        await ThunderSDK.rentalsAdmin.pool({ params: { id: server }, signal })
+  disputes: (status: "open" | "resolved") =>
+    query(["rentalsAdmin", "disputes", status], async ({ signal }) =>
+      can("rentalsAdmin", "listDisputes")
+        ? await ThunderSDK.rentalsAdmin.listDisputes({
+            query: { status },
+            signal,
+          })
+        : []
+    ),
+  claimReverts: () =>
+    query(["rentalsAdmin", "reverts"], async ({ signal }) =>
+      can("rentalsAdmin", "listReverts")
+        ? await ThunderSDK.rentalsAdmin.listReverts({ signal })
+        : []
+    ),
+  abuseReports: () =>
+    query(["rentalsAdmin", "reports"], async ({ signal }) =>
+      can("rentalsAdmin", "listReports")
+        ? await ThunderSDK.rentalsAdmin.listReports({ signal })
+        : []
     ),
 
   role: (id: string) =>

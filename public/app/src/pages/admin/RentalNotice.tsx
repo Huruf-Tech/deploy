@@ -7,31 +7,60 @@ import { getLocalPath } from "@/core/lib/utils"
 import { Button } from "@/components/ui/button"
 import { useCached } from "@/hooks/use-cached"
 import { queries } from "@/lib/queries"
+import { useIsOwner } from "@/pages/rentals/rental"
 
 /**
- * For admins on the overview (PLAN §26.8): rental requests and resizes
- * waiting for approval, and approved rentals that got stuck, with a link to
- * Admin → Rentals. Nothing when there's nothing to do.
+ * On the overview (PLAN §30): for a workspace owner, rental requests waiting
+ * for their machines; for admins, open disputes, claims to take back, abuse
+ * reports and stuck rentals. Nothing when there's nothing to do.
  */
 export function RentalNotice() {
-  if (!ThunderSDK.isPermitted("rentalsAdmin", "queue")) return null
-  return <Notice />
+  const isOwner = useIsOwner()
+  return (
+    <>
+      {isOwner && ThunderSDK.isPermitted("hosting", "requests") && (
+        <OwnerNotice />
+      )}
+      {ThunderSDK.isPermitted("rentalsAdmin", "listDisputes") && (
+        <AdminNotice />
+      )}
+    </>
+  )
 }
 
-function Notice() {
+function OwnerNotice() {
   const { t } = useTranslation()
-  const queue = useCached(queries.rentalQueue()).data
-  const waiting = useCached(queries.rentalWaiting()).data
-  const requests = queue?.filter((q) => q.status === "requested").length ?? 0
-  const resizes = (queue?.length ?? 0) - requests
-  const stuck = waiting?.filter((w) => w.error).length ?? 0
-  if (!requests && !resizes && !stuck) return null
+  const requests = useCached(queries.hostingRequests()).data ?? []
+  if (!requests.length) return null
+  return (
+    <Notice
+      text={t("{{count}} rental requests wait for you", {
+        count: requests.length,
+      })}
+      to="servers"
+    />
+  )
+}
 
+function AdminNotice() {
+  const { t } = useTranslation()
+  const disputes = useCached(queries.disputes("open")).data?.length ?? 0
+  const reverts = useCached(queries.claimReverts()).data?.length ?? 0
+  const reports = useCached(queries.abuseReports()).data?.length ?? 0
+  const stuck =
+    useCached(queries.rentalWaiting()).data?.filter((w) => w.error).length ?? 0
   const parts = [
-    requests && t("{{count}} rental requests waiting", { count: requests }),
-    resizes && t("{{count}} resizes waiting", { count: resizes }),
+    disputes && t("{{count}} open disputes", { count: disputes }),
+    reverts && t("{{count}} claims to take back", { count: reverts }),
+    reports && t("{{count}} abuse reports", { count: reports }),
     stuck && t("{{count}} approved rentals need attention", { count: stuck }),
   ].filter(Boolean)
+  if (!parts.length) return null
+  return <Notice text={parts.join(" · ")} to="admin/rentals" />
+}
+
+function Notice({ text, to }: { text: string; to: string }) {
+  const { t } = useTranslation()
   return (
     <div
       role="status"
@@ -41,12 +70,12 @@ function Notice() {
       <p className="min-w-0 flex-[1_1_16rem]">
         <span className="font-medium">{t("Rentals")}</span>
         {" · "}
-        {parts.join(" · ")}
+        {text}
       </p>
       <Button
         size="sm"
         variant="outline"
-        render={<Link to={getLocalPath("admin/rentals")} />}
+        render={<Link to={getLocalPath(to)} />}
         nativeButton={false}
       >
         {t("Review")}

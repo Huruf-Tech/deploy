@@ -95,6 +95,8 @@ export default new Router("/api", function market(router) {
   router.get("/quote", function quote() {
     const $query = z.object({
       machine: $objectId,
+      /** A resize of this rental: its own size counts as free, on any machine it's on. */
+      rental: $objectId.optional(),
       whole: $flag,
       vcpu: z.coerce.number().optional(),
       memMb: z.coerce.number().int().optional(),
@@ -117,9 +119,11 @@ export default new Router("/api", function market(router) {
     return {
       shape: () => ({ query: $query, return: $return }),
       handler: async (req) => {
-        const { machine, ...choice } = $query.parse(queryAsJson(req));
-        await withTenant(req);
-        const q = await rentals.quote(machine, choice);
+        const { machine, rental, ...choice } = $query.parse(queryAsJson(req));
+        const { tenant } = await withTenant(req);
+        const q = rental
+          ? await rentals.quoteResize(tenant._id, rental, choice)
+          : await rentals.quote(machine, choice);
         return Response.json({
           price: q.price,
           hourly: q.hourly,

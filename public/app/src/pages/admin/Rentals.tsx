@@ -4,14 +4,15 @@ import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
 import {
   IconAlertTriangle,
+  IconArrowBackUp,
+  IconFlag,
+  IconScale,
   IconServer2,
   IconServerBolt,
 } from "@tabler/icons-react"
 
 import { Page } from "@/components/page"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import {
   Dialog,
   DialogContent,
@@ -26,162 +27,64 @@ import { EmptyState } from "@/components/console/empty-state"
 import { StatusBadge } from "@/components/console/status"
 import { ConfirmDialog } from "@/components/confirm-dialog"
 import { useCached } from "@/hooks/use-cached"
-import { ago, dateTime, gbOfMb, sizeText } from "@/lib/format"
+import { ago, gbOfMb, sizeText } from "@/lib/format"
 import { money } from "@/lib/plans"
 import { queries } from "@/lib/queries"
 import { errorMessage } from "@/lib/utils"
-import { MachinePicker } from "@/pages/rentals/MachinePicker"
-import { usable } from "@/pages/rentals/rental"
+import { PromptDialog } from "@/pages/rentals/PromptDialog"
+import { MachineRentals } from "@/pages/rentals/HostingPanel"
 
-type TItem = Awaited<ReturnType<typeof ThunderSDK.rentalsAdmin.queue>>[number]
 type TWaiting = Awaited<
   ReturnType<typeof ThunderSDK.rentalsAdmin.waiting>
 >[number]
 
-/** Picks the machine for a request (PLAN §26.7), then approves it. */
-function ApproveDialog({
-  item,
+/** A machine's rentals, any owner's, with an admin's actions (PLAN §30.2). */
+function MachineRentalsDialog({
+  machine,
   onOpenChange,
-  onDone,
 }: {
-  item: TItem
+  machine: { id: string; name: string }
   onOpenChange: (open: boolean) => void
-  onDone: () => void
 }) {
   const { t } = useTranslation()
-  const placement = useCached(queries.placementFor(item._id))
-  const machines = placement.data
-  const [host, setHost] = React.useState<string>()
-  const pick = host ?? machines?.find(usable)?.server
-  const [busy, setBusy] = React.useState(false)
-  const approve = async () => {
-    if (!pick) return
-    setBusy(true)
-    try {
-      await ThunderSDK.rentalsAdmin.approve({
-        params: { id: item._id },
-        body: { host: pick },
-      })
-      toast.success(
-        t(
-          "Approved: the first month is charged and the partition is on its way"
-        )
-      )
-      onDone()
-      onOpenChange(false)
-    } catch (e) {
-      toast.error(errorMessage(e) ?? t("Could not approve it"))
-    } finally {
-      setBusy(false)
-    }
-  }
+  const { data, reload } = useCached(queries.adminMachine(machine.id))
   return (
     <Dialog open onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="max-h-[90svh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>
-            {t("Approve {{plan}} for {{tenant}}", {
-              plan: item.plan,
-              tenant: item.tenantName ?? item.tenant,
-            })}
+            {t("Rentals on {{name}}", { name: machine.name })}
           </DialogTitle>
-          <DialogDescription>{sizeText(item.size)}</DialogDescription>
+          <DialogDescription>
+            {data
+              ? t("Security held: {{amount}} of {{cap}}", {
+                  amount: money(data.security.amount, "usd"),
+                  cap: money(data.security.cap, "usd"),
+                })
+              : t("Loading…")}
+          </DialogDescription>
         </DialogHeader>
-        {!machines && placement.error ? (
-          <p className="text-[13px] break-words text-destructive-foreground">
-            {errorMessage(placement.error) ?? t("Could not load the machines")}
-          </p>
-        ) : !machines ? (
-          <p className="text-sm text-muted-foreground">{t("Loading…")}</p>
-        ) : !machines.length ? (
-          <p className="text-sm text-muted-foreground">
-            {t(
-              "No machine of this class takes rentals. Give a machine this class on its page."
-            )}
-          </p>
-        ) : (
-          <MachinePicker machines={machines} pick={pick} onPick={setHost} />
-        )}
-        <DialogFooter>
-          <Button onClick={approve} disabled={busy || !pick}>
-            {t("Approve and charge")}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  )
-}
-
-function RejectDialog({
-  item,
-  onOpenChange,
-  onDone,
-}: {
-  item: TItem
-  onOpenChange: (open: boolean) => void
-  onDone: () => void
-}) {
-  const { t } = useTranslation()
-  const [reason, setReason] = React.useState("")
-  const [busy, setBusy] = React.useState(false)
-  const submit = async (event: React.FormEvent) => {
-    event.preventDefault()
-    setBusy(true)
-    try {
-      if (item.resizeTo) {
-        await ThunderSDK.rentalsAdmin.rejectResize({
-          params: { id: item._id },
-          body: { reason },
-        })
-      } else {
-        await ThunderSDK.rentalsAdmin.reject({
-          params: { id: item._id },
-          body: { reason },
-        })
-      }
-      toast.success(t("Rejected; the customer is told why"))
-      onDone()
-      onOpenChange(false)
-    } catch (e) {
-      toast.error(errorMessage(e) ?? t("Could not reject it"))
-    } finally {
-      setBusy(false)
-    }
-  }
-  return (
-    <Dialog open onOpenChange={onOpenChange}>
-      <DialogContent>
-        <form onSubmit={submit} className="flex flex-col gap-4">
-          <DialogHeader>
-            <DialogTitle>
-              {item.resizeTo ? t("Reject the resize") : t("Reject the request")}
-            </DialogTitle>
-            <DialogDescription>
-              {t("The customer sees the reason. Nothing is charged.")}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="reject-reason">{t("Reason")}</Label>
-            <Input
-              id="reject-reason"
-              required
-              maxLength={500}
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
+        {data &&
+          (data.rentals.length ? (
+            <MachineRentals
+              info={data}
+              asAdmin
+              onChanged={() => {
+                reload()
+                queries.rentalCapacity().invalidate()
+              }}
             />
-          </div>
-          <DialogFooter>
-            <Button type="submit" variant="destructive" disabled={busy}>
-              {t("Reject")}
-            </Button>
-          </DialogFooter>
-        </form>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              {t("No rentals on it now.")}
+            </p>
+          ))}
       </DialogContent>
     </Dialog>
   )
 }
 
-/** Recreates a stuck rental's partition, on its machine or another one. */
+/** Recreates a stuck rental's partition on its machine. */
 function RetryDialog({
   item,
   onOpenChange,
@@ -192,21 +95,13 @@ function RetryDialog({
   onDone: () => void
 }) {
   const { t } = useTranslation()
-  const placement = useCached(queries.placementFor(item._id))
-  const machines = placement.data
-  const current = machines?.find((m) => m.name === item.host)
-  const [host, setHost] = React.useState<string>()
-  const pick =
-    host ??
-    (current && usable(current) ? current : machines?.find(usable))?.server
   const [busy, setBusy] = React.useState(false)
   const retry = async () => {
     setBusy(true)
     try {
       await ThunderSDK.rentalsAdmin.recreatePartition({
         params: { id: item._id },
-        // No pick, or its own machine: try again where it is.
-        body: pick && pick !== current?.server ? { host: pick } : {},
+        body: {},
       })
       toast.success(t("Setting it up again"))
       onDone()
@@ -229,7 +124,8 @@ function RetryDialog({
           </DialogTitle>
           <DialogDescription>
             {t(
-              "Recreates its partition on the machine you pick. Nothing is charged again."
+              "Recreates its partition on {{machine}}. Nothing is charged again.",
+              { machine: item.host ?? t("its machine") }
             )}
           </DialogDescription>
         </DialogHeader>
@@ -237,21 +133,6 @@ function RetryDialog({
           <p className="text-[13px] break-words text-destructive-foreground">
             {item.error}
           </p>
-        )}
-        {!machines && placement.error ? (
-          <p className="text-[13px] break-words text-destructive-foreground">
-            {errorMessage(placement.error) ?? t("Could not load the machines")}
-          </p>
-        ) : !machines ? (
-          <p className="text-sm text-muted-foreground">{t("Loading…")}</p>
-        ) : !machines.length ? (
-          <p className="text-sm text-muted-foreground">
-            {t(
-              "No machine of this class takes rentals. Give a machine this class on its page."
-            )}
-          </p>
-        ) : (
-          <MachinePicker machines={machines} pick={pick} onPick={setHost} />
         )}
         <DialogFooter>
           <Button onClick={retry} disabled={busy}>
@@ -414,12 +295,13 @@ function NeedsAttention() {
 }
 
 /**
- * Per machine for rent (PLAN §28): what customers rent, what the platform's
+ * Per machine in the market (PLAN §30): what renters take, what its owner's
  * own partitions take, what's free, and revenue against cost.
  */
 function Capacity() {
   const { t } = useTranslation()
   const data = useCached(queries.rentalCapacity()).data
+  const [open, setOpen] = React.useState<{ id: string; name: string }>()
   if (!data?.machines.length) return null
   return (
     <section aria-labelledby="capacity-title" className="flex flex-col gap-2">
@@ -432,7 +314,7 @@ function Capacity() {
         </h2>
         <p className="text-xs text-muted-foreground">
           {t(
-            "Machines for rent: give one a class on its page. Memory is what runs out, since it's never shared."
+            "Machines in the market. Memory is what runs out, since it's never shared."
           )}
         </p>
       </div>
@@ -449,7 +331,7 @@ function Capacity() {
                 <div className="min-w-0">
                   <div className="font-medium">{m.name}</div>
                   <div className="text-xs text-muted-foreground">
-                    {m.class}
+                    {m.forRent ? t("For rent") : t("Not for rent")}
                     {!m.accepting && ` · ${t("not taking rentals")}`}
                   </div>
                 </div>
@@ -457,7 +339,7 @@ function Capacity() {
             },
             {
               id: "memory",
-              header: t("Memory: rented / yours / free"),
+              header: t("Memory: rented / owner's / free"),
               className: "whitespace-nowrap tabular-nums",
               cell: (m) => (
                 <span dir="ltr">
@@ -484,140 +366,429 @@ function Capacity() {
                 </span>
               ),
             },
+            {
+              id: "actions",
+              header: <span className="sr-only">{t("Actions")}</span>,
+              align: "end",
+              cell: (m) =>
+                m.rentals > 0 &&
+                ThunderSDK.isPermitted("rentalsAdmin", "machine") && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-7"
+                    onClick={() => setOpen({ id: m._id, name: m.name })}
+                  >
+                    {t("Rentals")}
+                  </Button>
+                ),
+            },
           ]}
         />
       </div>
+      {open && (
+        <MachineRentalsDialog
+          machine={open}
+          onOpenChange={(o) => !o && setOpen(undefined)}
+        />
+      )}
     </section>
   )
 }
 
-/** Admin → Rentals (PLAN §26.8): requests and resizes waiting for approval. */
-export default function RentalsAdmin() {
-  const { t } = useTranslation()
-  const { data, reload } = useCached(queries.rentalQueue())
-  const [approving, setApproving] = React.useState<TItem | null>(null)
-  const [rejecting, setRejecting] = React.useState<TItem | null>(null)
+type TDispute = Awaited<
+  ReturnType<typeof ThunderSDK.rentalsAdmin.listDisputes>
+>[number]
+type TRevert = Awaited<
+  ReturnType<typeof ThunderSDK.rentalsAdmin.listReverts>
+>[number]
 
-  const approveResize = async (item: TItem) => {
+/** A section of the page: heading, one-line description, its table. */
+function Section({
+  id,
+  icon: Icon,
+  title,
+  description,
+  children,
+}: {
+  id: string
+  icon: typeof IconServer2
+  title: string
+  description: string
+  children: React.ReactNode
+}) {
+  return (
+    <section aria-labelledby={`${id}-title`} className="flex flex-col gap-2">
+      <div>
+        <h2
+          id={`${id}-title`}
+          className="flex items-center gap-2 text-sm font-semibold"
+        >
+          <Icon className="size-4" aria-hidden /> {title}
+        </h2>
+        <p className="text-xs text-muted-foreground">{description}</p>
+      </div>
+      <div className="overflow-x-auto">{children}</div>
+    </section>
+  )
+}
+
+/** What the measured evidence of a dispute says, in one line. */
+function evidenceText(
+  t: (key: string, options?: Record<string, unknown>) => string,
+  evidence: TDispute["evidence"]
+) {
+  const machine = evidence.machine as
+    { uptime30d?: number; rttMs?: number } | null | undefined
+  const period = evidence.period as
+    { paid?: number; downtimeMs?: number } | null | undefined
+  return [
+    machine?.uptime30d !== undefined &&
+      t("{{n}}% up in 30 days", { n: machine.uptime30d.toFixed(2) }),
+    machine?.rttMs !== undefined &&
+      t("{{ms}} ms latency", { ms: Math.round(machine.rttMs) }),
+    period?.downtimeMs !== undefined &&
+      t("{{min}} min down this period", {
+        min: Math.round(period.downtimeMs / 60_000),
+      }),
+    period?.paid !== undefined &&
+      t("{{amount}} paid", { amount: money(period.paid, "usd") }),
+  ]
+    .filter(Boolean)
+    .join(" · ")
+}
+
+/** Open disputes (PLAN §30.9): evidence, and a refund from the machine's money. */
+function Disputes() {
+  const { t } = useTranslation()
+  const { data, reload } = useCached(queries.disputes("open"))
+  const [deciding, setDeciding] = React.useState<TDispute>()
+  if (!data?.length) return null
+  return (
+    <Section
+      id="disputes"
+      icon={IconScale}
+      title={t("Disputes")}
+      description={t(
+        "The machine's money is frozen until you decide; a refund is paid from it to the renter's wallet."
+      )}
+    >
+      <DataTable
+        label={t("Disputes")}
+        rows={data}
+        rowId={(d) => d._id}
+        columns={[
+          {
+            id: "who",
+            header: t("Renter / owner"),
+            cell: (d) => (
+              <div className="min-w-0">
+                <div className="font-medium">{d.tenantName ?? "—"}</div>
+                <div className="text-xs text-muted-foreground">
+                  {d.ownerName ?? "—"} · {d.machineName ?? d.machine}
+                </div>
+              </div>
+            ),
+          },
+          {
+            id: "reason",
+            header: t("Reason and evidence"),
+            cell: (d) => (
+              <div className="max-w-md min-w-0">
+                <p className="break-words">{d.reason}</p>
+                <p className="text-xs text-muted-foreground">
+                  {evidenceText(t, d.evidence) || "—"}
+                </p>
+              </div>
+            ),
+          },
+          {
+            id: "held",
+            header: t("Held"),
+            align: "end",
+            className: "whitespace-nowrap tabular-nums",
+            cell: (d) => money(d.held, "usd"),
+          },
+          {
+            id: "when",
+            header: t("Opened"),
+            sortValue: (d) => new Date(d.createdAt).getTime(),
+            className: "whitespace-nowrap text-xs",
+            cell: (d) => ago(d.createdAt),
+          },
+          {
+            id: "actions",
+            header: <span className="sr-only">{t("Actions")}</span>,
+            align: "end",
+            cell: (d) =>
+              ThunderSDK.isPermitted("rentalsAdmin", "resolveDispute") && (
+                <Button
+                  size="sm"
+                  className="h-7"
+                  onClick={() => setDeciding(d)}
+                >
+                  {t("Decide")}
+                </Button>
+              ),
+          },
+        ]}
+      />
+      {deciding && (
+        <PromptDialog
+          title={t("Decide the dispute")}
+          description={t(
+            "Up to {{amount}} is held for this machine. 0 refunds nothing; both sides are told.",
+            { amount: money(deciding.held, "usd") }
+          )}
+          amount={{ label: t("Refund ($)"), max: deciding.held, initial: 0 }}
+          textLabel={t("Note for both sides (optional)")}
+          required={false}
+          submitLabel={t("Decide")}
+          onOpenChange={(o) => !o && setDeciding(undefined)}
+          onSubmit={async (note, refund) => {
+            try {
+              await ThunderSDK.rentalsAdmin.resolveDispute({
+                params: { id: deciding._id },
+                body: { refund, ...(note ? { note } : {}) },
+              })
+              toast.success(t("Dispute decided"))
+              reload()
+            } catch (e) {
+              toast.error(errorMessage(e) ?? t("Could not save"))
+              throw e
+            }
+          }}
+        />
+      )}
+    </Section>
+  )
+}
+
+/** Claims an owner wants back from a wallet that moved since (PLAN §30.7). */
+function Reverts() {
+  const { t } = useTranslation()
+  const { data, reload } = useCached(queries.claimReverts())
+  const [deciding, setDeciding] = React.useState<TRevert>()
+  if (!data?.length) return null
+  return (
+    <Section
+      id="reverts"
+      icon={IconArrowBackUp}
+      title={t("Claims to take back")}
+      description={t(
+        "The wallet moved since the claim: approve at most what wasn't spent, or refuse if a top-up looks like card money coming back as earnings."
+      )}
+    >
+      <DataTable
+        label={t("Claims to take back")}
+        rows={data}
+        rowId={(r) => r._id}
+        columns={[
+          {
+            id: "owner",
+            header: t("Owner"),
+            cell: (r) => (
+              <div className="min-w-0">
+                <div className="font-medium">{r.ownerName ?? "—"}</div>
+                <div className="text-xs text-muted-foreground">
+                  {t("claimed {{when}}", { when: ago(r.claimedAt) })}
+                </div>
+              </div>
+            ),
+          },
+          {
+            id: "amount",
+            header: t("Claim / at most"),
+            align: "end",
+            className: "whitespace-nowrap tabular-nums",
+            cell: (r) => (
+              <span dir="ltr">
+                {money(r.amount, "usd")} / {money(r.max, "usd")}
+              </span>
+            ),
+          },
+          {
+            id: "since",
+            header: t("Wallet since"),
+            cell: (r) => (
+              <ul className="text-xs text-muted-foreground">
+                {r.transactions.slice(0, 5).map((tx, i) => (
+                  <li key={i} dir="ltr" className="tabular-nums">
+                    {tx.type === "debit" ? "−" : "+"}
+                    {money(Math.abs(tx.amount), "usd")}{" "}
+                    {typeof tx.description === "string" ? tx.description : ""}
+                  </li>
+                ))}
+                {r.transactions.length > 5 && (
+                  <li>
+                    {t("and {{count}} more", {
+                      count: r.transactions.length - 5,
+                    })}
+                  </li>
+                )}
+              </ul>
+            ),
+          },
+          {
+            id: "actions",
+            header: <span className="sr-only">{t("Actions")}</span>,
+            align: "end",
+            cell: (r) =>
+              ThunderSDK.isPermitted("rentalsAdmin", "decideRevert") && (
+                <Button
+                  size="sm"
+                  className="h-7"
+                  onClick={() => setDeciding(r)}
+                >
+                  {t("Decide")}
+                </Button>
+              ),
+          },
+        ]}
+      />
+      {deciding && (
+        <PromptDialog
+          title={t("Take the claim back")}
+          description={t(
+            "Moves up to {{amount}} from the owner's wallet back to their earnings. 0 refuses.",
+            { amount: money(deciding.max, "usd") }
+          )}
+          amount={{ label: t("Amount ($)"), max: deciding.max }}
+          textLabel={t("Note (optional)")}
+          required={false}
+          submitLabel={t("Decide")}
+          onOpenChange={(o) => !o && setDeciding(undefined)}
+          onSubmit={async (note, amount) => {
+            try {
+              await ThunderSDK.rentalsAdmin.decideRevert({
+                params: { id: deciding._id },
+                body: { amount, ...(note ? { note } : {}) },
+              })
+              toast.success(amount ? t("Taken back") : t("Refused"))
+              reload()
+            } catch (e) {
+              toast.error(errorMessage(e) ?? t("Could not save"))
+              throw e
+            }
+          }}
+        />
+      )}
+    </Section>
+  )
+}
+
+/** Abuse reports (PLAN §30.10). */
+function Reports() {
+  const { t } = useTranslation()
+  const { data, reload } = useCached(queries.abuseReports())
+  if (!data?.length) return null
+  const close = async (id: string) => {
     try {
-      await ThunderSDK.rentalsAdmin.approveResize({ params: { id: item._id } })
-      toast.success(t("Resize approved"))
+      await ThunderSDK.rentalsAdmin.closeReport({ params: { id } })
+      toast.success(t("Report closed"))
       reload()
     } catch (e) {
-      toast.error(errorMessage(e) ?? t("Could not approve it"))
+      toast.error(errorMessage(e) ?? t("Could not save"))
     }
   }
+  return (
+    <Section
+      id="reports"
+      icon={IconFlag}
+      title={t("Abuse reports")}
+      description={t(
+        "Suspend or delete a rental from its machine's page when a report holds."
+      )}
+    >
+      <DataTable
+        label={t("Abuse reports")}
+        rows={data}
+        rowId={(r) => r._id}
+        columns={[
+          {
+            id: "who",
+            header: t("From"),
+            cell: (r) => (
+              <div className="min-w-0">
+                <div className="font-medium">{r.tenantName ?? "—"}</div>
+                <div
+                  dir="ltr"
+                  className="font-mono text-xs text-muted-foreground"
+                >
+                  {r.machine ?? r.subscription}
+                </div>
+              </div>
+            ),
+          },
+          {
+            id: "text",
+            header: t("Report"),
+            cell: (r) => <p className="max-w-md break-words">{r.text}</p>,
+          },
+          {
+            id: "when",
+            header: t("Sent"),
+            className: "whitespace-nowrap text-xs",
+            cell: (r) => ago(r.createdAt),
+          },
+          {
+            id: "actions",
+            header: <span className="sr-only">{t("Actions")}</span>,
+            align: "end",
+            cell: (r) =>
+              ThunderSDK.isPermitted("rentalsAdmin", "closeReport") && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7"
+                  onClick={() => close(r._id)}
+                >
+                  {t("Close")}
+                </Button>
+              ),
+          },
+        ]}
+      />
+    </Section>
+  )
+}
 
+/**
+ * Admin → Rentals (PLAN §30.2): oversight of the market. Owners accept
+ * requests; admins handle disputes, claims to take back, abuse reports and
+ * rentals that didn't arrive, and see the market's capacity.
+ */
+export default function RentalsAdmin() {
+  const { t } = useTranslation()
+  const disputes = useCached(queries.disputes("open")).data
+  const reverts = useCached(queries.claimReverts()).data
+  const reports = useCached(queries.abuseReports()).data
+  const waiting = useCached(queries.rentalWaiting()).data
+  const quiet =
+    disputes &&
+    reverts &&
+    reports &&
+    waiting &&
+    !disputes.length &&
+    !reverts.length &&
+    !reports.length &&
+    !waiting.some((w) => w.error)
   return (
     <Page className="flex flex-col gap-4 py-5">
       <PageHeader
         title={t("Rentals")}
         description={t(
-          "Servers customers asked to rent, and resizes. Approving places them on a machine for rent and charges the first month."
+          "Oversight of the market: disputes, claims to take back, abuse reports, rentals that didn't arrive, and capacity. Machine owners accept requests themselves."
         )}
       />
+      {quiet && (
+        <EmptyState icon={IconServerBolt} title={t("Nothing needs you.")} />
+      )}
+      <Disputes />
+      <Reverts />
+      <Reports />
       <NeedsAttention />
       <Capacity />
-      {data && !data.length ? (
-        <EmptyState
-          icon={IconServerBolt}
-          title={t("Nothing waits for approval.")}
-        />
-      ) : (
-        <div className="overflow-x-auto">
-          <DataTable
-            label={t("Rentals")}
-            rows={data}
-            rowId={(r) => r._id}
-            loading={!data}
-            columns={[
-              {
-                id: "tenant",
-                header: t("Tenant"),
-                sortValue: (r) => r.tenantName ?? "",
-                cell: (r) => (
-                  <div className="min-w-0">
-                    <div className="font-medium">{r.tenantName ?? "—"}</div>
-                    <div
-                      dir="ltr"
-                      className="font-mono text-xs text-muted-foreground"
-                    >
-                      {r.tenant}
-                    </div>
-                  </div>
-                ),
-              },
-              {
-                id: "what",
-                header: t("Request"),
-                cell: (r) =>
-                  r.resizeTo ? (
-                    <span>
-                      {t("Resize {{from}} → {{to}}", {
-                        from: r.plan,
-                        to: r.resizeTo,
-                      })}
-                    </span>
-                  ) : (
-                    <div className="min-w-0">
-                      <div>{r.plan}</div>
-                      <div dir="ltr" className="text-xs text-muted-foreground">
-                        {sizeText(r.size)}
-                      </div>
-                    </div>
-                  ),
-              },
-              {
-                id: "when",
-                header: t("Asked"),
-                sortValue: (r) => new Date(r.requestedAt).getTime(),
-                className: "whitespace-nowrap tabular-nums text-xs",
-                cell: (r) => dateTime(r.requestedAt),
-              },
-              {
-                id: "actions",
-                header: <span className="sr-only">{t("Actions")}</span>,
-                align: "end",
-                cell: (r) => (
-                  <div className="flex justify-end gap-1">
-                    <Button
-                      size="sm"
-                      className="h-7"
-                      onClick={() =>
-                        r.resizeTo ? approveResize(r) : setApproving(r)
-                      }
-                    >
-                      {t("Approve")}
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="h-7"
-                      onClick={() => setRejecting(r)}
-                    >
-                      {t("Reject")}
-                    </Button>
-                  </div>
-                ),
-              },
-            ]}
-          />
-        </div>
-      )}
-      {approving && (
-        <ApproveDialog
-          item={approving}
-          onOpenChange={(o) => !o && setApproving(null)}
-          onDone={reload}
-        />
-      )}
-      {rejecting && (
-        <RejectDialog
-          item={rejecting}
-          onOpenChange={(o) => !o && setRejecting(null)}
-          onDone={reload}
-        />
-      )}
     </Page>
   )
 }

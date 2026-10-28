@@ -10,7 +10,8 @@ import {
   IconBucket,
   IconCash,
   IconServerBolt,
-  IconServerCog,
+  IconBuildingStore,
+  IconCoin,
   IconHistory,
   IconBraces,
   IconBrandGithub,
@@ -41,6 +42,8 @@ import BillingAdmin from "@/pages/billing/Admin"
 import Payments from "@/pages/billing/Payments"
 import PaymentsAdmin from "@/pages/billing/PaymentsAdmin"
 import RentalsAdmin from "@/pages/admin/Rentals"
+import Market from "@/pages/market"
+import Earnings from "@/pages/earnings"
 import ControlPlane from "@/pages/admin/ControlPlane"
 import Network from "@/pages/network"
 import AlertRules from "@/pages/alerts"
@@ -94,19 +97,39 @@ export const routes: TRoutesOverride = {
     display: () => ThunderSDK.isPermitted("paymentsAdmin", "topups"),
     Component: PaymentsAdmin,
   },
-  // Rentals waiting for approval (PLAN §26.8).
+  // Oversight of the market (PLAN §30.2): disputes, reverts, reports.
   rentalsAdmin: {
     name: "Rentals",
     path: "rentals",
     group: "Admin",
     icon: IconServerBolt,
-    display: () => ThunderSDK.isPermitted("rentalsAdmin", "queue"),
+    display: () => ThunderSDK.isPermitted("rentalsAdmin", "listDisputes"),
     Component: RentalsAdmin,
   },
-  // Rate cards of rentable capacity: generated list, our form.
-  serverClasses: { merge: true, name: "Server classes", icon: IconServerCog },
   // The customer's rentals live on the Servers page.
   rentals: { display: false },
+  // Machines for rent (PLAN §30.4), beside Servers.
+  market: {
+    name: "Market",
+    path: "market",
+    group: "Infrastructure",
+    icon: IconBuildingStore,
+    priority: 0.5,
+    display: () => ThunderSDK.isPermitted("market", "machines"),
+    Component: Market,
+  },
+  // A machine's rental settings live on its page.
+  hosting: { display: false },
+  // What the workspace's machines earn (PLAN §30.7).
+  earnings: {
+    name: "Earnings",
+    path: "earnings",
+    group: "Configuration",
+    icon: IconCoin,
+    priority: 12,
+    display: () => ThunderSDK.isPermitted("earnings", "summary"),
+    Component: Earnings,
+  },
   controlPlane: {
     name: "Control plane",
     path: "controlPlane",

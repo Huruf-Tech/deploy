@@ -2,6 +2,7 @@ import { useTranslation } from "react-i18next"
 
 import { StatusBadge } from "@/components/console/status"
 import { gbOfMb } from "@/lib/format"
+import { money } from "@/lib/plans"
 import { cn } from "@/lib/utils"
 import { type TMachineSpot, usable } from "./rental"
 
@@ -36,19 +37,26 @@ export function MachinePicker({
           )}
         >
           <span className="font-medium">{m.name}</span>
-          <span
-            dir="ltr"
-            className="text-xs text-muted-foreground tabular-nums"
-          >
-            {t("{{mem}} GB · {{disk}} GB · {{cpu}} vCPU free", {
-              mem: gbOfMb(m.free.memMb),
-              disk: m.free.diskGb,
-              cpu: m.cpuRoom,
-            })}
-          </span>
+          {m.free && (
+            <span
+              dir="ltr"
+              className="text-xs text-muted-foreground tabular-nums"
+            >
+              {t("{{mem}} GB · {{disk}} GB · {{cpu}} vCPU free", {
+                mem: gbOfMb(m.free.memMb),
+                disk: m.free.diskGb,
+                cpu: m.cpuRoom,
+              })}
+            </span>
+          )}
+          {m.price !== undefined && (
+            <span dir="ltr" className="text-xs font-medium tabular-nums">
+              {t("{{price}} a month", { price: money(m.price, "usd") })}
+            </span>
+          )}
           {!m.fits ? (
             <StatusBadge tone="neutral" label={t("No room")} />
-          ) : "reachable" in m && !m.reachable ? (
+          ) : m.reachable === false ? (
             <span className="basis-full text-xs text-warning-foreground">
               {t(
                 "The machine it's on can't be reached: it has no address, and tunnels aren't set up"

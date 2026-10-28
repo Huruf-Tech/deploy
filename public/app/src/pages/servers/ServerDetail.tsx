@@ -38,7 +38,7 @@ import { ServerLabels, ServerName } from "./ServerLabels"
 import { HostSetup } from "./HostSetup"
 import { RemoveServerDialog } from "./RemoveServerDialog"
 import { RentalPanel } from "@/pages/rentals/Rentals"
-import { PoolPanel } from "@/pages/rentals/PoolPanel"
+import { HostingPanel } from "@/pages/rentals/HostingPanel"
 import { PageHeader } from "@/components/console/page-header"
 import {
   isMachine,
@@ -493,7 +493,7 @@ export default function ServerDetail() {
           {isMachine(server) && (
             <MachinePanel server={server} onChanged={reload} />
           )}
-          <PoolPanel server={server} onChanged={reload} />
+          <HostingPanel server={server} onChanged={reload} />
           <Panel title={t("Machine")} bodyClassName="py-1">
             <KeyValue
               items={[

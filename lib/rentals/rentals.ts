@@ -529,6 +529,15 @@ export class RentalService implements TRentalHooks {
     if (replaced) await this.dropCustomPlan(replaced);
   }
 
+  /** A resize's price on its rental's machine (it may have stopped taking rentals). */
+  async quoteResize(tenant: ObjectId, id: ObjectId, choice: TChoice) {
+    const sub = await this.rentalOf(id, { tenant });
+    return await this.quote(sub.rental.host!, choice, {
+      current: sub.rental.size,
+      machine: await this.machineOf(sub.rental.host!),
+    });
+  }
+
   /** A machine for rent, even one that stopped taking new rentals. */
   private async machineOf(id: ObjectId) {
     const machine = await serverModel.findOne({

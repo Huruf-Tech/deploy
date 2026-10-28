@@ -240,6 +240,24 @@ Deno.test({
           assertEquals(accepted.status, 200, JSON.stringify(accepted.json));
           assertEquals((await sub()).status, "active");
           assert((await sub()).rental!.term!.until! > new Date());
+          // The owner's view of the machine; admins see any machine's.
+          const view = await platform.call(
+            "GET",
+            `/hosting/api/machines/${host}`,
+          );
+          assertEquals(view.status, 200, JSON.stringify(view.json));
+          assertEquals(view.json.rentals.length, 1);
+          assertEquals(view.json.commission, 20);
+          assertEquals(
+            (await customer.call("GET", `/hosting/api/machines/${host}`))
+              .status,
+            404,
+          );
+          assertEquals(
+            (await customer.call("GET", `/rentalsAdmin/api/machines/${host}`))
+              .status,
+            403,
+          );
           assertEquals(await balance(), 10_000 - SMALL);
           const [create] = await commands("partition.create");
           const payload = JSON.parse(

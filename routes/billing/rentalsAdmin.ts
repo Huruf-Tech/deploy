@@ -19,6 +19,7 @@ import {
   earningModel,
 } from "@/schemas/billing/market.ts";
 import { serverModel } from "@/schemas/infrastructure/server.ts";
+import { $machineView, machineView } from "@/lib/market/machineView.ts";
 
 /**
  * Admin oversight of the market (PLAN §30.2): suspend, resume, delete, move
@@ -219,6 +220,21 @@ export default new Router("/api", function rentalsAdmin(router) {
         return Response.json(
           await rentalService.refund(id, await admin(req), reason),
         );
+      },
+    };
+  });
+
+  // Any machine for rent with its rentals, community ones included.
+  router.get("/machines/:id", function machine() {
+    return {
+      shape: () => ({ params: $params, return: $machineView }),
+      handler: async (req) => {
+        const { id } = $params.parse(paramsAsJson(req));
+        const doc = await serverModel.findOne({ _id: id }, {
+          projection: { tenant: 1, pool: 1 },
+        });
+        if (!doc?.pool) throw Response.notFound("Machine not found");
+        return Response.json(await machineView(doc));
       },
     };
   });

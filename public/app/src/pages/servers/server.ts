@@ -58,7 +58,7 @@ export const serverSchema = z.object({
         .nullish(),
     })
     .nullish(),
-  /** Machines' host setup (PLAN §27); a `class` puts the machine up for rent (§28). */
+  /** Machines' host setup (PLAN §27); `rent` puts the machine up for rent (§30.3). */
   pool: z
     .object({
       status: z.enum(["pending", "ready", "failed"]),
@@ -66,7 +66,7 @@ export const serverSchema = z.object({
         .object({ cpus: z.number(), memMb: z.number(), diskGb: z.number() })
         .nullish(),
       error: z.string().nullish(),
-      class: z.string().nullish(),
+      rent: z.object({ enabled: z.boolean() }).nullish(),
       accepting: z.boolean().nullish(),
       monthlyCost: z.number().nullish(),
     })

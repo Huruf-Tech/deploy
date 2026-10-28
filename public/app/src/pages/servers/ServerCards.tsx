@@ -33,6 +33,7 @@ import { cn } from "@/lib/utils"
 import { AcceptServerDialog } from "./AcceptServerDialog"
 import { AddServerButton } from "./AddServerButton"
 import { RentalRequests, RentServerButton } from "@/pages/rentals/Rentals"
+import { OwnerRequests } from "@/pages/rentals/HostingPanel"
 import { isAddServerOpen, onServersChanged } from "./events"
 import { StatusPill } from "./StatusPill"
 import { LabelChips } from "./ServerLabels"
@@ -788,6 +789,7 @@ export default function ServerCards({
         </div>
       )}
       <RentalRequests />
+      <OwnerRequests />
       <BulkAgentUpdate
         servers={servers}
         selectedIds={selectedIds}

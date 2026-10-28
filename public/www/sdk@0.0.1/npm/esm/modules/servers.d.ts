@@ -156,7 +156,7 @@ export type get$return = {
             monthlyCost?: number | undefined;
         } | undefined;
         region?: {
-            country: string;
+            country?: string | undefined;
             ip: string;
             at: Date;
         } | undefined;
