@@ -329,6 +329,12 @@ export class DisputeService {
         { limit: 1 },
       )
     ) throw Response.badRequest("A dispute on this rental is open already");
+    // About a month that ended (owner, 2026-10-28): its money waits 14 days.
+    if (!(await paidFor(subscription)).months) {
+      throw Response.badRequest(
+        "You can open a dispute once a paid month has ended",
+      );
+    }
     const now = new Date();
     const [profile, period] = await Promise.all([
       serverModel.findOne({ _id: machine }, {

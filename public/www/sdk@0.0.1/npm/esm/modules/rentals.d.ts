@@ -51,6 +51,8 @@ export type list$return = {
     } | undefined;
     /** A dispute is open */
     dispute?: boolean | undefined;
+    /** A paid month has ended: it can be rated or disputed */
+    matured?: boolean | undefined;
     /** The rating given */
     stars?: number | undefined;
 }[];

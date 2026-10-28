@@ -308,12 +308,12 @@ export function RentalPanel({ server }: { server: string }) {
             )}
           </>
         )}
-        {can("rateMachine") && (
+        {can("rateMachine") && rental.matured && (
           <Button size="sm" variant="ghost" onClick={() => setDialog("rate")}>
             {t("Rate this machine")}
           </Button>
         )}
-        {can("dispute") && !rental.dispute && (
+        {can("dispute") && rental.matured && !rental.dispute && (
           <Button
             size="sm"
             variant="ghost"

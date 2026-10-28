@@ -435,6 +435,13 @@ Deno.test({
           });
           rental = new ObjectId(res.json.rental);
           await rentals.approve(rental, owner.user, owner.tenantId);
+          // Disputes and ratings wait for a paid month to end.
+          const early = await customer.call(
+            "POST",
+            `/rentals/api/${rental}/dispute`,
+            { reason: "Too early to tell, really" },
+          );
+          assertEquals(early.status, 400, JSON.stringify(early.json));
           const { security } = await earnings.securityOf(m1);
           assert(security > 0);
           const before = await balance(customer.tenantId);

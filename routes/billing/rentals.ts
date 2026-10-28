@@ -13,6 +13,7 @@ import {
 import { rate, reportAbuse } from "@/lib/market/market.ts";
 import { planModel } from "@/schemas/billing/plan.ts";
 import { $subscription } from "@/schemas/billing/subscription.ts";
+import { subscriptionPeriodModel } from "@/schemas/billing/subscriptionPeriod.ts";
 import { disputeModel, machineRatingModel } from "@/schemas/billing/market.ts";
 import { serverModel } from "@/schemas/infrastructure/server.ts";
 
@@ -81,6 +82,9 @@ export default new Router("/api", function rentals(router) {
           reason: z.string().optional(),
         }).optional().describe("A move its owner asks for (PLAN §30.8)"),
         dispute: z.boolean().optional().describe("A dispute is open"),
+        matured: z.boolean().optional().describe(
+          "A paid month has ended: it can be rated or disputed",
+        ),
         stars: z.number().optional().describe("The rating given"),
       }),
     );
@@ -91,24 +95,32 @@ export default new Router("/api", function rentals(router) {
         const { tenant } = await withTenant(req);
         const subs = await rentalService.list(tenant._id);
         const ids = subs.map((s) => s._id);
-        const [plans, uptimes, machines, open, stars] = await Promise.all([
-          planModel.find({ _id: { $in: subs.map((s) => s.plan) } }, {
-            projection: { name: 1, resources: 1, price: 1 },
-          }).toArray(),
-          rentalService.uptimes(subs),
-          serverModel.find({
-            _id: {
-              $in: subs.flatMap((s) => [s.rental?.host, s.rental?.proposal?.to])
-                .filter((x) => !!x),
-            },
-          }, { projection: { name: 1 } }).toArray(),
-          disputeModel.find({ subscription: { $in: ids }, status: "open" }, {
-            projection: { subscription: 1 },
-          }).toArray(),
-          machineRatingModel.find({ subscription: { $in: ids } }, {
-            projection: { subscription: 1, stars: 1 },
-          }).toArray(),
-        ]);
+        const [plans, uptimes, machines, open, stars, ended] = await Promise
+          .all([
+            planModel.find({ _id: { $in: subs.map((s) => s.plan) } }, {
+              projection: { name: 1, resources: 1, price: 1 },
+            }).toArray(),
+            rentalService.uptimes(subs),
+            serverModel.find({
+              _id: {
+                $in: subs.flatMap((
+                  s,
+                ) => [s.rental?.host, s.rental?.proposal?.to])
+                  .filter((x) => !!x),
+              },
+            }, { projection: { name: 1 } }).toArray(),
+            disputeModel.find({ subscription: { $in: ids }, status: "open" }, {
+              projection: { subscription: 1 },
+            }).toArray(),
+            machineRatingModel.find({ subscription: { $in: ids } }, {
+              projection: { subscription: 1, stars: 1 },
+            }).toArray(),
+            subscriptionPeriodModel.distinct("subscription", {
+              subscription: { $in: ids },
+              kind: "paid",
+              settled: { $exists: true },
+            }),
+          ]);
         const name = (id?: { equals(x: unknown): boolean }) =>
           id && machines.find((m) => id.equals(m._id))?.name;
         return Response.json(subs.map((s) => {
@@ -159,6 +171,7 @@ export default new Router("/api", function rentals(router) {
               ? { dispute: true }
               : {}),
             stars: stars.find((x) => x.subscription.equals(s._id))?.stars,
+            ...(ended.some((x) => x.equals(s._id)) ? { matured: true } : {}),
           };
         }));
       },
