@@ -248,7 +248,7 @@ export default new Router("/api", function rentals(router) {
             ...(r.held ? { held: true } : {}),
             uptime: uptimes.get(String(s._id)),
             ...(r.move ? { moving: true } : {}),
-            ...(r.proposal && live
+            ...(r.proposal && live && !r.move
               ? {
                 proposal: {
                   to: r.proposal.to,

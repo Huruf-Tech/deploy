@@ -1471,9 +1471,10 @@ export class RentalService implements TRentalHooks {
       subject: "{workspace}: move your rented server?",
       text:
         `The owner of the machine your rented server runs on asks to move it to ${spot.name}` +
-        `${reason ? ` (${reason})` : ""}, at ${
+        `${reason ? ` (${reason})` : ""}. If you accept, it moves right away ` +
+        `(offline for a few minutes); its price there, ${
           (spot.price / 100).toFixed(2)
-        } USD a month from your next renewal. ` +
+        } USD a month, starts at your next renewal. ` +
         `Accept, decline or pick another machine on its page within 72 hours.`,
     }).catch((e) => log(`proposal notice: ${e}`));
   }

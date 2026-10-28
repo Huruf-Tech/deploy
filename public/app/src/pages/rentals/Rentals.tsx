@@ -517,7 +517,7 @@ function Proposal({ rental, onDone }: { rental: TRental; onDone: () => void }) {
     <div className="flex flex-col gap-2 rounded-lg bg-info-soft px-3 py-2 text-[13px] text-info-foreground">
       <p>
         {t(
-          "Its owner asks to move it to {{name}}, at {{price}} a month from your next renewal. Answer by {{date}}; nothing changes if you decline.",
+          "Its owner asks to move it to {{name}}. If you accept, it moves right away (offline for a few minutes); its price there, {{price}} a month, starts at your next renewal. Answer by {{date}}; nothing changes if you decline.",
           {
             name: p.toName ?? t("another machine"),
             price: `⁦${money(p.price, "usd")}⁩`,

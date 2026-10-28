@@ -157,7 +157,7 @@ export async function machineView(
           },
         }
         : {}),
-      ...(r.proposal && r.proposal.expiresAt > new Date()
+      ...(r.proposal && r.proposal.expiresAt > new Date() && !r.move
         ? {
           proposal: {
             to: String(r.proposal.to),

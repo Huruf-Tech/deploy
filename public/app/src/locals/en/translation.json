@@ -1535,7 +1535,6 @@
   "It's moving to another machine: it's offline for a few minutes, then everything is as before.": "It's moving to another machine: it's offline for a few minutes, then everything is as before.",
   "Its machine left": "Its machine left",
   "Its machine was down for more than 72 hours, so the rental ended on {{date}}. The downtime came back to your wallet.": "Its machine was down for more than 72 hours, so the rental ended on {{date}}. The downtime came back to your wallet.",
-  "Its owner asks to move it to {{name}}, at {{price}} a month from your next renewal. Answer by {{date}}; nothing changes if you decline.": "Its owner asks to move it to {{name}}, at {{price}} a month from your next renewal. Answer by {{date}}; nothing changes if you decline.",
   "Its owner stops renting it out: it ends on {{date}}, after your term and paid month. Rent another machine and move your projects before then.": "Its owner stops renting it out: it ends on {{date}}, after your term and paid month. Rent another machine and move your projects before then.",
   "Kept while the machine is rented out, paid out 14 days after it leaves properly.": "Kept while the machine is rented out, paid out 14 days after it leaves properly.",
   "List this machine in the market: renters pay by the month, you earn after each month, minus Huruf's commission.": "List this machine in the market: renters pay by the month, you earn after each month, minus Huruf's commission.",
@@ -1990,5 +1989,6 @@
   "Resizing to {{size}} on its machine. It keeps running; this takes a moment.": "Resizing to {{size}} on its machine. It keeps running; this takes a moment.",
   "Its machine couldn't apply the resize: {{reason}}": "Its machine couldn't apply the resize: {{reason}}",
   "Resizing on this machine…": "Resizing on this machine…",
-  "The resize didn't apply: {{reason}}": "The resize didn't apply: {{reason}}"
+  "The resize didn't apply: {{reason}}": "The resize didn't apply: {{reason}}",
+  "Its owner asks to move it to {{name}}. If you accept, it moves right away (offline for a few minutes); its price there, {{price}} a month, starts at your next renewal. Answer by {{date}}; nothing changes if you decline.": "Its owner asks to move it to {{name}}. If you accept, it moves right away (offline for a few minutes); its price there, {{price}} a month, starts at your next renewal. Answer by {{date}}; nothing changes if you decline."
 }

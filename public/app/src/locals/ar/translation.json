@@ -1535,7 +1535,6 @@
   "It's moving to another machine: it's offline for a few minutes, then everything is as before.": "يُنقل إلى جهاز آخر: يتوقف لبضع دقائق، ثم يعود كل شيء كما كان.",
   "Its machine left": "غادر جهازه",
   "Its machine was down for more than 72 hours, so the rental ended on {{date}}. The downtime came back to your wallet.": "توقف جهازه أكثر من 72 ساعة، فانتهى الإيجار في {{date}}. وعاد مقابل التوقف إلى محفظتك.",
-  "Its owner asks to move it to {{name}}, at {{price}} a month from your next renewal. Answer by {{date}}; nothing changes if you decline.": "يطلب مالكه نقله إلى {{name}} بسعر {{price}} شهريًا من تجديدك التالي. أجب قبل {{date}}؛ لا يتغير شيء إن رفضت.",
   "Its owner stops renting it out: it ends on {{date}}, after your term and paid month. Rent another machine and move your projects before then.": "يوقف مالكه تأجيره: ينتهي في {{date}} بعد مدتك وشهرك المدفوع. استأجر جهازًا آخر وانقل مشاريعك قبل ذلك.",
   "Kept while the machine is rented out, paid out 14 days after it leaves properly.": "يُحتفظ به ما دام الجهاز مؤجرًا، ويُصرف بعد 14 يومًا من مغادرته بشكل سليم.",
   "List this machine in the market: renters pay by the month, you earn after each month, minus Huruf's commission.": "اعرض هذا الجهاز في السوق: يدفع المستأجرون شهريًا، وتربح بعد كل شهر مخصومًا منه عمولة حروف.",
@@ -1990,5 +1989,6 @@
   "Resizing to {{size}} on its machine. It keeps running; this takes a moment.": "يُعاد تحجيمه إلى {{size}} على جهازه. يبقى قيد التشغيل؛ يستغرق ذلك لحظات.",
   "Its machine couldn't apply the resize: {{reason}}": "تعذّر على جهازه تطبيق تغيير الحجم: {{reason}}",
   "Resizing on this machine…": "جارٍ تغيير الحجم على هذا الجهاز…",
-  "The resize didn't apply: {{reason}}": "لم يُطبَّق تغيير الحجم: {{reason}}"
+  "The resize didn't apply: {{reason}}": "لم يُطبَّق تغيير الحجم: {{reason}}",
+  "Its owner asks to move it to {{name}}. If you accept, it moves right away (offline for a few minutes); its price there, {{price}} a month, starts at your next renewal. Answer by {{date}}; nothing changes if you decline.": "يطلب مالكه نقله إلى {{name}}. إن قبلت يُنقل فورًا (متوقفًا لبضع دقائق)، ويبدأ سعره هناك، {{price}} شهريًا، من تجديدك التالي. أجب قبل {{date}}؛ لا يتغير شيء إن رفضت."
 }
