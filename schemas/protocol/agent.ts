@@ -68,10 +68,23 @@ export const $partitionSize = z.object({
 export const $partitionName = z.string().regex(/^[a-z0-9]{1,12}$/);
 
 /** One partition of a machine, reported with the summary (PLAN §27). */
+export const $resizeError = z.object({
+  size: $partitionSize.describe("The size it was asked for"),
+  error: z.string().max(500),
+});
+
 export const $partitionUsage = z.object({
   name: $partitionName,
   state: z.string().describe("Docker state: running, exited…"),
-  size: $partitionSize,
+  size: $partitionSize.describe(
+    "Its size now: a resize changes it once applied",
+  ),
+  resizing: $partitionSize.optional().describe(
+    "A resize to this size is being applied",
+  ),
+  resizeError: $resizeError.optional().describe(
+    "The latest resize failed; it kept `size`",
+  ),
   cpuMicros: z.number().int().min(0).describe("CPU time used since it started"),
   memUsed: z.number().int().min(0).describe("Bytes it can't give back"),
   diskUsed: z.number().int().min(0),

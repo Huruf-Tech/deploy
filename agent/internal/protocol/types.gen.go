@@ -165,7 +165,14 @@ type PartitionUsage struct {
 	// Docker state: running, exited…
 	State string `json:"state"`
 
+	// Its size now: a resize changes it once applied
 	Size PartitionSize `json:"size"`
+
+	// A resize to this size is being applied
+	Resizing *PartitionSize `json:"resizing,omitempty"`
+
+	// The latest resize failed; it kept `size`
+	ResizeError *PartitionUsageResizeError `json:"resizeError,omitempty"`
 
 	// CPU time used since it started
 	CpuMicros int64 `json:"cpuMicros"`
@@ -188,6 +195,13 @@ type PartitionSize struct {
 	MemMb int64 `json:"memMb"`
 
 	DiskGb int64 `json:"diskGb"`
+}
+
+type PartitionUsageResizeError struct {
+	// The size it was asked for
+	Size PartitionSize `json:"size"`
+
+	Error string `json:"error"`
 }
 
 type ResourceSummaryBenchmark struct {

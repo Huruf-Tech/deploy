@@ -68,11 +68,28 @@ export type get$return = {
                 name: string;
                 /** Docker state: running, exited… */
                 state: string;
+                /** Its size now: a resize changes it once applied */
                 size: {
                     cpus: number;
                     memMb: number;
                     diskGb: number;
                 };
+                /** A resize to this size is being applied */
+                resizing?: {
+                    cpus: number;
+                    memMb: number;
+                    diskGb: number;
+                } | undefined;
+                /** The latest resize failed; it kept `size` */
+                resizeError?: {
+                    /** The size it was asked for */
+                    size: {
+                        cpus: number;
+                        memMb: number;
+                        diskGb: number;
+                    };
+                    error: string;
+                } | undefined;
                 /** CPU time used since it started */
                 cpuMicros: number;
                 /** Bytes it can't give back */

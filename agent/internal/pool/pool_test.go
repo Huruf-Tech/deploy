@@ -188,10 +188,34 @@ func TestResize(t *testing.T) {
 	if _, err := m.Resize(ctx, protocol.PartitionResizePayload{Name: "salha", Size: small}); err == nil {
 		t.Error("shrunk below its use")
 	}
+	// The failure is reported with the size it was asked for, until a resize applies.
+	report := func() protocol.PartitionUsage {
+		for _, u := range m.Usage(ctx) {
+			if u.Name == "salha" {
+				return u
+			}
+		}
+		t.Fatal("not reported")
+		return protocol.PartitionUsage{}
+	}
+	if u := report(); u.ResizeError == nil || u.ResizeError.Size != small || u.Size != medium || u.Resizing != nil {
+		t.Errorf("after a failed resize: %+v", u)
+	}
 	f.used["salha"] = Usage{MemUsed: 1 << 30}
 	if _, err := m.Resize(ctx, protocol.PartitionResizePayload{Name: "salha", Size: small}); err != nil {
 		t.Fatal(err)
 	}
+	if u := report(); u.ResizeError != nil || u.Resizing != nil || u.Size != small {
+		t.Errorf("after resizing: %+v", u)
+	}
+	// While it applies (holding the lock), polls say so.
+	m.setResize("salha", resizeState{to: &medium})
+	m.mu.Lock()
+	if u := report(); u.Resizing == nil || *u.Resizing != medium {
+		t.Errorf("while resizing: %+v", u)
+	}
+	m.mu.Unlock()
+	m.setResize("salha", resizeState{})
 	if _, err := m.Resize(ctx, protocol.PartitionResizePayload{Name: "nope", Size: small}); err == nil {
 		t.Error("resized an unknown partition")
 	}

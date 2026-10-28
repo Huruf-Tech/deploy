@@ -432,6 +432,73 @@
                       "cpus",
                       "memMb",
                       "diskGb"
+                    ],
+                    "description": "Its size now: a resize changes it once applied"
+                  },
+                  "resizing": {
+                    "description": "A resize to this size is being applied",
+                    "type": "object",
+                    "properties": {
+                      "cpus": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 512
+                      },
+                      "memMb": {
+                        "type": "integer",
+                        "minimum": 256,
+                        "maximum": 9007199254740991
+                      },
+                      "diskGb": {
+                        "type": "integer",
+                        "minimum": 5,
+                        "maximum": 9007199254740991
+                      }
+                    },
+                    "required": [
+                      "cpus",
+                      "memMb",
+                      "diskGb"
+                    ]
+                  },
+                  "resizeError": {
+                    "description": "The latest resize failed; it kept `size`",
+                    "type": "object",
+                    "properties": {
+                      "size": {
+                        "type": "object",
+                        "properties": {
+                          "cpus": {
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 512
+                          },
+                          "memMb": {
+                            "type": "integer",
+                            "minimum": 256,
+                            "maximum": 9007199254740991
+                          },
+                          "diskGb": {
+                            "type": "integer",
+                            "minimum": 5,
+                            "maximum": 9007199254740991
+                          }
+                        },
+                        "required": [
+                          "cpus",
+                          "memMb",
+                          "diskGb"
+                        ],
+                        "description": "The size it was asked for"
+                      },
+                      "error": {
+                        "type": "string",
+                        "maxLength": 500
+                      }
+                    },
+                    "required": [
+                      "size",
+                      "error"
                     ]
                   },
                   "cpuMicros": {

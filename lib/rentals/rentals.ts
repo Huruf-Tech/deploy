@@ -763,14 +763,7 @@ export class RentalService implements TRentalHooks {
       $set: { "rental.size": size, updatedAt: new Date() },
     });
     if (sub.rental.host && sub.rental.partition) {
-      const { command } = await resizePartition(
-        sub.rental.host,
-        sub.rental.partition,
-        size,
-      );
-      await subscriptionModel.updateOne({ _id: sub._id }, {
-        $set: { "rental.resize": { command, at: new Date() } },
-      });
+      await resizePartition(sub.rental.host, sub.rental.partition, size);
     }
     // Its server's name follows its size, unless the customer renamed it.
     if (sub.server) {
@@ -1736,43 +1729,44 @@ export class RentalService implements TRentalHooks {
     });
   }
 
-  /** This period's uptime so far, in percent, per rental (an ongoing outage included). */
   /**
-   * Rentals whose latest resize hasn't applied on the machine yet, or
-   * failed there; one done (or gone) is left out.
+   * Where each rental's size stands on its machine, from what the machine
+   * reports: a resize it's applying or hasn't picked up yet, or the error it
+   * gave for this size. Nothing once it has the size.
    */
   async resizeStates(
-    subs: { _id: ObjectId; rental?: { resize?: { command: ObjectId } } }[],
+    subs: {
+      _id: ObjectId;
+      rental?: { host?: ObjectId; partition?: string; size: TRental["size"] };
+    }[],
   ) {
-    const ids = subs.flatMap((s) =>
-      s.rental?.resize ? [s.rental.resize.command] : []
-    );
-    const commands = ids.length
-      ? await agentCommandModel.find({
-        _id: { $in: ids },
-        status: { $ne: "done" },
-      }, { projection: { status: 1, error: 1, expiresAt: 1 } }).toArray()
+    const placed = subs.filter((s) => s.rental?.host && s.rental.partition);
+    const hosts = placed.length
+      ? await serverModel.find({
+        _id: { $in: placed.map((s) => s.rental!.host!) },
+      }, { projection: { "resources.partitions": 1 } }).toArray()
       : [];
-    const now = new Date();
+    const same = (a: TRental["size"], b: TRental["size"]) =>
+      a.cpus === b.cpus && a.memMb === b.memMb && a.diskGb === b.diskGb;
     const states = new Map<
       string,
       { resizing: true } | { resizeError: string }
     >();
-    for (const s of subs) {
-      const c = commands.find((c) => c._id.equals(s.rental?.resize?.command));
-      if (!c) continue;
-      states.set(
-        String(s._id),
-        c.status === "failed"
-          ? { resizeError: c.error ?? "The machine couldn't resize it" }
-          : c.expiresAt < now
-          ? { resizeError: "Its machine didn't pick up the resize in time" }
-          : { resizing: true },
-      );
+    for (const s of placed) {
+      const r = s.rental!;
+      const p = hosts.find((h) => h._id.equals(r.host))?.resources?.partitions
+        ?.find((p) => p.name === r.partition);
+      if (!p) continue;
+      if (p.resizeError && same(p.resizeError.size, r.size)) {
+        states.set(String(s._id), { resizeError: p.resizeError.error });
+      } else if (p.resizing || !same(p.size, r.size)) {
+        states.set(String(s._id), { resizing: true });
+      }
     }
     return states;
   }
 
+  /** This period's uptime so far, in percent, per rental (an ongoing outage included). */
   async uptimes(subs: { _id: ObjectId; server?: ObjectId }[]) {
     const now = new Date();
     const [periods, leases] = await Promise.all([

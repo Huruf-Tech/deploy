@@ -479,18 +479,38 @@ Deno.test({
             diskGb: 50,
           });
           assertEquals((await sub()).rental!.pendingChange, undefined);
-          // Shown as resizing until the machine applies it, or why it didn't.
+          // From the machine's report: resizing until it has the size, or
+          // its error for this size.
           const state = async () =>
             (await rentals.resizeStates([await sub()])).get(String(rental));
+          const { rental: r } = await sub();
+          const report = (extra: Record<string, unknown>) =>
+            serverModel.updateOne({ _id: host }, {
+              $set: {
+                "resources.partitions": [{
+                  name: r!.partition!,
+                  state: "running",
+                  size: { cpus: 1, memMb: 2048 + 128, diskGb: 25 },
+                  cpuMicros: 0,
+                  memUsed: 0,
+                  diskUsed: 0,
+                  rxBytes: 0,
+                  txBytes: 0,
+                  ...extra,
+                }],
+              },
+            });
+          await report({});
+          assertEquals(await state(), { resizing: true }, "not picked up yet");
+          await report({ resizing: r!.size });
           assertEquals(await state(), { resizing: true });
-          await agentCommandModel.updateOne({ _id: resize._id }, {
-            $set: { status: "failed", error: "no room" },
-          });
+          await report({ resizeError: { size: r!.size, error: "no room" } });
           assertEquals(await state(), { resizeError: "no room" });
-          await agentCommandModel.updateOne({ _id: resize._id }, {
-            $set: { status: "done" },
-          });
+          await report({ size: r!.size });
           assertEquals(await state(), undefined);
+          await serverModel.updateOne({ _id: host }, {
+            $unset: { "resources.partitions": "" },
+          });
         },
       );
 

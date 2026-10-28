@@ -118,9 +118,42 @@ type Manager struct {
 	waiting []string
 	failed  bool
 
-	// The last usage report, for polls while a change holds mu.
-	lastMu sync.Mutex
-	last   []protocol.PartitionUsage
+	// The last usage report, for polls while a change holds mu, and each
+	// partition's resize in progress or latest failure (both reported).
+	lastMu  sync.Mutex
+	last    []protocol.PartitionUsage
+	resizes map[string]resizeState
+}
+
+type resizeState struct {
+	to  *protocol.PartitionSize
+	err *protocol.PartitionUsageResizeError
+}
+
+// setResize records a partition's resize for the usage report; neither
+// clears it (applied).
+func (m *Manager) setResize(name string, r resizeState) {
+	m.lastMu.Lock()
+	defer m.lastMu.Unlock()
+	if m.resizes == nil {
+		m.resizes = map[string]resizeState{}
+	}
+	if r.to == nil && r.err == nil {
+		delete(m.resizes, name)
+	} else {
+		m.resizes[name] = r
+	}
+}
+
+// withResizes is a usage report with each partition's resize state; the
+// caller holds lastMu.
+func (m *Manager) withResizes(usage []protocol.PartitionUsage) []protocol.PartitionUsage {
+	out := slices.Clone(usage)
+	for i := range out {
+		r := m.resizes[out[i].Name]
+		out[i].Resizing, out[i].ResizeError = r.to, r.err
+	}
+	return out
 }
 
 // load reads the state file once. Keys older agents wrote (`remainder`,
@@ -324,6 +357,19 @@ func (m *Manager) Resize(ctx context.Context, p protocol.PartitionResizePayload)
 	if err := checkName(p.Name); err != nil {
 		return nil, err
 	}
+	m.setResize(p.Name, resizeState{to: &p.Size})
+	out, err := m.resize(ctx, p)
+	if err != nil {
+		m.setResize(p.Name, resizeState{err: &protocol.PartitionUsageResizeError{
+			Size: p.Size, Error: sh.Tail(err.Error(), 500),
+		}})
+	} else {
+		m.setResize(p.Name, resizeState{})
+	}
+	return out, err
+}
+
+func (m *Manager) resize(ctx context.Context, p protocol.PartitionResizePayload) (map[string]any, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	s, err := m.load()
@@ -553,7 +599,7 @@ func (m *Manager) Usage(ctx context.Context) []protocol.PartitionUsage {
 	if !m.mu.TryLock() {
 		m.lastMu.Lock()
 		defer m.lastMu.Unlock()
-		return m.last
+		return m.withResizes(m.last)
 	}
 	s, err := m.load()
 	if err != nil || len(s.Partitions) == 0 {
@@ -583,6 +629,7 @@ func (m *Manager) Usage(ctx context.Context) []protocol.PartitionUsage {
 	}
 	m.lastMu.Lock()
 	m.last = out
+	out = m.withResizes(out)
 	m.lastMu.Unlock()
 	m.retryForwards(ctx, all)
 	return out
