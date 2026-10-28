@@ -34,6 +34,9 @@ export const $machineView = z.object({
     size: $size,
     whole: z.boolean().optional(),
     status: z.string(),
+    /** Unpaid: since when and why (the owner can try again). */
+    pastDueSince: z.date().optional(),
+    lastError: z.string().optional(),
     held: z.boolean().optional(),
     uptime: z.number().optional(),
     overDisk: z.number().optional(),
@@ -120,6 +123,9 @@ export async function machineView(
       size: r.size,
       ...(r.whole ? { whole: true } : {}),
       status: s.status,
+      ...(s.status === "pastDue" || (s.status === "suspended" && !r.held)
+        ? { pastDueSince: s.pastDueSince, lastError: s.lastError }
+        : {}),
       ...(r.held ? { held: true } : {}),
       uptime: uptimes.get(String(s._id)),
       ...(r.overDisk ? { overDisk: r.overDisk.bytes } : {}),

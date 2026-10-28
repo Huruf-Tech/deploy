@@ -144,6 +144,8 @@ export type machine$return = {
         };
         whole?: boolean | undefined;
         status: string;
+        pastDueSince?: Date | undefined;
+        lastError?: string | undefined;
         held?: boolean | undefined;
         uptime?: number | undefined;
         overDisk?: number | undefined;

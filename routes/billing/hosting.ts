@@ -233,6 +233,23 @@ export default new Router("/api", function hosting(router) {
   });
 
   // Stops renting one rental out: it ends after its term and paid month.
+  // Tries an unpaid renewal again, as the hourly retry does.
+  router.post("/:id/renew", function retryRenewal() {
+    const $return = z.object({
+      status: z.string(),
+      lastError: z.string().optional(),
+    });
+
+    return {
+      shape: () => ({ params: $params, return: $return }),
+      handler: async (req) => {
+        const { id } = $params.parse(paramsAsJson(req));
+        const { tenant } = await owner(req);
+        return Response.json(await rentals.retryRenewal(tenant._id, id));
+      },
+    };
+  });
+
   router.post("/:id/end", function end() {
     const $return = z.object({ endAt: z.date() });
 

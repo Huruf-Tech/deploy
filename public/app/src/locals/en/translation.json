@@ -1979,5 +1979,9 @@
   "Its renewal couldn't be paid: {{reason}}": "Its renewal couldn't be paid: {{reason}}",
   "{{amount}} is due. It's stopped; pay and it starts again. Unpaid, it's deleted with its data on {{date}}.": "{{amount}} is due. It's stopped; pay and it starts again. Unpaid, it's deleted with its data on {{date}}.",
   "{{amount}} is due. We try again every hour; unpaid, it stops on {{date}}.": "{{amount}} is due. We try again every hour; unpaid, it stops on {{date}}.",
-  "Pay now": "Pay now"
+  "Pay now": "Pay now",
+  "Payment due since {{date}}: {{reason}}": "Payment due since {{date}}: {{reason}}",
+  "Try renewing again": "Try renewing again",
+  "Renewed": "Renewed",
+  "Still unpaid: {{reason}}": "Still unpaid: {{reason}}"
 }

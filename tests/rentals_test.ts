@@ -819,6 +819,23 @@ Deno.test({
           assert(listed.amountDue > 0, JSON.stringify(listed));
           assert(listed.lastError);
           await mailed(/rented server couldn't renew/);
+          // Its owner sees it, and trying again with the wallet still
+          // short says so.
+          const view = await platform.call(
+            "GET",
+            `/hosting/api/machines/${host}`,
+          );
+          const unpaid = view.json.rentals.find((r: { _id: string }) =>
+            r._id === String(rental)
+          );
+          assert(unpaid.pastDueSince, JSON.stringify(unpaid));
+          const retried = await platform.call(
+            "POST",
+            `/hosting/api/${rental}/renew`,
+          );
+          assertEquals(retried.status, 200, JSON.stringify(retried.json));
+          assertEquals(retried.json.status, "pastDue");
+          assert(retried.json.lastError);
           await fund(listed.amountDue);
           const paid = await customer.call(
             "POST",

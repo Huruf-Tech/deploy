@@ -44,6 +44,8 @@ export type machine$return = {
         };
         whole?: boolean | undefined;
         status: string;
+        pastDueSince?: Date | undefined;
+        lastError?: string | undefined;
         held?: boolean | undefined;
         uptime?: number | undefined;
         overDisk?: number | undefined;
@@ -148,6 +150,13 @@ export type declineResize$params = {
 export type declineResize$body = {
     reason: string;
 };
+export type retryRenewal$params = {
+    id?: string;
+};
+export type retryRenewal$return = {
+    status: string;
+    lastError?: string | undefined;
+};
 export type end$params = {
     id?: string;
 };
@@ -212,6 +221,8 @@ export const hostingModule = (sdk: typeof BaseSDK) => {
         acceptResize$return: acceptResize$return,
         declineResize$params: declineResize$params,
         declineResize$body: declineResize$body,
+        retryRenewal$params: retryRenewal$params,
+        retryRenewal$return: retryRenewal$return,
         end$params: end$params,
         end$return: end$return,
         moveTargets$params: moveTargets$params,
@@ -419,6 +430,34 @@ export const hostingModule = (sdk: typeof BaseSDK) => {
             return res;
         }, data);
     },
+        retryRenewal(data: {
+        params: retryRenewal$params,
+        query?: undefined,
+        body?: undefined,
+    } & TRequestOptions<retryRenewal$return>) {
+        return sdk.resolveAxiosResponse(async () => {
+            sdk.checkPermission("hosting", "retryRenewal");
+
+            const method = "post";
+            const toPath = compile("hosting/api/:id/renew");
+            const requestPayload = {
+                method,
+                url: toPath(sdk.resolvePathParams(data?.params)),
+                params: data?.query,
+                data: data?.body,
+                signal: data?.signal,
+                ...(data?.axiosConfig
+                ? sdk.resolveAxiosConfig(data.axiosConfig)
+                : undefined),
+            };
+
+            sdk.log("Sending Request:", requestPayload);
+
+            const res = await sdk._axios!.request(requestPayload);
+
+            return res;
+        }, data);
+    },
         end(data: {
         params: end$params,
         query?: undefined,
@@ -540,6 +579,7 @@ export const hostingModule = (sdk: typeof BaseSDK) => {
     (methods.decline as any).__scope = "hosting";
     (methods.acceptResize as any).__scope = "hosting";
     (methods.declineResize as any).__scope = "hosting";
+    (methods.retryRenewal as any).__scope = "hosting";
     (methods.end as any).__scope = "hosting";
     (methods.moveTargets as any).__scope = "hosting";
     (methods.propose as any).__scope = "hosting";

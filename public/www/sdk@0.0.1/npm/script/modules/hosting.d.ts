@@ -39,6 +39,8 @@ export type machine$return = {
         };
         whole?: boolean | undefined;
         status: string;
+        pastDueSince?: Date | undefined;
+        lastError?: string | undefined;
         held?: boolean | undefined;
         uptime?: number | undefined;
         overDisk?: number | undefined;
@@ -143,6 +145,13 @@ export type declineResize$params = {
 export type declineResize$body = {
     reason: string;
 };
+export type retryRenewal$params = {
+    id?: string;
+};
+export type retryRenewal$return = {
+    status: string;
+    lastError?: string | undefined;
+};
 export type end$params = {
     id?: string;
 };
@@ -206,6 +215,8 @@ export declare const hostingModule: (sdk: typeof BaseSDK) => {
         acceptResize$return: acceptResize$return;
         declineResize$params: declineResize$params;
         declineResize$body: declineResize$body;
+        retryRenewal$params: retryRenewal$params;
+        retryRenewal$return: retryRenewal$return;
         end$params: end$params;
         end$return: end$return;
         moveTargets$params: moveTargets$params;
@@ -290,6 +301,17 @@ export declare const hostingModule: (sdk: typeof BaseSDK) => {
         then: <TResult1 = unknown, TResult2 = never>(onfulfilled?: ((value: unknown) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
         catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<unknown>;
         finally: (onfinally?: (() => void) | null | undefined) => Promise<unknown>;
+    };
+    readonly retryRenewal: (data: {
+        params: retryRenewal$params;
+        query?: undefined;
+        body?: undefined;
+    } & TRequestOptions<retryRenewal$return>) => {
+        readonly raw: Promise<import("axios").AxiosResponse<retryRenewal$return, any, {}, any>>;
+        readonly data: Promise<retryRenewal$return>;
+        then: <TResult1 = retryRenewal$return, TResult2 = never>(onfulfilled?: ((value: retryRenewal$return) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+        catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<retryRenewal$return | TResult>;
+        finally: (onfinally?: (() => void) | null | undefined) => Promise<retryRenewal$return>;
     };
     readonly end: (data: {
         params: end$params;

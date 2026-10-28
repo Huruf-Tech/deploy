@@ -1979,5 +1979,9 @@
   "Its renewal couldn't be paid: {{reason}}": "تعذّر دفع تجديده: {{reason}}",
   "{{amount}} is due. It's stopped; pay and it starts again. Unpaid, it's deleted with its data on {{date}}.": "المستحق {{amount}}. هو متوقف؛ ادفع ليعمل من جديد. إن بقي غير مدفوع يُحذف مع بياناته في {{date}}.",
   "{{amount}} is due. We try again every hour; unpaid, it stops on {{date}}.": "المستحق {{amount}}. نعيد المحاولة كل ساعة؛ وإن بقي غير مدفوع يتوقف في {{date}}.",
-  "Pay now": "ادفع الآن"
+  "Pay now": "ادفع الآن",
+  "Payment due since {{date}}: {{reason}}": "الدفع مستحق منذ {{date}}: {{reason}}",
+  "Try renewing again": "أعد محاولة التجديد",
+  "Renewed": "جُدّد",
+  "Still unpaid: {{reason}}": "ما زال غير مدفوع: {{reason}}"
 }

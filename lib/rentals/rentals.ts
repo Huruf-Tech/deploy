@@ -695,6 +695,28 @@ export class RentalService implements TRentalHooks {
     return { result: "active" as const };
   }
 
+  /**
+   * The machine's owner tries an unpaid renewal again (PLAN §26.9), as the
+   * hourly retry does: the customer's wallet, then their saved card without
+   * them present (a bank asking for 3-D Secure still waits for them).
+   */
+  async retryRenewal(owner: ObjectId, id: ObjectId) {
+    const sub = await this.ownedRental(owner, id, {
+      status: { $in: ["pastDue", "suspended"] },
+      "rental.held": { $exists: false },
+    }).catch(() => {
+      throw Response.badRequest("Its renewal isn't waiting for a payment");
+    });
+    await this.billing.renewOne(sub);
+    const after = await this.rentalOf(id);
+    return {
+      status: after.status,
+      ...(after.status === "active"
+        ? {}
+        : { lastError: after.lastError ?? "It couldn't renew" }),
+    };
+  }
+
   /** The customer takes back a resize nobody accepted yet; nothing changes. */
   async withdrawResize(tenant: ObjectId, id: ObjectId) {
     const sub = await subscriptionModel.findOneAndUpdate(

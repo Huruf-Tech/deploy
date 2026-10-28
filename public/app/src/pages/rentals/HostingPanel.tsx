@@ -700,6 +700,21 @@ export function MachineRentals({
       toast.error(errorMessage(e) ?? t("Could not save"))
     }
   }
+  const retry = async (id: string) => {
+    try {
+      const after = await ThunderSDK.hosting.retryRenewal({ params: { id } })
+      if (after.status === "active") toast.success(t("Renewed"))
+      else
+        toast.error(
+          t("Still unpaid: {{reason}}", {
+            reason: after.lastError ?? t("the payment didn't go through"),
+          })
+        )
+      onChanged()
+    } catch (e) {
+      toast.error(errorMessage(e) ?? t("Could not save"))
+    }
+  }
   const cancelMove = async (id: string) => {
     try {
       await ThunderSDK.rentalsAdmin.cancelMove({ params: { id } })
@@ -732,6 +747,14 @@ export function MachineRentals({
               {r.term?.until &&
                 ` · ${t("term until {{date}}", { date: day(r.term.until) })}`}
             </span>
+            {r.pastDueSince && (
+              <span className="text-xs text-destructive">
+                {t("Payment due since {{date}}: {{reason}}", {
+                  date: day(r.pastDueSince),
+                  reason: r.lastError ?? t("the payment didn't go through"),
+                })}
+              </span>
+            )}
             {r.nextSize && (
               <span className="text-xs text-info-foreground">
                 {t("Next size: {{plan}} from {{date}}", {
@@ -811,6 +834,13 @@ export function MachineRentals({
                         }
                       >
                         {t("Propose a move")}
+                      </button>
+                    )}
+                  {isOwner &&
+                    r.pastDueSince &&
+                    ThunderSDK.isPermitted("hosting", "retryRenewal") && (
+                      <button type="button" onClick={() => retry(r._id)}>
+                        {t("Try renewing again")}
                       </button>
                     )}
                   {isOwner &&

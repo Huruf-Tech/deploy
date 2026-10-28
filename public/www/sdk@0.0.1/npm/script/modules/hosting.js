@@ -146,6 +146,26 @@ const hostingModule = (sdk) => {
                 return res;
             }, data);
         },
+        retryRenewal(data) {
+            return sdk.resolveAxiosResponse(async () => {
+                sdk.checkPermission("hosting", "retryRenewal");
+                const method = "post";
+                const toPath = (0, path_to_regexp_1.compile)("hosting/api/:id/renew");
+                const requestPayload = {
+                    method,
+                    url: toPath(sdk.resolvePathParams(data?.params)),
+                    params: data?.query,
+                    data: data?.body,
+                    signal: data?.signal,
+                    ...(data?.axiosConfig
+                        ? sdk.resolveAxiosConfig(data.axiosConfig)
+                        : undefined),
+                };
+                sdk.log("Sending Request:", requestPayload);
+                const res = await sdk._axios.request(requestPayload);
+                return res;
+            }, data);
+        },
         end(data) {
             return sdk.resolveAxiosResponse(async () => {
                 sdk.checkPermission("hosting", "end");
@@ -234,6 +254,7 @@ const hostingModule = (sdk) => {
     methods.decline.__scope = "hosting";
     methods.acceptResize.__scope = "hosting";
     methods.declineResize.__scope = "hosting";
+    methods.retryRenewal.__scope = "hosting";
     methods.end.__scope = "hosting";
     methods.moveTargets.__scope = "hosting";
     methods.propose.__scope = "hosting";
