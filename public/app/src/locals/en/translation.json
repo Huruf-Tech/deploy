@@ -1811,5 +1811,11 @@
   "General purpose": "General purpose",
   "Compute optimized": "Compute optimized",
   "Memory optimized": "Memory optimized",
-  "vCPU {{cpu}} · memory {{mem}} per GB · disk {{disk}} per GB": "vCPU {{cpu}} · memory {{mem}} per GB · disk {{disk}} per GB"
+  "vCPU {{cpu}} · memory {{mem}} per GB · disk {{disk}} per GB": "vCPU {{cpu}} · memory {{mem}} per GB · disk {{disk}} per GB",
+  "What you earn": "What you earn",
+  "Fully rented, a month": "Fully rented, a month",
+  "Huruf's commission ({{pct}}%)": "Huruf's commission ({{pct}}%)",
+  "You earn": "You earn",
+  "After its cost of {{cost}}": "After its cost of {{cost}}",
+  "Rented now: {{now}} a month, you earn {{earn}}.": "Rented now: {{now}} a month, you earn {{earn}}."
 }

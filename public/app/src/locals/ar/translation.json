@@ -1811,5 +1811,11 @@
   "General purpose": "متعدد الأغراض",
   "Compute optimized": "مُحسّن للحوسبة",
   "Memory optimized": "مُحسّن للذاكرة",
-  "vCPU {{cpu}} · memory {{mem}} per GB · disk {{disk}} per GB": "المعالج {{cpu}} · الذاكرة {{mem}} لكل غيغابايت · القرص {{disk}} لكل غيغابايت"
+  "vCPU {{cpu}} · memory {{mem}} per GB · disk {{disk}} per GB": "المعالج {{cpu}} · الذاكرة {{mem}} لكل غيغابايت · القرص {{disk}} لكل غيغابايت",
+  "What you earn": "ما تربحه",
+  "Fully rented, a month": "مؤجّر بالكامل، شهريًا",
+  "Huruf's commission ({{pct}}%)": "عمولة حروف ({{pct}}%)",
+  "You earn": "تربح",
+  "After its cost of {{cost}}": "بعد تكلفته البالغة {{cost}}",
+  "Rented now: {{now}} a month, you earn {{earn}}.": "المؤجّر الآن: {{now}} شهريًا، تربح منها {{earn}}."
 }

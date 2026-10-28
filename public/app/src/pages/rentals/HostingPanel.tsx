@@ -88,6 +88,7 @@ function Hosting({
         // Saved values reset the form.
         key={JSON.stringify([info.rent, info.monthlyCost])}
         server={server._id}
+        allocatable={server.pool?.allocatable}
         info={info}
         editable={isOwner && ThunderSDK.isPermitted("hosting", "updateMachine")}
         onChanged={changed}
@@ -96,13 +97,6 @@ function Hosting({
         <section className="flex flex-col gap-1">
           <KeyValue
             items={[
-              {
-                label: t("Earns / costs a month"),
-                value: `${money(info.revenue, "usd")} / ${
-                  info.monthlyCost ? money(info.monthlyCost, "usd") : "—"
-                }`,
-              },
-              { label: t("Huruf's commission"), value: `${info.commission}%` },
               {
                 label: t("Security held"),
                 value: t("{{amount}} of {{cap}}", {
@@ -144,17 +138,19 @@ function PriceRow({
   onChange: (value: string) => void
 }) {
   return (
-    <div className="grid grid-cols-[minmax(0,1fr)_minmax(7.5rem,10rem)] items-center gap-x-4 gap-y-1 py-2">
+    <div className="flex items-center justify-between gap-3 py-1.5">
       <div className="min-w-0">
-        <Label htmlFor={id} className="text-[13px]">
+        <Label htmlFor={id} className="text-[13px] leading-5">
           {label}
         </Label>
         {hint && (
-          <p className="text-xs text-muted-foreground tabular-nums">{hint}</p>
+          <p className="text-[11px] leading-4 text-muted-foreground tabular-nums">
+            {hint}
+          </p>
         )}
       </div>
-      <InputGroup className="h-8">
-        <InputGroupAddon>$</InputGroupAddon>
+      <InputGroup className="h-7 w-36 shrink-0 rounded-md">
+        <InputGroupAddon className="ps-2 text-xs">$</InputGroupAddon>
         <InputGroupInput
           id={id}
           type="number"
@@ -162,12 +158,12 @@ function PriceRow({
           dir="ltr"
           min={0}
           step="any"
-          className="tabular-nums"
+          className="h-7 [appearance:textfield] px-1 text-[13px] tabular-nums [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
           value={value}
           placeholder={placeholder}
           onChange={(e) => onChange(e.target.value)}
         />
-        <InputGroupAddon align="inline-end" className="text-xs">
+        <InputGroupAddon align="inline-end" className="pe-2 text-[11px]">
           {unit}
         </InputGroupAddon>
       </InputGroup>
@@ -177,11 +173,14 @@ function PriceRow({
 
 function Settings({
   server,
+  allocatable,
   info,
   editable,
   onChanged,
 }: {
   server: string
+  /** What partitions may use in all: the whole machine. */
+  allocatable?: { cpus: number; memMb: number; diskGb: number } | null
   info: TMachine
   editable: boolean
   onChanged: () => void
@@ -331,7 +330,7 @@ function Settings({
             "By the hour; a month is 730 hours. Renters see the monthly price."
           )}
         </p>
-        <div className="mt-1 divide-y">
+        <div className="mt-1.5 divide-y">
           <PriceRow
             id="price-vcpu"
             label={t("Per vCPU")}
@@ -383,6 +382,23 @@ function Settings({
           />
         </div>
       </fieldset>
+      <Earnings
+        full={
+          allocatable && typed
+            ? Math.ceil(
+                (typed.whole ??
+                  allocatable.cpus * typed.vcpu +
+                    (allocatable.memMb / 1024) * typed.memGb +
+                    allocatable.diskGb * typed.diskGb) *
+                  HOURS -
+                  1e-9
+              )
+            : undefined
+        }
+        now={info.revenue}
+        commission={info.commission}
+        cost={toCents(form.cost) || 0}
+      />
       {editable && (
         <div className="flex flex-wrap items-center gap-2">
           <Button
@@ -876,6 +892,69 @@ export function MachineRentals({
         confirmLabel={t("Cancel move")}
         onConfirm={() => canceling && cancelMove(canceling)}
       />
+    </section>
+  )
+}
+
+/**
+ * What the owner earns a month (PLAN §30.7): rented in full at the prices
+ * typed (the whole price, else the parts), Huruf's commission, what's left,
+ * and after the machine's cost; and what the rentals on it bring now.
+ */
+function Earnings({
+  full,
+  now,
+  commission,
+  cost,
+}: {
+  full?: number
+  now: number
+  commission: number
+  cost: number
+}) {
+  const { t } = useTranslation()
+  if (full === undefined) return null
+  // As the security's cap is worked out (PLAN §30.7).
+  const earn = Math.round((full * (100 - commission)) / 100)
+  const cut = full - earn
+  const row = "flex justify-between gap-3 tabular-nums"
+  return (
+    <section
+      aria-label={t("What you earn")}
+      className="flex flex-col gap-1 rounded-lg border px-3 py-2.5 text-[13px]"
+    >
+      <div className={row}>
+        <span className="text-muted-foreground">
+          {t("Fully rented, a month")}
+        </span>
+        <span>{money(full, "usd")}</span>
+      </div>
+      <div className={row}>
+        <span className="text-muted-foreground">
+          {t("Huruf's commission ({{pct}}%)", { pct: commission })}
+        </span>
+        <span>−{money(cut, "usd")}</span>
+      </div>
+      <div className={`${row} border-t pt-1.5 font-semibold`}>
+        <span>{t("You earn")}</span>
+        <span>{money(earn, "usd")}</span>
+      </div>
+      {cost > 0 && (
+        <div className={row}>
+          <span className="text-muted-foreground">
+            {t("After its cost of {{cost}}", { cost: money(cost, "usd") })}
+          </span>
+          <span className={earn - cost < 0 ? "text-destructive" : ""}>
+            {money(earn - cost, "usd")}
+          </span>
+        </div>
+      )}
+      <p className="pt-1 text-[11px] text-muted-foreground tabular-nums">
+        {t("Rented now: {{now}} a month, you earn {{earn}}.", {
+          now: money(now, "usd"),
+          earn: money(now - Math.round((now * commission) / 100), "usd"),
+        })}
+      </p>
     </section>
   )
 }
