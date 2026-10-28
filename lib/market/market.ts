@@ -26,6 +26,28 @@ const NEW_FOR_MS = 182 * DAY_MS;
 
 const log = (text: string) => Logger.warn(`[market] ${text}`);
 
+/**
+ * What kind of machine it is (PLAN §30.4), from what's measured: memory per
+ * vCPU names the family like cloud instance types (memory optimized from 6
+ * GB a vCPU, compute optimized up to 2.5 GB, general purpose between), and
+ * a host taking 2 % of its CPU or more (steal) makes it burstable: its CPU
+ * is there in bursts, not all the time.
+ */
+export const familyOf = (
+  all: { cpus: number; memMb: number },
+  steal?: number,
+) => {
+  const perCpu = all.cpus > 0 ? all.memMb / 1024 / all.cpus : 0;
+  return {
+    family: perCpu >= 6
+      ? "Memory optimized" as const
+      : perCpu <= 2.5
+      ? "Compute optimized" as const
+      : "General purpose" as const,
+    burstable: (steal ?? 0) >= 0.02,
+  };
+};
+
 /** Machines for rent in the market (PLAN §30.4): set up, rentable, taking rentals. */
 export const RENTABLE = {
   status: "active",
@@ -182,6 +204,7 @@ export async function listMachines(viewer: ObjectId, f: TMarketFilters) {
       steal: p.steal,
       virtualization: p.virtualization,
       dedicated: !!p.dedicated,
+      ...familyOf(all, p.steal),
       renters: ratings.get(id),
     };
   }).filter((m) =>

@@ -455,6 +455,26 @@ function Figure({
   )
 }
 
+/** Flags as files, fetched only when shown (country-flag-icons, 3:2). */
+const FLAGS = import.meta.glob<string>(
+  "/node_modules/country-flag-icons/3x2/*.svg",
+  { eager: true, query: "?no-inline", import: "default" }
+)
+
+/** A country's flag; nothing for an unknown code. */
+function Flag({ code }: { code?: string }) {
+  const src = code && FLAGS[`/node_modules/country-flag-icons/3x2/${code}.svg`]
+  if (!src) return null
+  return (
+    <img
+      src={src}
+      alt=""
+      loading="lazy"
+      className="h-3 w-[18px] shrink-0 rounded-[2px] object-cover ring-1 ring-border"
+    />
+  )
+}
+
 function MachineCard({
   machine: m,
   countryName,
@@ -472,18 +492,6 @@ function MachineCard({
       HOURS
   )
   const monthly = m.prices.monthly
-  const meta = [
-    m.official ? t("Huruf") : (m.owner ?? t("Community")),
-    countryName,
-    m.rttMs === undefined
-      ? undefined
-      : t("{{ms}} ms away", { ms: Math.round(m.rttMs) }),
-  ].filter(Boolean)
-  const hardware = !m.virtualization
-    ? undefined
-    : m.virtualization === "none"
-      ? t("Bare metal")
-      : t("Virtual machine ({{kind}})", { kind: m.virtualization })
 
   return (
     <li className="flex flex-col rounded-[10px] border bg-card text-[13px]">
@@ -496,14 +504,41 @@ function MachineCard({
             <h2 className="truncate text-sm font-semibold">{m.name}</h2>
             {m.yours && <StatusBadge tone="neutral" label={t("Yours")} />}
           </div>
-          <p className="truncate text-xs text-muted-foreground">
-            {meta.join(" · ")}
+          <p className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+            {m.country && (
+              <>
+                <Flag code={m.country} />
+                <span className="truncate">{countryName}</span>
+                <span aria-hidden>·</span>
+              </>
+            )}
+            {m.rttMs !== undefined && (
+              <>
+                <span className="shrink-0">
+                  {t("{{ms}} ms away", { ms: Math.round(m.rttMs) })}
+                </span>
+                <span aria-hidden>·</span>
+              </>
+            )}
+            <span className="truncate">
+              {m.official ? t("Huruf") : (m.owner ?? t("Community"))}
+            </span>
           </p>
         </div>
         <StatusBadge
           tone={m.official ? "info" : "neutral"}
           label={m.official ? t("Official") : t("Community")}
         />
+      </div>
+
+      <div className="flex flex-wrap items-center gap-1.5 px-4 pb-3">
+        <span className="text-[13px] font-medium">
+          {[m.tier && t(m.tier), t(m.family)].filter(Boolean).join(" · ")}
+        </span>
+        {m.burstable && (
+          <StatusBadge tone="warning" label={t("Burstable CPU")} />
+        )}
+        {m.disk && <StatusBadge tone="neutral" label={m.disk} />}
       </div>
 
       <div className="grid grid-cols-3 gap-3 border-y px-4 py-3">
@@ -521,10 +556,7 @@ function MachineCard({
               </>
             )
           }
-          caption={
-            [m.tier && t(m.tier), m.disk].filter(Boolean).join(" · ") ||
-            t("Rating")
-          }
+          caption={t("Speed rating")}
         />
         <Figure
           value={m.uptime30d === undefined ? "—" : `${m.uptime30d.toFixed(2)}%`}
@@ -541,61 +573,49 @@ function MachineCard({
                 {m.renters.stars}
               </span>
             ) : (
-              "—"
+              <span className="text-sm font-normal text-muted-foreground">
+                {t("None yet")}
+              </span>
             )
           }
           caption={
             m.renters
               ? t("{{count}} renters", { count: m.renters.count })
-              : t("No ratings yet")
+              : t("Renters' rating")
           }
         />
       </div>
 
-      <dl className="flex flex-col gap-1.5 px-4 py-3">
+      <div className="flex flex-col gap-2 px-4 py-3">
         <div className="flex justify-between gap-3">
-          <dt className="text-muted-foreground">{t("Free now")}</dt>
-          <dd dir="ltr" className="text-end tabular-nums">
+          <span className="text-muted-foreground">{t("Free now")}</span>
+          <span dir="ltr" className="text-end tabular-nums">
             {t("{{cpu}} vCPU · {{mem}} GB · {{disk}} GB", {
               cpu: m.free.cpus,
               mem: gbOfMb(m.free.memMb),
               disk: m.free.diskGb,
             })}
-          </dd>
+          </span>
         </div>
-        {hardware && (
-          <div className="flex justify-between gap-3">
-            <dt className="text-muted-foreground">{t("Hardware")}</dt>
-            <dd className="min-w-0 truncate text-end">
-              {hardware}
-              {m.steal !== undefined && m.steal >= 0.01 && (
-                <span className="text-muted-foreground">
-                  {" · "}
-                  {t("host takes {{pct}}", {
-                    pct: `${(m.steal * 100).toFixed(1)}%`,
-                  })}
-                </span>
-              )}
-            </dd>
+        {(m.newArrival || m.dedicated || m.autoAccept) && (
+          <div className="flex flex-wrap gap-1">
+            {m.newArrival && (
+              <StatusBadge
+                tone="warning"
+                label={t("New · {{count}} days measured", {
+                  count: m.measuredDays,
+                })}
+              />
+            )}
+            {m.dedicated && (
+              <StatusBadge tone="success" label={t("Can be rented whole")} />
+            )}
+            {m.autoAccept && (
+              <StatusBadge tone="neutral" label={t("Starts at once")} />
+            )}
           </div>
         )}
-        <div className="flex flex-wrap gap-1 pt-1">
-          {m.newArrival && (
-            <StatusBadge
-              tone="warning"
-              label={t("New · {{count}} days measured", {
-                count: m.measuredDays,
-              })}
-            />
-          )}
-          {m.dedicated && (
-            <StatusBadge tone="success" label={t("Can be rented whole")} />
-          )}
-          {m.autoAccept && (
-            <StatusBadge tone="neutral" label={t("Starts at once")} />
-          )}
-        </div>
-      </dl>
+      </div>
 
       {!m.official && (
         <p className="mx-4 mb-3 flex gap-2 rounded-lg bg-warning-soft px-3 py-2 text-xs text-warning-foreground">
@@ -616,19 +636,12 @@ function MachineCard({
               {t("/ month")}
             </span>
           </div>
-          <div
-            dir="ltr"
-            className="truncate text-xs text-muted-foreground tabular-nums"
-            title={t(
-              "{{cpu}} per vCPU · {{mem}} per GB memory · {{disk}} per GB disk, a month",
-              {
-                cpu: money(monthly.vcpu, "usd"),
-                mem: money(monthly.memGb, "usd"),
-                disk: money(monthly.diskGb, "usd"),
-              }
-            )}
-          >
-            {`${money(monthly.vcpu, "usd")} vCPU · ${money(monthly.memGb, "usd")} GB · ${money(monthly.diskGb, "usd")} disk`}
+          <div className="text-xs text-pretty text-muted-foreground tabular-nums">
+            {t("vCPU {{cpu}} · memory {{mem}} per GB · disk {{disk}} per GB", {
+              cpu: money(monthly.vcpu, "usd"),
+              mem: money(monthly.memGb, "usd"),
+              disk: money(monthly.diskGb, "usd"),
+            })}
             {monthly.whole !== undefined &&
               ` · ${t("whole {{price}}", { price: money(monthly.whole, "usd") })}`}
           </div>

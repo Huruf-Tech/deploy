@@ -2549,6 +2549,7 @@ Kept: partitions and isolation, escrow at request, charging at acceptance, renew
 ### 30.4 The market (19b)
 - **Listing:** machines with room; official or community; region, measured latency, uptime (30/90 days), rating and tier, disk, steal, bare metal or VM, renters' rating, price calculator; Dedicated (whole machine) while nothing else runs on it.
 - **Filters and sorting** on each of those.
+- **What kind of machine** (measured, never typed): its speed tier (§29) and a family from memory per vCPU, named like cloud instance types: memory optimized from 6 GB a vCPU, compute optimized up to 2.5 GB, general purpose between; **burstable CPU** when its host takes 2 % of its CPU or more (steal). Its country shows with its flag.
 - **New arrivals:** a machine with less than about 6 months of measurements is listed in its own section with a "new" label and the days measured. Monitoring by the team or AI comes later; the data it needs (account age, self-rentals, uptime) is recorded from the start.
 - **Community warning:** "the owner of this machine can access your data". Sensitive workloads belong on official machines. Until backups exist: "if the hardware fails, data on it is lost".
 

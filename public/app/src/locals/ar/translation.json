@@ -1803,5 +1803,13 @@
   "New · {{count}} days measured_one": "جديد · قيس يومًا واحدًا",
   "New · {{count}} days measured_two": "جديد · قيس يومين",
   "New · {{count}} days measured_few": "جديد · قيس {{count}} أيام",
-  "New · {{count}} days measured_many": "جديد · قيس {{count}} يومًا"
+  "New · {{count}} days measured_many": "جديد · قيس {{count}} يومًا",
+  "Burstable CPU": "معالج متقطّع",
+  "Speed rating": "تقييم السرعة",
+  "None yet": "لا شيء بعد",
+  "Renters' rating": "تقييم المستأجرين",
+  "General purpose": "متعدد الأغراض",
+  "Compute optimized": "مُحسّن للحوسبة",
+  "Memory optimized": "مُحسّن للذاكرة",
+  "vCPU {{cpu}} · memory {{mem}} per GB · disk {{disk}} per GB": "المعالج {{cpu}} · الذاكرة {{mem}} لكل غيغابايت · القرص {{disk}} لكل غيغابايت"
 }

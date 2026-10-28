@@ -79,6 +79,12 @@ export default new Router("/api", function market(router) {
       steal: z.number().optional(),
       virtualization: z.string().optional(),
       dedicated: z.boolean().describe("Can be rented whole now"),
+      family: z.enum([
+        "General purpose",
+        "Compute optimized",
+        "Memory optimized",
+      ]).describe("From memory per vCPU"),
+      burstable: z.boolean().describe("Its host takes CPU from it at times"),
       renters: z.object({ stars: z.number(), count: z.number() }).optional(),
     }));
 

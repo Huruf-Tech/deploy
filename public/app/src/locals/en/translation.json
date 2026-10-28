@@ -1803,5 +1803,13 @@
   "New · {{count}} days measured_one": "New · {{count}} day measured",
   "New · {{count}} days measured_two": "New · {{count}} days measured",
   "New · {{count}} days measured_few": "New · {{count}} days measured",
-  "New · {{count}} days measured_many": "New · {{count}} days measured"
+  "New · {{count}} days measured_many": "New · {{count}} days measured",
+  "Burstable CPU": "Burstable CPU",
+  "Speed rating": "Speed rating",
+  "None yet": "None yet",
+  "Renters' rating": "Renters' rating",
+  "General purpose": "General purpose",
+  "Compute optimized": "Compute optimized",
+  "Memory optimized": "Memory optimized",
+  "vCPU {{cpu}} · memory {{mem}} per GB · disk {{disk}} per GB": "vCPU {{cpu}} · memory {{mem}} per GB · disk {{disk}} per GB"
 }

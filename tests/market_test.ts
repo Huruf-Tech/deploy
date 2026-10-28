@@ -7,7 +7,7 @@ import { Mailer } from "@/plugins/Huruf-Tech/thunder-core/lib/mailer.ts";
 import { Wallet } from "@/plugins/Huruf-Tech/thunder-core/lib/wallet.ts";
 import { disputes, earnings, rentals } from "@/lib/services.ts";
 import { HOLD_MS } from "@/lib/market/earnings.ts";
-import { linked, ratingsOf } from "@/lib/market/market.ts";
+import { familyOf, linked, ratingsOf } from "@/lib/market/market.ts";
 import {
   hourlyOf,
   monthlyOf,
@@ -30,6 +30,18 @@ import { testSession } from "./_session.ts";
 // machine that leaves inside its term, an agreed move's split, ratings.
 
 const DAY = 86_400_000;
+
+Deno.test("market: a machine's family from what's measured", () => {
+  assertEquals(familyOf({ cpus: 4, memMb: 8_192 }), {
+    family: "Compute optimized",
+    burstable: false,
+  });
+  assertEquals(familyOf({ cpus: 4, memMb: 16_384 }, 0.05), {
+    family: "General purpose",
+    burstable: true,
+  });
+  assertEquals(familyOf({ cpus: 2, memMb: 16_384 }).family, "Memory optimized");
+});
 
 Deno.test("market: prices, refunds, shares and the security fill", () => {
   const prices = { vcpu: 1, memGb: 0.5, diskGb: 0.02, whole: 10, trafficGb: 5 };

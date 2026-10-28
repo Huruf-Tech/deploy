@@ -69,6 +69,10 @@ export type machines$return = {
     virtualization?: string | undefined;
     /** Can be rented whole now */
     dedicated: boolean;
+    /** From memory per vCPU */
+    family: "General purpose" | "Compute optimized" | "Memory optimized";
+    /** Its host takes CPU from it at times */
+    burstable: boolean;
     renters?: {
         stars: number;
         count: number;
