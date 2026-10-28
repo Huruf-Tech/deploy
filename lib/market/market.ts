@@ -382,8 +382,9 @@ export class DisputeService {
     return { dispute: String(insertedId) };
   }
 
-  list(status: "open" | "resolved" = "open") {
-    return disputeModel.find({ status }, {
+  /** Open ones oldest first (the queue); decided or all, newest first. */
+  list(status: "open" | "resolved" | "all" = "open") {
+    return disputeModel.find(status === "all" ? {} : { status }, {
       sort: { createdAt: status === "open" ? 1 : -1 },
       limit: 200,
     }).toArray();

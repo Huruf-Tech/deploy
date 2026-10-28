@@ -1575,7 +1575,6 @@
   "Open a dispute": "فتح نزاع",
   "Open the dispute": "افتح النزاع",
   "Opened": "فُتح",
-  "Oversight of the market: disputes, claims to take back, abuse reports, rentals that didn't arrive, and capacity. Machine owners accept requests themselves.": "الإشراف على السوق: النزاعات، ومطالبات الاسترجاع، وبلاغات الإساءة، والإيجارات التي لم تصل، والسعة. يقبل مالكو الأجهزة الطلبات بأنفسهم.",
   "Owner": "المالك",
   "Paid for a dispute": "دُفع لنزاع",
   "Pick another machine": "اختر جهازًا آخر",
@@ -1908,5 +1907,16 @@
   "{{count}}, {{valid}} found valid_one": "{{count}}، تبيّن صحة {{valid}}",
   "{{count}}, {{valid}} found valid_two": "{{count}}، تبيّن صحة {{valid}}",
   "{{count}}, {{valid}} found valid_few": "{{count}}، تبيّن صحة {{valid}}",
-  "{{count}}, {{valid}} found valid_many": "{{count}}، تبيّن صحة {{valid}}"
+  "{{count}}, {{valid}} found valid_many": "{{count}}، تبيّن صحة {{valid}}",
+  "Renters' disputes on rentals. The machine's money is frozen while one is open; a refund is paid from it.": "نزاعات المستأجرين على الإيجارات. يُجمّد مال الجهاز ما دام النزاع مفتوحًا؛ ويُدفع الاسترداد منه.",
+  "No open dispute.": "لا نزاع مفتوح.",
+  "No dispute here.": "لا نزاعات هنا.",
+  "Renters open one from their rented server's page.": "يفتحه المستأجرون من صفحة خادمهم المؤجّر.",
+  "What renters and owners reported. Review each one and close it as valid or not.": "ما أبلغ عنه المستأجرون والملاك. راجع كل بلاغ وأغلقه على أنه صحيح أو غير صحيح.",
+  "Closed": "مغلق",
+  "No open report.": "لا بلاغ مفتوح.",
+  "No report here.": "لا بلاغات هنا.",
+  "Reports come from a rented server's page or a machine.": "تأتي البلاغات من صفحة خادم مؤجّر أو جهاز.",
+  "From / about": "من / بشأن",
+  "Oversight of the market: claims to take back, rentals that didn't arrive, and capacity. Disputes and abuse reports have their own pages. Machine owners accept requests themselves.": "الإشراف على السوق: المطالبات المطلوب استردادها، والإيجارات التي لم تصل، والسعة. للنزاعات وبلاغات الإساءة صفحاتها الخاصة. يقبل ملاك الأجهزة الطلبات بأنفسهم."
 }

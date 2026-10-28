@@ -35,18 +35,17 @@ type TMachine = NonNullable<TDisputeDetail["machine"]>
 
 const minutes = (ms: number) => Math.round(ms / 60_000)
 
-function BackToRentals() {
-  const { t } = useTranslation()
+function BackTo({ to, label }: { to: string; label: string }) {
   return (
     <Button
       size="sm"
       variant="ghost"
       className="self-start"
-      render={<Link to={getLocalPath("admin/rentals")} />}
+      render={<Link to={getLocalPath(to)} />}
       nativeButton={false}
     >
       <IconArrowLeft className="size-4 rtl:rotate-180" aria-hidden />
-      {t("Rentals")}
+      {label}
     </Button>
   )
 }
@@ -237,7 +236,7 @@ export function DisputeReview() {
 
   return (
     <Page className="flex flex-col gap-4 py-5">
-      <BackToRentals />
+      <BackTo to="admin/disputes" label={t("Disputes")} />
       <PageHeader
         title={t("Dispute")}
         status={
@@ -558,7 +557,9 @@ export function DisputeReview() {
               })
               toast.success(t("Dispute decided"))
               reload()
-              queries.disputes("open").invalidate()
+              for (const tab of ["open", "resolved", "all"] as const) {
+                queries.disputes(tab).invalidate()
+              }
             } catch (e) {
               toast.error(errorMessage(e) ?? t("Could not save"))
               throw e
@@ -592,7 +593,7 @@ export function ReportReview() {
 
   return (
     <Page className="flex flex-col gap-4 py-5">
-      <BackToRentals />
+      <BackTo to="admin/abuseReports" label={t("Abuse reports")} />
       <PageHeader
         title={t("Abuse report")}
         status={
@@ -753,7 +754,9 @@ export function ReportReview() {
               })
               toast.success(t("Report closed"))
               reload()
-              queries.abuseReports().invalidate()
+              for (const tab of ["open", "closed", "all"] as const) {
+                queries.abuseReports(tab).invalidate()
+              }
             } catch (e) {
               toast.error(errorMessage(e) ?? t("Could not save"))
               throw e

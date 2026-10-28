@@ -417,7 +417,7 @@ export type report$return = {
     }[];
 };
 export type listDisputes$query = {
-    status?: ("open" | "resolved") | undefined;
+    status?: ("open" | "resolved" | "all") | undefined;
 };
 export type listDisputes$return = {
     _id: string;
@@ -471,12 +471,20 @@ export type decideRevert$body = {
     amount: number;
     note?: string | undefined;
 };
+export type listReports$query = {
+    status?: ("open" | "closed" | "all") | undefined;
+};
 export type listReports$return = {
     _id: string;
     tenantName?: string | undefined;
     machine?: string | undefined;
+    machineName?: string | undefined;
     subscription?: string | undefined;
     text: string;
+    status: string;
+    /** The admin's verdict, once closed */
+    valid?: boolean | undefined;
+    closedAt?: Date | undefined;
     createdAt: Date;
 }[];
 export type closeReport$params = {
@@ -520,6 +528,7 @@ export const rentalsAdminModule = (sdk: typeof BaseSDK) => {
         listReverts$return: listReverts$return,
         decideRevert$params: decideRevert$params,
         decideRevert$body: decideRevert$body,
+        listReports$query: listReports$query,
         listReports$return: listReports$return,
         closeReport$params: closeReport$params,
         closeReport$body: closeReport$body,
@@ -1003,9 +1012,9 @@ export const rentalsAdminModule = (sdk: typeof BaseSDK) => {
             return res;
         }, data);
     },
-        listReports(data?: {
+        listReports(data: {
         params?: undefined,
-        query?: undefined,
+        query: listReports$query,
         body?: undefined,
     } & TRequestOptions<listReports$return>) {
         return sdk.resolveAxiosResponse(async () => {

@@ -19,6 +19,7 @@ import {
   earningModel,
 } from "@/schemas/billing/market.ts";
 import { serverModel } from "@/schemas/infrastructure/server.ts";
+import { subscriptionModel } from "@/schemas/billing/subscription.ts";
 import { $machineView, machineView } from "@/lib/market/machineView.ts";
 import { disputeDetail, reportDetail } from "@/lib/market/review.ts";
 
@@ -445,7 +446,7 @@ export default new Router("/api", function rentalsAdmin(router) {
   // the refund from the machine's money.
   router.get("/disputes", function listDisputes() {
     const $query = z.object({
-      status: z.enum(["open", "resolved"]).optional(),
+      status: z.enum(["open", "resolved", "all"]).optional(),
     });
     const $return = z.array(z.object({
       _id: z.string(),
@@ -611,33 +612,63 @@ export default new Router("/api", function rentalsAdmin(router) {
 
   // Abuse reports (PLAN §30.10).
   router.get("/reports", function listReports() {
+    const $query = z.object({
+      status: z.enum(["open", "closed", "all"]).optional(),
+    });
     const $return = z.array(z.object({
       _id: z.string(),
       tenantName: z.string().optional(),
       machine: z.string().optional(),
+      machineName: z.string().optional(),
       subscription: z.string().optional(),
       text: z.string(),
+      status: z.string(),
+      valid: z.boolean().optional().describe(
+        "The admin's verdict, once closed",
+      ),
+      closedAt: z.date().optional(),
       createdAt: z.date(),
     }));
 
     return {
-      shape: () => ({ return: $return }),
-      handler: async () => {
-        const rows = await abuseReportModel.find({ status: "open" }, {
-          sort: { createdAt: 1 },
-          limit: 200,
-        }).toArray();
-        const tenants = await tenantModel.find({
-          _id: { $in: rows.map((r) => r.tenant) },
-        }, { projection: { name: 1 } }).toArray();
-        return Response.json(rows.map((r) => ({
-          _id: r._id,
-          tenantName: tenants.find((t) => t._id.equals(r.tenant))?.name,
-          machine: r.machine,
-          subscription: r.subscription,
-          text: r.text,
-          createdAt: r.createdAt,
-        })));
+      shape: () => ({ query: $query, return: $return }),
+      handler: async (req) => {
+        const { status = "open" } = $query.parse(queryAsJson(req));
+        // Open ones oldest first (the queue); closed or all, newest first.
+        const rows = await abuseReportModel.find(
+          status === "all" ? {} : { status },
+          { sort: { createdAt: status === "open" ? 1 : -1 }, limit: 200 },
+        ).toArray();
+        const subs = await subscriptionModel.find({
+          _id: { $in: rows.flatMap((r) => r.subscription ?? []) },
+        }, { projection: { "rental.host": 1 } }).toArray();
+        const machineOf = (r: (typeof rows)[number]) =>
+          r.machine ??
+            subs.find((s) => r.subscription?.equals(s._id))?.rental?.host;
+        const [tenants, machines] = await Promise.all([
+          tenantModel.find({
+            _id: { $in: rows.map((r) => r.tenant) },
+          }, { projection: { name: 1 } }).toArray(),
+          serverModel.find({
+            _id: { $in: rows.flatMap((r) => machineOf(r) ?? []) },
+          }, { projection: { name: 1 } }).toArray(),
+        ]);
+        return Response.json(rows.map((r) => {
+          const machine = machineOf(r);
+          return {
+            _id: r._id,
+            tenantName: tenants.find((t) => t._id.equals(r.tenant))?.name,
+            machine,
+            machineName: machine &&
+              machines.find((m) => m._id.equals(machine))?.name,
+            subscription: r.subscription,
+            text: r.text,
+            status: r.status,
+            valid: r.resolution?.valid,
+            closedAt: r.resolution?.at,
+            createdAt: r.createdAt,
+          };
+        }));
       },
     };
   });

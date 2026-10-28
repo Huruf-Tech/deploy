@@ -358,7 +358,7 @@ export const queries = {
           })
         : null
     ),
-  disputes: (status: "open" | "resolved") =>
+  disputes: (status: "open" | "resolved" | "all") =>
     query(["rentalsAdmin", "disputes", status], async ({ signal }) =>
       can("rentalsAdmin", "listDisputes")
         ? await ThunderSDK.rentalsAdmin.listDisputes({
@@ -387,10 +387,13 @@ export const queries = {
       async ({ signal }) =>
         await ThunderSDK.rentalsAdmin.report({ params: { id }, signal })
     ),
-  abuseReports: () =>
-    query(["rentalsAdmin", "reports"], async ({ signal }) =>
+  abuseReports: (status: "open" | "closed" | "all" = "open") =>
+    query(["rentalsAdmin", "reports", status], async ({ signal }) =>
       can("rentalsAdmin", "listReports")
-        ? await ThunderSDK.rentalsAdmin.listReports({ signal })
+        ? await ThunderSDK.rentalsAdmin.listReports({
+            query: { status },
+            signal,
+          })
         : []
     ),
 

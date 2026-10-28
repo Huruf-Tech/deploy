@@ -1575,7 +1575,6 @@
   "Open a dispute": "Open a dispute",
   "Open the dispute": "Open the dispute",
   "Opened": "Opened",
-  "Oversight of the market: disputes, claims to take back, abuse reports, rentals that didn't arrive, and capacity. Machine owners accept requests themselves.": "Oversight of the market: disputes, claims to take back, abuse reports, rentals that didn't arrive, and capacity. Machine owners accept requests themselves.",
   "Owner": "Owner",
   "Paid for a dispute": "Paid for a dispute",
   "Pick another machine": "Pick another machine",
@@ -1908,5 +1907,16 @@
   "{{count}}, {{valid}} found valid_one": "{{count}}, {{valid}} found valid",
   "{{count}}, {{valid}} found valid_two": "{{count}}, {{valid}} found valid",
   "{{count}}, {{valid}} found valid_few": "{{count}}, {{valid}} found valid",
-  "{{count}}, {{valid}} found valid_many": "{{count}}, {{valid}} found valid"
+  "{{count}}, {{valid}} found valid_many": "{{count}}, {{valid}} found valid",
+  "Renters' disputes on rentals. The machine's money is frozen while one is open; a refund is paid from it.": "Renters' disputes on rentals. The machine's money is frozen while one is open; a refund is paid from it.",
+  "No open dispute.": "No open dispute.",
+  "No dispute here.": "No dispute here.",
+  "Renters open one from their rented server's page.": "Renters open one from their rented server's page.",
+  "What renters and owners reported. Review each one and close it as valid or not.": "What renters and owners reported. Review each one and close it as valid or not.",
+  "Closed": "Closed",
+  "No open report.": "No open report.",
+  "No report here.": "No report here.",
+  "Reports come from a rented server's page or a machine.": "Reports come from a rented server's page or a machine.",
+  "From / about": "From / about",
+  "Oversight of the market: claims to take back, rentals that didn't arrive, and capacity. Disputes and abuse reports have their own pages. Machine owners accept requests themselves.": "Oversight of the market: claims to take back, rentals that didn't arrive, and capacity. Disputes and abuse reports have their own pages. Machine owners accept requests themselves."
 }

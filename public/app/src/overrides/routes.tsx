@@ -22,6 +22,8 @@ import {
   IconLock,
   IconShieldCheck,
   IconUserShield,
+  IconScale,
+  IconFlag,
 } from "@tabler/icons-react"
 import { ThunderSDK } from "thunder-sdk"
 
@@ -43,6 +45,7 @@ import Payments from "@/pages/billing/Payments"
 import PaymentsAdmin from "@/pages/billing/PaymentsAdmin"
 import RentalsAdmin from "@/pages/admin/Rentals"
 import { DisputeReview, ReportReview } from "@/pages/admin/RentalReview"
+import { DisputesPage, ReportsPage } from "@/pages/admin/Cases"
 import Market from "@/pages/market"
 import Earnings from "@/pages/earnings"
 import ControlPlane from "@/pages/admin/ControlPlane"
@@ -105,11 +108,32 @@ export const routes: TRoutesOverride = {
     group: "Admin",
     icon: IconServerBolt,
     display: () => ThunderSDK.isPermitted("rentalsAdmin", "listDisputes"),
+    Component: RentalsAdmin,
+  },
+  // Disputes and abuse reports (PLAN §30.9, §30.10): queues, and their
+  // history to look back at; each opens its review page.
+  disputes: {
+    name: "Disputes",
+    path: "disputes",
+    group: "Admin",
+    icon: IconScale,
+    display: () => ThunderSDK.isPermitted("rentalsAdmin", "listDisputes"),
     Component: () => <Outlet />,
     children: [
-      { index: true, display: false, Component: RentalsAdmin },
-      { path: "disputes/:id", display: false, Component: DisputeReview },
-      { path: "reports/:id", display: false, Component: ReportReview },
+      { index: true, display: false, Component: DisputesPage },
+      { path: ":id", display: false, Component: DisputeReview },
+    ],
+  },
+  abuseReports: {
+    name: "Abuse reports",
+    path: "abuseReports",
+    group: "Admin",
+    icon: IconFlag,
+    display: () => ThunderSDK.isPermitted("rentalsAdmin", "listReports"),
+    Component: () => <Outlet />,
+    children: [
+      { index: true, display: false, Component: ReportsPage },
+      { path: ":id", display: false, Component: ReportReview },
     ],
   },
   // The customer's rentals live on the Servers page.

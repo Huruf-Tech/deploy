@@ -62,7 +62,18 @@ function AdminNotice() {
     stuck && t("{{count}} approved rentals need attention", { count: stuck }),
   ].filter(Boolean)
   if (!parts.length) return null
-  return <Notice text={parts.join(" · ")} to="admin/rentals" />
+  return (
+    <Notice
+      text={parts.join(" · ")}
+      to={
+        disputes
+          ? "admin/disputes"
+          : reports
+            ? "admin/abuseReports"
+            : "admin/rentals"
+      }
+    />
+  )
 }
 
 function Notice({ text, to }: { text: string; to: string }) {

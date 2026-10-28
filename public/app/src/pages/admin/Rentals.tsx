@@ -1,19 +1,15 @@
 import * as React from "react"
-import { Link } from "react-router"
 import { ThunderSDK } from "thunder-sdk"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
 import {
   IconAlertTriangle,
   IconArrowBackUp,
-  IconFlag,
-  IconScale,
   IconServer2,
   IconServerBolt,
 } from "@tabler/icons-react"
 
 import { Page } from "@/components/page"
-import { getLocalPath } from "@/core/lib/utils"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -398,9 +394,6 @@ function Capacity() {
   )
 }
 
-type TDispute = Awaited<
-  ReturnType<typeof ThunderSDK.rentalsAdmin.listDisputes>
->[number]
 type TRevert = Awaited<
   ReturnType<typeof ThunderSDK.rentalsAdmin.listReverts>
 >[number]
@@ -432,111 +425,6 @@ function Section({
       </div>
       <div className="overflow-x-auto">{children}</div>
     </section>
-  )
-}
-
-/** What the measured evidence of a dispute says, in one line. */
-function evidenceText(
-  t: (key: string, options?: Record<string, unknown>) => string,
-  evidence: TDispute["evidence"]
-) {
-  const machine = evidence.machine as
-    { uptime30d?: number; rttMs?: number } | null | undefined
-  const period = evidence.period as
-    { paid?: number; downtimeMs?: number } | null | undefined
-  return [
-    machine?.uptime30d !== undefined &&
-      t("{{n}}% up in 30 days", { n: machine.uptime30d.toFixed(2) }),
-    machine?.rttMs !== undefined &&
-      t("{{ms}} ms latency", { ms: Math.round(machine.rttMs) }),
-    period?.downtimeMs !== undefined &&
-      t("{{min}} min down this period", {
-        min: Math.round(period.downtimeMs / 60_000),
-      }),
-    period?.paid !== undefined &&
-      t("{{amount}} paid", { amount: money(period.paid, "usd") }),
-  ]
-    .filter(Boolean)
-    .join(" · ")
-}
-
-/** Open disputes (PLAN §30.9): evidence, and a refund from the machine's money. */
-function Disputes() {
-  const { t } = useTranslation()
-  const { data } = useCached(queries.disputes("open"))
-  if (!data?.length) return null
-  return (
-    <Section
-      id="disputes"
-      icon={IconScale}
-      title={t("Disputes")}
-      description={t(
-        "The machine's money is frozen until you decide; a refund is paid from it to the renter's wallet."
-      )}
-    >
-      <DataTable
-        label={t("Disputes")}
-        rows={data}
-        rowId={(d) => d._id}
-        columns={[
-          {
-            id: "who",
-            header: t("Renter / owner"),
-            cell: (d) => (
-              <div className="min-w-0">
-                <div className="font-medium">{d.tenantName ?? "—"}</div>
-                <div className="text-xs text-muted-foreground">
-                  {d.ownerName ?? "—"} · {d.machineName ?? d.machine}
-                </div>
-              </div>
-            ),
-          },
-          {
-            id: "reason",
-            header: t("Reason and evidence"),
-            cell: (d) => (
-              <div className="max-w-md min-w-0">
-                <p className="break-words">{d.reason}</p>
-                <p className="text-xs text-muted-foreground">
-                  {evidenceText(t, d.evidence) || "—"}
-                </p>
-              </div>
-            ),
-          },
-          {
-            id: "held",
-            header: t("Held"),
-            align: "end",
-            className: "whitespace-nowrap tabular-nums",
-            cell: (d) => money(d.held, "usd"),
-          },
-          {
-            id: "when",
-            header: t("Opened"),
-            sortValue: (d) => new Date(d.createdAt).getTime(),
-            className: "whitespace-nowrap text-xs",
-            cell: (d) => ago(d.createdAt),
-          },
-          {
-            id: "actions",
-            header: <span className="sr-only">{t("Actions")}</span>,
-            align: "end",
-            cell: (d) => (
-              <Button
-                size="sm"
-                className="h-7"
-                render={
-                  <Link to={getLocalPath(`admin/rentals/disputes/${d._id}`)} />
-                }
-                nativeButton={false}
-              >
-                {t("Review")}
-              </Button>
-            ),
-          },
-        ]}
-      />
-    </Section>
   )
 }
 
@@ -653,74 +541,6 @@ function Reverts() {
   )
 }
 
-/** Abuse reports (PLAN §30.10). */
-function Reports() {
-  const { t } = useTranslation()
-  const { data } = useCached(queries.abuseReports())
-  if (!data?.length) return null
-  return (
-    <Section
-      id="reports"
-      icon={IconFlag}
-      title={t("Abuse reports")}
-      description={t(
-        "Suspend or delete a rental from its machine's page when a report holds."
-      )}
-    >
-      <DataTable
-        label={t("Abuse reports")}
-        rows={data}
-        rowId={(r) => r._id}
-        columns={[
-          {
-            id: "who",
-            header: t("From"),
-            cell: (r) => (
-              <div className="min-w-0">
-                <div className="font-medium">{r.tenantName ?? "—"}</div>
-                <div
-                  dir="ltr"
-                  className="font-mono text-xs text-muted-foreground"
-                >
-                  {r.machine ?? r.subscription}
-                </div>
-              </div>
-            ),
-          },
-          {
-            id: "text",
-            header: t("Report"),
-            cell: (r) => <p className="max-w-md break-words">{r.text}</p>,
-          },
-          {
-            id: "when",
-            header: t("Sent"),
-            className: "whitespace-nowrap text-xs",
-            cell: (r) => ago(r.createdAt),
-          },
-          {
-            id: "actions",
-            header: <span className="sr-only">{t("Actions")}</span>,
-            align: "end",
-            cell: (r) => (
-              <Button
-                size="sm"
-                className="h-7"
-                render={
-                  <Link to={getLocalPath(`admin/rentals/reports/${r._id}`)} />
-                }
-                nativeButton={false}
-              >
-                {t("Review")}
-              </Button>
-            ),
-          },
-        ]}
-      />
-    </Section>
-  )
-}
-
 /**
  * Admin → Rentals (PLAN §30.2): oversight of the market. Owners accept
  * requests; admins handle disputes, claims to take back, abuse reports and
@@ -746,15 +566,13 @@ export default function RentalsAdmin() {
       <PageHeader
         title={t("Rentals")}
         description={t(
-          "Oversight of the market: disputes, claims to take back, abuse reports, rentals that didn't arrive, and capacity. Machine owners accept requests themselves."
+          "Oversight of the market: claims to take back, rentals that didn't arrive, and capacity. Disputes and abuse reports have their own pages. Machine owners accept requests themselves."
         )}
       />
       {quiet && (
         <EmptyState icon={IconServerBolt} title={t("Nothing needs you.")} />
       )}
-      <Disputes />
       <Reverts />
-      <Reports />
       <NeedsAttention />
       <Capacity />
     </Page>
