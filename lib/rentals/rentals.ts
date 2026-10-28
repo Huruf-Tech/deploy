@@ -252,6 +252,8 @@ export class RentalService implements TRentalHooks {
       machine: ObjectId;
       termMonths: number;
       waiveWithdrawal: boolean;
+      /** A community machine: its risks accepted (PLAN §30.4). */
+      acceptCommunityRisk?: boolean;
     },
   ) {
     if (!choice.waiveWithdrawal) {
@@ -263,6 +265,13 @@ export class RentalService implements TRentalHooks {
     if (!q.fits) throw Response.badRequest("That machine has no room for it");
     if (await linked(tenant, q.machine.tenant)) {
       throw Response.forbidden("You can't rent a machine of your own");
+    }
+    const platform = await platformTenantId();
+    const community = !platform || !q.machine.tenant.equals(platform);
+    if (community && !choice.acceptCommunityRisk) {
+      throw Response.badRequest(
+        "Confirm that you understand this is a community machine: its owner can access your data, and you answer for its leak or loss",
+      );
     }
     const plan = await this.rentalPlan(tenant, q, choice.whole);
     const now = new Date();
@@ -284,6 +293,7 @@ export class RentalService implements TRentalHooks {
         ...(choice.whole ? { whole: true } : {}),
         term: { months: choice.termMonths },
         waivedWithdrawalAt: now,
+        ...(community ? { communityRiskAcceptedAt: now } : {}),
         size: q.size,
         trafficRatePerGb: q.trafficRatePerGb,
       },

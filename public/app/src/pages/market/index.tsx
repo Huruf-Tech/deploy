@@ -3,7 +3,6 @@ import { useTranslation } from "react-i18next"
 import { ThunderSDK } from "thunder-sdk"
 import {
   IconAdjustmentsHorizontal,
-  IconAlertTriangle,
   IconBuildingStore,
   IconServer2,
   IconStarFilled,
@@ -614,15 +613,6 @@ function MachineCard({
           </div>
         )}
       </div>
-
-      {!m.official && (
-        <p className="mx-4 mb-3 flex gap-2 rounded-lg bg-warning-soft px-3 py-2 text-xs text-warning-foreground">
-          <IconAlertTriangle className="mt-px size-3.5 shrink-0" aria-hidden />
-          {t(
-            "The owner of this machine can access your data. If the hardware fails, data on it is lost."
-          )}
-        </p>
-      )}
 
       <div className="mt-auto flex items-end justify-between gap-3 border-t px-4 py-3">
         <div className="min-w-0">

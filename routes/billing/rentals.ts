@@ -191,6 +191,9 @@ export default new Router("/api", function rentals(router) {
       waiveWithdrawal: z.boolean().describe(
         "Agrees it starts at once, so the paid month isn't refundable",
       ),
+      acceptCommunityRisk: z.boolean().optional().describe(
+        "A community machine: its owner can access the data, and the renter answers for its leak or loss",
+      ),
     }).refine(
       (b) => b.whole || (b.vcpu && b.memMb && b.diskGb),
       "Choose a size or the whole machine",

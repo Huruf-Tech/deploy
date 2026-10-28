@@ -70,6 +70,8 @@ export type request$body = {
     termMonths: 1 | 3 | 6 | 12;
     /** Agrees it starts at once, so the paid month isn't refundable */
     waiveWithdrawal: boolean;
+    /** A community machine: its owner can access the data, and the renter answers for its leak or loss */
+    acceptCommunityRisk?: boolean | undefined;
 };
 export type request$return = {
     result: "requested" | "active" | "pending";

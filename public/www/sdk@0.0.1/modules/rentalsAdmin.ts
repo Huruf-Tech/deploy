@@ -224,6 +224,9 @@ export type dispute$return = {
         endAt?: Date | undefined;
         lostAt?: Date | undefined;
         heldByAdmin: boolean;
+        waivedWithdrawalAt?: Date | undefined;
+        /** When the renter accepted a community machine's risks */
+        communityRiskAcceptedAt?: Date | undefined;
         partition?: string | undefined;
         server?: string | undefined;
         uptimeThisPeriod?: number | undefined;

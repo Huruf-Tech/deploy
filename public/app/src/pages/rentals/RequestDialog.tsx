@@ -5,6 +5,8 @@ import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
+import { ConfirmDialog } from "@/components/confirm-dialog"
+import { IconAlertTriangle } from "@tabler/icons-react"
 import {
   Dialog,
   DialogContent,
@@ -68,6 +70,10 @@ export function RequestDialog({
   )
   const [term, setTerm] = React.useState<(typeof TERMS)[number]>(1)
   const [waived, setWaived] = React.useState(false)
+  // A community machine (PLAN §30.4): its risks, accepted twice.
+  const community = !!machine && !machine.official
+  const [riskAccepted, setRiskAccepted] = React.useState(false)
+  const [confirming, setConfirming] = React.useState(false)
   const [busy, setBusy] = React.useState(false)
   const choice = whole ? { whole: "true" as const } : stepped(size)
   const quote = useCached(
@@ -94,6 +100,7 @@ export function RequestDialog({
             ...(whole ? { whole: true } : stepped(size)),
             termMonths: term,
             waiveWithdrawal: waived,
+            ...(community ? { acceptCommunityRisk: riskAccepted } : {}),
           },
         })
         if (result.result === "pending" && result.topup) {
@@ -269,6 +276,47 @@ export function RequestDialog({
             )}
           </div>
 
+          {community && (
+            <div className="flex flex-col gap-3 rounded-lg border border-warning/50 bg-warning-soft px-3 py-3 text-[13px] text-warning-foreground">
+              <p className="flex gap-2 font-medium">
+                <IconAlertTriangle
+                  className="mt-0.5 size-4 shrink-0"
+                  aria-hidden
+                />
+                {t("This is an unofficial community server")}
+              </p>
+              <ul className="flex list-disc flex-col gap-1 ps-10 text-xs">
+                <li>
+                  {t(
+                    "Its owner has full access to the machine, so they can read or change your data and secrets."
+                  )}
+                </li>
+                <li>
+                  {t(
+                    "If the hardware fails or the owner shuts it down, data on it is lost. Huruf can't recover it."
+                  )}
+                </li>
+                <li>
+                  {t(
+                    "Keep important data off it: use external storage, such as an S3 bucket, for files and backups, and a database hosted elsewhere for anything sensitive."
+                  )}
+                </li>
+              </ul>
+              <label className="flex items-start gap-2 text-foreground">
+                <Checkbox
+                  checked={riskAccepted}
+                  onCheckedChange={(on) => setRiskAccepted(!!on)}
+                  className="mt-0.5"
+                />
+                <span>
+                  {t(
+                    "I understand, and I'm responsible for any leak or loss of my data on it"
+                  )}
+                </span>
+              </label>
+            </div>
+          )}
+
           {!resize && (
             <label className="flex items-start gap-2 text-[13px]">
               <Checkbox
@@ -290,13 +338,34 @@ export function RequestDialog({
 
         <DialogFooter>
           <Button
-            onClick={submit}
-            disabled={busy || !quote?.fits || (!resize && !waived)}
+            onClick={() => (community ? setConfirming(true) : submit())}
+            disabled={
+              busy ||
+              !quote?.fits ||
+              (!resize && !waived) ||
+              (community && !riskAccepted)
+            }
           >
             {resize ? t("Request resize") : t("Request server")}
           </Button>
         </DialogFooter>
       </DialogContent>
+      {confirming && (
+        <ConfirmDialog
+          open
+          onOpenChange={setConfirming}
+          title={t("Rent a community server?")}
+          description={t(
+            "{{name}} belongs to {{owner}}, not Huruf. Its owner can access everything you put on it, and you're responsible for any leak or loss of that data.",
+            {
+              name: machine?.name,
+              owner: machine?.owner ?? t("a community owner"),
+            }
+          )}
+          confirmLabel={t("Rent it anyway")}
+          onConfirm={submit}
+        />
+      )}
     </Dialog>
   )
 }

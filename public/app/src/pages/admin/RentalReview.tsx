@@ -338,6 +338,26 @@ export function DisputeReview() {
                   },
                   { label: t("Rented since"), value: day(r.startedAt) },
                   {
+                    label: t("Renter's consent"),
+                    value:
+                      [
+                        r.communityRiskAcceptedAt &&
+                          t(
+                            "Accepted the community machine's risks (owner's access, leak or loss) on {{when}}",
+                            { when: dateTime(r.communityRiskAcceptedAt) }
+                          ),
+                        r.waivedWithdrawalAt &&
+                          t(
+                            "Accepted that a paid month isn't refunded on {{when}}",
+                            {
+                              when: dateTime(r.waivedWithdrawalAt),
+                            }
+                          ),
+                      ]
+                        .filter(Boolean)
+                        .join(" · ") || "—",
+                  },
+                  {
                     label: t("Status"),
                     value: [
                       t(r.status),

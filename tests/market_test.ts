@@ -169,6 +169,20 @@ Deno.test({
         "a month matures: refund, commission, security, hold",
         async () => {
           await fund(customer.tenantId, 50_000);
+          // A community machine: the renter's consent to its risks.
+          const unaccepted = await customer.call(
+            "POST",
+            "/rentals/api/request",
+            {
+              machine: m1,
+              vcpu: 1,
+              memMb: 2048,
+              diskGb: 25,
+              termMonths: 6,
+              waiveWithdrawal: true,
+            },
+          );
+          assertEquals(unaccepted.status, 400, JSON.stringify(unaccepted.json));
           const res = await customer.call("POST", "/rentals/api/request", {
             machine: m1,
             vcpu: 1,
@@ -176,6 +190,7 @@ Deno.test({
             diskGb: 25,
             termMonths: 6,
             waiveWithdrawal: true,
+            acceptCommunityRisk: true,
           });
           assertEquals(res.status, 200, JSON.stringify(res.json));
           rental = new ObjectId(res.json.rental);
@@ -460,6 +475,7 @@ Deno.test({
             diskGb: 10,
             termMonths: 6,
             waiveWithdrawal: true,
+            acceptCommunityRisk: true,
           });
           rental = new ObjectId(res.json.rental);
           await rentals.approve(rental, owner.user, owner.tenantId);
