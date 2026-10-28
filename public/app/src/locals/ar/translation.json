@@ -1943,5 +1943,6 @@
   "This machine": "هذا الجهاز",
   "Accept and move": "وافق وانقل",
   "Accepted the community machine's risks (owner's access, leak or loss) on {{when}}, wording of {{version}}": "قبل مخاطر الجهاز المجتمعي (وصول المالك، التسريب أو الفقدان) في {{when}}، بصيغة {{version}}",
-  "Didn't start at once: {{reason}}": "لم يبدأ فورًا: {{reason}}"
+  "Didn't start at once: {{reason}}": "لم يبدأ فورًا: {{reason}}",
+  "The price couldn't be worked out for this size.": "تعذّر حساب السعر لهذا الحجم."
 }

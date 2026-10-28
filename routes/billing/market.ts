@@ -100,7 +100,8 @@ export default new Router("/api", function market(router) {
 
   router.get("/quote", function quote() {
     const $query = z.object({
-      machine: $objectId,
+      /** A machine of the market; or `rental`, for a resize on its machine. */
+      machine: $objectId.optional(),
       /** A resize of this rental: its own size counts as free, on any machine it's on. */
       rental: $objectId.optional(),
       whole: $flag,
@@ -127,9 +128,12 @@ export default new Router("/api", function market(router) {
       handler: async (req) => {
         const { machine, rental, ...choice } = $query.parse(queryAsJson(req));
         const { tenant } = await withTenant(req);
+        if (!rental && !machine) {
+          throw Response.badRequest("Name a machine or a rental");
+        }
         const q = rental
           ? await rentals.quoteResize(tenant._id, rental, choice)
-          : await rentals.quote(machine, choice);
+          : await rentals.quote(machine!, choice);
         return Response.json({
           price: q.price,
           hourly: q.hourly,

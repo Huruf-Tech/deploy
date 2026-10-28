@@ -397,6 +397,16 @@ Deno.test({
       await t.step(
         "a bigger size, approved, is prorated and applied live",
         async () => {
+          // The resize dialog's price: by the rental alone, on its machine.
+          const quoted = await customer.call(
+            "GET",
+            `/market/api/quote?rental=${rental}&vcpu=2&memMb=4096&diskGb=50`,
+          );
+          assertEquals(quoted.status, 200, JSON.stringify(quoted.json));
+          assertEquals(
+            [quoted.json.price, quoted.json.fits],
+            [priceOf(2, 4096, 50), true],
+          );
           const res = await customer.call(
             "POST",
             `/rentals/api/${rental}/resize`,

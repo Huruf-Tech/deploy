@@ -76,13 +76,14 @@ export function RequestDialog({
   const [confirming, setConfirming] = React.useState(false)
   const [busy, setBusy] = React.useState(false)
   const choice = whole ? { whole: "true" as const } : stepped(size)
-  const quote = useCached(
+  const priced = useCached(
     queries.marketQuote(
       resize
         ? { rental: resize.rental, ...choice }
         : { machine: machineId, ...choice }
     )
-  ).data
+  )
+  const quote = priced.data
 
   const submit = async () => {
     setBusy(true)
@@ -252,6 +253,12 @@ export function RequestDialog({
                 {quote ? money(quote.price, "usd") : "…"}
               </span>
             </p>
+            {!quote && priced.error ? (
+              <p className="mt-1 text-xs text-destructive">
+                {errorMessage(priced.error) ??
+                  t("The price couldn't be worked out for this size.")}
+              </p>
+            ) : null}
             {quote && !quote.fits && (
               <p className="mt-1 text-xs text-destructive-foreground">
                 {t("The machine has no room for this size.")}
