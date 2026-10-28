@@ -3,8 +3,8 @@
   "production": {
     "version": {
       "major": 0,
-      "minor": 5,
-      "patch": 9
+      "minor": 6,
+      "patch": 0
     },
     "dockerOrganization": "oridune",
     "dockerImage": "huruf-deploy",
