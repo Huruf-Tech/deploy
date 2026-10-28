@@ -48,6 +48,13 @@ export type list$return = {
         at: Date;
     } | undefined;
     rejectedReason?: string | undefined;
+    /** Cents its renewal needs, when it couldn't be charged */
+    amountDue?: number | undefined;
+    pastDueSince?: Date | undefined;
+    /** Unpaid: when it's stopped (suspended) */
+    stopsAt?: Date | undefined;
+    /** Suspended for non-payment: when it's deleted with its data */
+    deletedAt?: Date | undefined;
     suspendedAt?: Date | undefined;
     /** Stopped by Huruf, not unpaid */
     held?: boolean | undefined;
@@ -87,6 +94,14 @@ export type request$body = {
 export type request$return = {
     result: "requested" | "active" | "pending";
     rental: string;
+    topup?: string | undefined;
+    clientSecret?: string | undefined;
+};
+export type pay$params = {
+    id?: string;
+};
+export type pay$return = {
+    result: "active" | "pending";
     topup?: string | undefined;
     clientSecret?: string | undefined;
 };
@@ -156,6 +171,8 @@ export const rentalsModule = (sdk: typeof BaseSDK) => {
         list$return: list$return,
         request$body: request$body,
         request$return: request$return,
+        pay$params: pay$params,
+        pay$return: pay$return,
         withdraw$params: withdraw$params,
         resize$params: resize$params,
         resize$body: resize$body,
@@ -214,6 +231,34 @@ export const rentalsModule = (sdk: typeof BaseSDK) => {
 
             const method = "post";
             const toPath = compile("rentals/api/request");
+            const requestPayload = {
+                method,
+                url: toPath(sdk.resolvePathParams(data?.params)),
+                params: data?.query,
+                data: data?.body,
+                signal: data?.signal,
+                ...(data?.axiosConfig
+                ? sdk.resolveAxiosConfig(data.axiosConfig)
+                : undefined),
+            };
+
+            sdk.log("Sending Request:", requestPayload);
+
+            const res = await sdk._axios!.request(requestPayload);
+
+            return res;
+        }, data);
+    },
+        pay(data: {
+        params: pay$params,
+        query?: undefined,
+        body?: undefined,
+    } & TRequestOptions<pay$return>) {
+        return sdk.resolveAxiosResponse(async () => {
+            sdk.checkPermission("rentals", "pay");
+
+            const method = "post";
+            const toPath = compile("rentals/api/:id/pay");
             const requestPayload = {
                 method,
                 url: toPath(sdk.resolvePathParams(data?.params)),
@@ -516,6 +561,7 @@ export const rentalsModule = (sdk: typeof BaseSDK) => {
 
     (methods.list as any).__scope = "rentals";
     (methods.request as any).__scope = "rentals";
+    (methods.pay as any).__scope = "rentals";
     (methods.withdraw as any).__scope = "rentals";
     (methods.resize as any).__scope = "rentals";
     (methods.withdrawResize as any).__scope = "rentals";

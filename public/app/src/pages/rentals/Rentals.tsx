@@ -12,6 +12,7 @@ import {
   COMMUNITY_CONSENT_VERSION,
   CommunityConsentDialog,
 } from "./CommunityConsent"
+import { RentalDue } from "./RentalDue"
 
 import { getLocalPath } from "@/core/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -299,6 +300,7 @@ export function RentalPanel({ server }: { server: string }) {
           )}
         </p>
       )}
+      <RentalDue rental={rental} onPaid={reload} />
       {rental.dispute && (
         <p className="rounded-lg bg-info-soft px-3 py-2 text-[13px] text-info-foreground">
           {t("Your dispute is open: Huruf reviews it and tells you by email.")}

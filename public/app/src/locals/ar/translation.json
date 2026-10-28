@@ -1969,5 +1969,15 @@
   "Fast-forward {{count}} days_one": "قدّم الوقت {{count}} يومًا",
   "Fast-forward {{count}} days_two": "قدّم الوقت {{count}} يومًا",
   "Fast-forward {{count}} days_few": "قدّم الوقت {{count}} يومًا",
-  "Fast-forward {{count}} days_many": "قدّم الوقت {{count}} يومًا"
+  "Fast-forward {{count}} days_many": "قدّم الوقت {{count}} يومًا",
+  "the payment didn't go through": "لم تتم عملية الدفع",
+  "your bank wants you to confirm the payment": "يطلب مصرفك تأكيد الدفع",
+  "your wallet is short and your card couldn't be charged": "رصيد محفظتك غير كافٍ وتعذّر الخصم من بطاقتك",
+  "Paid: it's renewed for another month": "تم الدفع: جُدّد لشهر آخر",
+  "The payment didn't go through": "لم تتم عملية الدفع",
+  "{{name}} couldn't renew: {{reason}}": "تعذّر تجديد {{name}}: {{reason}}",
+  "Its renewal couldn't be paid: {{reason}}": "تعذّر دفع تجديده: {{reason}}",
+  "{{amount}} is due. It's stopped; pay and it starts again. Unpaid, it's deleted with its data on {{date}}.": "المستحق {{amount}}. هو متوقف؛ ادفع ليعمل من جديد. إن بقي غير مدفوع يُحذف مع بياناته في {{date}}.",
+  "{{amount}} is due. We try again every hour; unpaid, it stops on {{date}}.": "المستحق {{amount}}. نعيد المحاولة كل ساعة؛ وإن بقي غير مدفوع يتوقف في {{date}}.",
+  "Pay now": "ادفع الآن"
 }

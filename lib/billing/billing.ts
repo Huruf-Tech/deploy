@@ -105,6 +105,8 @@ export type TRentalHooks = {
   renewed(sub: WithId<TSubscription>, plan: WithId<TPlan>): Promise<void>;
   /** A renewal that couldn't be paid: suspend or release when due. */
   unpaid(sub: WithId<TSubscription>, now: Date): Promise<void>;
+  /** The renewal just failed for the first time: tell the customer why. */
+  pastDue(sub: WithId<TSubscription>, reason: string): Promise<void>;
   /** Canceled at the period end: the partition goes. */
   ended(sub: WithId<TSubscription>): Promise<void>;
 };
@@ -808,7 +810,9 @@ export class BillingService {
           { $set: { ...retry, status: "pastDue", pastDueSince: now } },
         );
         if (modifiedCount) {
-          notifyPastDue(tenant, plan).catch((e) => log(`notice: ${e}`));
+          (sub.kind === "server" && this.rentals
+            ? this.rentals.pastDue(sub, retry.lastError)
+            : notifyPastDue(tenant, plan)).catch((e) => log(`notice: ${e}`));
         } else await subscriptionModel.updateOne(guard, { $set: retry });
         if (sub.kind === "server") {
           await this.rentals?.unpaid(

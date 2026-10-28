@@ -13,6 +13,7 @@ import {
 } from "@/lib/services.ts";
 import { rate, reportAbuse } from "@/lib/market/market.ts";
 import { platformTenantId } from "@/lib/billing/platform.ts";
+import { readNumberSetting } from "@/lib/core/settings.ts";
 import { rentalPlanModel } from "@/schemas/billing/plan.ts";
 import { $subscription } from "@/schemas/billing/subscription.ts";
 import { subscriptionPeriodModel } from "@/schemas/billing/subscriptionPeriod.ts";
@@ -99,6 +100,16 @@ export default new Router("/api", function rentals(router) {
           "A smaller size (or a move's price) that starts at the renewal",
         ),
         rejectedReason: z.string().optional(),
+        amountDue: z.number().optional().describe(
+          "Cents its renewal needs, when it couldn't be charged",
+        ),
+        pastDueSince: z.date().optional(),
+        stopsAt: z.date().optional().describe(
+          "Unpaid: when it's stopped (suspended)",
+        ),
+        deletedAt: z.date().optional().describe(
+          "Suspended for non-payment: when it's deleted with its data",
+        ),
         suspendedAt: z.date().optional(),
         held: z.boolean().optional().describe("Stopped by Huruf, not unpaid"),
         uptime: z.number().optional().describe("This period so far, percent"),
@@ -168,6 +179,23 @@ export default new Router("/api", function rentals(router) {
         );
         const name = (id?: { equals(x: unknown): boolean }) =>
           id && machines.find((m) => id.equals(m._id))?.name;
+        const [graceDays, retentionDays] = await Promise.all([
+          readNumberSetting("SHARED_GRACE_DAYS", 3),
+          readNumberSetting("SHARED_RETENTION_DAYS", 14),
+        ]);
+        const later = (d: Date | undefined, days: number) =>
+          d && new Date(d.getTime() + days * 86_400_000);
+        // What each unpaid renewal needs, for its Pay now.
+        const due = new Map(
+          await Promise.all(
+            subs.filter((s) =>
+              (s.status === "pastDue" || s.status === "suspended") &&
+              !s.rental?.held
+            ).map(async (s) =>
+              [String(s._id), await rentalService.amountDue(s)] as const
+            ),
+          ),
+        );
         return Response.json(subs.map((s) => {
           const plan = plans.find((p) => p._id.equals(s.plan));
           const r = s.rental!;
@@ -200,6 +228,14 @@ export default new Router("/api", function rentals(router) {
               plans.find((p) => r.pendingChange!.plan.equals(p._id))?.name,
             ...nextOf(s, plans),
             rejectedReason: r.rejectedReason,
+            amountDue: due.get(String(s._id)),
+            pastDueSince: s.pastDueSince,
+            ...(s.status === "pastDue"
+              ? { stopsAt: later(s.pastDueSince, graceDays) }
+              : {}),
+            ...(s.status === "suspended" && !r.held
+              ? { deletedAt: later(r.suspendedAt, retentionDays) }
+              : {}),
             suspendedAt: r.suspendedAt,
             ...(r.held ? { held: true } : {}),
             uptime: uptimes.get(String(s._id)),
@@ -270,6 +306,25 @@ export default new Router("/api", function rentals(router) {
         return Response.json(
           await rentalService.request(tenant._id, user._id, body),
         );
+      },
+    };
+  });
+
+  // Pays a renewal that couldn't be charged, the customer present.
+  router.post("/:id/pay", function pay() {
+    const $return = z.object({
+      result: z.enum(["active", "pending"]),
+      /** `pending`: the bank wants the customer to confirm (3-D Secure). */
+      topup: z.string().optional(),
+      clientSecret: z.string().optional(),
+    });
+
+    return {
+      shape: () => ({ params: $params, return: $return }),
+      handler: async (req) => {
+        const { id } = $params.parse(paramsAsJson(req));
+        const { tenant } = await owner(req);
+        return Response.json(await rentalService.payNow(tenant._id, id));
       },
     };
   });

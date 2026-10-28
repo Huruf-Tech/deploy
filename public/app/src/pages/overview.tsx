@@ -40,6 +40,7 @@ import { DataTable, type TColumn } from "@/components/console/data-table"
 import { EmptyState } from "@/components/console/empty-state"
 import { ControlPlaneSummary } from "@/pages/admin/ControlPlaneSummary"
 import { RentalNotice } from "@/pages/admin/RentalNotice"
+import { RentalsDue } from "@/pages/rentals/RentalDue"
 import { AiPrompt } from "@/pages/projects/AiPrompt"
 import { DeploymentStatus } from "@/pages/projects/shared"
 import { useCached } from "@/hooks/use-cached"
@@ -225,6 +226,7 @@ export default function Overview() {
         {header()}
         {verify}
         <RentalNotice />
+        <RentalsDue />
         <EmptyState
           icon={IconServer2}
           title={t("Your server pool is empty")}
@@ -480,6 +482,7 @@ export default function Overview() {
       {header(status)}
       {verify}
       <RentalNotice />
+      <RentalsDue />
 
       <StatStrip>
         <Stat

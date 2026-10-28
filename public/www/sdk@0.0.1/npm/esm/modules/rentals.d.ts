@@ -43,6 +43,13 @@ export type list$return = {
         at: Date;
     } | undefined;
     rejectedReason?: string | undefined;
+    /** Cents its renewal needs, when it couldn't be charged */
+    amountDue?: number | undefined;
+    pastDueSince?: Date | undefined;
+    /** Unpaid: when it's stopped (suspended) */
+    stopsAt?: Date | undefined;
+    /** Suspended for non-payment: when it's deleted with its data */
+    deletedAt?: Date | undefined;
     suspendedAt?: Date | undefined;
     /** Stopped by Huruf, not unpaid */
     held?: boolean | undefined;
@@ -82,6 +89,14 @@ export type request$body = {
 export type request$return = {
     result: "requested" | "active" | "pending";
     rental: string;
+    topup?: string | undefined;
+    clientSecret?: string | undefined;
+};
+export type pay$params = {
+    id?: string;
+};
+export type pay$return = {
+    result: "active" | "pending";
     topup?: string | undefined;
     clientSecret?: string | undefined;
 };
@@ -150,6 +165,8 @@ export declare const rentalsModule: (sdk: typeof BaseSDK) => {
         list$return: list$return;
         request$body: request$body;
         request$return: request$return;
+        pay$params: pay$params;
+        pay$return: pay$return;
         withdraw$params: withdraw$params;
         resize$params: resize$params;
         resize$body: resize$body;
@@ -188,6 +205,17 @@ export declare const rentalsModule: (sdk: typeof BaseSDK) => {
         then: <TResult1 = request$return, TResult2 = never>(onfulfilled?: ((value: request$return) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
         catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<request$return | TResult>;
         finally: (onfinally?: (() => void) | null | undefined) => Promise<request$return>;
+    };
+    readonly pay: (data: {
+        params: pay$params;
+        query?: undefined;
+        body?: undefined;
+    } & TRequestOptions<pay$return>) => {
+        readonly raw: Promise<import("axios").AxiosResponse<pay$return, any, {}, any>>;
+        readonly data: Promise<pay$return>;
+        then: <TResult1 = pay$return, TResult2 = never>(onfulfilled?: ((value: pay$return) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+        catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<pay$return | TResult>;
+        finally: (onfinally?: (() => void) | null | undefined) => Promise<pay$return>;
     };
     readonly withdraw: (data: {
         params: withdraw$params;

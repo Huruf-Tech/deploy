@@ -1969,5 +1969,15 @@
   "Fast-forward {{count}} days_one": "Fast-forward {{count}} day",
   "Fast-forward {{count}} days_two": "Fast-forward {{count}} days",
   "Fast-forward {{count}} days_few": "Fast-forward {{count}} days",
-  "Fast-forward {{count}} days_many": "Fast-forward {{count}} days"
+  "Fast-forward {{count}} days_many": "Fast-forward {{count}} days",
+  "the payment didn't go through": "the payment didn't go through",
+  "your bank wants you to confirm the payment": "your bank wants you to confirm the payment",
+  "your wallet is short and your card couldn't be charged": "your wallet is short and your card couldn't be charged",
+  "Paid: it's renewed for another month": "Paid: it's renewed for another month",
+  "The payment didn't go through": "The payment didn't go through",
+  "{{name}} couldn't renew: {{reason}}": "{{name}} couldn't renew: {{reason}}",
+  "Its renewal couldn't be paid: {{reason}}": "Its renewal couldn't be paid: {{reason}}",
+  "{{amount}} is due. It's stopped; pay and it starts again. Unpaid, it's deleted with its data on {{date}}.": "{{amount}} is due. It's stopped; pay and it starts again. Unpaid, it's deleted with its data on {{date}}.",
+  "{{amount}} is due. We try again every hour; unpaid, it stops on {{date}}.": "{{amount}} is due. We try again every hour; unpaid, it stops on {{date}}.",
+  "Pay now": "Pay now"
 }

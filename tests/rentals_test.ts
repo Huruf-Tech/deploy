@@ -798,6 +798,39 @@ Deno.test({
           await billing.renewIfDue(tenant);
           assertEquals((await sub()).status, "active");
           assertEquals((await commands("partition.start")).length, starts + 1);
+
+          // Unpaid again: the customer sees what's due and pays it now.
+          const left = await balance();
+          if (left > 0) {
+            await Wallet.transfer({
+              fromTenant: tenant,
+              toTenant: platform.tenantId,
+              amount: left,
+              currency: "usd",
+              description: "test drain",
+              idempotencyKey: crypto.randomUUID(),
+            });
+          }
+          await endPeriod();
+          await billing.renewIfDue(tenant);
+          assertEquals((await sub()).status, "pastDue");
+          const listed = (await customer.call("GET", "/rentals/api")).json
+            .find((r: { _id: string }) => r._id === String(rental));
+          assert(listed.amountDue > 0, JSON.stringify(listed));
+          assert(listed.lastError);
+          await mailed(/rented server couldn't renew/);
+          await fund(listed.amountDue);
+          const paid = await customer.call(
+            "POST",
+            `/rentals/api/${rental}/pay`,
+          );
+          assertEquals(paid.json, { result: "active" });
+          assertEquals((await sub()).status, "active");
+          assertEquals(
+            (await customer.call("POST", `/rentals/api/${rental}/pay`)).status,
+            400,
+            "nothing left to pay",
+          );
         },
       );
 

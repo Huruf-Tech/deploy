@@ -1,5 +1,6 @@
 import * as React from "react"
 import { ThunderSDK } from "thunder-sdk"
+import { RentalsDue } from "@/pages/rentals/RentalDue"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
 import {
@@ -417,6 +418,7 @@ export default function Payments() {
           )
         }
       />
+      <RentalsDue />
 
       {config && !config.configured && (
         <p

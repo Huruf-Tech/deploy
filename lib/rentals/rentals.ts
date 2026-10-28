@@ -640,6 +640,61 @@ export class RentalService implements TRentalHooks {
     return result;
   }
 
+  /**
+   * What a rental's renewal costs (PLAN §26.9): its next month (a scheduled
+   * size or move's price, else its own) and the ended month's traffic over
+   * its allowance.
+   */
+  async amountDue(sub: WithId<TSubscription>) {
+    const plan = await rentalPlanModel.findOne({
+      _id: sub.nextPlan ?? sub.plan,
+    }, {
+      projection: { price: 1 },
+    });
+    const ended = await subscriptionPeriodModel.findOne(
+      { subscription: sub._id, periodEnd: { $lte: new Date() } },
+      { sort: { periodEnd: -1 } },
+    );
+    const overage = ended ? this.overage(sub, ended) : null;
+    return (plan?.price.amount ?? 0) + (overage?.amount ?? 0);
+  }
+
+  /**
+   * The customer pays a renewal that couldn't be charged (PLAN §26.9), with
+   * them present: their card is charged for what the wallet lacks (3-D
+   * Secure in the browser: `pending`, then they call again), and it renews.
+   */
+  async payNow(tenant: ObjectId, id: ObjectId) {
+    const sub = await this.rentalOf(id, {
+      tenant,
+      status: { $in: ["pastDue", "suspended"] },
+      "rental.held": { $exists: false },
+    }).catch(() => {
+      throw Response.badRequest("Nothing to pay for this rental");
+    });
+    const amount = await this.amountDue(sub);
+    const funded = await this.payments.fundNow({
+      tenant,
+      amount,
+      currency: "usd",
+      key: `pay:${id}:${sub.currentPeriodEnd?.toISOString()}`,
+    });
+    if (funded.status === "pending") {
+      return { result: "pending" as const, ...funded };
+    }
+    if (funded.status === "short") {
+      throw Response.badRequest(
+        "Your card couldn't cover it: add funds or another card on the Billing page",
+      );
+    }
+    await this.billing.renewOne(sub);
+    const after = await this.rentalOf(id);
+    if (after.status !== "active") {
+      throw Response.badRequest(after.lastError ?? "It couldn't renew");
+    }
+    return { result: "active" as const };
+  }
+
   /** The customer takes back a resize nobody accepted yet; nothing changes. */
   async withdrawResize(tenant: ObjectId, id: ObjectId) {
     const sub = await subscriptionModel.findOneAndUpdate(
@@ -1001,6 +1056,35 @@ export class RentalService implements TRentalHooks {
         partitionSize(plan.resources, await this.overheadMb()),
       );
     }
+  }
+
+  /**
+   * Its renewal failed for the first time (PLAN §26.9): the customer is told
+   * why, what's due, when it stops, and that they can pay on its page.
+   */
+  async pastDue(sub: WithId<TSubscription>, reason: string) {
+    const [plan, amount, graceDays] = await Promise.all([
+      rentalPlanModel.findOne({ _id: sub.plan }, { projection: { name: 1 } }),
+      this.amountDue(sub),
+      readNumberSetting("SHARED_GRACE_DAYS", 3),
+    ]);
+    const why = reason === "Waiting for the payment to be confirmed"
+      ? "your bank wants you to confirm the payment (3-D Secure)"
+      : reason.startsWith("Insufficient") || reason.includes("balance")
+      ? "your wallet is short and your card couldn't be charged"
+      : reason;
+    await notifyOwner(sub.tenant, {
+      subject: `{workspace}: your rented server couldn't renew`,
+      text:
+        `Your rented server (${
+          plan?.name ?? "rental"
+        }) couldn't renew: ${why}.\n\n` +
+        `${
+          (amount / 100).toFixed(2)
+        } USD is due. Open the server's page (or Billing) and press Pay now. ` +
+        `We also try again every hour. If it's still unpaid in ${graceDays} days, the server stops; ` +
+        `it's deleted with its data if it stays unpaid after that.`,
+    });
   }
 
   async unpaid(sub: WithId<TSubscription>, now: Date) {
