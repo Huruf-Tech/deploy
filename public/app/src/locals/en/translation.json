@@ -1949,5 +1949,6 @@
   "It doesn't fit on this machine now: propose a move to a machine with room (in the rentals below), then accept.": "It doesn't fit on this machine now: propose a move to a machine with room (in the rentals below), then accept.",
   "{{size}}, waiting for the owner": "{{size}}, waiting for the owner",
   "Resize canceled": "Resize canceled",
-  "Cancel resize": "Cancel resize"
+  "Cancel resize": "Cancel resize",
+  "To move it, add another machine to this workspace and put it up for rent, or free room on one you have.": "To move it, add another machine to this workspace and put it up for rent, or free room on one you have."
 }

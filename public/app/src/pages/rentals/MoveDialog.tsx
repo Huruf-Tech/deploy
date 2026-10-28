@@ -80,6 +80,9 @@ export function MoveDialog({
     }
   }
   const minutes = info ? Math.max(1, Math.round(info.downtimeSec / 60)) : 0
+  // Nowhere to go: say so and how to make room, instead of a form that
+  // can't be sent.
+  const nowhere = !!info && !pick
   return (
     <Dialog open onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
@@ -103,23 +106,28 @@ export function MoveDialog({
                   )}
           </DialogDescription>
         </DialogHeader>
-        {info &&
-          (info.targets.length ? (
-            <MachinePicker
-              machines={info.targets}
-              pick={pick}
-              onPick={setHost}
-            />
-          ) : (
-            <p className="text-sm text-muted-foreground">
+        {info && !nowhere && (
+          <MachinePicker machines={info.targets} pick={pick} onPick={setHost} />
+        )}
+        {nowhere && (
+          <div className="rounded-lg border border-warning/50 bg-warning-soft px-3 py-2.5 text-[13px] text-warning-foreground">
+            <p className="font-medium">
               {propose
                 ? t(
                     "None of your other machines, and no machine that accepts at once, has room for it."
                   )
                 : t("No other machine for rent has room for it.")}
             </p>
-          ))}
-        {propose && (
+            {propose && (
+              <p className="mt-1 text-xs">
+                {t(
+                  "To move it, add another machine to this workspace and put it up for rent, or free room on one you have."
+                )}
+              </p>
+            )}
+          </div>
+        )}
+        {propose && !nowhere && (
           <div className="flex flex-col gap-2">
             <Label htmlFor="move-reason">
               {t("Why (the customer sees it)")}
@@ -133,9 +141,15 @@ export function MoveDialog({
           </div>
         )}
         <DialogFooter>
-          <Button onClick={move} disabled={busy || !pick || info?.moving}>
-            {propose ? t("Send the proposal") : t("Move")}
-          </Button>
+          {nowhere ? (
+            <Button variant="outline" onClick={() => onOpenChange(false)}>
+              {t("Close")}
+            </Button>
+          ) : (
+            <Button onClick={move} disabled={busy || !pick || info?.moving}>
+              {propose ? t("Send the proposal") : t("Move")}
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

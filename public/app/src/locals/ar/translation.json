@@ -1949,5 +1949,6 @@
   "It doesn't fit on this machine now: propose a move to a machine with room (in the rentals below), then accept.": "لا يتسع هذا الجهاز له الآن: اقترح نقله إلى جهاز فيه متسع (في الإيجارات أدناه)، ثم اقبل.",
   "{{size}}, waiting for the owner": "{{size}}، بانتظار المالك",
   "Resize canceled": "أُلغي تغيير الحجم",
-  "Cancel resize": "إلغاء تغيير الحجم"
+  "Cancel resize": "إلغاء تغيير الحجم",
+  "To move it, add another machine to this workspace and put it up for rent, or free room on one you have.": "لنقله، أضف جهازًا آخر إلى مساحة العمل هذه واعرضه للإيجار، أو أفرغ متسعًا على جهاز لديك."
 }
