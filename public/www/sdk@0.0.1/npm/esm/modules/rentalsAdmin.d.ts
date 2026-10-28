@@ -1,55 +1,5 @@
 import type { TRequestOptions } from "../types.js";
 import type { BaseSDK } from "../base.js";
-export type queue$return = {
-    _id: string;
-    tenant: string;
-    tenantName?: string | undefined;
-    status: string;
-    /** Plan name */
-    plan?: string | undefined;
-    size: {
-        cpus: number;
-        memMb: number;
-        diskGb: number;
-    };
-    /** The size a resize asks for */
-    resizeTo?: string | undefined;
-    requestedAt: Date;
-}[];
-export type placement$params = {
-    id?: string;
-};
-export type placement$return = {
-    server: string;
-    name: string;
-    free: {
-        memMb: number;
-        diskGb: number;
-    };
-    cpuRoom: number;
-    fits: boolean;
-}[];
-export type approve$params = {
-    id?: string;
-};
-export type approve$body = {
-    host?: string;
-};
-export type reject$params = {
-    id?: string;
-};
-export type reject$body = {
-    reason: string;
-};
-export type approveResize$params = {
-    id?: string;
-};
-export type rejectResize$params = {
-    id?: string;
-};
-export type rejectResize$body = {
-    reason: string;
-};
 export type suspend$params = {
     id?: string;
 };
@@ -99,7 +49,9 @@ export type capacity$return = {
     machines: {
         _id: string;
         name: string;
-        class?: string | undefined;
+        /** The owner's workspace */
+        tenant: string;
+        forRent: boolean;
         accepting: boolean;
         allocatable: {
             cpus: number;
@@ -107,7 +59,7 @@ export type capacity$return = {
             diskGb: number;
         };
         rentedMemMb: number;
-        /** The platform's own partitions */
+        /** The owner's own partitions */
         ownMemMb: number;
         freeMemMb: number;
         rentals: number;
@@ -148,61 +100,74 @@ export type refund$return = {
     /** Cents refunded */
     amount: number;
 };
-export type pool$params = {
+export type listDisputes$query = {
+    status?: ("open" | "resolved") | undefined;
+};
+export type listDisputes$return = {
+    _id: string;
+    subscription: string;
+    tenantName?: string | undefined;
+    ownerName?: string | undefined;
+    machine: string;
+    machineName?: string | undefined;
+    reason: string;
+    status: string;
+    evidence: {
+        [K in string]: unknown;
+    };
+    /** Cents the machine's money can pay */
+    held: number;
+    decision?: {
+        refund: number;
+        note?: string | undefined;
+        at: Date;
+    } | undefined;
+    createdAt: Date;
+}[];
+export type resolveDispute$params = {
     id?: string;
 };
-export type pool$return = {
-    platform: boolean;
-    rentals: {
-        _id: string;
-        partition?: string | undefined;
-        tenantName?: string | undefined;
-        plan?: string | undefined;
-        /** Cents per month */
-        price: number;
-        status: string;
-        /** Suspended by an admin */
-        held?: boolean | undefined;
-        /** This period so far, percent */
-        uptime?: number | undefined;
-        /** Bytes used, when more than its size */
-        overDisk?: number | undefined;
-        moving?: {
-            to: string;
-            toName?: string | undefined;
-            startedAt: Date;
-        } | undefined;
-        lastMove?: {
-            from: string;
-            to: string;
-            at: Date;
-            error?: string | undefined;
-        } | undefined;
+export type resolveDispute$body = {
+    refund: number;
+    note?: string | undefined;
+};
+export type listReverts$return = {
+    _id: string;
+    ownerName?: string | undefined;
+    amount: number;
+    /** The claim minus what was charged since */
+    max: number;
+    claimedAt?: Date | undefined;
+    /** The wallet's movements since the claim */
+    transactions: {
+        type: string;
+        amount: number;
+        description?: unknown | undefined;
+        createdAt?: Date | undefined;
     }[];
-    /** Cents per month from live rentals */
-    revenue: number;
-};
-export type updatePool$params = {
+    createdAt: Date;
+}[];
+export type decideRevert$params = {
     id?: string;
 };
-export type updatePool$body = {
-    /** null: not for rent */
-    class?: (string | null) | undefined;
-    accepting?: boolean | undefined;
-    monthlyCost?: number | undefined;
+export type decideRevert$body = {
+    /** 0 refuses */
+    amount: number;
+    note?: string | undefined;
+};
+export type listReports$return = {
+    _id: string;
+    tenantName?: string | undefined;
+    machine?: string | undefined;
+    subscription?: string | undefined;
+    text: string;
+    createdAt: Date;
+}[];
+export type closeReport$params = {
+    id?: string;
 };
 export declare const rentalsAdminModule: (sdk: typeof BaseSDK) => {
     readonly type: {
-        queue$return: queue$return;
-        placement$params: placement$params;
-        placement$return: placement$return;
-        approve$params: approve$params;
-        approve$body: approve$body;
-        reject$params: reject$params;
-        reject$body: reject$body;
-        approveResize$params: approveResize$params;
-        rejectResize$params: rejectResize$params;
-        rejectResize$body: rejectResize$body;
         suspend$params: suspend$params;
         suspend$body: suspend$body;
         resume$params: resume$params;
@@ -220,76 +185,15 @@ export declare const rentalsAdminModule: (sdk: typeof BaseSDK) => {
         refund$params: refund$params;
         refund$body: refund$body;
         refund$return: refund$return;
-        pool$params: pool$params;
-        pool$return: pool$return;
-        updatePool$params: updatePool$params;
-        updatePool$body: updatePool$body;
-    };
-    readonly queue: (data?: {
-        params?: undefined;
-        query?: undefined;
-        body?: undefined;
-    } & TRequestOptions<queue$return>) => {
-        readonly raw: Promise<import("axios").AxiosResponse<queue$return, any, {}, any>>;
-        readonly data: Promise<queue$return>;
-        then: <TResult1 = queue$return, TResult2 = never>(onfulfilled?: ((value: queue$return) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
-        catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<queue$return | TResult>;
-        finally: (onfinally?: (() => void) | null | undefined) => Promise<queue$return>;
-    };
-    readonly placement: (data: {
-        params: placement$params;
-        query?: undefined;
-        body?: undefined;
-    } & TRequestOptions<placement$return>) => {
-        readonly raw: Promise<import("axios").AxiosResponse<placement$return, any, {}, any>>;
-        readonly data: Promise<placement$return>;
-        then: <TResult1 = placement$return, TResult2 = never>(onfulfilled?: ((value: placement$return) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
-        catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<placement$return | TResult>;
-        finally: (onfinally?: (() => void) | null | undefined) => Promise<placement$return>;
-    };
-    readonly approve: (data: {
-        params: approve$params;
-        query?: undefined;
-        body: approve$body;
-    } & TRequestOptions<unknown>) => {
-        readonly raw: Promise<import("axios").AxiosResponse<unknown, any, {}, any>>;
-        readonly data: Promise<unknown>;
-        then: <TResult1 = unknown, TResult2 = never>(onfulfilled?: ((value: unknown) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
-        catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<unknown>;
-        finally: (onfinally?: (() => void) | null | undefined) => Promise<unknown>;
-    };
-    readonly reject: (data: {
-        params: reject$params;
-        query?: undefined;
-        body: reject$body;
-    } & TRequestOptions<unknown>) => {
-        readonly raw: Promise<import("axios").AxiosResponse<unknown, any, {}, any>>;
-        readonly data: Promise<unknown>;
-        then: <TResult1 = unknown, TResult2 = never>(onfulfilled?: ((value: unknown) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
-        catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<unknown>;
-        finally: (onfinally?: (() => void) | null | undefined) => Promise<unknown>;
-    };
-    readonly approveResize: (data: {
-        params: approveResize$params;
-        query?: undefined;
-        body?: undefined;
-    } & TRequestOptions<unknown>) => {
-        readonly raw: Promise<import("axios").AxiosResponse<unknown, any, {}, any>>;
-        readonly data: Promise<unknown>;
-        then: <TResult1 = unknown, TResult2 = never>(onfulfilled?: ((value: unknown) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
-        catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<unknown>;
-        finally: (onfinally?: (() => void) | null | undefined) => Promise<unknown>;
-    };
-    readonly rejectResize: (data: {
-        params: rejectResize$params;
-        query?: undefined;
-        body: rejectResize$body;
-    } & TRequestOptions<unknown>) => {
-        readonly raw: Promise<import("axios").AxiosResponse<unknown, any, {}, any>>;
-        readonly data: Promise<unknown>;
-        then: <TResult1 = unknown, TResult2 = never>(onfulfilled?: ((value: unknown) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
-        catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<unknown>;
-        finally: (onfinally?: (() => void) | null | undefined) => Promise<unknown>;
+        listDisputes$query: listDisputes$query;
+        listDisputes$return: listDisputes$return;
+        resolveDispute$params: resolveDispute$params;
+        resolveDispute$body: resolveDispute$body;
+        listReverts$return: listReverts$return;
+        decideRevert$params: decideRevert$params;
+        decideRevert$body: decideRevert$body;
+        listReports$return: listReports$return;
+        closeReport$params: closeReport$params;
     };
     readonly suspend: (data: {
         params: suspend$params;
@@ -401,21 +305,65 @@ export declare const rentalsAdminModule: (sdk: typeof BaseSDK) => {
         catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<refund$return | TResult>;
         finally: (onfinally?: (() => void) | null | undefined) => Promise<refund$return>;
     };
-    readonly pool: (data: {
-        params: pool$params;
+    readonly listDisputes: (data: {
+        params?: undefined;
+        query: listDisputes$query;
+        body?: undefined;
+    } & TRequestOptions<listDisputes$return>) => {
+        readonly raw: Promise<import("axios").AxiosResponse<listDisputes$return, any, {}, any>>;
+        readonly data: Promise<listDisputes$return>;
+        then: <TResult1 = listDisputes$return, TResult2 = never>(onfulfilled?: ((value: listDisputes$return) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+        catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<listDisputes$return | TResult>;
+        finally: (onfinally?: (() => void) | null | undefined) => Promise<listDisputes$return>;
+    };
+    readonly resolveDispute: (data: {
+        params: resolveDispute$params;
+        query?: undefined;
+        body: resolveDispute$body;
+    } & TRequestOptions<unknown>) => {
+        readonly raw: Promise<import("axios").AxiosResponse<unknown, any, {}, any>>;
+        readonly data: Promise<unknown>;
+        then: <TResult1 = unknown, TResult2 = never>(onfulfilled?: ((value: unknown) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+        catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<unknown>;
+        finally: (onfinally?: (() => void) | null | undefined) => Promise<unknown>;
+    };
+    readonly listReverts: (data?: {
+        params?: undefined;
         query?: undefined;
         body?: undefined;
-    } & TRequestOptions<pool$return>) => {
-        readonly raw: Promise<import("axios").AxiosResponse<pool$return, any, {}, any>>;
-        readonly data: Promise<pool$return>;
-        then: <TResult1 = pool$return, TResult2 = never>(onfulfilled?: ((value: pool$return) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
-        catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<pool$return | TResult>;
-        finally: (onfinally?: (() => void) | null | undefined) => Promise<pool$return>;
+    } & TRequestOptions<listReverts$return>) => {
+        readonly raw: Promise<import("axios").AxiosResponse<listReverts$return, any, {}, any>>;
+        readonly data: Promise<listReverts$return>;
+        then: <TResult1 = listReverts$return, TResult2 = never>(onfulfilled?: ((value: listReverts$return) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+        catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<listReverts$return | TResult>;
+        finally: (onfinally?: (() => void) | null | undefined) => Promise<listReverts$return>;
     };
-    readonly updatePool: (data: {
-        params: updatePool$params;
+    readonly decideRevert: (data: {
+        params: decideRevert$params;
         query?: undefined;
-        body: updatePool$body;
+        body: decideRevert$body;
+    } & TRequestOptions<unknown>) => {
+        readonly raw: Promise<import("axios").AxiosResponse<unknown, any, {}, any>>;
+        readonly data: Promise<unknown>;
+        then: <TResult1 = unknown, TResult2 = never>(onfulfilled?: ((value: unknown) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+        catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<unknown>;
+        finally: (onfinally?: (() => void) | null | undefined) => Promise<unknown>;
+    };
+    readonly listReports: (data?: {
+        params?: undefined;
+        query?: undefined;
+        body?: undefined;
+    } & TRequestOptions<listReports$return>) => {
+        readonly raw: Promise<import("axios").AxiosResponse<listReports$return, any, {}, any>>;
+        readonly data: Promise<listReports$return>;
+        then: <TResult1 = listReports$return, TResult2 = never>(onfulfilled?: ((value: listReports$return) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+        catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<listReports$return | TResult>;
+        finally: (onfinally?: (() => void) | null | undefined) => Promise<listReports$return>;
+    };
+    readonly closeReport: (data: {
+        params: closeReport$params;
+        query?: undefined;
+        body?: undefined;
     } & TRequestOptions<unknown>) => {
         readonly raw: Promise<import("axios").AxiosResponse<unknown, any, {}, any>>;
         readonly data: Promise<unknown>;

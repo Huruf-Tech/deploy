@@ -6,46 +6,6 @@ const rentalsModule = (sdk) => {
     const type = {};
     const methods = {
         type,
-        catalog(data) {
-            return sdk.resolveAxiosResponse(async () => {
-                sdk.checkPermission("rentals", "catalog");
-                const method = "get";
-                const toPath = (0, path_to_regexp_1.compile)("rentals/api/catalog");
-                const requestPayload = {
-                    method,
-                    url: toPath(sdk.resolvePathParams(data?.params)),
-                    params: data?.query,
-                    data: data?.body,
-                    signal: data?.signal,
-                    ...(data?.axiosConfig
-                        ? sdk.resolveAxiosConfig(data.axiosConfig)
-                        : undefined),
-                };
-                sdk.log("Sending Request:", requestPayload);
-                const res = await sdk._axios.request(requestPayload);
-                return res;
-            }, data);
-        },
-        quote(data) {
-            return sdk.resolveAxiosResponse(async () => {
-                sdk.checkPermission("rentals", "quote");
-                const method = "get";
-                const toPath = (0, path_to_regexp_1.compile)("rentals/api/quote");
-                const requestPayload = {
-                    method,
-                    url: toPath(sdk.resolvePathParams(data?.params)),
-                    params: data?.query,
-                    data: data?.body,
-                    signal: data?.signal,
-                    ...(data?.axiosConfig
-                        ? sdk.resolveAxiosConfig(data.axiosConfig)
-                        : undefined),
-                };
-                sdk.log("Sending Request:", requestPayload);
-                const res = await sdk._axios.request(requestPayload);
-                return res;
-            }, data);
-        },
         list(data) {
             return sdk.resolveAxiosResponse(async () => {
                 sdk.checkPermission("rentals", "list");
@@ -146,14 +106,138 @@ const rentalsModule = (sdk) => {
                 return res;
             }, data);
         },
+        acceptProposal(data) {
+            return sdk.resolveAxiosResponse(async () => {
+                sdk.checkPermission("rentals", "acceptProposal");
+                const method = "post";
+                const toPath = (0, path_to_regexp_1.compile)("rentals/api/:id/proposal/accept");
+                const requestPayload = {
+                    method,
+                    url: toPath(sdk.resolvePathParams(data?.params)),
+                    params: data?.query,
+                    data: data?.body,
+                    signal: data?.signal,
+                    ...(data?.axiosConfig
+                        ? sdk.resolveAxiosConfig(data.axiosConfig)
+                        : undefined),
+                };
+                sdk.log("Sending Request:", requestPayload);
+                const res = await sdk._axios.request(requestPayload);
+                return res;
+            }, data);
+        },
+        declineProposal(data) {
+            return sdk.resolveAxiosResponse(async () => {
+                sdk.checkPermission("rentals", "declineProposal");
+                const method = "post";
+                const toPath = (0, path_to_regexp_1.compile)("rentals/api/:id/proposal/decline");
+                const requestPayload = {
+                    method,
+                    url: toPath(sdk.resolvePathParams(data?.params)),
+                    params: data?.query,
+                    data: data?.body,
+                    signal: data?.signal,
+                    ...(data?.axiosConfig
+                        ? sdk.resolveAxiosConfig(data.axiosConfig)
+                        : undefined),
+                };
+                sdk.log("Sending Request:", requestPayload);
+                const res = await sdk._axios.request(requestPayload);
+                return res;
+            }, data);
+        },
+        proposalTargets(data) {
+            return sdk.resolveAxiosResponse(async () => {
+                sdk.checkPermission("rentals", "proposalTargets");
+                const method = "get";
+                const toPath = (0, path_to_regexp_1.compile)("rentals/api/:id/proposal/targets");
+                const requestPayload = {
+                    method,
+                    url: toPath(sdk.resolvePathParams(data?.params)),
+                    params: data?.query,
+                    data: data?.body,
+                    signal: data?.signal,
+                    ...(data?.axiosConfig
+                        ? sdk.resolveAxiosConfig(data.axiosConfig)
+                        : undefined),
+                };
+                sdk.log("Sending Request:", requestPayload);
+                const res = await sdk._axios.request(requestPayload);
+                return res;
+            }, data);
+        },
+        dispute(data) {
+            return sdk.resolveAxiosResponse(async () => {
+                sdk.checkPermission("rentals", "dispute");
+                const method = "post";
+                const toPath = (0, path_to_regexp_1.compile)("rentals/api/:id/dispute");
+                const requestPayload = {
+                    method,
+                    url: toPath(sdk.resolvePathParams(data?.params)),
+                    params: data?.query,
+                    data: data?.body,
+                    signal: data?.signal,
+                    ...(data?.axiosConfig
+                        ? sdk.resolveAxiosConfig(data.axiosConfig)
+                        : undefined),
+                };
+                sdk.log("Sending Request:", requestPayload);
+                const res = await sdk._axios.request(requestPayload);
+                return res;
+            }, data);
+        },
+        rateMachine(data) {
+            return sdk.resolveAxiosResponse(async () => {
+                sdk.checkPermission("rentals", "rateMachine");
+                const method = "post";
+                const toPath = (0, path_to_regexp_1.compile)("rentals/api/:id/rate");
+                const requestPayload = {
+                    method,
+                    url: toPath(sdk.resolvePathParams(data?.params)),
+                    params: data?.query,
+                    data: data?.body,
+                    signal: data?.signal,
+                    ...(data?.axiosConfig
+                        ? sdk.resolveAxiosConfig(data.axiosConfig)
+                        : undefined),
+                };
+                sdk.log("Sending Request:", requestPayload);
+                const res = await sdk._axios.request(requestPayload);
+                return res;
+            }, data);
+        },
+        report(data) {
+            return sdk.resolveAxiosResponse(async () => {
+                sdk.checkPermission("rentals", "report");
+                const method = "post";
+                const toPath = (0, path_to_regexp_1.compile)("rentals/api/report");
+                const requestPayload = {
+                    method,
+                    url: toPath(sdk.resolvePathParams(data?.params)),
+                    params: data?.query,
+                    data: data?.body,
+                    signal: data?.signal,
+                    ...(data?.axiosConfig
+                        ? sdk.resolveAxiosConfig(data.axiosConfig)
+                        : undefined),
+                };
+                sdk.log("Sending Request:", requestPayload);
+                const res = await sdk._axios.request(requestPayload);
+                return res;
+            }, data);
+        },
     };
-    methods.catalog.__scope = "rentals";
-    methods.quote.__scope = "rentals";
     methods.list.__scope = "rentals";
     methods.request.__scope = "rentals";
     methods.withdraw.__scope = "rentals";
     methods.resize.__scope = "rentals";
     methods.cancel.__scope = "rentals";
+    methods.acceptProposal.__scope = "rentals";
+    methods.declineProposal.__scope = "rentals";
+    methods.proposalTargets.__scope = "rentals";
+    methods.dispute.__scope = "rentals";
+    methods.rateMachine.__scope = "rentals";
+    methods.report.__scope = "rentals";
     sdk["_moduleGroup"].set(methods, "Billing");
     return methods;
 };

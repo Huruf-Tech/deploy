@@ -8,6 +8,19 @@ import {
   $resourceSummary,
 } from "@/schemas/protocol/agent.ts";
 
+/**
+ * A machine's prices (PLAN §30.3), cents per hour (fractions allowed): per
+ * vCPU, GB of memory, GB of disk, and the whole machine (Dedicated). A month
+ * is 730 hours. Traffic beyond the allowance: cents per GB.
+ */
+export const $rentPrices = z.object({
+  vcpu: z.number().min(0).max(1_000),
+  memGb: z.number().min(0).max(1_000),
+  diskGb: z.number().min(0).max(100),
+  whole: z.number().min(0).max(100_000).optional(),
+  trafficGb: z.number().int().min(0).max(1_000).default(0),
+});
+
 /** Cold server document (PLAN §6): agent polls never write it. */
 export const $serverUpdate = z.object({
   name: z.string().min(1).max(60).meta({ canFilter: true }),
@@ -83,11 +96,23 @@ export const $server = $serverUpdate.extend({
     allocatable: $partitionSize.optional(),
     error: z.string().optional(),
     updatedAt: z.date(),
-    /** Set by admins on the platform's machines (PLAN §28): the class it rents, whether it takes new rentals, its cost. */
-    class: $objectId.meta({ ref: "serverClasses" }).optional(),
+    /** For rent in the market (PLAN §30.3), set by the machine's owner. */
+    rent: z.object({
+      enabled: z.boolean(),
+      /** Requests start at once, without the owner. */
+      autoAccept: z.boolean().default(false),
+      prices: $rentPrices,
+    }).optional(),
+    /** Takes new rentals (false: drains, its rentals stay). */
     accepting: z.boolean().optional(),
-    /** What the machine costs Huruf a month (cents), for cost vs revenue. */
+    /** What the machine costs its owner a month (cents), for cost vs revenue. */
     monthlyCost: z.number().int().min(0).optional(),
+  }).optional(),
+  /** The country of its public address (PLAN §30.3), looked up, never typed. */
+  region: z.object({
+    country: z.string().max(2),
+    ip: z.string(),
+    at: z.date(),
   }).optional(),
   /** Its reverse tunnel's port on every control plane instance (PLAN §14). */
   tunnelPort: z.number().int().min(1).max(65_535).optional(),

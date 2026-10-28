@@ -71,7 +71,6 @@ export type plans$return = {
         trafficGb: number;
     } | undefined;
     custom?: boolean | undefined;
-    class?: string | undefined;
     slug: string;
     description?: string | undefined;
     visibility: "public" | "private";
@@ -104,6 +103,7 @@ export type plans$return = {
         backups: boolean;
         aiAssistant: boolean;
     };
+    commission: number;
     isFree: boolean;
     active: boolean;
     sortOrder: number;

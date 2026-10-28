@@ -27,6 +27,10 @@ export default new Router("/api", function plans(router) {
     hooks: {
       beforeCreate: ({ data }) => {
         if (data.isFree) throw Response.badRequest(FREE_IS_SEEDED);
+        // Rentals are priced by their machine (PLAN §30.3).
+        if (data.kind === "server") {
+          throw Response.badRequest("Rentals are priced on their machine");
+        }
       },
       beforeUpdate: async ({ _id, data, session }) => {
         if (data.isFree === undefined) return;

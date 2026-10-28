@@ -10,12 +10,14 @@ import { projectGroupsModule } from "./modules/projectGroups.js";
 import { projectsModule } from "./modules/projects.js";
 import { billingModule } from "./modules/billing.js";
 import { billingAdminModule } from "./modules/billingAdmin.js";
+import { earningsModule } from "./modules/earnings.js";
+import { hostingModule } from "./modules/hosting.js";
+import { marketModule } from "./modules/market.js";
 import { paymentsModule } from "./modules/payments.js";
 import { paymentsAdminModule } from "./modules/paymentsAdmin.js";
 import { plansModule } from "./modules/plans.js";
 import { rentalsModule } from "./modules/rentals.js";
 import { rentalsAdminModule } from "./modules/rentalsAdmin.js";
-import { serverClassesModule } from "./modules/serverClasses.js";
 import { aiModule } from "./modules/ai.js";
 import { gitIntegrationsModule } from "./modules/gitIntegrations.js";
 import { githubHooksModule } from "./modules/githubHooks.js";
@@ -132,12 +134,14 @@ Object.defineProperty(ThunderSDK, "_moduleNames", {
         "projects",
         "billing",
         "billingAdmin",
+        "earnings",
+        "hosting",
+        "market",
         "payments",
         "paymentsAdmin",
         "plans",
         "rentals",
         "rentalsAdmin",
-        "serverClasses",
         "ai",
         "gitIntegrations",
         "githubHooks",
@@ -205,6 +209,24 @@ Object.defineProperty(ThunderSDK, "billingAdmin", {
     writable: true,
     value: billingAdminModule(_a)
 });
+Object.defineProperty(ThunderSDK, "earnings", {
+    enumerable: true,
+    configurable: true,
+    writable: true,
+    value: earningsModule(_a)
+});
+Object.defineProperty(ThunderSDK, "hosting", {
+    enumerable: true,
+    configurable: true,
+    writable: true,
+    value: hostingModule(_a)
+});
+Object.defineProperty(ThunderSDK, "market", {
+    enumerable: true,
+    configurable: true,
+    writable: true,
+    value: marketModule(_a)
+});
 Object.defineProperty(ThunderSDK, "payments", {
     enumerable: true,
     configurable: true,
@@ -234,12 +256,6 @@ Object.defineProperty(ThunderSDK, "rentalsAdmin", {
     configurable: true,
     writable: true,
     value: rentalsAdminModule(_a)
-});
-Object.defineProperty(ThunderSDK, "serverClasses", {
-    enumerable: true,
-    configurable: true,
-    writable: true,
-    value: serverClassesModule(_a)
 });
 Object.defineProperty(ThunderSDK, "ai", {
     enumerable: true,

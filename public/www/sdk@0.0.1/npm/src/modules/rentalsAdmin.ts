@@ -5,56 +5,6 @@ import type { BaseSDK } from "../base.js";
 
 import { compile } from "path-to-regexp";
 
-export type queue$return = {
-    _id: string;
-    tenant: string;
-    tenantName?: string | undefined;
-    status: string;
-    /** Plan name */
-    plan?: string | undefined;
-    size: {
-        cpus: number;
-        memMb: number;
-        diskGb: number;
-    };
-    /** The size a resize asks for */
-    resizeTo?: string | undefined;
-    requestedAt: Date;
-}[];
-export type placement$params = {
-    id?: string;
-};
-export type placement$return = {
-    server: string;
-    name: string;
-    free: {
-        memMb: number;
-        diskGb: number;
-    };
-    cpuRoom: number;
-    fits: boolean;
-}[];
-export type approve$params = {
-    id?: string;
-};
-export type approve$body = {
-    host?: string;
-};
-export type reject$params = {
-    id?: string;
-};
-export type reject$body = {
-    reason: string;
-};
-export type approveResize$params = {
-    id?: string;
-};
-export type rejectResize$params = {
-    id?: string;
-};
-export type rejectResize$body = {
-    reason: string;
-};
 export type suspend$params = {
     id?: string;
 };
@@ -104,7 +54,9 @@ export type capacity$return = {
     machines: {
         _id: string;
         name: string;
-        class?: string | undefined;
+        /** The owner's workspace */
+        tenant: string;
+        forRent: boolean;
         accepting: boolean;
         allocatable: {
             cpus: number;
@@ -112,7 +64,7 @@ export type capacity$return = {
             diskGb: number;
         };
         rentedMemMb: number;
-        /** The platform's own partitions */
+        /** The owner's own partitions */
         ownMemMb: number;
         freeMemMb: number;
         rentals: number;
@@ -153,62 +105,75 @@ export type refund$return = {
     /** Cents refunded */
     amount: number;
 };
-export type pool$params = {
+export type listDisputes$query = {
+    status?: ("open" | "resolved") | undefined;
+};
+export type listDisputes$return = {
+    _id: string;
+    subscription: string;
+    tenantName?: string | undefined;
+    ownerName?: string | undefined;
+    machine: string;
+    machineName?: string | undefined;
+    reason: string;
+    status: string;
+    evidence: {
+        [K in string]: unknown;
+    };
+    /** Cents the machine's money can pay */
+    held: number;
+    decision?: {
+        refund: number;
+        note?: string | undefined;
+        at: Date;
+    } | undefined;
+    createdAt: Date;
+}[];
+export type resolveDispute$params = {
     id?: string;
 };
-export type pool$return = {
-    platform: boolean;
-    rentals: {
-        _id: string;
-        partition?: string | undefined;
-        tenantName?: string | undefined;
-        plan?: string | undefined;
-        /** Cents per month */
-        price: number;
-        status: string;
-        /** Suspended by an admin */
-        held?: boolean | undefined;
-        /** This period so far, percent */
-        uptime?: number | undefined;
-        /** Bytes used, when more than its size */
-        overDisk?: number | undefined;
-        moving?: {
-            to: string;
-            toName?: string | undefined;
-            startedAt: Date;
-        } | undefined;
-        lastMove?: {
-            from: string;
-            to: string;
-            at: Date;
-            error?: string | undefined;
-        } | undefined;
+export type resolveDispute$body = {
+    refund: number;
+    note?: string | undefined;
+};
+export type listReverts$return = {
+    _id: string;
+    ownerName?: string | undefined;
+    amount: number;
+    /** The claim minus what was charged since */
+    max: number;
+    claimedAt?: Date | undefined;
+    /** The wallet's movements since the claim */
+    transactions: {
+        type: string;
+        amount: number;
+        description?: unknown | undefined;
+        createdAt?: Date | undefined;
     }[];
-    /** Cents per month from live rentals */
-    revenue: number;
-};
-export type updatePool$params = {
+    createdAt: Date;
+}[];
+export type decideRevert$params = {
     id?: string;
 };
-export type updatePool$body = {
-    /** null: not for rent */
-    class?: (string | null) | undefined;
-    accepting?: boolean | undefined;
-    monthlyCost?: number | undefined;
+export type decideRevert$body = {
+    /** 0 refuses */
+    amount: number;
+    note?: string | undefined;
+};
+export type listReports$return = {
+    _id: string;
+    tenantName?: string | undefined;
+    machine?: string | undefined;
+    subscription?: string | undefined;
+    text: string;
+    createdAt: Date;
+}[];
+export type closeReport$params = {
+    id?: string;
 };
 
 export const rentalsAdminModule = (sdk: typeof BaseSDK) => {
     const type = {} as unknown as {
-        queue$return: queue$return,
-        placement$params: placement$params,
-        placement$return: placement$return,
-        approve$params: approve$params,
-        approve$body: approve$body,
-        reject$params: reject$params,
-        reject$body: reject$body,
-        approveResize$params: approveResize$params,
-        rejectResize$params: rejectResize$params,
-        rejectResize$body: rejectResize$body,
         suspend$params: suspend$params,
         suspend$body: suspend$body,
         resume$params: resume$params,
@@ -226,182 +191,19 @@ export const rentalsAdminModule = (sdk: typeof BaseSDK) => {
         refund$params: refund$params,
         refund$body: refund$body,
         refund$return: refund$return,
-        pool$params: pool$params,
-        pool$return: pool$return,
-        updatePool$params: updatePool$params,
-        updatePool$body: updatePool$body,
+        listDisputes$query: listDisputes$query,
+        listDisputes$return: listDisputes$return,
+        resolveDispute$params: resolveDispute$params,
+        resolveDispute$body: resolveDispute$body,
+        listReverts$return: listReverts$return,
+        decideRevert$params: decideRevert$params,
+        decideRevert$body: decideRevert$body,
+        listReports$return: listReports$return,
+        closeReport$params: closeReport$params,
     };
 
     const methods = {
         type,
-        queue(data?: {
-        params?: undefined,
-        query?: undefined,
-        body?: undefined,
-    } & TRequestOptions<queue$return>) {
-        return sdk.resolveAxiosResponse(async () => {
-            sdk.checkPermission("rentalsAdmin", "queue");
-
-            const method = "get";
-            const toPath = compile("rentalsAdmin/api/queue");
-            const requestPayload = {
-                method,
-                url: toPath(sdk.resolvePathParams(data?.params)),
-                params: data?.query,
-                data: data?.body,
-                signal: data?.signal,
-                ...(data?.axiosConfig
-                ? sdk.resolveAxiosConfig(data.axiosConfig)
-                : undefined),
-            };
-
-            sdk.log("Sending Request:", requestPayload);
-
-            const res = await sdk._axios!.request(requestPayload);
-
-            return res;
-        }, data);
-    },
-        placement(data: {
-        params: placement$params,
-        query?: undefined,
-        body?: undefined,
-    } & TRequestOptions<placement$return>) {
-        return sdk.resolveAxiosResponse(async () => {
-            sdk.checkPermission("rentalsAdmin", "placement");
-
-            const method = "get";
-            const toPath = compile("rentalsAdmin/api/:id/placement");
-            const requestPayload = {
-                method,
-                url: toPath(sdk.resolvePathParams(data?.params)),
-                params: data?.query,
-                data: data?.body,
-                signal: data?.signal,
-                ...(data?.axiosConfig
-                ? sdk.resolveAxiosConfig(data.axiosConfig)
-                : undefined),
-            };
-
-            sdk.log("Sending Request:", requestPayload);
-
-            const res = await sdk._axios!.request(requestPayload);
-
-            return res;
-        }, data);
-    },
-        approve(data: {
-        params: approve$params,
-        query?: undefined,
-        body: approve$body,
-    } & TRequestOptions<unknown>) {
-        return sdk.resolveAxiosResponse(async () => {
-            sdk.checkPermission("rentalsAdmin", "approve");
-
-            const method = "post";
-            const toPath = compile("rentalsAdmin/api/:id/approve");
-            const requestPayload = {
-                method,
-                url: toPath(sdk.resolvePathParams(data?.params)),
-                params: data?.query,
-                data: data?.body,
-                signal: data?.signal,
-                ...(data?.axiosConfig
-                ? sdk.resolveAxiosConfig(data.axiosConfig)
-                : undefined),
-            };
-
-            sdk.log("Sending Request:", requestPayload);
-
-            const res = await sdk._axios!.request(requestPayload);
-
-            return res;
-        }, data);
-    },
-        reject(data: {
-        params: reject$params,
-        query?: undefined,
-        body: reject$body,
-    } & TRequestOptions<unknown>) {
-        return sdk.resolveAxiosResponse(async () => {
-            sdk.checkPermission("rentalsAdmin", "reject");
-
-            const method = "post";
-            const toPath = compile("rentalsAdmin/api/:id/reject");
-            const requestPayload = {
-                method,
-                url: toPath(sdk.resolvePathParams(data?.params)),
-                params: data?.query,
-                data: data?.body,
-                signal: data?.signal,
-                ...(data?.axiosConfig
-                ? sdk.resolveAxiosConfig(data.axiosConfig)
-                : undefined),
-            };
-
-            sdk.log("Sending Request:", requestPayload);
-
-            const res = await sdk._axios!.request(requestPayload);
-
-            return res;
-        }, data);
-    },
-        approveResize(data: {
-        params: approveResize$params,
-        query?: undefined,
-        body?: undefined,
-    } & TRequestOptions<unknown>) {
-        return sdk.resolveAxiosResponse(async () => {
-            sdk.checkPermission("rentalsAdmin", "approveResize");
-
-            const method = "post";
-            const toPath = compile("rentalsAdmin/api/:id/resize/approve");
-            const requestPayload = {
-                method,
-                url: toPath(sdk.resolvePathParams(data?.params)),
-                params: data?.query,
-                data: data?.body,
-                signal: data?.signal,
-                ...(data?.axiosConfig
-                ? sdk.resolveAxiosConfig(data.axiosConfig)
-                : undefined),
-            };
-
-            sdk.log("Sending Request:", requestPayload);
-
-            const res = await sdk._axios!.request(requestPayload);
-
-            return res;
-        }, data);
-    },
-        rejectResize(data: {
-        params: rejectResize$params,
-        query?: undefined,
-        body: rejectResize$body,
-    } & TRequestOptions<unknown>) {
-        return sdk.resolveAxiosResponse(async () => {
-            sdk.checkPermission("rentalsAdmin", "rejectResize");
-
-            const method = "post";
-            const toPath = compile("rentalsAdmin/api/:id/resize/reject");
-            const requestPayload = {
-                method,
-                url: toPath(sdk.resolvePathParams(data?.params)),
-                params: data?.query,
-                data: data?.body,
-                signal: data?.signal,
-                ...(data?.axiosConfig
-                ? sdk.resolveAxiosConfig(data.axiosConfig)
-                : undefined),
-            };
-
-            sdk.log("Sending Request:", requestPayload);
-
-            const res = await sdk._axios!.request(requestPayload);
-
-            return res;
-        }, data);
-    },
         suspend(data: {
         params: suspend$params,
         query?: undefined,
@@ -682,16 +484,16 @@ export const rentalsAdminModule = (sdk: typeof BaseSDK) => {
             return res;
         }, data);
     },
-        pool(data: {
-        params: pool$params,
-        query?: undefined,
+        listDisputes(data: {
+        params?: undefined,
+        query: listDisputes$query,
         body?: undefined,
-    } & TRequestOptions<pool$return>) {
+    } & TRequestOptions<listDisputes$return>) {
         return sdk.resolveAxiosResponse(async () => {
-            sdk.checkPermission("rentalsAdmin", "pool");
+            sdk.checkPermission("rentalsAdmin", "listDisputes");
 
             const method = "get";
-            const toPath = compile("rentalsAdmin/api/pool/:id");
+            const toPath = compile("rentalsAdmin/api/disputes");
             const requestPayload = {
                 method,
                 url: toPath(sdk.resolvePathParams(data?.params)),
@@ -710,16 +512,128 @@ export const rentalsAdminModule = (sdk: typeof BaseSDK) => {
             return res;
         }, data);
     },
-        updatePool(data: {
-        params: updatePool$params,
+        resolveDispute(data: {
+        params: resolveDispute$params,
         query?: undefined,
-        body: updatePool$body,
+        body: resolveDispute$body,
     } & TRequestOptions<unknown>) {
         return sdk.resolveAxiosResponse(async () => {
-            sdk.checkPermission("rentalsAdmin", "updatePool");
+            sdk.checkPermission("rentalsAdmin", "resolveDispute");
 
-            const method = "patch";
-            const toPath = compile("rentalsAdmin/api/pool/:id");
+            const method = "post";
+            const toPath = compile("rentalsAdmin/api/disputes/:id/resolve");
+            const requestPayload = {
+                method,
+                url: toPath(sdk.resolvePathParams(data?.params)),
+                params: data?.query,
+                data: data?.body,
+                signal: data?.signal,
+                ...(data?.axiosConfig
+                ? sdk.resolveAxiosConfig(data.axiosConfig)
+                : undefined),
+            };
+
+            sdk.log("Sending Request:", requestPayload);
+
+            const res = await sdk._axios!.request(requestPayload);
+
+            return res;
+        }, data);
+    },
+        listReverts(data?: {
+        params?: undefined,
+        query?: undefined,
+        body?: undefined,
+    } & TRequestOptions<listReverts$return>) {
+        return sdk.resolveAxiosResponse(async () => {
+            sdk.checkPermission("rentalsAdmin", "listReverts");
+
+            const method = "get";
+            const toPath = compile("rentalsAdmin/api/reverts");
+            const requestPayload = {
+                method,
+                url: toPath(sdk.resolvePathParams(data?.params)),
+                params: data?.query,
+                data: data?.body,
+                signal: data?.signal,
+                ...(data?.axiosConfig
+                ? sdk.resolveAxiosConfig(data.axiosConfig)
+                : undefined),
+            };
+
+            sdk.log("Sending Request:", requestPayload);
+
+            const res = await sdk._axios!.request(requestPayload);
+
+            return res;
+        }, data);
+    },
+        decideRevert(data: {
+        params: decideRevert$params,
+        query?: undefined,
+        body: decideRevert$body,
+    } & TRequestOptions<unknown>) {
+        return sdk.resolveAxiosResponse(async () => {
+            sdk.checkPermission("rentalsAdmin", "decideRevert");
+
+            const method = "post";
+            const toPath = compile("rentalsAdmin/api/reverts/:id/decide");
+            const requestPayload = {
+                method,
+                url: toPath(sdk.resolvePathParams(data?.params)),
+                params: data?.query,
+                data: data?.body,
+                signal: data?.signal,
+                ...(data?.axiosConfig
+                ? sdk.resolveAxiosConfig(data.axiosConfig)
+                : undefined),
+            };
+
+            sdk.log("Sending Request:", requestPayload);
+
+            const res = await sdk._axios!.request(requestPayload);
+
+            return res;
+        }, data);
+    },
+        listReports(data?: {
+        params?: undefined,
+        query?: undefined,
+        body?: undefined,
+    } & TRequestOptions<listReports$return>) {
+        return sdk.resolveAxiosResponse(async () => {
+            sdk.checkPermission("rentalsAdmin", "listReports");
+
+            const method = "get";
+            const toPath = compile("rentalsAdmin/api/reports");
+            const requestPayload = {
+                method,
+                url: toPath(sdk.resolvePathParams(data?.params)),
+                params: data?.query,
+                data: data?.body,
+                signal: data?.signal,
+                ...(data?.axiosConfig
+                ? sdk.resolveAxiosConfig(data.axiosConfig)
+                : undefined),
+            };
+
+            sdk.log("Sending Request:", requestPayload);
+
+            const res = await sdk._axios!.request(requestPayload);
+
+            return res;
+        }, data);
+    },
+        closeReport(data: {
+        params: closeReport$params,
+        query?: undefined,
+        body?: undefined,
+    } & TRequestOptions<unknown>) {
+        return sdk.resolveAxiosResponse(async () => {
+            sdk.checkPermission("rentalsAdmin", "closeReport");
+
+            const method = "post";
+            const toPath = compile("rentalsAdmin/api/reports/:id/close");
             const requestPayload = {
                 method,
                 url: toPath(sdk.resolvePathParams(data?.params)),
@@ -740,12 +654,6 @@ export const rentalsAdminModule = (sdk: typeof BaseSDK) => {
     },
     } as const;
 
-    (methods.queue as any).__scope = "rentalsAdmin";
-    (methods.placement as any).__scope = "rentalsAdmin";
-    (methods.approve as any).__scope = "rentalsAdmin";
-    (methods.reject as any).__scope = "rentalsAdmin";
-    (methods.approveResize as any).__scope = "rentalsAdmin";
-    (methods.rejectResize as any).__scope = "rentalsAdmin";
     (methods.suspend as any).__scope = "rentalsAdmin";
     (methods.resume as any).__scope = "rentalsAdmin";
     (methods.terminate as any).__scope = "rentalsAdmin";
@@ -756,8 +664,12 @@ export const rentalsAdminModule = (sdk: typeof BaseSDK) => {
     (methods.waiting as any).__scope = "rentalsAdmin";
     (methods.recreatePartition as any).__scope = "rentalsAdmin";
     (methods.refund as any).__scope = "rentalsAdmin";
-    (methods.pool as any).__scope = "rentalsAdmin";
-    (methods.updatePool as any).__scope = "rentalsAdmin";
+    (methods.listDisputes as any).__scope = "rentalsAdmin";
+    (methods.resolveDispute as any).__scope = "rentalsAdmin";
+    (methods.listReverts as any).__scope = "rentalsAdmin";
+    (methods.decideRevert as any).__scope = "rentalsAdmin";
+    (methods.listReports as any).__scope = "rentalsAdmin";
+    (methods.closeReport as any).__scope = "rentalsAdmin";
 
     sdk["_moduleGroup"].set(methods, "Admin");
 

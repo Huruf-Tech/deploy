@@ -141,9 +141,24 @@ export type get$return = {
             } | undefined;
             error?: string | undefined;
             updatedAt: Date;
-            class?: string | undefined;
+            rent?: {
+                enabled: boolean;
+                autoAccept: boolean;
+                prices: {
+                    vcpu: number;
+                    memGb: number;
+                    diskGb: number;
+                    whole?: number | undefined;
+                    trafficGb: number;
+                };
+            } | undefined;
             accepting?: boolean | undefined;
             monthlyCost?: number | undefined;
+        } | undefined;
+        region?: {
+            country: string;
+            ip: string;
+            at: Date;
         } | undefined;
         tunnelPort?: number | undefined;
         acceptedBy?: string | undefined;

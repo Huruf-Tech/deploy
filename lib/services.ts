@@ -8,6 +8,8 @@ import { BillingService } from "@/lib/billing/billing.ts";
 import { GitHubApi } from "@/lib/github/githubApi.ts";
 import { PaymentService } from "@/lib/payments/payments.ts";
 import { RentalService } from "@/lib/rentals/rentals.ts";
+import { EarningsService } from "@/lib/market/earnings.ts";
+import { DisputeService } from "@/lib/market/market.ts";
 import { StripeGateway } from "@/lib/payments/stripe.ts";
 import { Wallet } from "@/plugins/Huruf-Tech/thunder-core/lib/wallet.ts";
 import { keyringModel } from "@/schemas/crypto/keyring.ts";
@@ -76,11 +78,17 @@ export const payments: PaymentService = new PaymentService(
 );
 Wallet.onInsufficientBalance = (request) => payments.coverShortfall(request);
 
+/** Machine owners' money (PLAN §30.7): maturity, security, claims. */
+export const earnings: EarningsService = new EarningsService(entitlements);
+
+/** Disputes on rentals (PLAN §30.9), paid from the machine's money. */
+export const disputes: DisputeService = new DisputeService(earnings);
+
 /**
- * Rentals (PLAN §26): requests, approval, partitions and traffic. Billing
- * calls its hooks when a rental renews, goes unpaid or ends.
+ * Rentals (PLAN §26, §30): requests, acceptance, partitions and traffic.
+ * Billing calls its hooks when a rental is charged, renews, goes unpaid or ends.
  */
 export const rentals: RentalService = new RentalService(billing, {
   fundNow: (opts) => payments.fundNow(opts),
-});
+}, earnings);
 billing.rentals = rentals;

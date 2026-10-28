@@ -84,6 +84,18 @@ export const WORKSPACE: TSubject = { kind: "workspace" };
  * implemented by `RentalService` so billing knows nothing of partitions.
  */
 export type TRentalHooks = {
+  /** Fields a rental's period records when charged (PLAN §30.7: who earns it). */
+  periodFields(
+    sub: WithId<TSubscription>,
+  ): Promise<Partial<TSubscriptionPeriod>>;
+  /**
+   * Before a renewal (PLAN §30.6): "skip" it (the rental ended meanwhile), or
+   * "end" it as if canceled.
+   */
+  beforeRenew(
+    sub: WithId<TSubscription>,
+    now: Date,
+  ): Promise<"skip" | "end" | undefined>;
   /** A period's traffic beyond its allowance, charged with the next one. */
   overage(
     sub: WithId<TSubscription>,
@@ -236,6 +248,8 @@ export class BillingService {
     credit?: number;
     /** A rental's traffic overage, charged with this period (PLAN §26.9). */
     overage?: { gb: number; amount: number } | null;
+    /** More of the period's fields (a rental's `market`, PLAN §30.7). */
+    extra?: Partial<TSubscriptionPeriod>;
     user?: ObjectId;
     session: ClientSession;
   }) {
@@ -308,6 +322,7 @@ export class BillingService {
         ? { resourcesSnapshot: plan.resources, usage: { trafficBytes: 0 } }
         : {}),
       ...(opts.overage ? { overage: opts.overage } : {}),
+      ...opts.extra,
       kind: "paid",
       paidAt: opts.start,
       createdAt: new Date(),
@@ -418,6 +433,9 @@ export class BillingService {
       ? this.rentals?.overage(sub, current) ?? null
       : null;
     const total = due + (overage?.amount ?? 0);
+    const extra = subject.kind === "server" && sub
+      ? await this.rentals?.periodFields(sub)
+      : undefined;
     // The card covers what the wallet is short of, outside the transaction.
     if (this.funds && total > 0) {
       if (opts.customerAway) {
@@ -461,6 +479,7 @@ export class BillingService {
             idempotencyKey: key,
             credit: credit + refund,
             overage,
+            extra,
             user,
             session,
           });
@@ -524,6 +543,7 @@ export class BillingService {
     const plan = await planModel.findOne({ _id: sub.plan });
     if (!plan) throw Response.notFound("Plan not found");
     const key = `sub:${sub._id}:first`;
+    const extra = await this.rentals?.periodFields(sub);
     if (this.funds && plan.price.amount > 0) {
       const funded = await this.funds.fundRenewal({
         tenant: sub.tenant,
@@ -548,6 +568,7 @@ export class BillingService {
             plan,
             start: now,
             idempotencyKey: key,
+            extra,
             user,
             session,
           });
@@ -679,9 +700,13 @@ export class BillingService {
     if (!await platformTenantId()) return;
     const ended = sub.currentPeriodEnd;
     const guard = { _id: sub._id, currentPeriodEnd: ended };
+    const verdict = sub.kind === "server"
+      ? await this.rentals?.beforeRenew(sub, now)
+      : undefined;
+    if (verdict === "skip") return;
 
     // A plan no longer offered (`active: false`) still renews its subscribers.
-    const plan = !sub.cancelAtPeriodEnd && sub.autoRenew &&
+    const plan = verdict !== "end" && !sub.cancelAtPeriodEnd && sub.autoRenew &&
       await planModel.findOne({ _id: sub.nextPlan ?? sub.plan });
     if (!plan || plan.isFree) {
       const { modifiedCount } = await subscriptionModel.updateOne(guard, {
@@ -703,6 +728,11 @@ export class BillingService {
       ? this.rentals?.overage(sub, endedPeriod) ?? null
       : null;
     const amount = plan.price.amount + (overage?.amount ?? 0);
+    // Who earns the new period: its machine's owner now (an agreed move
+    // changed it, PLAN §30.8).
+    const extra = sub.kind === "server"
+      ? await this.rentals?.periodFields(sub)
+      : undefined;
 
     try {
       // The card covers what the wallet is short of, before the transaction.
@@ -735,6 +765,7 @@ export class BillingService {
             start: now,
             idempotencyKey: `sub:${sub._id}:renew:${ended.toISOString()}`,
             overage,
+            extra,
             session,
           });
           const { modifiedCount } = await subscriptionModel.updateOne(guard, {

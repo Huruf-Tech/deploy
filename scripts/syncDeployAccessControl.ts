@@ -42,6 +42,11 @@ export const syncDeployAccessControl = async () => {
     "payments",
     // Rented servers (PLAN §26): everyone sees them; renting checks for the owner.
     "rentals",
+    // The market, renting machines out and their earnings (PLAN §30):
+    // everyone looks; changes check for the owner.
+    "market",
+    "hosting",
+    "earnings",
     "networks",
     "alertRules",
     "alertEvents",

@@ -1,148 +1,34 @@
 import z from "zod";
-import { platformTenant, platformTenantId } from "@/lib/billing/platform.ts";
+import type { ObjectId } from "mongodb";
 import { Router } from "@/core/http/router.ts";
-import { bodyAsJson, paramsAsJson } from "@/core/http/utils.ts";
+import { bodyAsJson, paramsAsJson, queryAsJson } from "@/core/http/utils.ts";
 import { Response } from "@/core/http/response.ts";
 import { $objectId } from "@/core/utils/createCRUD.ts";
 import { withAuthSession } from "@/plugins/Huruf-Tech/thunder-core/utils/withAuthSession.ts";
 import { tenantModel } from "@/plugins/Huruf-Tech/thunder-core/schemas/tenant.ts";
-import { rentals as rentalService } from "@/lib/services.ts";
+import { walletLedgerModel } from "@/plugins/Huruf-Tech/thunder-core/schemas/walletLedger.ts";
+import {
+  disputes,
+  earnings,
+  rentals as rentalService,
+} from "@/lib/services.ts";
 import { planModel } from "@/schemas/billing/plan.ts";
 import {
-  LIVE_RENTAL,
-  subscriptionModel,
-} from "@/schemas/billing/subscription.ts";
-import { serverClassModel } from "@/schemas/billing/serverClass.ts";
+  abuseReportModel,
+  claimRevertModel,
+  earningModel,
+} from "@/schemas/billing/market.ts";
 import { serverModel } from "@/schemas/infrastructure/server.ts";
-import { ObjectId } from "mongodb";
 
 /**
- * Admin side of rentals (PLAN §26.8, §28): the queue of requests and
- * resizes, placement on the platform's machines, approval, and which
- * machines are for rent.
+ * Admin oversight of the market (PLAN §30.2): suspend, resume, delete, move
+ * and refund rentals, rentals that didn't arrive, the market's machines,
+ * disputes, claims taken back and abuse reports. Owners accept requests.
  * Root only: no member policy grants this router.
  */
 export default new Router("/api", function rentalsAdmin(router) {
   const $params = z.object({ id: $objectId });
   const admin = async (req: Request) => (await withAuthSession(req)).user._id;
-
-  router.get("/queue", function queue() {
-    const $return = z.array(z.object({
-      _id: z.string(),
-      tenant: z.string(),
-      tenantName: z.string().optional(),
-      status: z.string(),
-      plan: z.string().optional().describe("Plan name"),
-      size: z.object({
-        cpus: z.number(),
-        memMb: z.number(),
-        diskGb: z.number(),
-      }),
-      resizeTo: z.string().optional().describe("The size a resize asks for"),
-      requestedAt: z.date(),
-    }));
-
-    return {
-      shape: () => ({ return: $return }),
-      handler: async () => {
-        const subs = await rentalService.queue();
-        const [tenants, plans] = await Promise.all([
-          tenantModel.find({ _id: { $in: subs.map((s) => s.tenant) } }, {
-            projection: { name: 1 },
-          }).toArray(),
-          planModel.find({
-            _id: {
-              $in: subs.flatMap((s) => [s.plan, s.rental?.pendingChange?.plan])
-                .filter((x) => !!x),
-            },
-          }, { projection: { name: 1 } }).toArray(),
-        ]);
-        const name = (id?: ObjectId) =>
-          id && plans.find((p) => p._id.equals(id))?.name;
-        return Response.json(subs.map((s) => ({
-          _id: s._id,
-          tenant: s.tenant,
-          tenantName: tenants.find((t) => t._id.equals(s.tenant))?.name,
-          status: s.status,
-          plan: name(s.plan),
-          size: s.rental!.size,
-          resizeTo: name(s.rental!.pendingChange?.plan),
-          requestedAt: s.rental!.pendingChange?.requestedAt ?? s.updatedAt,
-        })));
-      },
-    };
-  });
-
-  router.get("/:id/placement", function placement() {
-    const $return = z.array(z.object({
-      server: z.string(),
-      name: z.string(),
-      free: z.object({ memMb: z.number(), diskGb: z.number() }),
-      cpuRoom: z.number(),
-      fits: z.boolean(),
-    }));
-
-    return {
-      shape: () => ({ params: $params, return: $return }),
-      handler: async (req) => {
-        const { id } = $params.parse(paramsAsJson(req));
-        return Response.json(await rentalService.placement(id));
-      },
-    };
-  });
-
-  router.post("/:id/approve", function approve() {
-    const $body = z.object({ host: $objectId });
-
-    return {
-      shape: () => ({ params: $params, body: $body }),
-      handler: async (req) => {
-        const { id } = $params.parse(paramsAsJson(req));
-        const { host } = $body.parse(await bodyAsJson(req));
-        await rentalService.approve(id, host, await admin(req));
-        return Response.json({ ok: true });
-      },
-    };
-  });
-
-  router.post("/:id/reject", function reject() {
-    const $body = z.object({ reason: z.string().min(1).max(500) });
-
-    return {
-      shape: () => ({ params: $params, body: $body }),
-      handler: async (req) => {
-        const { id } = $params.parse(paramsAsJson(req));
-        const { reason } = $body.parse(await bodyAsJson(req));
-        await rentalService.reject(id, reason);
-        return Response.json({ ok: true });
-      },
-    };
-  });
-
-  router.post("/:id/resize/approve", function approveResize() {
-    return {
-      shape: () => ({ params: $params }),
-      handler: async (req) => {
-        const { id } = $params.parse(paramsAsJson(req));
-        await rentalService.approveResize(id, await admin(req));
-        return Response.json({ ok: true });
-      },
-    };
-  });
-
-  router.post("/:id/resize/reject", function rejectResize() {
-    const $body = z.object({ reason: z.string().min(1).max(500) });
-
-    return {
-      shape: () => ({ params: $params, body: $body }),
-      handler: async (req) => {
-        const { id } = $params.parse(paramsAsJson(req));
-        const { reason } = $body.parse(await bodyAsJson(req));
-        await rentalService.rejectResize(id, reason);
-        return Response.json({ ok: true });
-      },
-    };
-  });
 
   // An admin's hand on a rental: stop it (not renewed meanwhile), start it
   // again, or delete it now with its data (nothing refunded).
@@ -242,7 +128,8 @@ export default new Router("/api", function rentalsAdmin(router) {
       machines: z.array(z.object({
         _id: z.string(),
         name: z.string(),
-        class: z.string().optional(),
+        tenant: z.string().describe("The owner's workspace"),
+        forRent: z.boolean(),
         accepting: z.boolean(),
         allocatable: z.object({
           cpus: z.number(),
@@ -250,7 +137,7 @@ export default new Router("/api", function rentalsAdmin(router) {
           diskGb: z.number(),
         }),
         rentedMemMb: z.number(),
-        ownMemMb: z.number().describe("The platform's own partitions"),
+        ownMemMb: z.number().describe("The owner's own partitions"),
         freeMemMb: z.number(),
         rentals: z.number(),
         revenue: z.number().describe("Cents per month"),
@@ -336,112 +223,73 @@ export default new Router("/api", function rentalsAdmin(router) {
     };
   });
 
-  // A server's pool state for its page (PLAN §26.8): whether it can be one
-  // (the platform's servers only), and the rentals on it with their prices.
-  router.get("/pool/:id", function pool() {
-    const $return = z.object({
-      platform: z.boolean(),
-      rentals: z.array(z.object({
-        _id: z.string(),
-        partition: z.string().optional(),
-        tenantName: z.string().optional(),
-        plan: z.string().optional(),
-        price: z.number().describe("Cents per month"),
-        status: z.string(),
-        held: z.boolean().optional().describe("Suspended by an admin"),
-        uptime: z.number().optional().describe("This period so far, percent"),
-        overDisk: z.number().optional().describe(
-          "Bytes used, when more than its size",
-        ),
-        moving: z.object({
-          to: z.string(),
-          toName: z.string().optional(),
-          startedAt: z.date(),
-        }).optional(),
-        lastMove: z.object({
-          from: z.string(),
-          to: z.string(),
-          at: z.date(),
-          error: z.string().optional(),
-        }).optional(),
-      })),
-      revenue: z.number().describe("Cents per month from live rentals"),
+  // Disputes (PLAN §30.9): open ones with their evidence; a decision pays
+  // the refund from the machine's money.
+  router.get("/disputes", function listDisputes() {
+    const $query = z.object({
+      status: z.enum(["open", "resolved"]).optional(),
     });
+    const $return = z.array(z.object({
+      _id: z.string(),
+      subscription: z.string(),
+      tenantName: z.string().optional(),
+      ownerName: z.string().optional(),
+      machine: z.string(),
+      machineName: z.string().optional(),
+      reason: z.string(),
+      status: z.string(),
+      evidence: z.record(z.string(), z.unknown()),
+      held: z.number().describe("Cents the machine's money can pay"),
+      decision: z.object({
+        refund: z.number(),
+        note: z.string().optional(),
+        at: z.date(),
+      }).optional(),
+      createdAt: z.date(),
+    }));
 
     return {
-      shape: () => ({ params: $params, return: $return }),
+      shape: () => ({ query: $query, return: $return }),
       handler: async (req) => {
-        const { id } = $params.parse(paramsAsJson(req));
-        const server = await serverModel.findOne({ _id: id }, {
-          projection: { tenant: 1 },
-        });
-        if (!server) throw Response.notFound("Server not found");
-        const platform = server.tenant.equals(
-          await platformTenantId() ?? new ObjectId(),
-        );
-        const subs = platform
-          ? await subscriptionModel.find({
-            kind: "server",
-            "rental.host": id,
-            status: { $in: [...LIVE_RENTAL] },
-          }, { limit: 200 }).toArray()
-          : [];
-        const [tenants, plans, uptimes, targets] = await Promise.all([
-          tenantModel.find({ _id: { $in: subs.map((s) => s.tenant) } }, {
+        const { status } = $query.parse(queryAsJson(req));
+        const rows = await disputes.list(status);
+        const [tenants, machines, held] = await Promise.all([
+          tenantModel.find({
+            _id: { $in: rows.flatMap((d) => [d.tenant, d.owner]) },
+          }, { projection: { name: 1 } }).toArray(),
+          serverModel.find({ _id: { $in: rows.map((d) => d.machine) } }, {
             projection: { name: 1 },
           }).toArray(),
-          planModel.find({ _id: { $in: subs.map((s) => s.plan) } }, {
-            projection: { name: 1, price: 1 },
-          }).toArray(),
-          rentalService.uptimes(subs),
-          serverModel.find({
-            _id: { $in: subs.flatMap((s) => s.rental?.move?.to ?? []) },
-          }, { projection: { name: 1 } }).toArray(),
+          Promise.all(rows.map((d) => earnings.frozenOf(d.machine))),
         ]);
-        const rows = subs.map((s) => {
-          const plan = plans.find((p) => p._id.equals(s.plan));
-          const move = s.rental?.move;
-          return {
-            _id: s._id,
-            partition: s.rental?.partition,
-            tenantName: tenants.find((t) => t._id.equals(s.tenant))?.name,
-            plan: plan?.name,
-            price: plan?.price.amount ?? 0,
-            status: s.status,
-            ...(s.rental?.held ? { held: true } : {}),
-            uptime: uptimes.get(String(s._id)),
-            ...(s.rental?.overDisk
-              ? { overDisk: s.rental.overDisk.bytes }
-              : {}),
-            ...(move
-              ? {
-                moving: {
-                  to: String(move.to),
-                  toName: targets.find((m) => m._id.equals(move.to))?.name,
-                  startedAt: move.startedAt,
-                },
-              }
-              : {}),
-            ...(s.rental?.lastMove ? { lastMove: s.rental.lastMove } : {}),
-          };
-        });
-        return Response.json({
-          platform,
-          rentals: rows,
-          revenue: rows.filter((r) => r.status !== "suspended")
-            .reduce((sum, r) => sum + r.price, 0),
-        });
+        const name = (id: ObjectId) =>
+          tenants.find((t) => t._id.equals(id))?.name;
+        return Response.json(rows.map((d, i) => ({
+          _id: d._id,
+          subscription: d.subscription,
+          tenantName: name(d.tenant),
+          ownerName: name(d.owner),
+          machine: d.machine,
+          machineName: machines.find((m) => m._id.equals(d.machine))?.name,
+          reason: d.reason,
+          status: d.status,
+          evidence: d.evidence,
+          held: held[i].total,
+          decision: d.decision && {
+            refund: d.decision.refund,
+            note: d.decision.note,
+            at: d.decision.at,
+          },
+          createdAt: d.createdAt,
+        })));
       },
     };
   });
 
-  // A platform machine is for rent once it has a class (PLAN §28): its
-  // class, whether it takes new rentals (draining), and its cost.
-  router.patch("/pool/:id", function updatePool() {
+  router.post("/disputes/:id/resolve", function resolveDispute() {
     const $body = z.object({
-      class: $objectId.nullable().optional().describe("null: not for rent"),
-      accepting: z.boolean().optional(),
-      monthlyCost: z.number().int().min(0).optional(),
+      refund: z.number().int().min(0),
+      note: z.string().max(1_000).optional(),
     });
 
     return {
@@ -449,32 +297,141 @@ export default new Router("/api", function rentalsAdmin(router) {
       handler: async (req) => {
         const { id } = $params.parse(paramsAsJson(req));
         const body = $body.parse(await bodyAsJson(req));
-        if (
-          body.class &&
-          !await serverClassModel.countDocuments({ _id: body.class })
-        ) {
-          throw Response.notFound("Server class not found");
-        }
-        const { class: cls, ...rest } = body;
-        const { matchedCount } = await serverModel.updateOne(
-          {
-            _id: id,
-            tenant: await platformTenant(),
-            "pool.status": { $exists: true },
-          },
-          {
-            $set: Object.fromEntries(
-              Object.entries({
-                ...rest,
-                ...(cls ? { class: cls } : {}),
-              }).map(([k, v]) => [`pool.${k}`, v]),
-            ),
-            ...(cls === null ? { $unset: { "pool.class": "" } } : {}),
-          },
+        await disputes.resolve(id, await admin(req), body);
+        return Response.json({ ok: true });
+      },
+    };
+  });
+
+  // Claims an owner wants back from a wallet that moved since (PLAN §30.7).
+  router.get("/reverts", function listReverts() {
+    const $return = z.array(z.object({
+      _id: z.string(),
+      ownerName: z.string().optional(),
+      amount: z.number(),
+      max: z.number().describe("The claim minus what was charged since"),
+      claimedAt: z.date().optional(),
+      transactions: z.array(z.object({
+        type: z.string(),
+        amount: z.number(),
+        description: z.unknown().optional(),
+        createdAt: z.date().optional(),
+      })).describe("The wallet's movements since the claim"),
+      createdAt: z.date(),
+    }));
+
+    return {
+      shape: () => ({ return: $return }),
+      handler: async () => {
+        const rows = await claimRevertModel.find({ status: "pending" }, {
+          sort: { createdAt: 1 },
+          limit: 100,
+        }).toArray();
+        const [tenants, claims] = await Promise.all([
+          tenantModel.find({ _id: { $in: rows.map((r) => r.owner) } }, {
+            projection: { name: 1 },
+          }).toArray(),
+          earningModel.find({ _id: { $in: rows.map((r) => r.claim) } }, {
+            projection: { createdAt: 1, walletReference: 1 },
+          }).toArray(),
+        ]);
+        return Response.json(
+          await Promise.all(rows.map(async (r) => {
+            const claim = claims.find((c) => c._id.equals(r.claim));
+            const since = claim
+              ? await walletLedgerModel.find({
+                tenant: r.owner,
+                createdAt: { $gt: claim.createdAt },
+                reference: { $ne: claim.walletReference },
+              }, {
+                projection: {
+                  type: 1,
+                  amount: 1,
+                  description: 1,
+                  createdAt: 1,
+                },
+                sort: { createdAt: 1 },
+                limit: 100,
+              }).toArray()
+              : [];
+            return {
+              _id: r._id,
+              ownerName: tenants.find((t) => t._id.equals(r.owner))?.name,
+              amount: r.amount,
+              max: r.max,
+              claimedAt: claim?.createdAt,
+              transactions: since.map((t) => ({
+                type: String(t.type),
+                amount: Number(t.amount),
+                description: t.description,
+                createdAt: t.createdAt,
+              })),
+              createdAt: r.createdAt,
+            };
+          })),
         );
-        if (!matchedCount) {
-          throw Response.notFound("No machine of the platform with this id");
-        }
+      },
+    };
+  });
+
+  router.post("/reverts/:id/decide", function decideRevert() {
+    const $body = z.object({
+      amount: z.number().int().min(0).describe("0 refuses"),
+      note: z.string().max(500).optional(),
+    });
+
+    return {
+      shape: () => ({ params: $params, body: $body }),
+      handler: async (req) => {
+        const { id } = $params.parse(paramsAsJson(req));
+        const body = $body.parse(await bodyAsJson(req));
+        await earnings.decideRevert(id, await admin(req), body);
+        return Response.json({ ok: true });
+      },
+    };
+  });
+
+  // Abuse reports (PLAN §30.10).
+  router.get("/reports", function listReports() {
+    const $return = z.array(z.object({
+      _id: z.string(),
+      tenantName: z.string().optional(),
+      machine: z.string().optional(),
+      subscription: z.string().optional(),
+      text: z.string(),
+      createdAt: z.date(),
+    }));
+
+    return {
+      shape: () => ({ return: $return }),
+      handler: async () => {
+        const rows = await abuseReportModel.find({ status: "open" }, {
+          sort: { createdAt: 1 },
+          limit: 200,
+        }).toArray();
+        const tenants = await tenantModel.find({
+          _id: { $in: rows.map((r) => r.tenant) },
+        }, { projection: { name: 1 } }).toArray();
+        return Response.json(rows.map((r) => ({
+          _id: r._id,
+          tenantName: tenants.find((t) => t._id.equals(r.tenant))?.name,
+          machine: r.machine,
+          subscription: r.subscription,
+          text: r.text,
+          createdAt: r.createdAt,
+        })));
+      },
+    };
+  });
+
+  router.post("/reports/:id/close", function closeReport() {
+    return {
+      shape: () => ({ params: $params }),
+      handler: async (req) => {
+        const { id } = $params.parse(paramsAsJson(req));
+        await abuseReportModel.updateOne({ _id: id }, {
+          $set: { status: "closed" },
+        });
         return Response.json({ ok: true });
       },
     };

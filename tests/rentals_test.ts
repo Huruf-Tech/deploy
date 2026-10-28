@@ -6,19 +6,11 @@ import { Env } from "@/core/utils/env.ts";
 import { Mailer } from "@/plugins/Huruf-Tech/thunder-core/lib/mailer.ts";
 import { Wallet } from "@/plugins/Huruf-Tech/thunder-core/lib/wallet.ts";
 import { billing, rentals } from "@/lib/services.ts";
-import {
-  counterDelta,
-  includedTraffic,
-  overageOf,
-  priceOf,
-} from "@/lib/rentals/rentals.ts";
+import { counterDelta, overageOf } from "@/lib/rentals/rentals.ts";
+import { hourlyOf, monthlyOf } from "@/lib/market/pricing.ts";
 import { openSealed } from "@/lib/agents/sealing.ts";
 import { registerAgent } from "@/lib/agents/servers.ts";
-import { $plan, planModel } from "@/schemas/billing/plan.ts";
-import {
-  $serverClass,
-  serverClassModel,
-} from "@/schemas/billing/serverClass.ts";
+import { planModel } from "@/schemas/billing/plan.ts";
 import { subscriptionModel } from "@/schemas/billing/subscription.ts";
 import { subscriptionPeriodModel } from "@/schemas/billing/subscriptionPeriod.ts";
 import { serverModel } from "@/schemas/infrastructure/server.ts";
@@ -29,25 +21,27 @@ import { seedKeys } from "./sealing_test.ts";
 import { MOVE_PORT } from "@/schemas/protocol/agent.ts";
 import { testSession } from "./_session.ts";
 
-// Rentals (PLAN §26, Phases 16d and 16f): requests, approval, the rented
-// server, traffic, renewal with overage, resize, moving between machines,
-// capacity and uptime, suspension and release.
+// Rentals (PLAN §26, §30): requests on a machine of the market, the owner's
+// acceptance, the rented server, traffic, renewal with overage, resize,
+// moving between machines, capacity and uptime, suspension and release, and
+// a machine that leaves.
 
 const DAY = 86_400_000;
-const shared = $serverClass.parse({
-  name: "Shared CPU test",
-  rates: { vcpu: 800, memGb: 400, diskGb: 12, trafficGb: 10, fixed: 200 },
-  includedTrafficPerVcpu: 100,
-  cpuOvercommit: 2,
-});
+// The launch "Shared CPU" rate card, by the hour (PLAN §30.3).
+const prices = {
+  vcpu: 800 / 730,
+  memGb: 400 / 730,
+  diskGb: 12 / 730,
+  trafficGb: 10,
+};
+const priceOf = (vcpu: number, memMb: number, diskGb: number) =>
+  monthlyOf(hourlyOf(prices, { vcpu, memMb, diskGb }, 128));
+const SMALL = priceOf(1, 2048, 25);
 
 Deno.test("rentals: price, overage and counters", () => {
-  // Small: $2 + $8 + 2.125 GB × $4 + 25 GB × $0.12 = $21.50 → $22.
-  assertEquals(
-    priceOf(shared, { vcpu: 1, memMb: 2048, diskGb: 25 }, 128),
-    2_200,
-  );
-  assertEquals(includedTraffic(shared, 1), 100);
+  // 1 vCPU $8 + 2.125 GB × $4 + 25 GB × $0.12 = $19.50 a month.
+  assertEquals(SMALL, 1_950);
+  assertEquals(monthlyOf(1.5), 1_095, "730 hours, cents rounded up");
   assertEquals(overageOf(99e9, 100, 10), null);
   assertEquals(overageOf(105.2e9, 100, 10), { gb: 6, amount: 60 });
   assertEquals(
@@ -110,29 +104,14 @@ Deno.test({
     const refused = (fn: () => Promise<unknown>) =>
       fn().then(() => null, (e) => e as Response);
 
-    const { insertedId: cls } = await serverClassModel.insertOne(shared);
-    const size = (name: string, vcpu: number, memMb: number, diskGb: number) =>
-      $plan.parse({
-        name,
-        slug: `test-${name.toLowerCase()}-${Date.now()}`,
-        kind: "server",
-        class: cls,
-        resources: {
-          vcpu,
-          memMb,
-          diskGb,
-          trafficGb: includedTraffic(shared, vcpu),
-        },
-        price: {
-          amount: priceOf(shared, { vcpu, memMb, diskGb }, 128),
-          currency: "usd",
-          interval: "month",
-        },
-      });
-    const small =
-      (await planModel.insertOne(size("Small", 1, 2048, 25))).insertedId;
-    const medium =
-      (await planModel.insertOne(size("Medium", 2, 4096, 50))).insertedId;
+    const rent = { enabled: true, autoAccept: false, prices };
+    const small = {
+      vcpu: 1,
+      memMb: 2048,
+      diskGb: 25,
+      termMonths: 1,
+      waiveWithdrawal: true,
+    };
     const host = new ObjectId();
     await serverModel.insertOne({
       _id: host,
@@ -144,9 +123,11 @@ Deno.test({
         boxPublicKey: publicKey,
         fingerprint: `pool-${host}`,
       },
+      provider: { kind: "machine" },
+      createdAt: new Date(),
       pool: {
         status: "ready",
-        class: cls,
+        rent,
         allocatable: { cpus: 2, memMb: 8192, diskGb: 100 },
         updatedAt: new Date(),
       },
@@ -181,32 +162,47 @@ Deno.test({
     };
 
     try {
-      await t.step("the catalog and a custom quote", async () => {
-        const { json } = await customer.call("GET", "/rentals/api/catalog");
-        assert(
-          json.sizes.some((s: { _id: string }) => s._id === String(small)),
-          JSON.stringify(json),
+      await t.step("the market and a quote", async () => {
+        const { json } = await customer.call("GET", "/market/api/machines");
+        const listed = json.find((m: { _id: string }) =>
+          m._id === String(host)
+        );
+        assert(listed, JSON.stringify(json));
+        assertEquals(
+          [listed.official, listed.yours, listed.newArrival, listed.free.cpus],
+          [true, false, true, 2],
         );
         const quote = await customer.call(
           "GET",
-          `/rentals/api/quote?class=${cls}&vcpu=1.5&memMb=3072&diskGb=40`,
+          `/market/api/quote?machine=${host}&vcpu=1.5&memMb=3072&diskGb=40`,
         );
         assertEquals(quote.status, 200, JSON.stringify(quote.json));
-        assertEquals(
-          quote.json.price,
-          priceOf(shared, { vcpu: 1.5, memMb: 3072, diskGb: 40 }, 128),
-        );
+        assertEquals(quote.json.price, priceOf(1.5, 3072, 40));
+        assertEquals(quote.json.fits, true);
         const odd = await customer.call(
           "GET",
-          `/rentals/api/quote?class=${cls}&vcpu=1.3&memMb=3072&diskGb=40`,
+          `/market/api/quote?machine=${host}&vcpu=1.3&memMb=3072&diskGb=40`,
         );
         assertEquals(odd.status, 400);
+        // The owner can't rent their own machine.
+        const own = await platform.call("POST", "/rentals/api/request", {
+          machine: host,
+          ...small,
+        });
+        assertEquals(own.status, 403, JSON.stringify(own.json));
       });
 
       await t.step("a request is funded, not charged", async () => {
         await fund(10_000);
+        const unwaived = await customer.call("POST", "/rentals/api/request", {
+          machine: host,
+          ...small,
+          waiveWithdrawal: false,
+        });
+        assertEquals(unwaived.status, 400, "it starts at once: agreed first");
         const res = await customer.call("POST", "/rentals/api/request", {
-          plan: small,
+          machine: host,
+          ...small,
         });
         assertEquals(res.status, 200, JSON.stringify(res.json));
         assertEquals(res.json.result, "requested");
@@ -217,21 +213,34 @@ Deno.test({
           memMb: 2048 + 128,
           diskGb: 25,
         });
+        assert((await sub()).rental!.owner!.equals(platform.tenantId));
         assertEquals(await balance(), 10_000, "the money waits in the wallet");
-        // Admin only.
-        const theirs = await customer.call("GET", "/rentalsAdmin/api/queue");
-        assertEquals(theirs.status, 403);
-        assert((await rentals.queue()).some((s) => s._id.equals(rental)));
+        await mailed(/a rental request/);
+        // The machine's owner sees it; the customer can't accept it.
+        const theirs = await customer.call(
+          "POST",
+          `/hosting/api/${rental}/accept`,
+        );
+        assertEquals(theirs.status, 404);
+        const queue = await platform.call("GET", "/hosting/api/requests");
+        assert(
+          queue.json.some((r: { _id: string }) => r._id === String(rental)),
+          JSON.stringify(queue.json),
+        );
       });
 
       await t.step(
-        "approval charges, places and creates the partition",
+        "the owner's acceptance charges, starts the term, creates the partition",
         async () => {
-          const [spot] = await rentals.placement(rental);
-          assertEquals([spot.server, spot.fits], [String(host), true]);
-          await rentals.approve(rental, host, platform.user);
+          assertEquals((await rentals.placement(rental)).fits, true);
+          const accepted = await platform.call(
+            "POST",
+            `/hosting/api/${rental}/accept`,
+          );
+          assertEquals(accepted.status, 200, JSON.stringify(accepted.json));
           assertEquals((await sub()).status, "active");
-          assertEquals(await balance(), 10_000 - 2_200);
+          assert((await sub()).rental!.term!.until! > new Date());
+          assertEquals(await balance(), 10_000 - SMALL);
           const [create] = await commands("partition.create");
           const payload = JSON.parse(
             await openSealed(
@@ -271,7 +280,11 @@ Deno.test({
             (await serverModel.findOne({ _id: new ObjectId(hello.server) }))!;
           assertEquals(server.provider.kind, "rented");
           assert(server.provider.host!.equals(host));
-          assertEquals(server.name, "Huruf · Small");
+          assertEquals(server.name, "Huruf · 1 vCPU · 2 GB");
+          // Up: its lease is current, so no downtime is refunded.
+          await serverLeaseModel.updateOne({ _id: server._id }, {
+            $set: { aliveUntil: new Date(Date.now() + 365 * DAY) },
+          });
           assert((await sub()).server!.equals(server._id));
           assertEquals(
             (await tenantUsageModel.findOne({ tenant }))?.servers ?? 0,
@@ -338,7 +351,7 @@ Deno.test({
         await endPeriod();
         const before = await balance();
         await billing.renewIfDue(tenant);
-        assertEquals(await balance(), before - 2_200 - 60);
+        assertEquals(await balance(), before - SMALL - 60);
         const renewed = await subscriptionPeriodModel.findOne(
           { subscription: rental },
           { sort: { periodStart: -1 } },
@@ -353,7 +366,7 @@ Deno.test({
           const res = await customer.call(
             "POST",
             `/rentals/api/${rental}/resize`,
-            { plan: medium },
+            { vcpu: 2, memMb: 4096, diskGb: 50 },
           );
           assertEquals(res.status, 200, JSON.stringify(res.json));
           assert((await sub()).rental!.pendingChange);
@@ -366,10 +379,12 @@ Deno.test({
           await serverModel.updateOne({ _id: host }, {
             $unset: { "pool.accepting": "" },
           });
-          assertEquals((await sub()).plan, medium);
+          const plan = await planModel.findOne({ _id: (await sub()).plan });
+          assertEquals(plan!.resources!.vcpu, 2);
+          assertEquals(plan!.price.amount, priceOf(2, 4096, 50));
           assert(await balance() < before, "charged");
           assert(
-            before - await balance() < 4_300,
+            before - await balance() < priceOf(2, 4096, 50),
             "with the unused Small month credited",
           );
           const [resize] = await commands("partition.resize");
@@ -397,9 +412,11 @@ Deno.test({
               boxPublicKey: publicKey,
               fingerprint: `pool-${host2}`,
             },
+            provider: { kind: "machine" },
+            createdAt: new Date(),
             pool: {
               status: "ready",
-              class: cls,
+              rent,
               allocatable: { cpus: 2, memMb: 8192, diskGb: 100 },
               updatedAt: new Date(),
             },
@@ -454,8 +471,8 @@ Deno.test({
           const { machines } = await rentals.capacity();
           const row = machines.find((m) => m._id === String(host))!;
           assertEquals(
-            [row.class, row.rentals, row.rentedMemMb, row.freeMemMb],
-            ["Shared CPU test", 1, 4096 + 128, 8192 - 4224],
+            [row.forRent, row.rentals, row.rentedMemMb, row.freeMemMb],
+            [true, 1, 4096 + 128, 8192 - 4224],
           );
           assert(machines.some((m) => m._id === String(host2)));
           // The platform's own partitions on a machine take its room too.
@@ -561,15 +578,23 @@ Deno.test({
 
           // Downtime counts against the period's uptime.
           const now = new Date();
+          await serverLeaseModel.updateOne({ _id: server }, {
+            $set: { aliveUntil: new Date(now.getTime() + 365 * DAY) },
+          });
+          // A day into the period (an outage before it counted in the last one).
+          await subscriptionPeriodModel.updateOne(
+            { subscription: rental, periodEnd: { $gt: now } },
+            { $set: { periodStart: new Date(now.getTime() - DAY) } },
+          );
           await rentals.recordDowntime(
             server,
             new Date(now.getTime() - 60_000),
             now,
           );
-          const period = await subscriptionPeriodModel.findOne(
-            { subscription: rental },
-            { sort: { periodStart: -1 } },
-          );
+          const period = await subscriptionPeriodModel.findOne({
+            subscription: rental,
+            periodEnd: { $gt: now },
+          });
           assertEquals(period!.usage!.downtimeMs, 60_000);
           // A minute down in a day: 99.93 %; its lease is current again.
           await serverLeaseModel.updateOne({ _id: server }, {
@@ -732,9 +757,16 @@ Deno.test({
 
       await t.step("a request can be withdrawn or rejected", async () => {
         await fund(10_000);
-        const a =
-          (await customer.call("POST", "/rentals/api/request", { plan: small }))
-            .json.rental;
+        const ask = async (body: object = {}) => {
+          const res = await customer.call("POST", "/rentals/api/request", {
+            machine: host,
+            ...small,
+            ...body,
+          });
+          assertEquals(res.status, 200, JSON.stringify(res.json));
+          return res.json.rental;
+        };
+        const a = await ask();
         assertEquals(
           (await customer.call("POST", `/rentals/api/${a}/withdraw`)).status,
           200,
@@ -743,13 +775,13 @@ Deno.test({
           (await subscriptionModel.findOne({ _id: new ObjectId(a) }))!.status,
           "canceled",
         );
-        const b = (await customer.call("POST", "/rentals/api/request", {
-          custom: { class: cls, vcpu: 0.5, memMb: 1024, diskGb: 10 },
-        })).json.rental;
-        await rentals.reject(
-          new ObjectId(b),
-          "No capacity in that class this week",
+        const b = await ask({ vcpu: 0.5, memMb: 1024, diskGb: 10 });
+        const declined = await platform.call(
+          "POST",
+          `/hosting/api/${b}/decline`,
+          { reason: "No capacity in that class this week" },
         );
+        assertEquals(declined.status, 200, JSON.stringify(declined.json));
         const rejected =
           (await subscriptionModel.findOne({ _id: new ObjectId(b) }))!;
         assertEquals([rejected.status, rejected.rental!.rejectedReason], [
@@ -757,28 +789,25 @@ Deno.test({
           "No capacity in that class this week",
         ]);
         assertEquals(
-          (await refused(() =>
-            rentals.approve(new ObjectId(b), host, platform.user)
-          ))?.status,
+          (await refused(() => rentals.approve(new ObjectId(b), platform.user)))
+            ?.status,
           404,
           "nothing left to approve",
         );
-        // Two admins approving at once: charged and created once.
-        const c =
-          (await customer.call("POST", "/rentals/api/request", { plan: small }))
-            .json.rental;
+        // Accepted twice at once: charged and created once.
+        const c = await ask();
         const creates = (await commands("partition.create")).length;
         const charged = await balance();
         const approvals = await Promise.allSettled([
-          rentals.approve(new ObjectId(c), host, platform.user),
-          rentals.approve(new ObjectId(c), host, platform.user),
+          rentals.approve(new ObjectId(c), platform.user),
+          rentals.approve(new ObjectId(c), platform.user),
         ]);
         assertEquals(
           approvals.filter((a) => a.status === "fulfilled").length,
           1,
         );
         assertEquals((await commands("partition.create")).length, creates + 1);
-        assertEquals(await balance(), charged - 2_200);
+        assertEquals(await balance(), charged - SMALL);
         // An admin deletes an approved rental now.
         const removes = (await commands("partition.remove")).length;
         await rentals.terminate(new ObjectId(c), "Terms violation");
@@ -791,11 +820,8 @@ Deno.test({
 
         // A rental whose partition failed: listed with why, created again,
         // or refunded in full.
-        const e = new ObjectId(
-          (await customer.call("POST", "/rentals/api/request", { plan: small }))
-            .json.rental,
-        );
-        await rentals.approve(e, host, platform.user);
+        const e = new ObjectId(await ask());
+        await rentals.approve(e, platform.user);
         const failed = (await commands("partition.create")).at(-1)!;
         await agentCommandModel.updateOne({ _id: failed._id }, {
           $set: { status: "failed", error: "No space left on device" },
@@ -813,8 +839,8 @@ Deno.test({
           "being set up again",
         );
         const paid = await balance();
-        assertEquals((await rentals.refund(e, platform.user)).amount, 2_200);
-        assertEquals(await balance(), paid + 2_200);
+        assertEquals((await rentals.refund(e, platform.user)).amount, SMALL);
+        assertEquals(await balance(), paid + SMALL);
         assertEquals(
           (await subscriptionModel.findOne({ _id: e }))!.status,
           "canceled",
@@ -824,18 +850,97 @@ Deno.test({
           404,
           "refunded once",
         );
-        assertEquals(await balance(), paid + 2_200);
+        assertEquals(await balance(), paid + SMALL);
         await mailed(/was refunded/);
+
+        // Not accepted in 72 hours: declined, nothing charged.
+        const f = new ObjectId(await ask());
+        await subscriptionModel.updateOne({ _id: f }, {
+          $set: { startedAt: new Date(Date.now() - 73 * 3_600_000) },
+        });
+        await rentals.queue(platform.tenantId);
+        const expired = (await subscriptionModel.findOne({ _id: f }))!;
+        assertEquals([expired.status, expired.rental!.rejectedReason], [
+          "rejected",
+          "Not accepted in time",
+        ]);
+
+        // Auto-accept: running at once.
+        await serverModel.updateOne({ _id: host }, {
+          $set: { "pool.rent.autoAccept": true },
+        });
+        const auto = await customer.call("POST", "/rentals/api/request", {
+          machine: host,
+          ...small,
+        });
+        assertEquals(auto.json.result, "active", JSON.stringify(auto.json));
+        await serverModel.updateOne({ _id: host }, {
+          $set: { "pool.rent.autoAccept": false },
+        });
+        const g = new ObjectId(auto.json.rental);
+
+        // The owner stops renting it out: it ends with its term and month.
+        const ended = await platform.call("POST", `/hosting/api/${g}/end`);
+        assertEquals(ended.status, 200, JSON.stringify(ended.json));
+        await subscriptionModel.updateOne({ _id: g }, {
+          $set: {
+            currentPeriodEnd: new Date(Date.now() - 1_000),
+            "rental.endAt": new Date(Date.now() - 2_000),
+          },
+        });
+        await subscriptionPeriodModel.updateMany({ subscription: g }, {
+          $set: { periodEnd: new Date(Date.now() - 1_000) },
+        });
+        const kept = await balance();
+        await billing.renewIfDue(tenant);
+        assertEquals(
+          (await subscriptionModel.findOne({ _id: g }))!.status,
+          "canceled",
+        );
+        assert(await balance() >= kept, "not charged again");
+
+        // Its machine down for over 72 hours: it left, the rental ends
+        // without another charge.
+        const h = new ObjectId(await ask());
+        await rentals.approve(h, platform.user);
+        const lostServer = new ObjectId();
+        await subscriptionModel.updateOne({ _id: h }, {
+          $set: {
+            server: lostServer,
+            currentPeriodEnd: new Date(Date.now() - 1_000),
+          },
+        });
+        await subscriptionPeriodModel.updateMany({ subscription: h }, {
+          $set: {
+            periodStart: new Date(Date.now() - 30 * DAY),
+            periodEnd: new Date(Date.now() - 1_000),
+          },
+        });
+        await serverLeaseModel.insertOne({
+          _id: lostServer,
+          tenant,
+          status: "active",
+          aliveUntil: new Date(Date.now() - 4 * DAY),
+          offline: true,
+          shard: 0,
+          desiredVersion: 0,
+          commandSeq: 0,
+          deliveredSeq: 0,
+        });
+        const beforeLost = await balance();
+        await billing.renewIfDue(tenant);
+        const lost = (await subscriptionModel.findOne({ _id: h }))!;
+        assertEquals(lost.status, "canceled");
+        assert(lost.rental!.lostAt);
+        assert(await balance() > beforeLost, "its downtime came back");
+        await mailed(/machine is gone/);
       });
     } finally {
       config.PLATFORM_TENANT = previous;
       Mailer.onSendMail = undefined;
       const tenants = [platform.tenantId, tenant];
       await Promise.all([
-        serverClassModel.deleteOne({ _id: cls }),
-        planModel.deleteMany({
-          $or: [{ class: cls }, { allowedTenants: tenant }],
-        }),
+        planModel.deleteMany({ allowedTenants: tenant }),
         ...[
           "subscriptions",
           "subscriptionPeriods",

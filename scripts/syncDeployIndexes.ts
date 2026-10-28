@@ -2,7 +2,15 @@ import { serverOutageModel } from "@/schemas/infrastructure/serverOutage.ts";
 import { storageModel } from "@/schemas/infrastructure/storage.ts";
 import { subscriptionModel } from "@/schemas/billing/subscription.ts";
 import { planModel } from "@/schemas/billing/plan.ts";
-import { serverClassModel } from "@/schemas/billing/serverClass.ts";
+import {
+  abuseReportModel,
+  claimRevertModel,
+  disputeModel,
+  earningModel,
+  machineRatingModel,
+} from "@/schemas/billing/market.ts";
+import { platformTenantId } from "@/lib/billing/platform.ts";
+import { mongodb } from "@/database.ts";
 import { walletTopupModel } from "@/plugins/Huruf-Tech/thunder-core/schemas/walletTopup.ts";
 import {
   billingAccountModel,
@@ -53,6 +61,67 @@ import {
 } from "@/schemas/infrastructure/stream.ts";
 
 /** Every Huruf Deploy index lives here (PLAN §6). Run by setup, never at startup. */
+/**
+ * Phase 19 (PLAN §30): the classes' rate cards move onto their machines (by
+ * the hour), size plans stop being offered, and existing rentals belong to
+ * the platform. Idempotent; requests made before the market have no
+ * machine to accept them, so they're declined (nothing was charged).
+ */
+async function migrateToMarket() {
+  const classes = await mongodb.db().collection<{
+    rates: { vcpu: number; memGb: number; diskGb: number; trafficGb: number };
+  }>("serverClasses").find().toArray();
+  for (const cls of classes) {
+    await serverModel.updateMany(
+      { "pool.class": cls._id, "pool.rent": { $exists: false } } as never,
+      {
+        $set: {
+          "pool.rent": {
+            enabled: true,
+            autoAccept: false,
+            prices: {
+              vcpu: cls.rates.vcpu / 730,
+              memGb: cls.rates.memGb / 730,
+              diskGb: cls.rates.diskGb / 730,
+              trafficGb: cls.rates.trafficGb,
+            },
+          },
+        },
+      },
+    );
+  }
+  await serverModel.updateMany({ "pool.class": { $exists: true } } as never, {
+    $unset: { "pool.class": "" } as never,
+  });
+  await planModel.updateMany({ kind: "server" }, {
+    $set: { custom: true, visibility: "private" },
+    $unset: { class: "" } as never,
+  });
+  const platform = await platformTenantId();
+  if (platform) {
+    await subscriptionModel.updateMany({
+      kind: "server",
+      "rental.host": { $exists: true },
+      "rental.owner": { $exists: false },
+    }, { $set: { "rental.owner": platform } });
+  }
+  await subscriptionModel.updateMany({
+    kind: "server",
+    status: "requested",
+    "rental.host": { $exists: false },
+  }, {
+    $set: {
+      status: "rejected",
+      "rental.rejectedReason":
+        "Rentals moved to the market: pick a machine there and request again",
+    },
+  });
+  await subscriptionModel.updateMany(
+    { kind: "server", "rental.class": { $exists: true } } as never,
+    { $unset: { "rental.class": "" } as never },
+  );
+}
+
 export const syncDeployIndexes = async () => {
   // The first version left `project` out: projects of one tenant couldn't
   // share a variable name. Replaced by uniqueKeyPerScopeOwner.
@@ -64,6 +133,7 @@ export const syncDeployIndexes = async () => {
   });
   await subscriptionModel.dropIndex("uniqueTenant").catch(() => {});
   await subscriptionModel.dropIndex("uniqueServer").catch(() => {});
+  await migrateToMarket();
 
   await Promise.all([
     controlPlaneSampleModel.createIndex({ at: 1 }, { name: "at" }),
@@ -362,8 +432,50 @@ export const syncDeployIndexes = async () => {
       name: "rentalRequests",
       partialFilterExpression: { kind: "server" },
     }),
-    serverClassModel.createIndex({ active: 1, sortOrder: 1 }, {
-      name: "activeClasses",
+    // The market (PLAN §30): machines for rent, owners' queues and money.
+    serverModel.createIndex({ "pool.rent.enabled": 1 }, {
+      name: "forRent",
+      partialFilterExpression: { "pool.rent.enabled": true },
+    }),
+    subscriptionModel.createIndex({ "rental.owner": 1, status: 1 }, {
+      name: "rentalOwner",
+      partialFilterExpression: { kind: "server" },
+    }),
+    subscriptionPeriodModel.createIndex({ "market.owner": 1, periodEnd: 1 }, {
+      name: "marketOwner",
+      partialFilterExpression: { "market.owner": { $exists: true } },
+    }),
+    subscriptionPeriodModel.createIndex({ "market.split.owner": 1 }, {
+      name: "marketSplitOwner",
+      partialFilterExpression: { "market.split.owner": { $exists: true } },
+    }),
+    subscriptionPeriodModel.createIndex(
+      { "market.machine": 1, periodEnd: -1 },
+      {
+        name: "marketMachine",
+        partialFilterExpression: { "market.machine": { $exists: true } },
+      },
+    ),
+    earningModel.createIndex({ key: 1 }, { name: "uniqueKey", unique: true }),
+    earningModel.createIndex({ owner: 1, createdAt: -1 }, { name: "owner" }),
+    earningModel.createIndex({ machine: 1, bucket: 1 }, { name: "machine" }),
+    claimRevertModel.createIndex({ claim: 1 }, { name: "claim" }),
+    claimRevertModel.createIndex({ status: 1, createdAt: 1 }, {
+      name: "status",
+    }),
+    disputeModel.createIndex({ machine: 1, status: 1 }, { name: "machine" }),
+    disputeModel.createIndex({ subscription: 1, status: 1 }, {
+      name: "subscription",
+    }),
+    disputeModel.createIndex({ owner: 1, status: 1 }, { name: "owner" }),
+    disputeModel.createIndex({ status: 1, createdAt: 1 }, { name: "status" }),
+    machineRatingModel.createIndex({ subscription: 1 }, {
+      name: "uniqueRental",
+      unique: true,
+    }),
+    machineRatingModel.createIndex({ machine: 1 }, { name: "machine" }),
+    abuseReportModel.createIndex({ status: 1, createdAt: 1 }, {
+      name: "status",
     }),
     subscriptionModel.createIndex({ tenant: 1, currentPeriodEnd: 1 }, {
       name: "tenantDue",

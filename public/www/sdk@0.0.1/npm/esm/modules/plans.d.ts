@@ -10,7 +10,6 @@ export type create$body = {
         trafficGb: number;
     } | undefined;
     custom?: boolean | undefined;
-    class?: string | undefined;
     slug: string;
     description?: string | undefined;
     visibility?: "public" | "private";
@@ -44,6 +43,7 @@ export type create$body = {
         backups?: boolean;
         aiAssistant?: boolean;
     };
+    commission?: number;
     isFree?: boolean;
     active?: boolean;
     sortOrder?: number;
@@ -75,7 +75,6 @@ export type get$return = {
             trafficGb: number;
         } | undefined;
         custom?: boolean | undefined;
-        class?: string | undefined;
         slug: string;
         description?: string | undefined;
         visibility: "public" | "private";
@@ -109,6 +108,7 @@ export type get$return = {
             backups: boolean;
             aiAssistant: boolean;
         };
+        commission: number;
         isFree: boolean;
         active: boolean;
         sortOrder: number;
@@ -130,7 +130,6 @@ export type update$body = {
         trafficGb: number;
     } | undefined) | undefined) | undefined;
     custom?: ((boolean | undefined) | undefined) | undefined;
-    class?: ((string | undefined) | undefined) | undefined;
     slug?: (string | undefined) | undefined;
     description?: ((string | undefined) | undefined) | undefined;
     visibility?: (("public" | "private") | undefined) | undefined;
@@ -164,6 +163,7 @@ export type update$body = {
         backups?: boolean;
         aiAssistant?: boolean;
     } | undefined) | undefined;
+    commission?: (number | undefined) | undefined;
     isFree?: (boolean | undefined) | undefined;
     active?: (boolean | undefined) | undefined;
     sortOrder?: (number | undefined) | undefined;

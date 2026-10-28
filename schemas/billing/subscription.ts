@@ -43,9 +43,35 @@ export const $subscription = z.object({
   pastDueSince: z.date().optional(),
   /** `server` subscriptions: the rental (PLAN §26). */
   rental: z.object({
-    class: $objectId.meta({ ref: "serverClasses" }),
-    /** The machine and partition, once approved. */
+    /** The machine it was requested on and runs on (PLAN §30.5). */
     host: $objectId.meta({ ref: "servers" }).optional(),
+    /** The machine's tenant: who accepts it and earns from it. */
+    owner: $objectId.meta({ ref: "tenants" }).optional(),
+    /** The whole machine (Dedicated, PLAN §29). */
+    whole: z.boolean().optional(),
+    /**
+     * The term the customer committed to (PLAN §30.5): the owner keeps the
+     * machine until `until` (set when accepted); the customer may cancel.
+     */
+    term: z.object({
+      months: z.number().int().min(1).max(12),
+      until: z.date().optional(),
+    }).optional(),
+    /** An EU consumer agreed it starts at once, waiving the withdrawal right. */
+    waivedWithdrawalAt: z.date().optional(),
+    /** The owner stops renting it out: it ends at this date (term and period kept). */
+    endAt: z.date().optional(),
+    /** Its machine left (removed, or down beyond the limit): ended unpaid. */
+    lostAt: z.date().optional(),
+    /** A move the owner proposed, waiting for the customer (PLAN §30.8). */
+    proposal: z.object({
+      to: $objectId.meta({ ref: "servers" }),
+      at: z.date(),
+      expiresAt: z.date(),
+      /** The target's monthly price for this size, from the next renewal. */
+      price: z.number().int().min(0),
+      reason: z.string().max(500).optional(),
+    }).optional(),
     partition: z.string().optional(),
     /** The partition's size: the plan's resources plus the overhead. */
     size: z.object({
@@ -80,6 +106,8 @@ export const $subscription = z.object({
       command: $objectId,
       startedAt: z.date(),
       by: $objectId.meta({ ref: "users" }),
+      /** Agreed with the customer (PLAN §30.8): the money of the month is split. */
+      agreed: z.boolean().optional(),
     }).optional(),
     /** Using more disk than its size (what escapes its quota, PLAN §28). */
     overDisk: z.object({ since: z.date(), bytes: z.number() }).optional(),

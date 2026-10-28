@@ -56,10 +56,11 @@ export const $planInput = z.object({
     canFilter: true,
   }),
   resources: $planResources.optional(),
-  /** Made from one customer's custom request: never offered as a size. */
+  /**
+   * `server` plans are made per rental, priced by its machine (PLAN §30.3),
+   * and never offered: always `custom`.
+   */
   custom: z.boolean().optional(),
-  /** `server` plans: the class whose machines it runs on (PLAN §26.8). */
-  class: $objectId.meta({ ref: "serverClasses" }).optional(),
   slug: z.string().min(1).max(50).regex(/^[a-z0-9-]+$/).meta({
     canFilter: true,
   }),
@@ -75,6 +76,8 @@ export const $planInput = z.object({
   }),
   limits: $planLimits.default($planLimits.parse({})),
   features: $planFeatures.default($planFeatures.parse({})),
+  /** Workspace plans: Huruf's percentage of what the tenant's machines earn (PLAN §30.7). */
+  commission: z.number().min(0).max(100).default(20),
   isFree: z.boolean().default(false).meta({ canFilter: true }),
   active: z.boolean().default(true).meta({ canFilter: true }),
   sortOrder: z.number().int().default(0),
@@ -90,6 +93,7 @@ export const $planUpdate = $planInput.extend({
   allowedTenants: $planInput.shape.allowedTenants.unwrap(),
   limits: $planLimits,
   features: $planFeatures,
+  commission: z.number().min(0).max(100),
   isFree: z.boolean(),
   active: z.boolean(),
   sortOrder: z.number().int(),

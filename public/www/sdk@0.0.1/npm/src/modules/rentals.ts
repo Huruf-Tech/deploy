@@ -5,63 +5,6 @@ import type { BaseSDK } from "../base.js";
 
 import { compile } from "path-to-regexp";
 
-export type catalog$return = {
-    classes: {
-        name: string;
-        description?: string | undefined;
-        rates: {
-            vcpu: number;
-            memGb: number;
-            diskGb: number;
-            trafficGb: number;
-            fixed: number;
-        };
-        includedTrafficPerVcpu: number;
-        cpuOvercommit: number;
-        maxPerRental: {
-            vcpu: number;
-            memMb: number;
-            diskGb: number;
-        };
-        active: boolean;
-        sortOrder: number;
-        createdAt: Date;
-        updatedAt: Date;
-        _id: string;
-    }[];
-    sizes: {
-        _id: string;
-        name: string;
-        description?: string | undefined;
-        class: string;
-        resources: {
-            vcpu: number;
-            memMb: number;
-            diskGb: number;
-            trafficGb: number;
-        };
-        price: {
-            amount: number;
-            currency: string;
-            interval: string;
-        };
-    }[];
-    /** Added to every partition, at the memory rate */
-    overheadMb: number;
-};
-export type quote$query = {
-    class?: string;
-    vcpu: number;
-    memMb: number;
-    diskGb: number;
-};
-export type quote$return = {
-    /** Cents per month */
-    price: number;
-    /** Included per month */
-    trafficGb: number;
-    overheadMb: number;
-};
 export type list$return = {
     status: "requested" | "rejected" | "active" | "pastDue" | "suspended" | "released" | "canceled";
     cancelAtPeriodEnd: boolean;
@@ -73,12 +16,27 @@ export type list$return = {
     plan?: {
         _id: string;
         name: string;
+        /** Cents per month */
+        price: number;
     } | undefined;
     size: {
         cpus: number;
         memMb: number;
         diskGb: number;
     };
+    machine?: {
+        _id: string;
+        name: string;
+    } | undefined;
+    whole?: boolean | undefined;
+    term?: {
+        months: number;
+        until?: Date | undefined;
+    } | undefined;
+    /** Its owner stops renting it then */
+    endAt?: Date | undefined;
+    /** Its machine left */
+    lostAt?: Date | undefined;
     /** The plan a resize waits for */
     pendingChange?: string | undefined;
     rejectedReason?: string | undefined;
@@ -87,20 +45,32 @@ export type list$return = {
     held?: boolean | undefined;
     /** This period so far, percent */
     uptime?: number | undefined;
-    /** Huruf moves it to another machine */
     moving?: boolean | undefined;
+    /** A move its owner asks for (PLAN §30.8) */
+    proposal?: {
+        to: string;
+        toName?: string | undefined;
+        price: number;
+        expiresAt: Date;
+        reason?: string | undefined;
+    } | undefined;
+    /** A dispute is open */
+    dispute?: boolean | undefined;
+    /** The rating given */
+    stars?: number | undefined;
 }[];
 export type request$body = {
-    plan?: string | undefined;
-    custom?: {
-        class?: string;
-        vcpu: number;
-        memMb: number;
-        diskGb: number;
-    } | undefined;
+    vcpu?: number | undefined;
+    memMb?: number | undefined;
+    diskGb?: number | undefined;
+    machine?: string;
+    whole?: boolean | undefined;
+    termMonths: 1 | 3 | 6 | 12;
+    /** Agrees it starts at once, so the paid month isn't refundable */
+    waiveWithdrawal: boolean;
 };
 export type request$return = {
-    result: "requested" | "pending";
+    result: "requested" | "active" | "pending";
     rental: string;
     topup?: string | undefined;
     clientSecret?: string | undefined;
@@ -112,23 +82,55 @@ export type resize$params = {
     id?: string;
 };
 export type resize$body = {
-    plan?: string | undefined;
-    custom?: {
-        class?: string;
-        vcpu: number;
-        memMb: number;
-        diskGb: number;
-    } | undefined;
+    vcpu: number;
+    memMb: number;
+    diskGb: number;
 };
 export type cancel$params = {
     id?: string;
 };
+export type acceptProposal$params = {
+    id?: string;
+};
+export type acceptProposal$body = {
+    to?: string | undefined;
+};
+export type declineProposal$params = {
+    id?: string;
+};
+export type proposalTargets$params = {
+    id?: string;
+};
+export type proposalTargets$return = {
+    server: string;
+    name: string;
+    /** Cents per month, from the renewal */
+    price: number;
+}[];
+export type dispute$params = {
+    id?: string;
+};
+export type dispute$body = {
+    reason: string;
+};
+export type dispute$return = {
+    dispute: string;
+};
+export type rateMachine$params = {
+    id?: string;
+};
+export type rateMachine$body = {
+    stars: number;
+    comment?: string | undefined;
+};
+export type report$body = {
+    machine?: string | undefined;
+    subscription?: string | undefined;
+    text: string;
+};
 
 export const rentalsModule = (sdk: typeof BaseSDK) => {
     const type = {} as unknown as {
-        catalog$return: catalog$return,
-        quote$query: quote$query,
-        quote$return: quote$return,
         list$return: list$return,
         request$body: request$body,
         request$return: request$return,
@@ -136,66 +138,21 @@ export const rentalsModule = (sdk: typeof BaseSDK) => {
         resize$params: resize$params,
         resize$body: resize$body,
         cancel$params: cancel$params,
+        acceptProposal$params: acceptProposal$params,
+        acceptProposal$body: acceptProposal$body,
+        declineProposal$params: declineProposal$params,
+        proposalTargets$params: proposalTargets$params,
+        proposalTargets$return: proposalTargets$return,
+        dispute$params: dispute$params,
+        dispute$body: dispute$body,
+        dispute$return: dispute$return,
+        rateMachine$params: rateMachine$params,
+        rateMachine$body: rateMachine$body,
+        report$body: report$body,
     };
 
     const methods = {
         type,
-        catalog(data?: {
-        params?: undefined,
-        query?: undefined,
-        body?: undefined,
-    } & TRequestOptions<catalog$return>) {
-        return sdk.resolveAxiosResponse(async () => {
-            sdk.checkPermission("rentals", "catalog");
-
-            const method = "get";
-            const toPath = compile("rentals/api/catalog");
-            const requestPayload = {
-                method,
-                url: toPath(sdk.resolvePathParams(data?.params)),
-                params: data?.query,
-                data: data?.body,
-                signal: data?.signal,
-                ...(data?.axiosConfig
-                ? sdk.resolveAxiosConfig(data.axiosConfig)
-                : undefined),
-            };
-
-            sdk.log("Sending Request:", requestPayload);
-
-            const res = await sdk._axios!.request(requestPayload);
-
-            return res;
-        }, data);
-    },
-        quote(data: {
-        params?: undefined,
-        query: quote$query,
-        body?: undefined,
-    } & TRequestOptions<quote$return>) {
-        return sdk.resolveAxiosResponse(async () => {
-            sdk.checkPermission("rentals", "quote");
-
-            const method = "get";
-            const toPath = compile("rentals/api/quote");
-            const requestPayload = {
-                method,
-                url: toPath(sdk.resolvePathParams(data?.params)),
-                params: data?.query,
-                data: data?.body,
-                signal: data?.signal,
-                ...(data?.axiosConfig
-                ? sdk.resolveAxiosConfig(data.axiosConfig)
-                : undefined),
-            };
-
-            sdk.log("Sending Request:", requestPayload);
-
-            const res = await sdk._axios!.request(requestPayload);
-
-            return res;
-        }, data);
-    },
         list(data?: {
         params?: undefined,
         query?: undefined,
@@ -336,15 +293,187 @@ export const rentalsModule = (sdk: typeof BaseSDK) => {
             return res;
         }, data);
     },
+        acceptProposal(data: {
+        params: acceptProposal$params,
+        query?: undefined,
+        body: acceptProposal$body,
+    } & TRequestOptions<unknown>) {
+        return sdk.resolveAxiosResponse(async () => {
+            sdk.checkPermission("rentals", "acceptProposal");
+
+            const method = "post";
+            const toPath = compile("rentals/api/:id/proposal/accept");
+            const requestPayload = {
+                method,
+                url: toPath(sdk.resolvePathParams(data?.params)),
+                params: data?.query,
+                data: data?.body,
+                signal: data?.signal,
+                ...(data?.axiosConfig
+                ? sdk.resolveAxiosConfig(data.axiosConfig)
+                : undefined),
+            };
+
+            sdk.log("Sending Request:", requestPayload);
+
+            const res = await sdk._axios!.request(requestPayload);
+
+            return res;
+        }, data);
+    },
+        declineProposal(data: {
+        params: declineProposal$params,
+        query?: undefined,
+        body?: undefined,
+    } & TRequestOptions<unknown>) {
+        return sdk.resolveAxiosResponse(async () => {
+            sdk.checkPermission("rentals", "declineProposal");
+
+            const method = "post";
+            const toPath = compile("rentals/api/:id/proposal/decline");
+            const requestPayload = {
+                method,
+                url: toPath(sdk.resolvePathParams(data?.params)),
+                params: data?.query,
+                data: data?.body,
+                signal: data?.signal,
+                ...(data?.axiosConfig
+                ? sdk.resolveAxiosConfig(data.axiosConfig)
+                : undefined),
+            };
+
+            sdk.log("Sending Request:", requestPayload);
+
+            const res = await sdk._axios!.request(requestPayload);
+
+            return res;
+        }, data);
+    },
+        proposalTargets(data: {
+        params: proposalTargets$params,
+        query?: undefined,
+        body?: undefined,
+    } & TRequestOptions<proposalTargets$return>) {
+        return sdk.resolveAxiosResponse(async () => {
+            sdk.checkPermission("rentals", "proposalTargets");
+
+            const method = "get";
+            const toPath = compile("rentals/api/:id/proposal/targets");
+            const requestPayload = {
+                method,
+                url: toPath(sdk.resolvePathParams(data?.params)),
+                params: data?.query,
+                data: data?.body,
+                signal: data?.signal,
+                ...(data?.axiosConfig
+                ? sdk.resolveAxiosConfig(data.axiosConfig)
+                : undefined),
+            };
+
+            sdk.log("Sending Request:", requestPayload);
+
+            const res = await sdk._axios!.request(requestPayload);
+
+            return res;
+        }, data);
+    },
+        dispute(data: {
+        params: dispute$params,
+        query?: undefined,
+        body: dispute$body,
+    } & TRequestOptions<dispute$return>) {
+        return sdk.resolveAxiosResponse(async () => {
+            sdk.checkPermission("rentals", "dispute");
+
+            const method = "post";
+            const toPath = compile("rentals/api/:id/dispute");
+            const requestPayload = {
+                method,
+                url: toPath(sdk.resolvePathParams(data?.params)),
+                params: data?.query,
+                data: data?.body,
+                signal: data?.signal,
+                ...(data?.axiosConfig
+                ? sdk.resolveAxiosConfig(data.axiosConfig)
+                : undefined),
+            };
+
+            sdk.log("Sending Request:", requestPayload);
+
+            const res = await sdk._axios!.request(requestPayload);
+
+            return res;
+        }, data);
+    },
+        rateMachine(data: {
+        params: rateMachine$params,
+        query?: undefined,
+        body: rateMachine$body,
+    } & TRequestOptions<unknown>) {
+        return sdk.resolveAxiosResponse(async () => {
+            sdk.checkPermission("rentals", "rateMachine");
+
+            const method = "post";
+            const toPath = compile("rentals/api/:id/rate");
+            const requestPayload = {
+                method,
+                url: toPath(sdk.resolvePathParams(data?.params)),
+                params: data?.query,
+                data: data?.body,
+                signal: data?.signal,
+                ...(data?.axiosConfig
+                ? sdk.resolveAxiosConfig(data.axiosConfig)
+                : undefined),
+            };
+
+            sdk.log("Sending Request:", requestPayload);
+
+            const res = await sdk._axios!.request(requestPayload);
+
+            return res;
+        }, data);
+    },
+        report(data: {
+        params?: undefined,
+        query?: undefined,
+        body: report$body,
+    } & TRequestOptions<unknown>) {
+        return sdk.resolveAxiosResponse(async () => {
+            sdk.checkPermission("rentals", "report");
+
+            const method = "post";
+            const toPath = compile("rentals/api/report");
+            const requestPayload = {
+                method,
+                url: toPath(sdk.resolvePathParams(data?.params)),
+                params: data?.query,
+                data: data?.body,
+                signal: data?.signal,
+                ...(data?.axiosConfig
+                ? sdk.resolveAxiosConfig(data.axiosConfig)
+                : undefined),
+            };
+
+            sdk.log("Sending Request:", requestPayload);
+
+            const res = await sdk._axios!.request(requestPayload);
+
+            return res;
+        }, data);
+    },
     } as const;
 
-    (methods.catalog as any).__scope = "rentals";
-    (methods.quote as any).__scope = "rentals";
     (methods.list as any).__scope = "rentals";
     (methods.request as any).__scope = "rentals";
     (methods.withdraw as any).__scope = "rentals";
     (methods.resize as any).__scope = "rentals";
     (methods.cancel as any).__scope = "rentals";
+    (methods.acceptProposal as any).__scope = "rentals";
+    (methods.declineProposal as any).__scope = "rentals";
+    (methods.proposalTargets as any).__scope = "rentals";
+    (methods.dispute as any).__scope = "rentals";
+    (methods.rateMachine as any).__scope = "rentals";
+    (methods.report as any).__scope = "rentals";
 
     sdk["_moduleGroup"].set(methods, "Billing");
 

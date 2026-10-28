@@ -38,6 +38,34 @@ export const $subscriptionPeriod = z.object({
   }).optional(),
   /** Charged with this period: the previous period's traffic beyond its allowance. */
   overage: z.object({ gb: z.number(), amount: z.number().int() }).optional(),
+  /**
+   * Market rentals (PLAN §30.7): who earns this period and at what commission,
+   * fixed when it's charged. Absent on the platform's own machines.
+   */
+  market: z.object({
+    owner: $objectId.meta({ ref: "tenants" }),
+    machine: $objectId.meta({ ref: "servers" }),
+    commission: z.number().min(0).max(100),
+    /** An agreed move (PLAN §30.8): the target hosts it from `from` at its own price. */
+    split: z.object({
+      owner: $objectId.meta({ ref: "tenants" }),
+      machine: $objectId.meta({ ref: "servers" }),
+      commission: z.number().min(0).max(100),
+      from: z.date(),
+      amount: z.number().int().min(0),
+    }).optional(),
+  }).optional(),
+  /** Matured (PLAN §30.7): what was refunded and what the owner earned. */
+  settled: z.object({
+    at: z.date(),
+    downtimeMs: z.number().min(0),
+    refund: z.number().int().min(0),
+    commission: z.number().int().min(0),
+    share: z.number().int(),
+    toSecurity: z.number().int().min(0),
+    /** Down beyond the limit: the owner earns nothing for it. */
+    left: z.boolean().optional(),
+  }).optional(),
   /** Given back to the wallet by an admin; the period ended then (PLAN §26.9). */
   refunded: z.number().int().min(0).optional(),
   kind: z.enum(["paid", "complimentary"]),
