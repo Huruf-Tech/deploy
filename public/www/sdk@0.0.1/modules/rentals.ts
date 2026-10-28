@@ -46,10 +46,13 @@ export type list$return = {
     /** This period so far, percent */
     uptime?: number | undefined;
     moving?: boolean | undefined;
+    /** The community consent's version the renter accepted */
+    consentVersion?: string | undefined;
     /** A move its owner asks for (PLAN §30.8) */
     proposal?: {
         to: string;
         toName?: string | undefined;
+        community: boolean;
         price: number;
         expiresAt: Date;
         reason?: string | undefined;
@@ -70,8 +73,8 @@ export type request$body = {
     termMonths: 1 | 3 | 6 | 12;
     /** Agrees it starts at once, so the paid month isn't refundable */
     waiveWithdrawal: boolean;
-    /** A community machine: its owner can access the data, and the renter answers for its leak or loss */
-    acceptCommunityRisk?: boolean | undefined;
+    /** A community machine: the version of the consent accepted (its owner can access the data; the renter answers for its leak or loss) */
+    communityConsent?: string | undefined;
 };
 export type request$return = {
     result: "requested" | "active" | "pending";
@@ -98,6 +101,8 @@ export type acceptProposal$params = {
 };
 export type acceptProposal$body = {
     to?: string | undefined;
+    /** Moving onto a community machine: the consent's version accepted */
+    communityConsent?: string | undefined;
 };
 export type declineProposal$params = {
     id?: string;
@@ -110,6 +115,8 @@ export type proposalTargets$return = {
     name: string;
     /** Cents per month, from the renewal */
     price: number;
+    /** A community machine, not Huruf's */
+    community: boolean;
 }[];
 export type dispute$params = {
     id?: string;

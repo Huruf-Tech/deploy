@@ -220,8 +220,11 @@ export type dispute$return = {
         lostAt?: Date | undefined;
         heldByAdmin: boolean;
         waivedWithdrawalAt?: Date | undefined;
-        /** When the renter accepted a community machine's risks */
-        communityRiskAcceptedAt?: Date | undefined;
+        /** When the renter accepted a community machine's risks, and which wording */
+        communityConsent?: {
+            at: Date;
+            version: string;
+        } | undefined;
         partition?: string | undefined;
         server?: string | undefined;
         uptimeThisPeriod?: number | undefined;

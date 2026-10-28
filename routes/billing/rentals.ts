@@ -11,6 +11,7 @@ import {
   rentals as rentalService,
 } from "@/lib/services.ts";
 import { rate, reportAbuse } from "@/lib/market/market.ts";
+import { platformTenantId } from "@/lib/billing/platform.ts";
 import { rentalPlanModel } from "@/schemas/billing/plan.ts";
 import { $subscription } from "@/schemas/billing/subscription.ts";
 import { subscriptionPeriodModel } from "@/schemas/billing/subscriptionPeriod.ts";
@@ -74,9 +75,13 @@ export default new Router("/api", function rentals(router) {
         held: z.boolean().optional().describe("Stopped by Huruf, not unpaid"),
         uptime: z.number().optional().describe("This period so far, percent"),
         moving: z.boolean().optional(),
+        consentVersion: z.string().optional().describe(
+          "The community consent's version the renter accepted",
+        ),
         proposal: z.object({
           to: z.string(),
           toName: z.string().optional(),
+          community: z.boolean(),
           price: z.number(),
           expiresAt: z.date(),
           reason: z.string().optional(),
@@ -108,7 +113,7 @@ export default new Router("/api", function rentals(router) {
                 ) => [s.rental?.host, s.rental?.proposal?.to])
                   .filter((x) => !!x),
               },
-            }, { projection: { name: 1 } }).toArray(),
+            }, { projection: { name: 1, tenant: 1 } }).toArray(),
             disputeModel.find({ subscription: { $in: ids }, status: "open" }, {
               projection: { subscription: 1 },
             }).toArray(),
@@ -121,6 +126,11 @@ export default new Router("/api", function rentals(router) {
               settled: { $exists: true },
             }),
           ]);
+        const platform = await platformTenantId();
+        const communityOwners = new Set(
+          machines.filter((m) => !platform || !m.tenant.equals(platform))
+            .map((m) => String(m.tenant)),
+        );
         const name = (id?: { equals(x: unknown): boolean }) =>
           id && machines.find((m) => id.equals(m._id))?.name;
         return Response.json(subs.map((s) => {
@@ -161,6 +171,12 @@ export default new Router("/api", function rentals(router) {
                 proposal: {
                   to: r.proposal.to,
                   toName: name(r.proposal.to),
+                  community: communityOwners.has(
+                    String(
+                      machines.find((m) => r.proposal!.to.equals(m._id))
+                        ?.tenant,
+                    ),
+                  ),
                   price: r.proposal.price,
                   expiresAt: r.proposal.expiresAt,
                   reason: r.proposal.reason,
@@ -171,6 +187,7 @@ export default new Router("/api", function rentals(router) {
               ? { dispute: true }
               : {}),
             stars: stars.find((x) => x.subscription.equals(s._id))?.stars,
+            consentVersion: r.communityConsent?.version,
             ...(ended.some((x) => x.equals(s._id)) ? { matured: true } : {}),
           };
         }));
@@ -191,8 +208,8 @@ export default new Router("/api", function rentals(router) {
       waiveWithdrawal: z.boolean().describe(
         "Agrees it starts at once, so the paid month isn't refundable",
       ),
-      acceptCommunityRisk: z.boolean().optional().describe(
-        "A community machine: its owner can access the data, and the renter answers for its leak or loss",
+      communityConsent: z.string().optional().describe(
+        "A community machine: the version of the consent accepted (its owner can access the data; the renter answers for its leak or loss)",
       ),
     }).refine(
       (b) => b.whole || (b.vcpu && b.memMb && b.diskGb),
@@ -259,15 +276,26 @@ export default new Router("/api", function rentals(router) {
   // An owner's move proposal (PLAN §30.8): accept (to it, or to another
   // machine that accepts at once) or decline.
   router.post("/:id/proposal/accept", function acceptProposal() {
-    const $body = z.object({ to: $objectId.optional() });
+    const $body = z.object({
+      to: $objectId.optional(),
+      communityConsent: z.string().optional().describe(
+        "Moving onto a community machine: the consent's version accepted",
+      ),
+    });
 
     return {
       shape: () => ({ params: $params, body: $body }),
       handler: async (req) => {
         const { id } = $params.parse(paramsAsJson(req));
-        const { to } = $body.parse(await bodyAsJson(req));
+        const { to, communityConsent } = $body.parse(await bodyAsJson(req));
         const { tenant, user } = await owner(req);
-        await rentalService.acceptProposal(tenant._id, user._id, id, to);
+        await rentalService.acceptProposal(
+          tenant._id,
+          user._id,
+          id,
+          to,
+          communityConsent,
+        );
         return Response.json({ ok: true });
       },
     };
@@ -291,6 +319,7 @@ export default new Router("/api", function rentals(router) {
       server: z.string(),
       name: z.string(),
       price: z.number().describe("Cents per month, from the renewal"),
+      community: z.boolean().describe("A community machine, not Huruf's"),
     }));
 
     return {
@@ -306,10 +335,13 @@ export default new Router("/api", function rentals(router) {
           sub.rental.owner,
         );
         return Response.json(
-          targets.filter((t) => t.fits).map(({ server, name, price }) => ({
+          targets.filter((t) => t.fits).map((
+            { server, name, price, community },
+          ) => ({
             server,
             name,
             price,
+            community,
           })),
         );
       },

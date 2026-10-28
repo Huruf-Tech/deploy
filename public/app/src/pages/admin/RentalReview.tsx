@@ -341,10 +341,13 @@ export function DisputeReview() {
                     label: t("Renter's consent"),
                     value:
                       [
-                        r.communityRiskAcceptedAt &&
+                        r.communityConsent &&
                           t(
-                            "Accepted the community machine's risks (owner's access, leak or loss) on {{when}}",
-                            { when: dateTime(r.communityRiskAcceptedAt) }
+                            "Accepted the community machine's risks (owner's access, leak or loss) on {{when}}, wording of {{version}}",
+                            {
+                              when: dateTime(r.communityConsent.at),
+                              version: r.communityConsent.version,
+                            }
                           ),
                         r.waivedWithdrawalAt &&
                           t(

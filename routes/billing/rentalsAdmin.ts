@@ -335,8 +335,11 @@ export default new Router("/api", function rentalsAdmin(router) {
         lostAt: z.date().optional(),
         heldByAdmin: z.boolean(),
         waivedWithdrawalAt: z.date().optional(),
-        communityRiskAcceptedAt: z.date().optional().describe(
-          "When the renter accepted a community machine's risks",
+        communityConsent: z.object({
+          at: z.date(),
+          version: z.string(),
+        }).optional().describe(
+          "When the renter accepted a community machine's risks, and which wording",
         ),
         partition: z.string().optional(),
         server: z.string().optional(),

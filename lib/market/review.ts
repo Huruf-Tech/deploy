@@ -214,7 +214,7 @@ export async function disputeDetail(id: ObjectId) {
         lostAt: r.lostAt,
         heldByAdmin: !!r.held,
         waivedWithdrawalAt: r.waivedWithdrawalAt,
-        communityRiskAcceptedAt: r.communityRiskAcceptedAt,
+        communityConsent: r.communityConsent,
         partition: r.partition,
         server: sub.server && String(sub.server),
         uptimeThisPeriod: uptime.get(String(sub._id)),

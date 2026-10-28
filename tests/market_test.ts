@@ -7,6 +7,10 @@ import { Mailer } from "@/plugins/Huruf-Tech/thunder-core/lib/mailer.ts";
 import { Wallet } from "@/plugins/Huruf-Tech/thunder-core/lib/wallet.ts";
 import { disputes, earnings, rentals } from "@/lib/services.ts";
 import { HOLD_MS } from "@/lib/market/earnings.ts";
+import {
+  COMMUNITY_CONSENT_VERSION,
+  communityConsent,
+} from "@/lib/market/consent.ts";
 import { disputeDetail, reportDetail } from "@/lib/market/review.ts";
 import { familyOf, linked, ratingsOf } from "@/lib/market/market.ts";
 import {
@@ -31,6 +35,20 @@ import { testSession } from "./_session.ts";
 // machine that leaves inside its term, an agreed move's split, ratings.
 
 const DAY = 86_400_000;
+
+Deno.test("market: consent to a community machine is to its current wording", () => {
+  const given = communityConsent(COMMUNITY_CONSENT_VERSION);
+  assertEquals(given.version, COMMUNITY_CONSENT_VERSION);
+  for (const stale of [undefined, "2020-01-01"]) {
+    let refused = false;
+    try {
+      communityConsent(stale);
+    } catch (error) {
+      refused = (error as Response).status === 400;
+    }
+    assert(refused, `version ${stale}`);
+  }
+});
 
 Deno.test("market: a machine's family from what's measured", () => {
   assertEquals(familyOf({ cpus: 4, memMb: 8_192 }), {
@@ -190,10 +208,15 @@ Deno.test({
             diskGb: 25,
             termMonths: 6,
             waiveWithdrawal: true,
-            acceptCommunityRisk: true,
+            communityConsent: COMMUNITY_CONSENT_VERSION,
           });
           assertEquals(res.status, 200, JSON.stringify(res.json));
           rental = new ObjectId(res.json.rental);
+          const consented = await subscriptionModel.findOne({ _id: rental });
+          assertEquals(
+            consented!.rental!.communityConsent?.version,
+            COMMUNITY_CONSENT_VERSION,
+          );
           await rentals.approve(rental, owner.user, owner.tenantId);
           const charged = await period();
           assertEquals(charged.market!.commission, 20);
@@ -475,7 +498,7 @@ Deno.test({
             diskGb: 10,
             termMonths: 6,
             waiveWithdrawal: true,
-            acceptCommunityRisk: true,
+            communityConsent: COMMUNITY_CONSENT_VERSION,
           });
           rental = new ObjectId(res.json.rental);
           await rentals.approve(rental, owner.user, owner.tenantId);

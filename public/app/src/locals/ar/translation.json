@@ -1937,6 +1937,10 @@
   "Rent it anyway": "استأجره على أي حال",
   "a community owner": "مالك من المجتمع",
   "Renter's consent": "موافقة المستأجر",
-  "Accepted the community machine's risks (owner's access, leak or loss) on {{when}}": "قبل مخاطر الجهاز المجتمعي (وصول المالك، التسريب أو الفقدان) في {{when}}",
-  "Accepted that a paid month isn't refunded on {{when}}": "قبل أن الشهر المدفوع لا يُسترد في {{when}}"
+  "Accepted that a paid month isn't refunded on {{when}}": "قبل أن الشهر المدفوع لا يُسترد في {{when}}",
+  "Move to a community server?": "النقل إلى خادم مجتمعي؟",
+  "{{name}} belongs to a community owner, not Huruf. Read this before your server moves there.": "{{name}} ملك لمالك من المجتمع وليس لحروف. اقرأ هذا قبل نقل خادمك إليه.",
+  "This machine": "هذا الجهاز",
+  "Accept and move": "وافق وانقل",
+  "Accepted the community machine's risks (owner's access, leak or loss) on {{when}}, wording of {{version}}": "قبل مخاطر الجهاز المجتمعي (وصول المالك، التسريب أو الفقدان) في {{when}}، بصيغة {{version}}"
 }

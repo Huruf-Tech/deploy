@@ -21,6 +21,11 @@ import { freeOf, takenOn } from "@/lib/pool/room.ts";
 import type { EarningsService } from "@/lib/market/earnings.ts";
 import { linked, RENTABLE } from "@/lib/market/market.ts";
 import {
+  COMMUNITY_CONSENT_VERSION,
+  communityConsent,
+  isCommunity,
+} from "@/lib/market/consent.ts";
+import {
   hourlyOf,
   monthlyOf,
   type TRentPrices,
@@ -252,8 +257,8 @@ export class RentalService implements TRentalHooks {
       machine: ObjectId;
       termMonths: number;
       waiveWithdrawal: boolean;
-      /** A community machine: its risks accepted (PLAN §30.4). */
-      acceptCommunityRisk?: boolean;
+      /** A community machine: the consent's version accepted (PLAN §30.4). */
+      communityConsent?: string;
     },
   ) {
     if (!choice.waiveWithdrawal) {
@@ -266,13 +271,9 @@ export class RentalService implements TRentalHooks {
     if (await linked(tenant, q.machine.tenant)) {
       throw Response.forbidden("You can't rent a machine of your own");
     }
-    const platform = await platformTenantId();
-    const community = !platform || !q.machine.tenant.equals(platform);
-    if (community && !choice.acceptCommunityRisk) {
-      throw Response.badRequest(
-        "Confirm that you understand this is a community machine: its owner can access your data, and you answer for its leak or loss",
-      );
-    }
+    const consent = await isCommunity(q.machine.tenant)
+      ? communityConsent(choice.communityConsent)
+      : undefined;
     const plan = await this.rentalPlan(tenant, q, choice.whole);
     const now = new Date();
     const _id = new ObjectId();
@@ -293,7 +294,7 @@ export class RentalService implements TRentalHooks {
         ...(choice.whole ? { whole: true } : {}),
         term: { months: choice.termMonths },
         waivedWithdrawalAt: now,
-        ...(community ? { communityRiskAcceptedAt: now } : {}),
+        ...(consent ? { communityConsent: consent } : {}),
         size: q.size,
         trafficRatePerGb: q.trafficRatePerGb,
       },
@@ -1102,6 +1103,7 @@ export class RentalService implements TRentalHooks {
         fits: q.fits,
         price: q.price,
         own: !!owner && m.tenant.equals(owner),
+        community: await isCommunity(m.tenant),
       });
     }
     // The target fetches from the source's address (TCP MOVE_PORT open), or
@@ -1255,6 +1257,8 @@ export class RentalService implements TRentalHooks {
     user: ObjectId,
     id: ObjectId,
     to?: ObjectId,
+    /** Moving onto a community machine: the consent's version accepted. */
+    consentVersion?: string,
   ) {
     const sub = await this.rentalOf(id, {
       tenant,
@@ -1264,10 +1268,25 @@ export class RentalService implements TRentalHooks {
       throw Response.badRequest("No move waiting for your answer");
     });
     const target = to ?? sub.rental.proposal!.to;
+    // Onto a community machine, the renter consents as when renting one
+    // (PLAN §30.4), unless they did to this version already.
+    const machine = await serverModel.findOne({ _id: target }, {
+      projection: { tenant: 1 },
+    });
+    if (!machine) throw Response.notFound("Machine not found");
+    const consent = await isCommunity(machine.tenant) &&
+        sub.rental.communityConsent?.version !== COMMUNITY_CONSENT_VERSION
+      ? communityConsent(consentVersion)
+      : undefined;
     await this.move(id, target, user, {
       agreed: true,
       owner: sub.rental.owner,
     });
+    if (consent) {
+      await subscriptionModel.updateOne({ _id: id }, {
+        $set: { "rental.communityConsent": consent },
+      });
+    }
   }
 
   /** The customer declines: nothing changes. */

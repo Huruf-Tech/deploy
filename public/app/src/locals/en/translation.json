@@ -1937,6 +1937,10 @@
   "Rent it anyway": "Rent it anyway",
   "a community owner": "a community owner",
   "Renter's consent": "Renter's consent",
-  "Accepted the community machine's risks (owner's access, leak or loss) on {{when}}": "Accepted the community machine's risks (owner's access, leak or loss) on {{when}}",
-  "Accepted that a paid month isn't refunded on {{when}}": "Accepted that a paid month isn't refunded on {{when}}"
+  "Accepted that a paid month isn't refunded on {{when}}": "Accepted that a paid month isn't refunded on {{when}}",
+  "Move to a community server?": "Move to a community server?",
+  "{{name}} belongs to a community owner, not Huruf. Read this before your server moves there.": "{{name}} belongs to a community owner, not Huruf. Read this before your server moves there.",
+  "This machine": "This machine",
+  "Accept and move": "Accept and move",
+  "Accepted the community machine's risks (owner's access, leak or loss) on {{when}}, wording of {{version}}": "Accepted the community machine's risks (owner's access, leak or loss) on {{when}}, wording of {{version}}"
 }

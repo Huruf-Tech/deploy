@@ -8,6 +8,10 @@ import {
   IconStar,
   IconStarFilled,
 } from "@tabler/icons-react"
+import {
+  COMMUNITY_CONSENT_VERSION,
+  CommunityConsentDialog,
+} from "./CommunityConsent"
 
 import { getLocalPath } from "@/core/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -411,14 +415,28 @@ function Proposal({ rental, onDone }: { rental: TRental; onDone: () => void }) {
   const p = rental.proposal!
   const [picking, setPicking] = React.useState(false)
   const [busy, setBusy] = React.useState(false)
+  // A move onto a community machine waits for the renter's consent.
+  const [consenting, setConsenting] = React.useState<{
+    to?: string
+    name?: string
+  }>()
   const can = ThunderSDK.isPermitted("rentals", "acceptProposal")
-  const answer = async (accept: boolean, to?: string) => {
+  const needsConsent = (community: boolean) =>
+    community && rental.consentVersion !== COMMUNITY_CONSENT_VERSION
+  const accept = (target?: { to: string; name: string; community: boolean }) =>
+    needsConsent(target ? target.community : p.community)
+      ? setConsenting({ to: target?.to, name: target?.name ?? p.toName })
+      : answer(true, target?.to)
+  const answer = async (accept: boolean, to?: string, consent?: boolean) => {
     setBusy(true)
     try {
       if (accept) {
         await ThunderSDK.rentals.acceptProposal({
           params: { id: rental._id },
-          body: to ? { to } : {},
+          body: {
+            ...(to ? { to } : {}),
+            ...(consent ? { communityConsent: COMMUNITY_CONSENT_VERSION } : {}),
+          },
         })
         toast.success(t("Moving: it's offline for a few minutes"))
       } else {
@@ -452,7 +470,7 @@ function Proposal({ rental, onDone }: { rental: TRental; onDone: () => void }) {
             size="sm"
             className="h-7"
             disabled={busy}
-            onClick={() => answer(true)}
+            onClick={() => accept()}
           >
             {t("Accept the move")}
           </Button>
@@ -480,7 +498,20 @@ function Proposal({ rental, onDone }: { rental: TRental; onDone: () => void }) {
         <OtherTargets
           rental={rental._id}
           busy={busy}
-          onPick={(to) => answer(true, to)}
+          onPick={(target) =>
+            accept({
+              to: target.server,
+              name: target.name,
+              community: target.community,
+            })
+          }
+        />
+      )}
+      {consenting && (
+        <CommunityConsentDialog
+          machine={consenting.name}
+          onOpenChange={(open) => !open && setConsenting(undefined)}
+          onConfirm={() => answer(true, consenting.to, true)}
         />
       )}
     </div>
@@ -494,7 +525,7 @@ function OtherTargets({
 }: {
   rental: string
   busy: boolean
-  onPick: (to: string) => void
+  onPick: (target: { server: string; name: string; community: boolean }) => void
 }) {
   const { t } = useTranslation()
   const targets = useCached(queries.proposalTargets(rental)).data
@@ -513,7 +544,10 @@ function OtherTargets({
         size="sm"
         className="h-7 self-start"
         disabled={busy || !pick}
-        onClick={() => pick && onPick(pick)}
+        onClick={() => {
+          const target = targets.find((m) => m.server === pick)
+          if (target) onPick(target)
+        }}
       >
         {t("Move there")}
       </Button>

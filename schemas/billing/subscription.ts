@@ -60,10 +60,14 @@ export const $subscription = z.object({
     /** An EU consumer agreed it starts at once, waiving the withdrawal right. */
     waivedWithdrawalAt: z.date().optional(),
     /**
-     * On a community machine (PLAN §30.4): the renter accepted that its owner
-     * can access their data and that they answer for its leak or loss.
+     * On a community machine (PLAN §30.4): when the renter accepted that its
+     * owner can access their data and that they answer for its leak or loss,
+     * and which version of that wording.
      */
-    communityRiskAcceptedAt: z.date().optional(),
+    communityConsent: z.object({
+      at: z.date(),
+      version: z.string(),
+    }).optional(),
     /** The owner stops renting it out: it ends at this date (term and period kept). */
     endAt: z.date().optional(),
     /** Its machine left (removed, or down beyond the limit): ended unpaid. */
