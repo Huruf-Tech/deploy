@@ -375,4 +375,3 @@ func osRelease() map[string]string {
 	}
 	return values
 }
-

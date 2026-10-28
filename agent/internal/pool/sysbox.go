@@ -103,6 +103,7 @@ func (d *Sysbox) Setup(ctx context.Context, p protocol.PoolEnsurePayload) (proto
 	if err := buildImage(ctx); err != nil {
 		return none, result, err
 	}
+	ensureLxcfs(ctx, &notes)
 	if err := applyRules(ctx); err != nil {
 		return none, result, err
 	}
@@ -446,6 +447,7 @@ func runPartition(ctx context.Context, name string, size protocol.PartitionSize,
 	}
 	args = append(args, cpuArgs(size.Cpus, weight)...)
 	args = append(args, memArgs(size.MemMb)...)
+	args = append(args, lxcfsArgs()...)
 	if _, err := sh.Run(ctx, "docker", append(args, img)...); err != nil {
 		return err
 	}
@@ -505,6 +507,7 @@ func (d *Sysbox) Usage(ctx context.Context, names []string, exact bool) (map[str
 	if len(names) == 0 {
 		return map[string]Usage{}, nil
 	}
+	healLxcfs(ctx)
 	containers := make([]string, len(names))
 	for i, name := range names {
 		containers[i] = container(name)
