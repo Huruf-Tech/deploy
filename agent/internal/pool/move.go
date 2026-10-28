@@ -42,6 +42,11 @@ const moveErrorTrailer = "X-Move-Error"
 // poll later) or for the next bytes of one.
 var moveWait = 15 * time.Minute
 
+// moveAckWait is how long the source waits, once everything is sent, for the
+// target to confirm it received it all: closing earlier would drop bytes
+// still on the way (buffers, the tunnel). An older target never confirms.
+var moveAckWait = 2 * time.Minute
+
 // tarArgs keeps owners, xattrs (overlay whiteouts and opaque dirs in the
 // partition's own Docker) and sparse files; the archive is stdin or stdout.
 func tarArgs(name string, create bool) []string {
@@ -166,9 +171,25 @@ func serve(ctx context.Context, listen, token, key string, parts map[string][]st
 				results <- err
 				return
 			}
-			results <- sealed.Close()
+			err := sealed.Close()
+			if err == nil {
+				// Onto the connection now, not when the handler returns.
+				err = http.NewResponseController(w).Flush()
+			}
+			results <- err
 		})
 	}
+	// The target confirms it has every part: only then is closing safe.
+	acked := make(chan struct{})
+	var ackOnce sync.Once
+	mux.HandleFunc("/done", func(w http.ResponseWriter, r *http.Request) {
+		if subtle.ConstantTimeCompare([]byte(r.Header.Get("Authorization")), []byte("Bearer "+token)) != 1 {
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
+		ackOnce.Do(func() { close(acked) })
+		w.WriteHeader(http.StatusNoContent)
+	})
 	srv := &http.Server{Handler: mux, ReadHeaderTimeout: 10 * time.Second}
 	go srv.Serve(ln)
 	// Closing drops a stalled receiver's connection, which ends its part.
@@ -190,7 +211,28 @@ func serve(ctx context.Context, listen, token, key string, parts map[string][]st
 			return ctx.Err()
 		}
 	}
+	select {
+	case <-acked:
+	case <-time.After(moveAckWait):
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 	return nil
+}
+
+// confirm tells the source every part arrived, so it can stop serving.
+// Best effort: an older source doesn't wait for it.
+func confirm(ctx context.Context, src *source, token string) {
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+src.chosen+"/done", nil)
+	if err != nil {
+		return
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	if resp, err := http.DefaultClient.Do(req); err == nil {
+		resp.Body.Close()
+	}
 }
 
 func (d *Sysbox) Receive(ctx context.Context, name string, size protocol.PartitionSize, weight int, from, token, key string, relay *protocol.MoveRelay) error {
@@ -226,12 +268,14 @@ func (d *Sysbox) Receive(ctx context.Context, name string, size protocol.Partiti
 	}
 	// Its system files came with its directory.
 	if _, err := os.Stat(filepath.Join(rootDir(name), "usr")); err == nil {
+		confirm(ctx, src, token)
 		return runPartition(ctx, name, size, weight, image)
 	}
 	out, err := fetch(ctx, src, token, key, "/image", "docker", "load")
 	if err != nil {
 		return err
 	}
+	confirm(ctx, src, token)
 	img := ""
 	for _, line := range strings.Split(out, "\n") {
 		if v, ok := strings.CutPrefix(strings.TrimSpace(line), "Loaded image: "); ok {

@@ -45,16 +45,41 @@ func TestServeSendsEachPartOnceWithTheToken(t *testing.T) {
 	if _, err := fetch(ctx, &source{addrs: []string{addr}}, token, testKey, "/image", "cat"); err == nil || !strings.Contains(err.Error(), "410") {
 		t.Fatalf("a part is sent once: %v", err)
 	}
-	if out, err := fetch(ctx, &source{addrs: []string{addr}}, token, testKey, "/data", "cat"); err != nil || out != "data bytes\n" {
+	src := &source{addrs: []string{addr}}
+	if out, err := fetch(ctx, src, token, testKey, "/data", "cat"); err != nil || out != "data bytes\n" {
 		t.Fatalf("data = %q, %v", out, err)
 	}
+	// Everything sent, but it keeps serving until the target confirms:
+	// closing earlier would drop bytes still on the way.
+	select {
+	case err := <-done:
+		t.Fatalf("serve returned before the target confirmed: %v", err)
+	case <-time.After(300 * time.Millisecond):
+	}
+	confirm(ctx, src, token)
 	select {
 	case err := <-done:
 		if err != nil {
 			t.Fatal(err)
 		}
 	case <-time.After(5 * time.Second):
-		t.Fatal("serve should return once every part is sent")
+		t.Fatal("serve should return once the target confirms")
+	}
+}
+
+// An older target never confirms: the source still finishes, a bit later.
+func TestServeFinishesWithoutConfirmation(t *testing.T) {
+	defer func(w time.Duration) { moveAckWait = w }(moveAckWait)
+	moveAckWait = 200 * time.Millisecond
+	addr, token := freeAddr(t), strings.Repeat("t", 32)
+	ctx := context.Background()
+	done := make(chan error, 1)
+	go func() { done <- serve(ctx, addr, token, testKey, map[string][]string{"/data": {"echo", "x"}}) }()
+	if _, err := fetch(ctx, &source{addrs: []string{addr}}, token, testKey, "/data", "cat"); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-done; err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -133,9 +158,11 @@ func TestTarRoundTrip(t *testing.T) {
 	ctx := context.Background()
 	done := make(chan error, 1)
 	go func() { done <- serve(ctx, addr, token, testKey, map[string][]string{"/data": create}) }()
-	if _, err := fetch(ctx, &source{addrs: []string{addr}}, token, testKey, "/data", extract...); err != nil {
+	from := &source{addrs: []string{addr}}
+	if _, err := fetch(ctx, from, token, testKey, "/data", extract...); err != nil {
 		t.Fatal(err)
 	}
+	confirm(ctx, from, token)
 	if err := <-done; err != nil {
 		t.Fatal(err)
 	}
