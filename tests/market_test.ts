@@ -7,6 +7,7 @@ import { Mailer } from "@/plugins/Huruf-Tech/thunder-core/lib/mailer.ts";
 import { Wallet } from "@/plugins/Huruf-Tech/thunder-core/lib/wallet.ts";
 import { disputes, earnings, rentals } from "@/lib/services.ts";
 import { HOLD_MS } from "@/lib/market/earnings.ts";
+import { disputeDetail, reportDetail } from "@/lib/market/review.ts";
 import { familyOf, linked, ratingsOf } from "@/lib/market/market.ts";
 import {
   hourlyOf,
@@ -323,6 +324,33 @@ Deno.test({
             { reason: "It was down most of the week" },
           );
           assertEquals(opened.status, 200, JSON.stringify(opened.json));
+          // What an admin sees to decide it.
+          const detail = await disputeDetail(new ObjectId(opened.json.dispute));
+          assertEquals(detail.customer._id, String(customer.tenantId));
+          assertEquals(detail.owner._id, String(owner.tenantId));
+          assertEquals(detail.machine?.name, "home-1");
+          assertEquals(detail.rental?._id, String(rental));
+          assert(detail.periods.some((p) => p.settled && p.refund! > 0));
+          assertEquals(detail.linked, false);
+          assert(detail.held.total > 0);
+          // A report: the reporter rents the machine.
+          const reported = await customer.call("POST", "/rentals/api/report", {
+            subscription: rental,
+            text: "The owner seems to read my database",
+          });
+          assertEquals(reported.status, 200, JSON.stringify(reported.json));
+          const [abuse] = await d.collection("abuseReports").find({
+            tenant: customer.tenantId,
+          }).toArray();
+          const review = await reportDetail(abuse._id);
+          assertEquals([review.relation, review.machine?.name], [
+            "renter",
+            "home-1",
+          ]);
+          assertEquals(review.owner?._id, String(owner.tenantId));
+          await d.collection("abuseReports").deleteMany({
+            tenant: customer.tenantId,
+          });
           const frozen = await earnings.summary(owner.tenantId);
           assertEquals(frozen.available, 0);
           assert(frozen.frozen > 0, "its released money is frozen");

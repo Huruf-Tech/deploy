@@ -2600,11 +2600,14 @@ Kept: partitions and isolation, escrow at request, charging at acceptance, renew
 - Only while the source machine is up (the data is copied from it), and not in the last 3 days before renewal (the owner can stop the renewal instead).
 
 ### 30.9 Disputes (19f)
-The customer opens a dispute; the machine's unreleased money is frozen; measured evidence (uptime, latency, steal, CPU outside partitions, benchmarks) is attached automatically; an admin refunds all, part or nothing, paid from the frozen money.
+The customer opens a dispute once a paid month has ended; the machine's unreleased money is frozen; measured evidence (uptime, latency, steal, CPU outside partitions, benchmarks) is attached automatically; an admin refunds all, part or nothing, paid from the frozen money.
+
+An admin decides on the dispute's own page: the reason, what was bought, every month's payment, downtime, refund and owner's share, the rented server's and machine's outages, both workspaces with their owners and records (rentals, disputes, refunds, reports), the machine's measured facts, and whether the two sides look linked.
 
 ### 30.10 Trust and safety (19g)
 - No renting your own or a linked account's machine (same person, card or IP).
 - Ratings only from paying, unrelated renters, weighted by money spent.
+- Abuse reports have their own page for admins: the report, how the reporter relates to the machine (owner, renter or neither), the reporter's record (reports made and found valid), the machine, its owner and earlier reports on it; an admin closes it as valid or not, which counts in the reporter's record.
 - An acceptable-use policy and abuse reports (mail ports are already blocked); owners warned that their connection is exposed and that many residential ISPs forbid servers.
 
 ### 30.11 Laws to check before launch (a lawyer's review)

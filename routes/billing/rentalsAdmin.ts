@@ -20,6 +20,39 @@ import {
 } from "@/schemas/billing/market.ts";
 import { serverModel } from "@/schemas/infrastructure/server.ts";
 import { $machineView, machineView } from "@/lib/market/machineView.ts";
+import { disputeDetail, reportDetail } from "@/lib/market/review.ts";
+
+/** A machine as a dispute or report shows it: measured facts and record. */
+const $reviewMachine = z.object({
+  _id: z.string(),
+  name: z.string(),
+  owner: z.string(),
+  country: z.string().optional(),
+  publicIp: z.string().optional(),
+  addedAt: z.date(),
+  allocatable: z.object({
+    cpus: z.number(),
+    memMb: z.number(),
+    diskGb: z.number(),
+  }).optional(),
+  forRent: z.boolean(),
+  profile: z.object({
+    rttMs: z.number().optional(),
+    uptime30d: z.number().optional(),
+    uptime90d: z.number().optional(),
+    steal: z.number().optional(),
+    virtualization: z.string().optional(),
+    rating: z.number().optional(),
+    tier: z.string().optional(),
+    disk: z.string().optional(),
+    benchmarkAt: z.string().optional(),
+    hostCpu: z.number().optional(),
+  }),
+  renters: z.object({ stars: z.number(), count: z.number() }).optional(),
+  liveRentals: z.number(),
+  disputes: z.number(),
+  reports: z.number(),
+});
 
 /**
  * Admin oversight of the market (PLAN §30.2): suspend, resume, delete, move
@@ -239,6 +272,175 @@ export default new Router("/api", function rentalsAdmin(router) {
     };
   });
 
+  // A dispute with everything needed to decide it (PLAN §30.9).
+  router.get("/disputes/:id", function dispute() {
+    const $party = z.object({
+      _id: z.string(),
+      name: z.string().optional(),
+      createdAt: z.date().optional(),
+      ownerName: z.string().optional(),
+      ownerEmail: z.string().optional(),
+      rentals: z.number(),
+      machinesForRent: z.number().optional(),
+      disputes: z.number(),
+      disputesRefunded: z.number(),
+      refundedCents: z.number(),
+      reportsMade: z.number(),
+      reportsValid: z.number(),
+    });
+    const $return = z.object({
+      dispute: z.object({
+        _id: z.string(),
+        reason: z.string(),
+        status: z.string(),
+        createdAt: z.date(),
+        evidence: z.record(z.string(), z.unknown()),
+        decision: z.object({
+          refund: z.number(),
+          note: z.string().optional(),
+          at: z.date(),
+        }).optional(),
+      }),
+      held: z.object({
+        unreleased: z.number(),
+        security: z.number(),
+        total: z.number(),
+      }).describe("Cents the machine's money can pay"),
+      rental: z.object({
+        _id: z.string(),
+        status: z.string(),
+        plan: z.string().optional(),
+        price: z.number(),
+        resources: z.object({
+          vcpu: z.number(),
+          memMb: z.number(),
+          diskGb: z.number(),
+          trafficGb: z.number(),
+        }).optional(),
+        size: z.object({
+          cpus: z.number(),
+          memMb: z.number(),
+          diskGb: z.number(),
+        }),
+        whole: z.boolean(),
+        term: z.object({
+          months: z.number(),
+          until: z.date().optional(),
+        }).optional(),
+        startedAt: z.date(),
+        currentPeriodEnd: z.date().optional(),
+        cancelAtPeriodEnd: z.boolean(),
+        endAt: z.date().optional(),
+        lostAt: z.date().optional(),
+        heldByAdmin: z.boolean(),
+        partition: z.string().optional(),
+        server: z.string().optional(),
+        uptimeThisPeriod: z.number().optional(),
+        lastMove: z.object({
+          at: z.date(),
+          error: z.string().optional(),
+        }).optional(),
+      }).optional(),
+      periods: z.array(z.object({
+        _id: z.string(),
+        start: z.date(),
+        end: z.date(),
+        paid: z.number(),
+        overage: z.number().optional(),
+        downtimeMs: z.number(),
+        refund: z.number().optional(),
+        commission: z.number().optional(),
+        ownerShare: z.number().optional(),
+        toSecurity: z.number().optional(),
+        left: z.boolean(),
+        settled: z.boolean(),
+      })),
+      outages: z.array(z.object({
+        server: z.string(),
+        from: z.date(),
+        to: z.date().optional(),
+        ongoing: z.boolean().optional(),
+        minutes: z.number(),
+      })),
+      machine: $reviewMachine.nullable(),
+      customer: $party,
+      owner: $party,
+      linked: z.boolean().describe("The same person on both sides"),
+    });
+
+    return {
+      shape: () => ({ params: $params, return: $return }),
+      handler: async (req) => {
+        const { id } = $params.parse(paramsAsJson(req));
+        return Response.json(await disputeDetail(id));
+      },
+    };
+  });
+
+  // An abuse report with the reporter's record and the target's (PLAN §30.10).
+  router.get("/reports/:id", function report() {
+    const $party = z.object({
+      _id: z.string(),
+      name: z.string().optional(),
+      createdAt: z.date().optional(),
+      ownerName: z.string().optional(),
+      ownerEmail: z.string().optional(),
+      rentals: z.number(),
+      machinesForRent: z.number().optional(),
+      disputes: z.number(),
+      disputesRefunded: z.number(),
+      refundedCents: z.number(),
+      reportsMade: z.number(),
+      reportsValid: z.number(),
+    });
+    const $return = z.object({
+      report: z.object({
+        _id: z.string(),
+        text: z.string(),
+        status: z.string(),
+        createdAt: z.date(),
+        resolution: z.object({
+          valid: z.boolean(),
+          note: z.string().optional(),
+          at: z.date(),
+        }).optional(),
+      }),
+      reporter: $party,
+      relation: z.enum(["owner", "renter", "none"]).describe(
+        "How the reporter relates to the machine",
+      ),
+      rental: z.object({
+        _id: z.string(),
+        status: z.string(),
+        plan: z.string().optional(),
+        customer: z.string(),
+        size: z.object({
+          cpus: z.number(),
+          memMb: z.number(),
+          diskGb: z.number(),
+        }).optional(),
+        startedAt: z.date(),
+      }).optional(),
+      machine: $reviewMachine.nullable(),
+      owner: $party.nullable(),
+      earlier: z.array(z.object({
+        _id: z.string(),
+        text: z.string(),
+        status: z.string(),
+        valid: z.boolean().optional(),
+        createdAt: z.date(),
+      })).describe("Other reports on the same machine or rental"),
+    });
+
+    return {
+      shape: () => ({ params: $params, return: $return }),
+      handler: async (req) => {
+        const { id } = $params.parse(paramsAsJson(req));
+        return Response.json(await reportDetail(id));
+      },
+    };
+  });
+
   // Disputes (PLAN §30.9): open ones with their evidence; a decision pays
   // the refund from the machine's money.
   router.get("/disputes", function listDisputes() {
@@ -440,14 +642,35 @@ export default new Router("/api", function rentalsAdmin(router) {
     };
   });
 
+  // Closes a report with the admin's verdict: did it hold up?
   router.post("/reports/:id/close", function closeReport() {
+    const $body = z.object({
+      valid: z.boolean().describe("The report held up"),
+      note: z.string().max(1_000).optional(),
+    });
+
     return {
-      shape: () => ({ params: $params }),
+      shape: () => ({ params: $params, body: $body }),
       handler: async (req) => {
         const { id } = $params.parse(paramsAsJson(req));
-        await abuseReportModel.updateOne({ _id: id }, {
-          $set: { status: "closed" },
-        });
+        const { valid, note } = $body.parse(await bodyAsJson(req));
+        const { matchedCount } = await abuseReportModel.updateOne(
+          { _id: id, status: "open" },
+          {
+            $set: {
+              status: "closed",
+              resolution: {
+                valid,
+                ...(note ? { note } : {}),
+                by: await admin(req),
+                at: new Date(),
+              },
+            },
+          },
+        );
+        if (!matchedCount) {
+          throw Response.notFound("No open report with this id");
+        }
         return Response.json({ ok: true });
       },
     };

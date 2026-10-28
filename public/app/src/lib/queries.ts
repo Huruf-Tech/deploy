@@ -373,6 +373,20 @@ export const queries = {
         ? await ThunderSDK.rentalsAdmin.listReverts({ signal })
         : []
     ),
+  /** A dispute with everything to decide it (PLAN §30.9). */
+  disputeDetail: (id: string) =>
+    query(
+      ["rentalsAdmin", "dispute", id],
+      async ({ signal }) =>
+        await ThunderSDK.rentalsAdmin.dispute({ params: { id }, signal })
+    ),
+  /** An abuse report with both records (PLAN §30.10). */
+  reportDetail: (id: string) =>
+    query(
+      ["rentalsAdmin", "report", id],
+      async ({ signal }) =>
+        await ThunderSDK.rentalsAdmin.report({ params: { id }, signal })
+    ),
   abuseReports: () =>
     query(["rentalsAdmin", "reports"], async ({ signal }) =>
       can("rentalsAdmin", "listReports")

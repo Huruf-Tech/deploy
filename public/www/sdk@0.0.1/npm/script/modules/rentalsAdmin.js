@@ -226,6 +226,46 @@ const rentalsAdminModule = (sdk) => {
                 return res;
             }, data);
         },
+        dispute(data) {
+            return sdk.resolveAxiosResponse(async () => {
+                sdk.checkPermission("rentalsAdmin", "dispute");
+                const method = "get";
+                const toPath = (0, path_to_regexp_1.compile)("rentalsAdmin/api/disputes/:id");
+                const requestPayload = {
+                    method,
+                    url: toPath(sdk.resolvePathParams(data?.params)),
+                    params: data?.query,
+                    data: data?.body,
+                    signal: data?.signal,
+                    ...(data?.axiosConfig
+                        ? sdk.resolveAxiosConfig(data.axiosConfig)
+                        : undefined),
+                };
+                sdk.log("Sending Request:", requestPayload);
+                const res = await sdk._axios.request(requestPayload);
+                return res;
+            }, data);
+        },
+        report(data) {
+            return sdk.resolveAxiosResponse(async () => {
+                sdk.checkPermission("rentalsAdmin", "report");
+                const method = "get";
+                const toPath = (0, path_to_regexp_1.compile)("rentalsAdmin/api/reports/:id");
+                const requestPayload = {
+                    method,
+                    url: toPath(sdk.resolvePathParams(data?.params)),
+                    params: data?.query,
+                    data: data?.body,
+                    signal: data?.signal,
+                    ...(data?.axiosConfig
+                        ? sdk.resolveAxiosConfig(data.axiosConfig)
+                        : undefined),
+                };
+                sdk.log("Sending Request:", requestPayload);
+                const res = await sdk._axios.request(requestPayload);
+                return res;
+            }, data);
+        },
         listDisputes(data) {
             return sdk.resolveAxiosResponse(async () => {
                 sdk.checkPermission("rentalsAdmin", "listDisputes");
@@ -358,6 +398,8 @@ const rentalsAdminModule = (sdk) => {
     methods.recreatePartition.__scope = "rentalsAdmin";
     methods.refund.__scope = "rentalsAdmin";
     methods.machine.__scope = "rentalsAdmin";
+    methods.dispute.__scope = "rentalsAdmin";
+    methods.report.__scope = "rentalsAdmin";
     methods.listDisputes.__scope = "rentalsAdmin";
     methods.resolveDispute.__scope = "rentalsAdmin";
     methods.listReverts.__scope = "rentalsAdmin";

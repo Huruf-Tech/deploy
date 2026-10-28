@@ -105,6 +105,13 @@ export const $abuseReport = z.object({
   by: $objectId.meta({ ref: "users" }),
   text: z.string().min(1).max(2_000),
   status: z.enum(["open", "closed"]),
+  /** An admin's review: whether the report held up, and why. */
+  resolution: z.object({
+    valid: z.boolean(),
+    note: z.string().max(1_000).optional(),
+    by: $objectId.meta({ ref: "users" }),
+    at: z.date(),
+  }).optional(),
   createdAt: z.date(),
 });
 export type TAbuseReport = z.output<typeof $abuseReport>;

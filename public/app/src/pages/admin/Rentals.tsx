@@ -1,4 +1,5 @@
 import * as React from "react"
+import { Link } from "react-router"
 import { ThunderSDK } from "thunder-sdk"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
@@ -12,6 +13,7 @@ import {
 } from "@tabler/icons-react"
 
 import { Page } from "@/components/page"
+import { getLocalPath } from "@/core/lib/utils"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -461,8 +463,7 @@ function evidenceText(
 /** Open disputes (PLAN §30.9): evidence, and a refund from the machine's money. */
 function Disputes() {
   const { t } = useTranslation()
-  const { data, reload } = useCached(queries.disputes("open"))
-  const [deciding, setDeciding] = React.useState<TDispute>()
+  const { data } = useCached(queries.disputes("open"))
   if (!data?.length) return null
   return (
     <Section
@@ -520,46 +521,21 @@ function Disputes() {
             id: "actions",
             header: <span className="sr-only">{t("Actions")}</span>,
             align: "end",
-            cell: (d) =>
-              ThunderSDK.isPermitted("rentalsAdmin", "resolveDispute") && (
-                <Button
-                  size="sm"
-                  className="h-7"
-                  onClick={() => setDeciding(d)}
-                >
-                  {t("Decide")}
-                </Button>
-              ),
+            cell: (d) => (
+              <Button
+                size="sm"
+                className="h-7"
+                render={
+                  <Link to={getLocalPath(`admin/rentals/disputes/${d._id}`)} />
+                }
+                nativeButton={false}
+              >
+                {t("Review")}
+              </Button>
+            ),
           },
         ]}
       />
-      {deciding && (
-        <PromptDialog
-          title={t("Decide the dispute")}
-          description={t(
-            "Up to {{amount}} is held for this machine. 0 refunds nothing; both sides are told.",
-            { amount: money(deciding.held, "usd") }
-          )}
-          amount={{ label: t("Refund ($)"), max: deciding.held, initial: 0 }}
-          textLabel={t("Note for both sides (optional)")}
-          required={false}
-          submitLabel={t("Decide")}
-          onOpenChange={(o) => !o && setDeciding(undefined)}
-          onSubmit={async (note, refund) => {
-            try {
-              await ThunderSDK.rentalsAdmin.resolveDispute({
-                params: { id: deciding._id },
-                body: { refund, ...(note ? { note } : {}) },
-              })
-              toast.success(t("Dispute decided"))
-              reload()
-            } catch (e) {
-              toast.error(errorMessage(e) ?? t("Could not save"))
-              throw e
-            }
-          }}
-        />
-      )}
     </Section>
   )
 }
@@ -680,17 +656,8 @@ function Reverts() {
 /** Abuse reports (PLAN §30.10). */
 function Reports() {
   const { t } = useTranslation()
-  const { data, reload } = useCached(queries.abuseReports())
+  const { data } = useCached(queries.abuseReports())
   if (!data?.length) return null
-  const close = async (id: string) => {
-    try {
-      await ThunderSDK.rentalsAdmin.closeReport({ params: { id } })
-      toast.success(t("Report closed"))
-      reload()
-    } catch (e) {
-      toast.error(errorMessage(e) ?? t("Could not save"))
-    }
-  }
   return (
     <Section
       id="reports"
@@ -735,17 +702,18 @@ function Reports() {
             id: "actions",
             header: <span className="sr-only">{t("Actions")}</span>,
             align: "end",
-            cell: (r) =>
-              ThunderSDK.isPermitted("rentalsAdmin", "closeReport") && (
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="h-7"
-                  onClick={() => close(r._id)}
-                >
-                  {t("Close")}
-                </Button>
-              ),
+            cell: (r) => (
+              <Button
+                size="sm"
+                className="h-7"
+                render={
+                  <Link to={getLocalPath(`admin/rentals/reports/${r._id}`)} />
+                }
+                nativeButton={false}
+              >
+                {t("Review")}
+              </Button>
+            ),
           },
         ]}
       />

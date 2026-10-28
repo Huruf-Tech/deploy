@@ -168,6 +168,249 @@ export type machine$return = {
     /** Cents per month from live rentals */
     revenue: number;
 };
+export type dispute$params = {
+    id?: string;
+};
+export type dispute$return = {
+    dispute: {
+        _id: string;
+        reason: string;
+        status: string;
+        createdAt: Date;
+        evidence: {
+            [K in string]: unknown;
+        };
+        decision?: {
+            refund: number;
+            note?: string | undefined;
+            at: Date;
+        } | undefined;
+    };
+    /** Cents the machine's money can pay */
+    held: {
+        unreleased: number;
+        security: number;
+        total: number;
+    };
+    rental?: {
+        _id: string;
+        status: string;
+        plan?: string | undefined;
+        price: number;
+        resources?: {
+            vcpu: number;
+            memMb: number;
+            diskGb: number;
+            trafficGb: number;
+        } | undefined;
+        size: {
+            cpus: number;
+            memMb: number;
+            diskGb: number;
+        };
+        whole: boolean;
+        term?: {
+            months: number;
+            until?: Date | undefined;
+        } | undefined;
+        startedAt: Date;
+        currentPeriodEnd?: Date | undefined;
+        cancelAtPeriodEnd: boolean;
+        endAt?: Date | undefined;
+        lostAt?: Date | undefined;
+        heldByAdmin: boolean;
+        partition?: string | undefined;
+        server?: string | undefined;
+        uptimeThisPeriod?: number | undefined;
+        lastMove?: {
+            at: Date;
+            error?: string | undefined;
+        } | undefined;
+    } | undefined;
+    periods: {
+        _id: string;
+        start: Date;
+        end: Date;
+        paid: number;
+        overage?: number | undefined;
+        downtimeMs: number;
+        refund?: number | undefined;
+        commission?: number | undefined;
+        ownerShare?: number | undefined;
+        toSecurity?: number | undefined;
+        left: boolean;
+        settled: boolean;
+    }[];
+    outages: {
+        server: string;
+        from: Date;
+        to?: Date | undefined;
+        ongoing?: boolean | undefined;
+        minutes: number;
+    }[];
+    machine: {
+        _id: string;
+        name: string;
+        owner: string;
+        country?: string | undefined;
+        publicIp?: string | undefined;
+        addedAt: Date;
+        allocatable?: {
+            cpus: number;
+            memMb: number;
+            diskGb: number;
+        } | undefined;
+        forRent: boolean;
+        profile: {
+            rttMs?: number | undefined;
+            uptime30d?: number | undefined;
+            uptime90d?: number | undefined;
+            steal?: number | undefined;
+            virtualization?: string | undefined;
+            rating?: number | undefined;
+            tier?: string | undefined;
+            disk?: string | undefined;
+            benchmarkAt?: string | undefined;
+            hostCpu?: number | undefined;
+        };
+        renters?: {
+            stars: number;
+            count: number;
+        } | undefined;
+        liveRentals: number;
+        disputes: number;
+        reports: number;
+    } | null;
+    customer: {
+        _id: string;
+        name?: string | undefined;
+        createdAt?: Date | undefined;
+        ownerName?: string | undefined;
+        ownerEmail?: string | undefined;
+        rentals: number;
+        machinesForRent?: number | undefined;
+        disputes: number;
+        disputesRefunded: number;
+        refundedCents: number;
+        reportsMade: number;
+        reportsValid: number;
+    };
+    owner: {
+        _id: string;
+        name?: string | undefined;
+        createdAt?: Date | undefined;
+        ownerName?: string | undefined;
+        ownerEmail?: string | undefined;
+        rentals: number;
+        machinesForRent?: number | undefined;
+        disputes: number;
+        disputesRefunded: number;
+        refundedCents: number;
+        reportsMade: number;
+        reportsValid: number;
+    };
+    /** The same person on both sides */
+    linked: boolean;
+};
+export type report$params = {
+    id?: string;
+};
+export type report$return = {
+    report: {
+        _id: string;
+        text: string;
+        status: string;
+        createdAt: Date;
+        resolution?: {
+            valid: boolean;
+            note?: string | undefined;
+            at: Date;
+        } | undefined;
+    };
+    reporter: {
+        _id: string;
+        name?: string | undefined;
+        createdAt?: Date | undefined;
+        ownerName?: string | undefined;
+        ownerEmail?: string | undefined;
+        rentals: number;
+        machinesForRent?: number | undefined;
+        disputes: number;
+        disputesRefunded: number;
+        refundedCents: number;
+        reportsMade: number;
+        reportsValid: number;
+    };
+    /** How the reporter relates to the machine */
+    relation: "owner" | "renter" | "none";
+    rental?: {
+        _id: string;
+        status: string;
+        plan?: string | undefined;
+        customer: string;
+        size?: {
+            cpus: number;
+            memMb: number;
+            diskGb: number;
+        } | undefined;
+        startedAt: Date;
+    } | undefined;
+    machine: {
+        _id: string;
+        name: string;
+        owner: string;
+        country?: string | undefined;
+        publicIp?: string | undefined;
+        addedAt: Date;
+        allocatable?: {
+            cpus: number;
+            memMb: number;
+            diskGb: number;
+        } | undefined;
+        forRent: boolean;
+        profile: {
+            rttMs?: number | undefined;
+            uptime30d?: number | undefined;
+            uptime90d?: number | undefined;
+            steal?: number | undefined;
+            virtualization?: string | undefined;
+            rating?: number | undefined;
+            tier?: string | undefined;
+            disk?: string | undefined;
+            benchmarkAt?: string | undefined;
+            hostCpu?: number | undefined;
+        };
+        renters?: {
+            stars: number;
+            count: number;
+        } | undefined;
+        liveRentals: number;
+        disputes: number;
+        reports: number;
+    } | null;
+    owner: {
+        _id: string;
+        name?: string | undefined;
+        createdAt?: Date | undefined;
+        ownerName?: string | undefined;
+        ownerEmail?: string | undefined;
+        rentals: number;
+        machinesForRent?: number | undefined;
+        disputes: number;
+        disputesRefunded: number;
+        refundedCents: number;
+        reportsMade: number;
+        reportsValid: number;
+    } | null;
+    /** Other reports on the same machine or rental */
+    earlier: {
+        _id: string;
+        text: string;
+        status: string;
+        valid?: boolean | undefined;
+        createdAt: Date;
+    }[];
+};
 export type listDisputes$query = {
     status?: ("open" | "resolved") | undefined;
 };
@@ -234,6 +477,11 @@ export type listReports$return = {
 export type closeReport$params = {
     id?: string;
 };
+export type closeReport$body = {
+    /** The report held up */
+    valid: boolean;
+    note?: string | undefined;
+};
 export declare const rentalsAdminModule: (sdk: typeof BaseSDK) => {
     readonly type: {
         suspend$params: suspend$params;
@@ -255,6 +503,10 @@ export declare const rentalsAdminModule: (sdk: typeof BaseSDK) => {
         refund$return: refund$return;
         machine$params: machine$params;
         machine$return: machine$return;
+        dispute$params: dispute$params;
+        dispute$return: dispute$return;
+        report$params: report$params;
+        report$return: report$return;
         listDisputes$query: listDisputes$query;
         listDisputes$return: listDisputes$return;
         resolveDispute$params: resolveDispute$params;
@@ -264,6 +516,7 @@ export declare const rentalsAdminModule: (sdk: typeof BaseSDK) => {
         decideRevert$body: decideRevert$body;
         listReports$return: listReports$return;
         closeReport$params: closeReport$params;
+        closeReport$body: closeReport$body;
     };
     readonly suspend: (data: {
         params: suspend$params;
@@ -386,6 +639,28 @@ export declare const rentalsAdminModule: (sdk: typeof BaseSDK) => {
         catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<machine$return | TResult>;
         finally: (onfinally?: (() => void) | null | undefined) => Promise<machine$return>;
     };
+    readonly dispute: (data: {
+        params: dispute$params;
+        query?: undefined;
+        body?: undefined;
+    } & TRequestOptions<dispute$return>) => {
+        readonly raw: Promise<import("axios").AxiosResponse<dispute$return, any, {}, any>>;
+        readonly data: Promise<dispute$return>;
+        then: <TResult1 = dispute$return, TResult2 = never>(onfulfilled?: ((value: dispute$return) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+        catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<dispute$return | TResult>;
+        finally: (onfinally?: (() => void) | null | undefined) => Promise<dispute$return>;
+    };
+    readonly report: (data: {
+        params: report$params;
+        query?: undefined;
+        body?: undefined;
+    } & TRequestOptions<report$return>) => {
+        readonly raw: Promise<import("axios").AxiosResponse<report$return, any, {}, any>>;
+        readonly data: Promise<report$return>;
+        then: <TResult1 = report$return, TResult2 = never>(onfulfilled?: ((value: report$return) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+        catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<report$return | TResult>;
+        finally: (onfinally?: (() => void) | null | undefined) => Promise<report$return>;
+    };
     readonly listDisputes: (data: {
         params?: undefined;
         query: listDisputes$query;
@@ -444,7 +719,7 @@ export declare const rentalsAdminModule: (sdk: typeof BaseSDK) => {
     readonly closeReport: (data: {
         params: closeReport$params;
         query?: undefined;
-        body?: undefined;
+        body: closeReport$body;
     } & TRequestOptions<unknown>) => {
         readonly raw: Promise<import("axios").AxiosResponse<unknown, any, {}, any>>;
         readonly data: Promise<unknown>;

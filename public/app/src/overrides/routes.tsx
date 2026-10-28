@@ -42,6 +42,7 @@ import BillingAdmin from "@/pages/billing/Admin"
 import Payments from "@/pages/billing/Payments"
 import PaymentsAdmin from "@/pages/billing/PaymentsAdmin"
 import RentalsAdmin from "@/pages/admin/Rentals"
+import { DisputeReview, ReportReview } from "@/pages/admin/RentalReview"
 import Market from "@/pages/market"
 import Earnings from "@/pages/earnings"
 import ControlPlane from "@/pages/admin/ControlPlane"
@@ -104,7 +105,12 @@ export const routes: TRoutesOverride = {
     group: "Admin",
     icon: IconServerBolt,
     display: () => ThunderSDK.isPermitted("rentalsAdmin", "listDisputes"),
-    Component: RentalsAdmin,
+    Component: () => <Outlet />,
+    children: [
+      { index: true, display: false, Component: RentalsAdmin },
+      { path: "disputes/:id", display: false, Component: DisputeReview },
+      { path: "reports/:id", display: false, Component: ReportReview },
+    ],
   },
   // The customer's rentals live on the Servers page.
   rentals: { display: false },

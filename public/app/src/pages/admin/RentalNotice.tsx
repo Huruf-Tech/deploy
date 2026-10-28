@@ -32,12 +32,18 @@ function OwnerNotice() {
   const { t } = useTranslation()
   const requests = useCached(queries.hostingRequests()).data ?? []
   if (!requests.length) return null
+  // One machine: its page, where they wait; else the servers list.
+  const machines = [...new Set(requests.map((r) => r.machine))]
   return (
     <Notice
       text={t("{{count}} rental requests wait for you", {
         count: requests.length,
       })}
-      to="servers"
+      to={
+        machines.length === 1 && machines[0]
+          ? `infrastructure/servers/${machines[0]}`
+          : "infrastructure/servers"
+      }
     />
   )
 }
