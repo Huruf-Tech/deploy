@@ -19,7 +19,7 @@ import { isMeshPortTaken, meshPlacement } from "@/lib/agents/servers.ts";
 import { refreshSpecs } from "@/lib/deploy/specs.ts";
 import { freeOf, takenOn } from "@/lib/pool/room.ts";
 import type { EarningsService } from "@/lib/market/earnings.ts";
-import { linked, RENTABLE } from "@/lib/market/market.ts";
+import { linked, LINKED_REASON, RENTABLE } from "@/lib/market/market.ts";
 import {
   COMMUNITY_CONSENT_VERSION,
   communityConsent,
@@ -268,9 +268,8 @@ export class RentalService implements TRentalHooks {
     }
     const q = await this.quote(choice.machine, choice);
     if (!q.fits) throw Response.badRequest("That machine has no room for it");
-    if (await linked(tenant, q.machine.tenant)) {
-      throw Response.forbidden("You can't rent a machine of your own");
-    }
+    const link = await linked(tenant, q.machine.tenant);
+    if (link) throw Response.forbidden(LINKED_REASON[link]);
     const consent = await isCommunity(q.machine.tenant)
       ? communityConsent(choice.communityConsent)
       : undefined;

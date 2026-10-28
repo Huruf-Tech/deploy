@@ -538,7 +538,7 @@ Deno.test({
           { tenant: { $in: [customer.tenantId, owner.tenantId] } },
           { $set: { fingerprint: "same-card" } },
         );
-        assertEquals(await linked(customer.tenantId, owner.tenantId), true);
+        assertEquals(await linked(customer.tenantId, owner.tenantId), "card");
       });
     } finally {
       config.PLATFORM_TENANT = previous;

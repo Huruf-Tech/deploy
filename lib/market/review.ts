@@ -167,7 +167,7 @@ export async function disputeDetail(id: ObjectId) {
       party(dispute.tenant, "customer"),
       party(dispute.owner, "owner"),
       earnings.frozenOf(dispute.machine),
-      linked(dispute.tenant, dispute.owner),
+      linked(dispute.tenant, dispute.owner).then((link) => !!link),
     ]);
   const started = sub?.startedAt ?? dispute.createdAt;
   const servers = [

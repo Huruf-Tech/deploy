@@ -78,15 +78,18 @@ export type TMarketFilters = {
  * creator, or a card saved in both. Renting from yourself would launder a
  * card through earnings.
  */
-export async function linked(customer: ObjectId, owner: ObjectId) {
-  if (customer.equals(owner)) return true;
+export async function linked(
+  customer: ObjectId,
+  owner: ObjectId,
+): Promise<false | "workspace" | "creator" | "card"> {
+  if (customer.equals(owner)) return "workspace";
   const tenants = await tenantModel.find({ _id: { $in: [customer, owner] } }, {
     projection: { createdBy: 1 },
   }).toArray();
   if (
     tenants.length === 2 && tenants[0].createdBy &&
     String(tenants[0].createdBy) === String(tenants[1].createdBy)
-  ) return true;
+  ) return "creator";
   const cards = await paymentCardModel.find({
     tenant: { $in: [customer, owner] },
     fingerprint: { $exists: true },
@@ -94,8 +97,18 @@ export async function linked(customer: ObjectId, owner: ObjectId) {
   const mine = new Set(
     cards.filter((c) => c.tenant.equals(customer)).map((c) => c.fingerprint),
   );
-  return cards.some((c) => c.tenant.equals(owner) && mine.has(c.fingerprint));
+  return cards.some((c) => c.tenant.equals(owner) && mine.has(c.fingerprint))
+    ? "card"
+    : false;
 }
+
+/** Why a renter can't rent from an owner, in the renter's words. */
+export const LINKED_REASON = {
+  workspace: "You can't rent a machine of your own workspace",
+  creator: "You can't rent a machine of a workspace you created",
+  card:
+    "The same card is saved in your workspace and the machine owner's: renting from a linked account isn't allowed. Use another card if you aren't its owner.",
+} as const;
 
 /** Renters' ratings per machine: stars weighted by what each paid. */
 export async function ratingsOf(machines: ObjectId[]) {
