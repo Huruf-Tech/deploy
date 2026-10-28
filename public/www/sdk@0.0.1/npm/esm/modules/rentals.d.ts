@@ -70,6 +70,9 @@ export type list$return = {
         price: number;
         expiresAt: Date;
         reason?: string | undefined;
+        when: "now" | "renewal";
+        /** Agreed: it moves after the renewal */
+        accepted?: boolean | undefined;
     } | undefined;
     /** A dispute is open */
     dispute?: boolean | undefined;

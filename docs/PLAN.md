@@ -2599,6 +2599,7 @@ Kept: partitions and isolation, escrow at request, charging at acceptance, renew
 - Accepted: the partition moves (§26.10); the contract carries over (renewal date, rest of the term); the move's downtime is refunded as usual but doesn't count toward the 72 hours.
 - **The month of the move:** the customer pays nothing extra; the new price starts at renewal. The target owner earns their own price for the days they host it; the proposing owner gets the rest of what the customer paid, and pays any gap from their earnings. Example: $30 paid, move on day 10 to a $33 machine → target $22, proposing owner $8.
 - Only while the source machine is up (the data is copied from it), and not in the last 3 days before renewal (the owner can stop the renewal instead).
+- **When:** the owner picks **now** (it moves once accepted; the customer confirms the few minutes offline first) or **at the renewal** (accepted now, it moves right after the next renewal is paid, which counts as its month of the move). An agreed renewal move shows on both sides until it starts, and the customer can cancel it until then. If it can't start at the renewal (no room, machine down), nothing changes and both sides are emailed.
 
 ### 30.9 Disputes (19f)
 The customer opens a dispute once a paid month has ended; the machine's unreleased money is frozen; measured evidence (uptime, latency, steal, CPU outside partitions, benchmarks) is attached automatically; an admin refunds all, part or nothing, paid from the frozen money.

@@ -806,13 +806,23 @@ export function MachineRentals({
             )}
             {r.proposal && (
               <span className="text-xs text-info-foreground">
-                {t(
-                  "Move to {{name}} proposed: the renter answers by {{date}}",
-                  {
-                    name: r.proposal.toName ?? r.proposal.to,
-                    date: day(r.proposal.expiresAt),
-                  }
-                )}
+                {r.proposal.accepted
+                  ? t(
+                      "Moves to {{name}} after its renewal on {{date}}: the renter agreed",
+                      {
+                        name: r.proposal.toName ?? r.proposal.to,
+                        date: day(r.currentPeriodEnd),
+                      }
+                    )
+                  : t(
+                      r.proposal.when === "now"
+                        ? "Move to {{name}} proposed: the renter answers by {{date}}"
+                        : "Move to {{name}} at its renewal proposed: the renter answers by {{date}}",
+                      {
+                        name: r.proposal.toName ?? r.proposal.to,
+                        date: day(r.proposal.expiresAt),
+                      }
+                    )}
               </span>
             )}
             {r.moving ? (

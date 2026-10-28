@@ -62,6 +62,10 @@ export const $machineView = z.object({
       to: z.string(),
       toName: z.string().optional(),
       expiresAt: z.date(),
+      when: z.enum(["now", "renewal"]),
+      accepted: z.boolean().optional().describe(
+        "Agreed: it moves after the renewal",
+      ),
     }).optional(),
     lastMove: z.object({
       from: z.string(),
@@ -157,12 +161,16 @@ export async function machineView(
           },
         }
         : {}),
-      ...(r.proposal && r.proposal.expiresAt > new Date() && !r.move
+      ...(r.proposal &&
+          (r.proposal.accepted || r.proposal.expiresAt > new Date()) &&
+          !r.move
         ? {
           proposal: {
             to: String(r.proposal.to),
             toName: nameOf(r.proposal.to),
             expiresAt: r.proposal.expiresAt,
+            when: r.proposal.when ?? "now",
+            ...(r.proposal.accepted ? { accepted: true } : {}),
           },
         }
         : {}),

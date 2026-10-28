@@ -72,6 +72,9 @@ export type machine$return = {
             to: string;
             toName?: string | undefined;
             expiresAt: Date;
+            when: "now" | "renewal";
+            /** Agreed: it moves after the renewal */
+            accepted?: boolean | undefined;
         } | undefined;
         lastMove?: {
             from: string;
@@ -190,6 +193,8 @@ export type propose$params = {
 export type propose$body = {
     to?: string;
     reason?: string | undefined;
+    /** Move once accepted, or after the next renewal */
+    when?: "now" | "renewal";
 };
 export type capacity$return = {
     machines: {

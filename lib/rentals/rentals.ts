@@ -1101,6 +1101,28 @@ export class RentalService implements TRentalHooks {
         plan,
       );
     }
+    // A move the customer agreed to for the renewal starts now.
+    const agreed = sub.rental.proposal?.accepted && sub.rental.proposal;
+    if (agreed && !sub.rental.move) {
+      await this.move(sub._id, agreed.to, agreed.accepted!.by, {
+        agreed: true,
+        owner: sub.rental.owner,
+      }).catch(async (e) => {
+        const why = e instanceof Response ? await errorText(e) : String(e);
+        log(`renewal move ${sub._id}: ${why}`);
+        await subscriptionModel.updateOne({ _id: sub._id }, {
+          $unset: { "rental.proposal": "" },
+        });
+        for (const to of [sub.tenant, sub.rental!.owner]) {
+          if (!to) continue;
+          notifyOwner(to, {
+            subject: "{workspace}: a rented server didn't move at its renewal",
+            text:
+              `The move agreed for its renewal couldn't start (${why}), so it stays where it is. Nothing else changed.`,
+          }).catch((e) => log(`renewal move notice: ${e}`));
+        }
+      });
+    }
   }
 
   /**
@@ -1427,11 +1449,22 @@ export class RentalService implements TRentalHooks {
    * 72 hours; never this close to a renewal, and only while the machine is up
    * (the data is copied from it).
    */
-  async propose(owner: ObjectId, id: ObjectId, to: ObjectId, reason?: string) {
+  async propose(
+    owner: ObjectId,
+    id: ObjectId,
+    to: ObjectId,
+    reason?: string,
+    when: "now" | "renewal" = "now",
+  ) {
     const sub = await this.ownedRental(owner, id, {
       status: { $in: [...RUNNING] },
     });
     if (sub.rental.move) throw Response.badRequest("It's being moved");
+    if (sub.rental.proposal?.accepted) {
+      throw Response.badRequest(
+        "Its customer already agreed to move it at the renewal",
+      );
+    }
     const now = new Date();
     if (
       sub.currentPeriodEnd &&
@@ -1463,6 +1496,7 @@ export class RentalService implements TRentalHooks {
           expiresAt: new Date(now.getTime() + PROPOSAL_MS),
           price: spot.price,
           ...(reason ? { reason } : {}),
+          when,
         },
         updatedAt: now,
       },
@@ -1471,10 +1505,11 @@ export class RentalService implements TRentalHooks {
       subject: "{workspace}: move your rented server?",
       text:
         `The owner of the machine your rented server runs on asks to move it to ${spot.name}` +
-        `${reason ? ` (${reason})` : ""}. If you accept, it moves right away ` +
-        `(offline for a few minutes); its price there, ${
+        `${reason ? ` (${reason})` : ""}. If you accept, it moves ${
+          when === "now" ? "right away" : "after your next renewal"
+        } (offline for a few minutes); its price there, ${
           (spot.price / 100).toFixed(2)
-        } USD a month, starts at your next renewal. ` +
+        } USD a month, starts at the first renewal after the move. ` +
         `Accept, decline or pick another machine on its page within 72 hours.`,
     }).catch((e) => log(`proposal notice: ${e}`));
   }
@@ -1509,6 +1544,25 @@ export class RentalService implements TRentalHooks {
         sub.rental.communityConsent?.version !== COMMUNITY_CONSENT_VERSION
       ? communityConsent(consentVersion)
       : undefined;
+    if (sub.rental.proposal!.when === "renewal") {
+      // Agreed now, moved after the renewal (`renewed`): the machine must
+      // have room now; it's checked again then.
+      const { targets } = await this.moveTargets(id, sub.rental.owner);
+      const spot = targets.find((t) => t.server === String(target));
+      if (!spot?.fits) {
+        throw Response.badRequest("That machine has no room for this rental");
+      }
+      await subscriptionModel.updateOne({ _id: id }, {
+        $set: {
+          "rental.proposal.to": target,
+          "rental.proposal.price": spot.price,
+          "rental.proposal.accepted": { at: new Date(), by: user },
+          ...(consent ? { "rental.communityConsent": consent } : {}),
+          updatedAt: new Date(),
+        },
+      });
+      return;
+    }
     await this.move(id, target, user, {
       agreed: true,
       owner: sub.rental.owner,

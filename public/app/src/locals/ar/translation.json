@@ -1990,5 +1990,19 @@
   "Its machine couldn't apply the resize: {{reason}}": "تعذّر على جهازه تطبيق تغيير الحجم: {{reason}}",
   "Resizing on this machine…": "جارٍ تغيير الحجم على هذا الجهاز…",
   "The resize didn't apply: {{reason}}": "لم يُطبَّق تغيير الحجم: {{reason}}",
-  "Its owner asks to move it to {{name}}. If you accept, it moves right away (offline for a few minutes); its price there, {{price}} a month, starts at your next renewal. Answer by {{date}}; nothing changes if you decline.": "يطلب مالكه نقله إلى {{name}}. إن قبلت يُنقل فورًا (متوقفًا لبضع دقائق)، ويبدأ سعره هناك، {{price}} شهريًا، من تجديدك التالي. أجب قبل {{date}}؛ لا يتغير شيء إن رفضت."
+  "Its owner asks to move it to {{name}}. If you accept, it moves right away (offline for a few minutes); its price there, {{price}} a month, starts at your next renewal. Answer by {{date}}; nothing changes if you decline.": "يطلب مالكه نقله إلى {{name}}. إن قبلت يُنقل فورًا (متوقفًا لبضع دقائق)، ويبدأ سعره هناك، {{price}} شهريًا، من تجديدك التالي. أجب قبل {{date}}؛ لا يتغير شيء إن رفضت.",
+  "Its owner asks to move it to {{name}} after your next renewal, on {{renewal}} (offline for a few minutes then). Its price there, {{price}} a month, starts at the renewal after the move. Answer by {{date}}; nothing changes if you decline.": "يطلب مالكه نقله إلى {{name}} بعد تجديدك التالي في {{renewal}} (متوقفًا لبضع دقائق حينها). يبدأ سعره هناك، {{price}} شهريًا، من التجديد الذي يلي النقل. أجب قبل {{date}}؛ لا يتغير شيء إن رفضت.",
+  "You agreed to move it to {{name}} after your renewal on {{renewal}} (offline for a few minutes then). Its price there, {{price}} a month, starts at the renewal after the move.": "وافقت على نقله إلى {{name}} بعد تجديدك في {{renewal}} (متوقفًا لبضع دقائق حينها). يبدأ سعره هناك، {{price}} شهريًا، من التجديد الذي يلي النقل.",
+  "The customer decides within 72 hours. If they agree, it moves right after their next renewal (offline about {{minutes}} min), its term carries over and the new machine's price starts at the renewal after; you pay any gap that month.": "يقرر العميل خلال 72 ساعة. إن وافق يُنقل بعد تجديده التالي مباشرة (متوقفًا نحو {{minutes}} دقيقة)، وتبقى مدته كما هي ويبدأ سعر الجهاز الجديد من التجديد الذي يليه؛ وتدفع أنت أي فرق في ذلك الشهر.",
+  "Agreed: it moves after your renewal": "تمت الموافقة: يُنقل بعد تجديدك",
+  "Canceled: it stays where it is": "أُلغي: يبقى حيث هو",
+  "Cancel the move": "ألغِ النقل",
+  "Move it now?": "نقله الآن؟",
+  "It stops, its data is copied to {{name}}, and it starts there. Its server, projects and domains are offline for a few minutes meanwhile, then everything is as before.": "يتوقف، وتُنسخ بياناته إلى {{name}}، ثم يعمل هناك. يكون خادمه ومشاريعه ونطاقاته متوقفة لبضع دقائق خلال ذلك، ثم يعود كل شيء كما كان.",
+  "Move now": "انقله الآن",
+  "Moves to {{name}} after its renewal on {{date}}: the renter agreed": "يُنقل إلى {{name}} بعد تجديده في {{date}}: وافق المستأجر",
+  "Move to {{name}} at its renewal proposed: the renter answers by {{date}}": "اقتُرح نقله إلى {{name}} عند تجديده: يجيب المستأجر قبل {{date}}",
+  "When it moves": "موعد النقل",
+  "Now, once they agree": "الآن، عند موافقته",
+  "At their next renewal": "عند تجديده التالي"
 }

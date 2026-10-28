@@ -79,9 +79,16 @@ export const $subscription = z.object({
       to: $objectId.meta({ ref: "servers" }),
       at: z.date(),
       expiresAt: z.date(),
-      /** The target's monthly price for this size, from the next renewal. */
+      /** The target's monthly price for this size, from the first renewal there. */
       price: z.number().int().min(0),
       reason: z.string().max(500).optional(),
+      /** When it moves once accepted: now, or after the next renewal is paid. */
+      when: z.enum(["now", "renewal"]).optional(),
+      /** A renewal move the customer agreed to: it moves after the renewal. */
+      accepted: z.object({
+        at: z.date(),
+        by: $objectId.meta({ ref: "users" }),
+      }).optional(),
     }).optional(),
     partition: z.string().optional(),
     /** The partition's size: the plan's resources plus the overhead. */

@@ -6,6 +6,7 @@ import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import {
   Dialog,
   DialogContent,
@@ -47,6 +48,7 @@ export function MoveDialog({
   const info = propose ? proposed.data : admin.data
   const [host, setHost] = React.useState<string>()
   const [reason, setReason] = React.useState("")
+  const [when, setWhen] = React.useState<"now" | "renewal">("now")
   const pick = host ?? info?.targets.find(usable)?.server
   const [busy, setBusy] = React.useState(false)
   const move = async () => {
@@ -59,6 +61,7 @@ export function MoveDialog({
           body: {
             to: pick,
             ...(reason.trim() ? { reason: reason.trim() } : {}),
+            when,
           },
         })
         toast.success(t("Proposed: the customer has 72 hours to answer"))
@@ -97,7 +100,9 @@ export function MoveDialog({
               ? t("Loading…")
               : propose
                 ? t(
-                    "The customer decides within 72 hours. If they agree, it moves (offline about {{minutes}} min), its term carries over and the new machine's price starts at their next renewal; you pay any gap this month.",
+                    when === "now"
+                      ? "The customer decides within 72 hours. If they agree, it moves (offline about {{minutes}} min), its term carries over and the new machine's price starts at their next renewal; you pay any gap this month."
+                      : "The customer decides within 72 hours. If they agree, it moves right after their next renewal (offline about {{minutes}} min), its term carries over and the new machine's price starts at the renewal after; you pay any gap that month.",
                     { minutes }
                   )
                 : t(
@@ -125,6 +130,24 @@ export function MoveDialog({
                 )}
               </p>
             )}
+          </div>
+        )}
+        {propose && pick && (
+          <div className="flex flex-col gap-2">
+            <Label id="move-when">{t("When it moves")}</Label>
+            <ToggleGroup
+              value={when}
+              onValueChange={(v) => v && setWhen(v as typeof when)}
+              aria-labelledby="move-when"
+              className="justify-start"
+            >
+              <ToggleGroupItem value="now" className="h-7 px-2.5 text-xs">
+                {t("Now, once they agree")}
+              </ToggleGroupItem>
+              <ToggleGroupItem value="renewal" className="h-7 px-2.5 text-xs">
+                {t("At their next renewal")}
+              </ToggleGroupItem>
+            </ToggleGroup>
           </div>
         )}
         {propose && pick && (

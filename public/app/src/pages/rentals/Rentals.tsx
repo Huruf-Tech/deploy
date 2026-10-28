@@ -482,13 +482,18 @@ function Proposal({ rental, onDone }: { rental: TRental; onDone: () => void }) {
     to?: string
     name?: string
   }>()
+  // A move now takes it offline for a while: asked first.
+  type TTarget = { to: string; name: string; community: boolean }
+  const [confirming, setConfirming] = React.useState<{ target?: TTarget }>()
   const can = ThunderSDK.isPermitted("rentals", "acceptProposal")
   const needsConsent = (community: boolean) =>
     community && rental.consentVersion !== COMMUNITY_CONSENT_VERSION
-  const accept = (target?: { to: string; name: string; community: boolean }) =>
+  const proceed = (target?: TTarget) =>
     needsConsent(target ? target.community : p.community)
       ? setConsenting({ to: target?.to, name: target?.name ?? p.toName })
       : answer(true, target?.to)
+  const accept = (target?: TTarget) =>
+    p.when === "now" ? setConfirming({ target }) : proceed(target)
   const answer = async (accept: boolean, to?: string, consent?: boolean) => {
     setBusy(true)
     try {
@@ -500,10 +505,18 @@ function Proposal({ rental, onDone }: { rental: TRental; onDone: () => void }) {
             ...(consent ? { communityConsent: COMMUNITY_CONSENT_VERSION } : {}),
           },
         })
-        toast.success(t("Moving: it's offline for a few minutes"))
+        toast.success(
+          p.when === "now"
+            ? t("Moving: it's offline for a few minutes")
+            : t("Agreed: it moves after your renewal")
+        )
       } else {
         await ThunderSDK.rentals.declineProposal({ params: { id: rental._id } })
-        toast.success(t("Declined: it stays where it is"))
+        toast.success(
+          p.accepted
+            ? t("Canceled: it stays where it is")
+            : t("Declined: it stays where it is")
+        )
       }
       setPicking(false)
       onDone()
@@ -517,16 +530,34 @@ function Proposal({ rental, onDone }: { rental: TRental; onDone: () => void }) {
     <div className="flex flex-col gap-2 rounded-lg bg-info-soft px-3 py-2 text-[13px] text-info-foreground">
       <p>
         {t(
-          "Its owner asks to move it to {{name}}. If you accept, it moves right away (offline for a few minutes); its price there, {{price}} a month, starts at your next renewal. Answer by {{date}}; nothing changes if you decline.",
+          p.accepted
+            ? "You agreed to move it to {{name}} after your renewal on {{renewal}} (offline for a few minutes then). Its price there, {{price}} a month, starts at the renewal after the move."
+            : p.when === "now"
+              ? "Its owner asks to move it to {{name}}. If you accept, it moves right away (offline for a few minutes); its price there, {{price}} a month, starts at your next renewal. Answer by {{date}}; nothing changes if you decline."
+              : "Its owner asks to move it to {{name}} after your next renewal, on {{renewal}} (offline for a few minutes then). Its price there, {{price}} a month, starts at the renewal after the move. Answer by {{date}}; nothing changes if you decline.",
           {
             name: p.toName ?? t("another machine"),
             price: `⁦${money(p.price, "usd")}⁩`,
             date: day(p.expiresAt),
+            renewal: day(rental.currentPeriodEnd),
           }
         )}
         {p.reason && <span className="block text-xs">{p.reason}</span>}
       </p>
-      {can && (
+      {can && p.accepted && (
+        <div>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7"
+            disabled={busy}
+            onClick={() => answer(false)}
+          >
+            {t("Cancel the move")}
+          </Button>
+        </div>
+      )}
+      {can && !p.accepted && (
         <div className="flex flex-wrap gap-2">
           <Button
             size="sm"
@@ -569,6 +600,21 @@ function Proposal({ rental, onDone }: { rental: TRental; onDone: () => void }) {
           }
         />
       )}
+      <ConfirmDialog
+        open={!!confirming}
+        onOpenChange={(open) => !open && setConfirming(undefined)}
+        title={t("Move it now?")}
+        description={t(
+          "It stops, its data is copied to {{name}}, and it starts there. Its server, projects and domains are offline for a few minutes meanwhile, then everything is as before.",
+          { name: confirming?.target?.name ?? p.toName ?? t("another machine") }
+        )}
+        confirmLabel={t("Move now")}
+        onConfirm={() => {
+          const target = confirming?.target
+          setConfirming(undefined)
+          proceed(target)
+        }}
+      />
       {consenting && (
         <CommunityConsentDialog
           machine={consenting.name}

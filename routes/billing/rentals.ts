@@ -130,6 +130,10 @@ export default new Router("/api", function rentals(router) {
           price: z.number(),
           expiresAt: z.date(),
           reason: z.string().optional(),
+          when: z.enum(["now", "renewal"]),
+          accepted: z.boolean().optional().describe(
+            "Agreed: it moves after the renewal",
+          ),
         }).optional().describe("A move its owner asks for (PLAN §30.8)"),
         dispute: z.boolean().optional().describe("A dispute is open"),
         matured: z.boolean().optional().describe(
@@ -206,7 +210,8 @@ export default new Router("/api", function rentals(router) {
         return Response.json(subs.map((s) => {
           const plan = plans.find((p) => p._id.equals(s.plan));
           const r = s.rental!;
-          const live = !r.proposal || r.proposal.expiresAt > new Date();
+          const live = !r.proposal || !!r.proposal.accepted ||
+            r.proposal.expiresAt > new Date();
           return {
             _id: s._id,
             status: s.status,
@@ -262,6 +267,8 @@ export default new Router("/api", function rentals(router) {
                   price: r.proposal.price,
                   expiresAt: r.proposal.expiresAt,
                   reason: r.proposal.reason,
+                  when: r.proposal.when ?? "now",
+                  ...(r.proposal.accepted ? { accepted: true } : {}),
                 },
               }
               : {}),

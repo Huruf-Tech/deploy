@@ -310,15 +310,18 @@ export default new Router("/api", function hosting(router) {
     const $body = z.object({
       to: $objectId,
       reason: z.string().max(500).optional(),
+      when: z.enum(["now", "renewal"]).default("now").describe(
+        "Move once accepted, or after the next renewal",
+      ),
     });
 
     return {
       shape: () => ({ params: $params, body: $body }),
       handler: async (req) => {
         const { id } = $params.parse(paramsAsJson(req));
-        const { to, reason } = $body.parse(await bodyAsJson(req));
+        const { to, reason, when } = $body.parse(await bodyAsJson(req));
         const { tenant } = await owner(req);
-        await rentals.propose(tenant._id, id, to, reason);
+        await rentals.propose(tenant._id, id, to, reason, when);
         return Response.json({ ok: true });
       },
     };

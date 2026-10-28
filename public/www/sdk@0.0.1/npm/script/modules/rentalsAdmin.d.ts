@@ -167,6 +167,9 @@ export type machine$return = {
             to: string;
             toName?: string | undefined;
             expiresAt: Date;
+            when: "now" | "renewal";
+            /** Agreed: it moves after the renewal */
+            accepted?: boolean | undefined;
         } | undefined;
         lastMove?: {
             from: string;

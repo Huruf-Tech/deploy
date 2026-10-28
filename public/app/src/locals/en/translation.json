@@ -1990,5 +1990,19 @@
   "Its machine couldn't apply the resize: {{reason}}": "Its machine couldn't apply the resize: {{reason}}",
   "Resizing on this machine…": "Resizing on this machine…",
   "The resize didn't apply: {{reason}}": "The resize didn't apply: {{reason}}",
-  "Its owner asks to move it to {{name}}. If you accept, it moves right away (offline for a few minutes); its price there, {{price}} a month, starts at your next renewal. Answer by {{date}}; nothing changes if you decline.": "Its owner asks to move it to {{name}}. If you accept, it moves right away (offline for a few minutes); its price there, {{price}} a month, starts at your next renewal. Answer by {{date}}; nothing changes if you decline."
+  "Its owner asks to move it to {{name}}. If you accept, it moves right away (offline for a few minutes); its price there, {{price}} a month, starts at your next renewal. Answer by {{date}}; nothing changes if you decline.": "Its owner asks to move it to {{name}}. If you accept, it moves right away (offline for a few minutes); its price there, {{price}} a month, starts at your next renewal. Answer by {{date}}; nothing changes if you decline.",
+  "Its owner asks to move it to {{name}} after your next renewal, on {{renewal}} (offline for a few minutes then). Its price there, {{price}} a month, starts at the renewal after the move. Answer by {{date}}; nothing changes if you decline.": "Its owner asks to move it to {{name}} after your next renewal, on {{renewal}} (offline for a few minutes then). Its price there, {{price}} a month, starts at the renewal after the move. Answer by {{date}}; nothing changes if you decline.",
+  "You agreed to move it to {{name}} after your renewal on {{renewal}} (offline for a few minutes then). Its price there, {{price}} a month, starts at the renewal after the move.": "You agreed to move it to {{name}} after your renewal on {{renewal}} (offline for a few minutes then). Its price there, {{price}} a month, starts at the renewal after the move.",
+  "The customer decides within 72 hours. If they agree, it moves right after their next renewal (offline about {{minutes}} min), its term carries over and the new machine's price starts at the renewal after; you pay any gap that month.": "The customer decides within 72 hours. If they agree, it moves right after their next renewal (offline about {{minutes}} min), its term carries over and the new machine's price starts at the renewal after; you pay any gap that month.",
+  "Agreed: it moves after your renewal": "Agreed: it moves after your renewal",
+  "Canceled: it stays where it is": "Canceled: it stays where it is",
+  "Cancel the move": "Cancel the move",
+  "Move it now?": "Move it now?",
+  "It stops, its data is copied to {{name}}, and it starts there. Its server, projects and domains are offline for a few minutes meanwhile, then everything is as before.": "It stops, its data is copied to {{name}}, and it starts there. Its server, projects and domains are offline for a few minutes meanwhile, then everything is as before.",
+  "Move now": "Move now",
+  "Moves to {{name}} after its renewal on {{date}}: the renter agreed": "Moves to {{name}} after its renewal on {{date}}: the renter agreed",
+  "Move to {{name}} at its renewal proposed: the renter answers by {{date}}": "Move to {{name}} at its renewal proposed: the renter answers by {{date}}",
+  "When it moves": "When it moves",
+  "Now, once they agree": "Now, once they agree",
+  "At their next renewal": "At their next renewal"
 }

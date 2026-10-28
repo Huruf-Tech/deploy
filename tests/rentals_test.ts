@@ -638,6 +638,37 @@ Deno.test({
           assertEquals(del.status, 400, JSON.stringify(del.json));
           assert(JSON.stringify(del.json).includes("move them"));
 
+          // A move agreed for the renewal waits for it, then starts.
+          await subscriptionModel.updateOne({ _id: rental }, {
+            $set: {
+              "rental.proposal": {
+                to: host2,
+                at: new Date(),
+                expiresAt: new Date(Date.now() + 86_400_000),
+                price: 100,
+                when: "renewal",
+              },
+            },
+          });
+          await rentals.acceptProposal(
+            (await sub()).tenant,
+            platform.user,
+            rental,
+          );
+          let agreed = await sub();
+          assert(agreed.rental!.proposal!.accepted, "agreed");
+          assertEquals(agreed.rental!.move, undefined, "not moved yet");
+          await rentals.renewed(
+            agreed,
+            (await rentalPlanModel.findOne({ _id: agreed.plan }))!,
+          );
+          agreed = await sub();
+          assertEquals(String(agreed.rental!.move?.to), String(host2));
+          assert(agreed.rental!.move!.agreed);
+          await subscriptionModel.updateOne({ _id: rental }, {
+            $unset: { "rental.move": "", "rental.proposal": "" },
+          });
+
           // Moved: the target pulls from the source's address, encrypted.
           await rentals.move(rental, host2, platform.user);
           assertEquals(
