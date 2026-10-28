@@ -1,3 +1,4 @@
+import { serverOutageModel } from "@/schemas/infrastructure/serverOutage.ts";
 import { storageModel } from "@/schemas/infrastructure/storage.ts";
 import { subscriptionModel } from "@/schemas/billing/subscription.ts";
 import { planModel } from "@/schemas/billing/plan.ts";
@@ -310,6 +311,12 @@ export const syncDeployIndexes = async () => {
       partialFilterExpression: { verifiedAt: { $exists: true } },
     }),
     domainModel.createIndex({ project: 1 }, { name: "project" }),
+    // Uptime (PLAN §29): a server's outages over a window; kept 120 days.
+    serverOutageModel.createIndex({ server: 1, to: -1 }, { name: "serverTo" }),
+    serverOutageModel.createIndex({ expiresAt: 1 }, {
+      name: "ttl",
+      expireAfterSeconds: 0,
+    }),
     // Removed domains' certificates go when they expire.
     certificateArchiveModel.createIndex({ "certificate.notAfter": 1 }, {
       name: "ttl",

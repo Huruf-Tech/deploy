@@ -1,3 +1,4 @@
+import { profilesOf } from "@/lib/agents/profile.ts";
 import { clearAllBuildCaches } from "@/lib/deploy/deployments.ts";
 import z from "zod";
 import { Router } from "@/core/http/router.ts";
@@ -124,6 +125,52 @@ export default new Router("/api", function servers(router) {
   const $partitionParams = z.object({
     id: $objectId,
     name: z.string().regex(/^p[0-9a-f]{11}$/),
+  });
+
+  // What's measured of a server (PLAN §29): latency, uptime and, for a
+  // machine, its rating, class and whether it can be rented whole.
+  router.get("/:id/profile", function profile() {
+    const $return = z.object({
+      rttMs: z.number().optional().describe("Round trip to the control plane"),
+      uptime30d: z.number().optional().describe("Percent, last 30 days"),
+      uptime90d: z.number().optional().describe("Percent, last 90 days"),
+      steal: z.number().optional().describe("CPU the hypervisor took, 0..1"),
+      virtualization: z.string().optional(),
+      rating: z.number().optional().describe("0..100, machines"),
+      tier: z.enum(["Basic", "Standard", "Performance"]).optional(),
+      disk: z.enum(["NVMe", "SSD", "HDD"]).optional(),
+      benchmarkAt: z.string().optional(),
+      hostCpu: z.number().optional().describe(
+        "CPU used outside partitions, 0..1, machines",
+      ),
+      dedicated: z.boolean().optional().describe(
+        "Can be rented whole: nothing else runs on it",
+      ),
+      notDedicated: z.string().optional().describe("Why it can't, if not"),
+    });
+
+    return {
+      shape: () => ({ params: $params, return: $return }),
+      handler: async (req) => {
+        const { id } = $params.parse(paramsAsJson(req));
+        const { tenant } = await withTenant(req);
+        const server = await serverModel.findOne({
+          _id: id,
+          tenant: tenant._id,
+        }, {
+          projection: {
+            provider: 1,
+            pool: 1,
+            resources: 1,
+            inventory: 1,
+            createdAt: 1,
+          },
+        });
+        if (!server) throw Response.notFound("Server not found");
+        const profiles = await profilesOf([server]);
+        return Response.json(profiles.get(String(id)));
+      },
+    };
   });
 
   router.get("/:id/partitions", function partitions() {

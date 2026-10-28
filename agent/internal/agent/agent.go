@@ -8,8 +8,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"math"
 	"math/rand/v2"
 	"net/http"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -62,6 +64,10 @@ type Agent struct {
 	}
 	// A machine's partitions, sent with the summary (PLAN §27); may be nil.
 	Partitions func(ctx context.Context) []protocol.PartitionUsage
+	// Whether this server is a machine set up for partitions; may be nil.
+	IsMachine func() bool
+	// A machine's latest benchmark (PLAN §29); may be nil, or return nil.
+	Benchmark func() *protocol.ResourceSummaryBenchmark
 	// Applies a machine's forwards into its partitions (PLAN §27.3); may be nil.
 	Forwards func(ctx context.Context, forwards []protocol.PortForward) error
 	Log      *slog.Logger
@@ -78,13 +84,80 @@ type Agent struct {
 	reconcileMs atomic.Int64 // read by the reconciler's goroutine
 	monitorMs   atomic.Int64
 	capacity    atomic.Pointer[protocol.AgentConfigCapacity]
-	mu          sync.Mutex // guards events: commands finish on their own goroutines
-	wake        chan struct{}
-	events      []any
+	// Recent polls' round trips without the control plane's own time (PLAN §29).
+	rtts []time.Duration
+	// A machine's CPU used outside its partitions (PLAN §29): the partitions'
+	// CPU counters at the last summary, and the smoothed share.
+	partCPU map[string]int64
+	partAt  time.Time
+	hostCPU *float64
+	mu      sync.Mutex // guards events: commands finish on their own goroutines
+	wake    chan struct{}
+	events  []any
 	// Commands run on their own goroutines, in commandCtx: it outlives Run's
 	// ctx, so a shutdown can let them finish.
 	commandCtx context.Context
 	running    sync.WaitGroup
+}
+
+// rttKept is how many recent polls the round trip is the median of.
+const rttKept = 30
+
+// addRTT keeps a poll's network round trip (PLAN §29).
+func (a *Agent) addRTT(rtt time.Duration) {
+	if rtt <= 0 {
+		return
+	}
+	a.rtts = append(a.rtts, rtt)
+	if len(a.rtts) > rttKept {
+		a.rtts = a.rtts[len(a.rtts)-rttKept:]
+	}
+}
+
+func median(values []time.Duration) time.Duration {
+	if len(values) == 0 {
+		return 0
+	}
+	sorted := slices.Clone(values)
+	slices.Sort(sorted)
+	return sorted[len(sorted)/2]
+}
+
+// hostCPUWindow is how long the CPU used outside partitions is averaged over.
+const hostCPUWindow = time.Hour
+
+// outsidePartitions is the share of the machine's CPU used by everything but
+// its partitions since the last summary (the owner's own programs, other
+// tools), smoothed over about an hour: a machine with nothing else running
+// can be rented as a whole, dedicated (PLAN §29).
+func (a *Agent) outsidePartitions(cpu float64, parts []protocol.PartitionUsage, now time.Time) *float64 {
+	counters := make(map[string]int64, len(parts))
+	for _, p := range parts {
+		counters[p.Name] = p.CpuMicros
+	}
+	elapsed := now.Sub(a.partAt)
+	prev := a.partCPU
+	a.partCPU, a.partAt = counters, now
+	if prev == nil || elapsed <= 0 {
+		return a.hostCPU
+	}
+	var used int64
+	for name, micros := range counters {
+		if before, ok := prev[name]; ok && micros >= before {
+			used += micros - before
+		}
+	}
+	share := float64(used) / (float64(elapsed.Microseconds()) * host.Cores())
+	outside := min(1, max(0, cpu-share))
+	if a.hostCPU == nil {
+		a.hostCPU = &outside
+	} else {
+		weight := 1 - math.Exp(-elapsed.Seconds()/hostCPUWindow.Seconds())
+		smoothed := *a.hostCPU + weight*(outside-*a.hostCPU)
+		a.hostCPU = &smoothed
+	}
+	value := *a.hostCPU
+	return &value
 }
 
 // Run polls until ctx is cancelled or the tenant rejects this server. Events
@@ -168,13 +241,27 @@ func (a *Agent) step(ctx context.Context) (wait time.Duration, stop bool, err er
 		if a.Partitions != nil {
 			summary.Partitions = a.Partitions(ctx)
 		}
+		if rtt := median(a.rtts); rtt > 0 {
+			ms := float64(rtt.Microseconds()) / 1000
+			summary.RttMs = &ms
+		}
+		if a.IsMachine != nil && a.IsMachine() {
+			summary.HostCpu = a.outsidePartitions(summary.Cpu, summary.Partitions, time.Now())
+			if a.Benchmark != nil {
+				summary.Benchmark = a.Benchmark()
+			}
+		}
 		request.Summary = &summary
 	}
 
 	var raw json.RawMessage
-	status, err := a.Client.Post(ctx, "/agents/api/poll", request, &raw)
+	sentAt := time.Now()
+	status, server, err := a.Client.PostTimed(ctx, "/agents/api/poll", request, &raw)
 	if err != nil {
 		return 0, false, err
+	}
+	if status == http.StatusOK {
+		a.addRTT(time.Since(sentAt) - server)
 	}
 	var response protocol.PollResponse
 	var refusal protocol.PollRefusal

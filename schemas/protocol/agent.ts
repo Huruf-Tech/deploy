@@ -12,6 +12,8 @@ export const AGENT_HEADERS = {
   timestamp: "X-Agent-Timestamp",
   signature: "X-Agent-Signature",
   protocol: "X-Agent-Protocol",
+  /** On poll responses: milliseconds the control plane spent on it, waiting included. */
+  serverTime: "X-Server-Ms",
 } as const;
 
 export const $inventory = z.object({
@@ -28,6 +30,30 @@ export const $inventory = z.object({
   agentVersion: z.string().max(50),
   agentSha256: z.string().max(64).optional().describe(
     "SHA-256 of the running agent binary: compared with the published one for updates",
+  ),
+  virtualization: z.string().max(40).optional().describe(
+    "What `systemd-detect-virt` says: none on bare metal, else kvm, microsoft…",
+  ),
+});
+
+/**
+ * A machine's measured performance (PLAN §29): the agent runs these short
+ * tests now and then; the control plane turns them into its rating and class.
+ */
+export const $benchmark = z.object({
+  at: z.string().max(40).describe("When it ran, ISO 8601"),
+  cpuSingle: z.number().min(0).describe("One core compressing, MB/s"),
+  cpuMulti: z.number().min(0).describe("Every core compressing, MB/s in all"),
+  threads: z.number().int().min(1),
+  memory: z.number().min(0).describe("Copying memory, MB/s"),
+  diskWrite: z.number().min(0).describe(
+    "Writing to the partitions' disk, flushed, MB/s",
+  ),
+  diskSync: z.number().min(0).describe(
+    "A small write made durable (fsync), milliseconds",
+  ),
+  rotational: z.boolean().optional().describe(
+    "A spinning disk, says the kernel",
   ),
 });
 
@@ -60,6 +86,16 @@ export const $resourceSummary = z.object({
   partitions: z.array($partitionUsage).max(200).optional().describe(
     "Machines only (PLAN §27)",
   ),
+  rttMs: z.number().min(0).optional().describe(
+    "Round trip to the control plane: the median of recent polls, its own time left out (PLAN §29)",
+  ),
+  steal: z.number().min(0).max(1).optional().describe(
+    "Share of CPU time the hypervisor gave elsewhere: a virtual machine on a busy host",
+  ),
+  hostCpu: z.number().min(0).max(1).optional().describe(
+    "Machines: CPU used outside partitions, averaged over about an hour (PLAN §29)",
+  ),
+  benchmark: $benchmark.optional().describe("Machines: the latest tests"),
 });
 
 export const $helloRequest = z.object({

@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/agent"
+	"github.com/Huruf-Tech/huruf-deploy/agent/internal/bench"
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/build"
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/cleanup"
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/commands"
@@ -164,6 +165,12 @@ func main() {
 		log.Warn("restoring partitions", "error", err)
 	}
 	a.Partitions = pools.Usage
+	a.IsMachine = pools.Ready
+	// What a machine measures for the market (PLAN §29), on the disk its
+	// partitions live on, weekly.
+	benchmarks := &bench.Store{Path: filepath.Join(*stateDir, "benchmark.json")}
+	a.Benchmark = benchmarks.Latest
+	go benchmarks.Schedule(ctx, pool.Root, pools.Ready, log.Warn)
 	// A machine's forwards into its partitions come with its desired state (PLAN §27.3).
 	a.Forwards = pools.ApplyForwards
 	a.Commands["pool.ensure"] = commands.Handle(pools.Ensure)

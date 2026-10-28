@@ -288,10 +288,19 @@ Deno.test({
             true,
           );
 
-          await poll();
+          const back = await poll();
           const recovered = await serverLeaseModel.findOne({ _id: server });
           assertEquals(recovered?.offline, false);
           assertEquals(recovered?.offlineSince, undefined);
+          // The time it was down is kept for its uptime (PLAN §29).
+          const outages = await mongodb.db().collection("serverOutages").find({
+            server,
+          }).toArray();
+          assertEquals(outages.length, 1);
+          assert(outages[0].to > outages[0].from);
+          // Every poll says how long the control plane spent on it.
+          assert(Number(back.headers.get("x-server-ms")) >= 0);
+          assert(back.headers.has("x-server-ms"));
         },
       );
 

@@ -23,17 +23,26 @@ func Inventory(agentVersion string) protocol.Inventory {
 	total, _ := DataDisk()
 
 	return protocol.Inventory{
-		Hostname:      hostname,
-		Os:            osName(),
-		Arch:          runtime.GOARCH,
-		CpuCores:      Cores(),
-		Memory:        Memory(),
-		Disk:          total,
-		PrivateIp:     privateIP(),
-		DockerVersion: dockerVersion(),
-		AgentVersion:  agentVersion,
-		AgentSha256:   update.SelfSha256(),
+		Hostname:       hostname,
+		Os:             osName(),
+		Arch:           runtime.GOARCH,
+		CpuCores:       Cores(),
+		Memory:         Memory(),
+		Disk:           total,
+		PrivateIp:      privateIP(),
+		DockerVersion:  dockerVersion(),
+		AgentVersion:   agentVersion,
+		AgentSha256:    update.SelfSha256(),
+		Virtualization: virtualization(),
 	}
+}
+
+// virtualization is what systemd-detect-virt says: "none" on bare metal,
+// else the hypervisor or container (kvm, microsoft, docker…); empty when
+// it can't tell.
+func virtualization() string {
+	out, _ := exec.Command("systemd-detect-virt").Output()
+	return strings.TrimSpace(string(out))
 }
 
 // privateIP is the address of the interface holding the default route: a UDP
@@ -93,6 +102,20 @@ type Sampler struct {
 	idle, total uint64
 	usage       uint64
 	at          time.Time
+	// For steal time, always from /proc/stat.
+	steal, stealTotal uint64
+}
+
+// Steal is the share of CPU time the hypervisor gave to other guests since
+// the previous call: 0 on bare metal, high on an oversold host.
+func (s *Sampler) Steal() float64 {
+	_, total, steal := cpuTimes()
+	share := 0.0
+	if s.stealTotal > 0 && total > s.stealTotal && steal >= s.steal {
+		share = float64(steal-s.steal) / float64(total-s.stealTotal)
+	}
+	s.steal, s.stealTotal = steal, total
+	return min(1, max(0, share))
 }
 
 // CPU is the share of Cores() used since the previous call.
@@ -105,7 +128,7 @@ func (s *Sampler) CPU() float64 {
 		}
 		s.usage, s.at = usage, now
 	} else {
-		idle, total := cpuTimes()
+		idle, total, _ := cpuTimes()
 		if s.total > 0 && total > s.total {
 			cpu = 1 - float64(idle-s.idle)/float64(total-s.total)
 		}
@@ -116,10 +139,12 @@ func (s *Sampler) CPU() float64 {
 
 func (s *Sampler) Summary() protocol.ResourceSummary {
 	_, free := DataDisk()
+	steal := s.Steal()
 	return protocol.ResourceSummary{
 		Cpu:      s.CPU(),
 		MemFree:  MemoryFree(),
 		DiskFree: free,
+		Steal:    &steal,
 	}
 }
 
@@ -165,10 +190,10 @@ func disk(path string) (total, free int64) {
 	return int64(st.Blocks) * st.Bsize, int64(st.Bavail) * st.Bsize
 }
 
-func cpuTimes() (idle, total uint64) {
+func cpuTimes() (idle, total, steal uint64) {
 	data, err := os.ReadFile("/proc/stat")
 	if err != nil {
-		return 0, 0
+		return 0, 0, 0
 	}
 	line, _, _ := strings.Cut(string(data), "\n")
 	for i, field := range strings.Fields(line)[1:] {
@@ -177,8 +202,11 @@ func cpuTimes() (idle, total uint64) {
 		if i == 3 || i == 4 { // idle, iowait
 			idle += n
 		}
+		if i == 7 { // steal
+			steal = n
+		}
 	}
-	return idle, total
+	return idle, total, steal
 }
 
 func dockerVersion() string {

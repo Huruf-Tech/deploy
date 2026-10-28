@@ -17,6 +17,7 @@ import {
   $helloResponse,
   $pollRequest,
   $pollResponse,
+  AGENT_HEADERS,
 } from "@/schemas/protocol/agent.ts";
 
 const $configRequest = z.object({});
@@ -49,6 +50,7 @@ export default new Router("/api", function agents(router) {
     return {
       shape: () => ({ body: $pollRequest, return: $pollResponse }),
       handler: async (req) => {
+        const started = performance.now();
         const { identity, fingerprint, body } = await authenticateAgent(
           req,
           $pollRequest,
@@ -56,9 +58,15 @@ export default new Router("/api", function agents(router) {
         const result = await pollAgent(identity, fingerprint, body);
         return Response.json(result.body, {
           status: result.status,
-          headers: result.heldMs
-            ? { [HELD_HEADER]: String(Math.round(result.heldMs)) }
-            : {},
+          headers: {
+            // The agent leaves our time out of its round trip (PLAN §29).
+            [AGENT_HEADERS.serverTime]: String(
+              Math.round(performance.now() - started),
+            ),
+            ...(result.heldMs
+              ? { [HELD_HEADER]: String(Math.round(result.heldMs)) }
+              : {}),
+          },
         });
       },
     };

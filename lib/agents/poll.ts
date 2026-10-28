@@ -1,3 +1,4 @@
+import { recordOutage } from "@/lib/monitoring/uptime.ts";
 import { MongoBulkWriteError } from "mongodb";
 import { BoundedCache } from "@/lib/core/boundedCache.ts";
 import { Logger } from "@/core/utils/logger.ts";
@@ -175,8 +176,12 @@ const poll = async (
   // Back after its lease ran out: a rented server was down since then (PLAN
   // §26.11). Not the sweep's flag, which can lag minutes in a small fleet.
   if (lease.aliveUntil && lease.aliveUntil < now) {
-    await rentals.recordDowntime(identity.server, lease.aliveUntil, now)
-      .catch((e) => Logger.warn(`[rentals] downtime: ${e}`));
+    await Promise.all([
+      recordOutage(identity.server, identity.tenant, lease.aliveUntil, now)
+        .catch((e) => Logger.warn(`[uptime] outage: ${e}`)),
+      rentals.recordDowntime(identity.server, lease.aliveUntil, now)
+        .catch((e) => Logger.warn(`[rentals] downtime: ${e}`)),
+    ]);
   }
 
   const applied = request.appliedVersion ?? 0;

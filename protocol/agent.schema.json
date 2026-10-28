@@ -4,7 +4,8 @@
     "key": "X-Agent-Key",
     "timestamp": "X-Agent-Timestamp",
     "signature": "X-Agent-Signature",
-    "protocol": "X-Agent-Protocol"
+    "protocol": "X-Agent-Protocol",
+    "serverTime": "X-Server-Ms"
   },
   "schemas": {
     "HelloRequest": {
@@ -79,6 +80,11 @@
               "description": "SHA-256 of the running agent binary: compared with the published one for updates",
               "type": "string",
               "maxLength": 64
+            },
+            "virtualization": {
+              "description": "What `systemd-detect-virt` says: none on bare metal, else kvm, microsoft…",
+              "type": "string",
+              "maxLength": 40
             }
           },
           "required": [
@@ -469,6 +475,77 @@
                   "txBytes"
                 ]
               }
+            },
+            "rttMs": {
+              "description": "Round trip to the control plane: the median of recent polls, its own time left out (PLAN §29)",
+              "type": "number",
+              "minimum": 0
+            },
+            "steal": {
+              "description": "Share of CPU time the hypervisor gave elsewhere: a virtual machine on a busy host",
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "hostCpu": {
+              "description": "Machines: CPU used outside partitions, averaged over about an hour (PLAN §29)",
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "benchmark": {
+              "description": "Machines: the latest tests",
+              "type": "object",
+              "properties": {
+                "at": {
+                  "type": "string",
+                  "maxLength": 40,
+                  "description": "When it ran, ISO 8601"
+                },
+                "cpuSingle": {
+                  "type": "number",
+                  "minimum": 0,
+                  "description": "One core compressing, MB/s"
+                },
+                "cpuMulti": {
+                  "type": "number",
+                  "minimum": 0,
+                  "description": "Every core compressing, MB/s in all"
+                },
+                "threads": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 9007199254740991
+                },
+                "memory": {
+                  "type": "number",
+                  "minimum": 0,
+                  "description": "Copying memory, MB/s"
+                },
+                "diskWrite": {
+                  "type": "number",
+                  "minimum": 0,
+                  "description": "Writing to the partitions' disk, flushed, MB/s"
+                },
+                "diskSync": {
+                  "type": "number",
+                  "minimum": 0,
+                  "description": "A small write made durable (fsync), milliseconds"
+                },
+                "rotational": {
+                  "description": "A spinning disk, says the kernel",
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "at",
+                "cpuSingle",
+                "cpuMulti",
+                "threads",
+                "memory",
+                "diskWrite",
+                "diskSync"
+              ]
             }
           },
           "required": [

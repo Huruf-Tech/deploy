@@ -18,6 +18,7 @@ import { joinAsPartition } from "./_partition.ts";
 const HOLD_MS = 1_500;
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 type TPoll = {
+  headers: Headers;
   status: number;
   json: { nextPollMs: number; commands: { seq: number }[] };
 };

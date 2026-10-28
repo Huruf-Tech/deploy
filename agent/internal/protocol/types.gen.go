@@ -12,6 +12,8 @@ const HeaderSignature = "X-Agent-Signature"
 
 const HeaderProtocol = "X-Agent-Protocol"
 
+const HeaderServerTime = "X-Server-Ms"
+
 type HelloRequest struct {
 	Tenant string `json:"tenant"`
 
@@ -53,6 +55,9 @@ type Inventory struct {
 
 	// SHA-256 of the running agent binary: compared with the published one for updates
 	AgentSha256 string `json:"agentSha256,omitempty"`
+
+	// What `systemd-detect-virt` says: none on bare metal, else kvm, microsoft…
+	Virtualization string `json:"virtualization,omitempty"`
 }
 
 type HelloResponse struct {
@@ -140,6 +145,18 @@ type ResourceSummary struct {
 
 	// Machines only (PLAN §27)
 	Partitions []PartitionUsage `json:"partitions,omitempty"`
+
+	// Round trip to the control plane: the median of recent polls, its own time left out (PLAN §29)
+	RttMs *float64 `json:"rttMs,omitempty"`
+
+	// Share of CPU time the hypervisor gave elsewhere: a virtual machine on a busy host
+	Steal *float64 `json:"steal,omitempty"`
+
+	// Machines: CPU used outside partitions, averaged over about an hour (PLAN §29)
+	HostCpu *float64 `json:"hostCpu,omitempty"`
+
+	// Machines: the latest tests
+	Benchmark *ResourceSummaryBenchmark `json:"benchmark,omitempty"`
 }
 
 type PartitionUsage struct {
@@ -171,6 +188,31 @@ type PartitionSize struct {
 	MemMb int64 `json:"memMb"`
 
 	DiskGb int64 `json:"diskGb"`
+}
+
+type ResourceSummaryBenchmark struct {
+	// When it ran, ISO 8601
+	At string `json:"at"`
+
+	// One core compressing, MB/s
+	CpuSingle float64 `json:"cpuSingle"`
+
+	// Every core compressing, MB/s in all
+	CpuMulti float64 `json:"cpuMulti"`
+
+	Threads int64 `json:"threads"`
+
+	// Copying memory, MB/s
+	Memory float64 `json:"memory"`
+
+	// Writing to the partitions' disk, flushed, MB/s
+	DiskWrite float64 `json:"diskWrite"`
+
+	// A small write made durable (fsync), milliseconds
+	DiskSync float64 `json:"diskSync"`
+
+	// A spinning disk, says the kernel
+	Rotational *bool `json:"rotational,omitempty"`
 }
 
 type PollResponse struct {

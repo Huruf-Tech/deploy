@@ -178,6 +178,17 @@ func (s *state) fits(name string, size protocol.PartitionSize) error {
 }
 
 // ready loads the state of a machine set up for partitions.
+// Ready says whether this machine is set up for partitions. It reads the
+// saved state, so it never waits on a change in progress.
+func (m *Manager) Ready() bool {
+	data, err := os.ReadFile(m.Path)
+	if err != nil {
+		return false
+	}
+	var s state
+	return json.Unmarshal(data, &s) == nil && s.Allocatable.MemMb > 0
+}
+
 func (m *Manager) ready() (*state, error) {
 	s, err := m.load()
 	if err == nil && s.Allocatable.MemMb == 0 {

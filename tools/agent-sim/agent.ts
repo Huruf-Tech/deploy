@@ -182,6 +182,7 @@ export class SimAgent {
 
     return {
       status: response.status,
+      headers: response.headers,
       json: await response.json().catch(() => ({})) as Record<string, unknown>,
     };
   }
@@ -201,7 +202,7 @@ export class SimAgent {
         disk: 80 * 2 ** 30,
         agentVersion: "sim-0.1.0",
       },
-    }) as { status: number; json: THelloResponse };
+    }) as { status: number; headers: Headers; json: THelloResponse };
 
     if (response.status === 200) {
       this.config = response.json.config;
