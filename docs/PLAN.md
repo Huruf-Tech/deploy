@@ -1,8 +1,11 @@
 # Huruf Deploy — Product & Technical Plan
 
-> Status: **v4.8 — Phases 0–13 and 15–18 are built** (status notes in §16); Phase 14 is the backlog, managed servers (D42, §24) are not built.
+> Status: **v4.9 — Phases 0–13 and 15–18 are built** (status notes in §16); Phase 19 (the market, §30) is planned, Phase 14 is the backlog, managed servers (D42, §24) are not built.
 > Product: **Huruf Deploy**. Reference product: Dokploy (inspiration, not a clone).
 > Every phase in §16 ends with a review checkpoint before the next one starts.
+
+**v4.9:**
+- **A market of machines** (D50, §30, Phase 19, planned): anyone rents out a machine at hourly prices; customers find it in a market and pay monthly in advance; the owner earns after each month minus a commission set by their workspace plan, with a security per machine. Measurements it relies on are built (§29). AWS provisioning moves to Phase 20.
 
 **v4.8:**
 - **Rentals on any machine** (D49, §28, Phase 18): no pool machines; an admin gives any platform machine a class, and rentals are isolated one by one. Every partition's whole disk is capped at its size. Phase 18 addendum in §16 logs the review fixes (billing keys, admin suspend/resume/delete, deploy pruning, agent shutdown).
@@ -127,6 +130,7 @@ A free-to-use SaaS that deploys and operates apps on **the user's own machines**
 | D47 | ~~**Shared resources (Phase 16, §26):** Huruf's pool machines are split into partitions (Sysbox system containers, behind a `PartitionDriver`), each running our normal agent; a rented partition joins the customer's tenant as an ordinary server, and Huruf's own remainder partition holds everything not rented (CPU uncapped at lowest priority), so nothing sits idle. Sizes are plans and a rental is a subscription (existing mechanisms, refactored where needed), priced from a rate card per class and paid monthly upfront from the wallet. Admins approve requests for now; custom domains only.~~ **Superseded by D49** (pool machines and the remainder partition are gone; rentals, classes, sizes, approval and billing remain). |
 | D48 | **Partitions on every server (Phase 17, §27):** every agent is a host; after install the customer creates a partition of the size they choose and leaves the rest of the machine to other tools. Partitions are servers and can be added, resized and removed later. Uninstall removes partitions and our own objects by label and name, never shared packages (Sysbox only on request), so the install log goes. |
 | D49 | **Rentals on any machine (Phase 18, §28):** no pool machines. An admin adds machines like any customer and makes one available for rent by giving it a class; approving a request creates the customer's partition on the machine the admin picks. Rentals are isolated one by one, so the platform's own partitions and other tools share the machine. |
+| D50 | **A market of machines (Phase 19, §30, owner 2026-10-28):** any machine's owner can rent it out; customers pick it in a market. The rental system is reshaped, not built alongside: prices move from classes and server plans onto the machine (hourly), the class is measured (§29), the owner accepts requests, and a rental's money becomes the owner's earnings after each month minus the commission of their workspace plan, with a security per machine capped at its whole-machine monthly price. Earnings are kept apart: claimed into the wallet (one way) to spend, or paid out (Stripe Connect, later); the wallet is never withdrawable. |
 | D46 | **Payments through Stripe, saved cards first (Phase 15, §25):** customers save a card on a Billing page (Stripe Elements; card data never touches us) and are charged later, off session, when a renewal or payment is short, and on demand through "Add funds". Money always lands in the thunder-core wallet first (`Wallet.ensureBalance` / `addBalance` / `settleTopup`), and every charge still goes through `BillingService`. USD only for now. Gateways sit behind one `PaymentGateway` interface, so more can join the same Billing page later. |
 | D42 | **Managed servers (optional, needs owner consent):** provision EC2 instances on the platform's AWS account and bill plan + metered usage from the wallet. The MVP only prepares the seams (§24). |
 
@@ -1426,7 +1430,7 @@ Owner's decisions recorded (§25.10). 15a–15d built; the owner tested the paym
      - An unpaid rental is suspended after 3 days and released after 14 more, with the emails; paying before release resumes it.
   5. **Resize:** an approved resize up applies in place without a restart and charges with proration once. One that doesn't fit is moved by an admin, and her server, projects and domains stay the same.
   6. **Nothing else changes:** workspace plans, BYO servers and existing billing behave as before (existing tests green).
-- **Phase 19 (later):** pool machines provisioned and retired on AWS automatically (`ServerProvisioner`, §24), and automatic approval when a class has room.
+- **Phase 20 (later):** pool machines provisioned and retired on AWS automatically (`ServerProvisioner`, §24), and automatic approval when a class has room.
 
 ### Phase 17 — Partitions on every server (built, pending review, D48, §27)
 The owner said go for all stages (2026-10-27). Every agent is a host; after install the customer creates a partition of the size they choose, and projects run in partitions. Uninstall no longer needs the install log.
@@ -1526,6 +1530,22 @@ The owner's decision (2026-10-27): no pool machines. An admin adds machines like
   - S3 volumes inside partitions don't work yet: in a Sysbox partition a FUSE mount can't be handed to a container (the Docker plugin, a bind at start and a bind after start all fail); mounting the bucket inside each project container is the likely way, to be designed.
   - Not built elsewhere in the plan: audited variable reveals and resolve reads (§12), template `cachePaths` (stored, unused).
 
+### Phase 19 — A market of machines (planned, D50, §30)
+The owner's idea (2026-10-27/28): anyone with a spare machine installs the agent, sets prices and rents it out; customers find machines in a market. Breaking changes and data migrations are fine (nothing is public yet). The measurements it needs are built (§29). One stage at a time, each with the owner's review; nothing starts before the owner says go.
+- **19a Pricing on the machine** (§30.3): hourly prices on the machine; server plans for rentals and the classes' rate cards go; the class comes from the rating; region from the IP address.
+- **19b The market** (§30.4): listing, filters, New arrivals, the community warning, a price calculator.
+- **19c Requests and the contract** (§30.5): the customer picks sizes and a committed term; escrow as today; the owner accepts (or auto-accept).
+- **19d Earnings and security** (§30.7): commission per workspace plan, maturity, the security cap with its 50 % fill, the earnings balance apart from card credit.
+- **19e Downtime, leaving and agreed moves** (§30.6, §30.8): hourly downtime refunds, the 72-hour rule, forfeits, owner-proposed moves with the customer's consent.
+- **19f Disputes** (§30.9) and **19g Trust and safety** (§30.10).
+- **Later:** payouts out of the platform (Stripe Connect or another method), longer-term discounts, fraud monitoring of New arrivals (the data for it is recorded from 19b).
+- **Done when:**
+  1. Ali adds his spare computer, sets hourly prices and switches rentals on; it appears under New arrivals with its measured rating, class, disk, region, latency and uptime, and the community warning.
+  2. Salha picks it, chooses 2 vCPU / 4 GB / 40 GB and a 6-month term, pays into escrow and Ali accepts; her server joins her workspace as rentals do today.
+  3. After month 1 matures, half of Ali's earnings fill the machine's security and half reach his earnings balance 14 days later; 3 hours of downtime are refunded to Salha's wallet first.
+  4. Ali shutting the machine down mid-month: Salha gets the downtime refund, Ali gets nothing for the month, the rest goes to Huruf, and the security goes to Salha (term broken).
+  5. Workspace plans, the customer's own machines and existing billing behave as before (existing tests green).
+
 ### Phase 14 — Backlog (after MVP)
 - Ability to upgrade already installed agent along with its deps — **done (pending review):**
   - Agents report the SHA-256 of their binary. The control plane compares it with the `SHA256SUMS` the installer uses (`AGENT_DOWNLOAD_BASE`; optional `AGENT_CHECKSUMS_BASE` when the control plane reaches that host under another address), cached 5 minutes.
@@ -1542,7 +1562,7 @@ The owner's decision (2026-10-27): no pool machines. An admin adds machines like
 - PR preview deployments (consent needed)
 - macOS agent (consent needed)
 - **More roles** (owner agrees): viewer (read-only), developer (projects and variables only), billing manager, and per-project access.
-- Managed servers on our AWS account (D42, §24): now Phase 19, after shared resources (D47, §26)
+- Managed servers on our AWS account (D42, §24): now Phase 20, after the market (D50, §30)
 
 ---
 
@@ -1974,7 +1994,7 @@ Each axis of variation is an interface with one class per variant. Adding a vari
 
 ## 24. Managed servers (optional, D42)
 
-> **Folded into shared resources (D47, §26).** The owner consented to platform-run capacity with Phase 16: machines are added manually there (since Phase 18 like any customer's machine, §28), and the AWS provisioning below becomes Phase 19, feeding the pool. Per-hour billing (§24.2) is replaced by monthly upfront allocations (§26.7); hourly blocks remain a later option.
+> **Folded into shared resources (D47, §26).** The owner consented to platform-run capacity with Phase 16: machines are added manually there (since Phase 18 like any customer's machine, §28), and the AWS provisioning below becomes Phase 20 (was 19; the market took 19). Per-hour billing (§24.2) is replaced by monthly upfront allocations (§26.7); hourly blocks remain a later option.
 
 **Idea:** the user provisions an EC2 instance from the dashboard on the platform's AWS account. The tenant pays the plan subscription plus metered machine usage per hour.
 
@@ -2123,7 +2143,7 @@ Example:
 - the screens.
 
 **Later:**
-- AWS provisioning and automatic approval (Phase 19);
+- AWS provisioning and automatic approval (Phase 20);
 - backups of partitions;
 - yearly prepay.
 
@@ -2376,7 +2396,7 @@ Needed for a resize that doesn't fit, or for draining a machine. An admin action
 14. **The customer pays the partition overhead,** at the class's memory rate.
 10. **Terms of service and data processing:** on the website, later.
 11. **Reuse first:** build on existing mechanisms and refactor them where needed.
-12. **Consent for platform-run capacity** (D42): given with this feature; AWS provisioning follows in Phase 19.
+12. **Consent for platform-run capacity** (D42): given with this feature; AWS provisioning follows in Phase 20.
 
 **Open:**
 1. Final rates, once the Partitions panel shows real costs.
@@ -2477,3 +2497,91 @@ What the agent measures, so a market of machines (planned, see the owner's notes
 - **Rating and class (machines):** weekly, and 10 minutes after the agent starts when due, the agent runs about 6 s of tests on the disk partitions live on: compressing on one core and on every core it may use, copying memory, writing 128 MB flushed, and the time a small write takes to be durable. The control plane scores each on a log scale between poor and excellent (calibrated on a 2026 desktop, which scores about 68) into a rating 0–100: Basic (<40), Standard (40–69), Performance (≥70); the disk is NVMe (durable write <0.3 ms), SSD, or HDD (spinning, or >5 ms).
 - **Dedicated (a whole machine):** a machine can be rented whole while nothing else runs on it: set up for partitions, reporting, no partitions (its own or rented, or being created), and less than 15 % of its CPU used outside partitions, averaged over about an hour (`hostCpu`: the machine's CPU minus what its partitions used). It isn't dedicated hardware: the agent also reports steal time (what a hypervisor gave other guests) and the virtualization (`systemd-detect-virt`), shown as measured.
 - **Where:** `GET /servers/api/:id/profile`; the market will list them.
+
+## 30. A market of machines (D50, Phase 19)
+
+Planned with the owner on 2026-10-27/28. Not built. Where this section and §26–§28 disagree, this section wins once built.
+
+### 30.1 The idea
+Ali has a spare computer and a good connection. He installs the agent, sets his prices and switches rentals on. Salha finds the machine in the market, requests a size and pays a month in advance into escrow (as today). Ali earns after each month of service, minus Huruf's commission. Huruf's own machines are listed the same way ("official"), owned by the platform's workspace.
+
+### 30.2 What is reshaped
+| Today | After |
+|---|---|
+| Server classes carry the rate card | Gone: the class is the measured tier (§29), Dedicated is renting the whole machine. Prices are on the machine. |
+| Rental sizes are server plans, plus a private custom plan per request | Server plans for rentals go. A rental is priced by its machine at request time; the price is stored on its subscription. Plans admin is workspace plans only. |
+| "Rent a server": pick a class and size | The market: pick a machine, then sizes, with its price calculated. |
+| Only the platform's machines; Admin → Rentals approves | Any machine with rentals on; its owner accepts (or auto-accept). Admin → Rentals is oversight: disputes, stuck rentals, refunds, suspend, delete. |
+| A rental's payment goes to the platform's wallet | Becomes the owner's earnings after each month, minus commission (§30.7). |
+| Capacity page per platform machine | An earnings view on each owner's machine page; admins see the whole market. |
+| Day-based proration | Hourly (§30.3). |
+
+Kept: partitions and isolation, escrow at request, charging at acceptance, renewal and suspension, encrypted moves (§26.10), uptime records and measurements (§29), the admin's suspend, resume and delete.
+
+### 30.3 Pricing on the machine (19a)
+- The owner sets **hourly** prices: per vCPU, per GB of memory, per GB of disk, and one whole-machine price (Dedicated). Also their own monthly cost (for their revenue view), minimum and maximum sizes, rentals on or off, "takes new rentals", auto-accept.
+- **Monthly charge = hourly price × 730** (average hours in a month), so every month costs the same; hours (to the minute) are used for downtime refunds and mid-month changes.
+- **The class is measured, never chosen:** rating 0–100 and tier, disk kind, steal, bare metal or VM (§29). Region is looked up from the machine's IP address.
+- Open for 19a: whether owners may overcommit CPU (today a class setting).
+
+### 30.4 The market (19b)
+- **Listing:** machines with room; official or community; region, measured latency, uptime (30/90 days), rating and tier, disk, steal, bare metal or VM, renters' rating, price calculator; Dedicated (whole machine) while nothing else runs on it.
+- **Filters and sorting** on each of those.
+- **New arrivals:** a machine with less than about 6 months of measurements is listed in its own section with a "new" label and the days measured. Monitoring by the team or AI comes later; the data it needs (account age, self-rentals, uptime) is recorded from the start.
+- **Community warning:** "the owner of this machine can access your data". Sensitive workloads belong on official machines. Until backups exist: "if the hardware fails, data on it is lost".
+
+### 30.5 Requests and the contract (19c)
+- The customer picks a machine, sizes and a **committed term** (1, 3, 6 or 12 months), and pays the first month into escrow (wallet, card charged when short, as today). The owner accepts, or auto-accept does; not accepted in time → refunded to the wallet.
+- **The customer:** pays monthly in advance; **a paid month is non-refundable**. They may cancel at any time: the rental runs to the end of the paid month and doesn't renew. Only downtime is refunded (§30.6). The term doesn't bind the customer (owner's choice: flexibility, as long as it can't be abused). Discounts for longer terms: later.
+- **The owner:** can't remove the machine or stop its rentals before the term ends; "takes new rentals" off is allowed.
+- **EU consumers:** a checkbox at request agreeing that the service starts at once and waiving the 14-day withdrawal right.
+
+### 30.6 Downtime and leaving (19e)
+- **Downtime** is measured from our side and refunded to the customer's wallet: hours down × hourly price, to the minute. It comes off that month before it matures, so the owner earns on what's left.
+- **Leaving** means the machine is removed, or down more than **72 hours** in a month. Hardware failure counts the same (we can't tell a dead disk from a shutdown; it's the owner's risk).
+- **Leaving mid-month:** the owner gets nothing for that month; the customer gets the downtime refund; the rest of the month goes to Huruf. Example: $30 paid, machine gone on day 15 → $15 refunded, $15 to Huruf, $0 to the owner.
+- **Breaking the term** (leaving mid-month, or stopping at a month end before the term ends): the machine's security (§30.7) is forfeited to the affected customers, in proportion to their monthly price, and each is offered a free move to another machine.
+
+### 30.7 Earnings and security (19d)
+- **Commission** is a percentage on each workspace plan (Free: 20 %), taken from the owner's plan and fixed when each month is charged.
+- **A month's money:** paid → in escrow until the month ends → matures, commission to Huruf → the owner's share goes to the machine's security, or to their earnings balance **14 days after maturity** (the window for downtime and disputes).
+- **Security per machine:** capped at the **whole-machine monthly price minus commission**.
+  - Until the cap is full, **at most 50 %** of each matured month fills it; the rest is paid out as above, so owners earn from the first month.
+  - Raising the price or adding capacity raises the cap; the following months top it up (50 % at most).
+  - The cap never falls below what the machine's current rentals earn per month; any excess is released with the next normal payout.
+  - **Released** 14 days after the machine leaves properly (its last rental ran to the end of its term and month), if nothing is disputed. **Forfeited** on breaking a term (§30.6). Disputes are paid from it and from matured, unreleased money.
+- **Example:** whole machine at $100/month, rented whole; the owner earns $80, the cap is $80.
+
+  | Month | Matures | To security | Paid to the owner |
+  |---|---|---|---|
+  | Jan | Jan 31 | $40 | $40 on Feb 14 |
+  | Feb | Feb 28 | $40 (full) | $40 on Mar 14 |
+  | Mar onward | month end | — | $80, 14 days after |
+
+  With one $100 partition on a $300 machine (cap $240), $40 a month fills it for 6 months while $40 a month is paid out.
+- **Earnings stay out of the wallet until claimed** (owner, 2026-10-28). Released earnings collect in the owner's *earnings* (one per workspace, each entry by its rental and month). From there the owner either:
+  - **claims them into the wallet** to spend on the platform, after a warning that wallet money can never be cashed out; or
+  - **withdraws them** to a payout method (Stripe Connect or another, later; until then only the wallet).
+
+  **Undoing a claim:** with no wallet transaction of any kind since the claim (no charge, top-up, refund or other claim), the owner reverts it in full themselves, at once. Otherwise they ask, and an admin decides, seeing the claim and every wallet transaction since it. The most that can be approved is what wasn't spent: the claim minus everything charged to the wallet since it was made (top-ups never add to it). Example: claim $800, a $100 renewal is charged, then $500 is added by card → $700 can be returned; spend $800 → nothing. Spending counts against the claim first, so card money added later can never be returned as earnings.
+
+  **The wallet is never withdrawable.** So money added by card (possibly a stolen card) can't leave as cash, mixed with earnings or not. A late card chargeback (up to 120 days) is taken from the owner's earnings first, then the wallet.
+- **Payouts out of the platform:** later (Stripe Connect on the US account, or another method; check Pakistan with Stripe first). Until then earnings stay in the wallet.
+- **Held money is the owners'**: escrow, security and unreleased earnings are kept available, never spent by the platform. Huruf's money is its commission (and forfeits).
+
+### 30.8 Agreed moves (19e)
+- The owner proposes moving a rental (a fault, maintenance) to one of their machines or another owner's that accepts it. The customer sees the target's price, rating and region and has **72 hours** to accept, decline or pick another machine. They can never be forced: declined and shut down anyway is leaving (§30.6).
+- Accepted: the partition moves (§26.10); the contract carries over (renewal date, rest of the term); the move's downtime is refunded as usual but doesn't count toward the 72 hours.
+- **The month of the move:** the customer pays nothing extra; the new price starts at renewal. The target owner earns their own price for the days they host it; the proposing owner gets the rest of what the customer paid, and pays any gap from their earnings. Example: $30 paid, move on day 10 to a $33 machine → target $22, proposing owner $8.
+- Only while the source machine is up (the data is copied from it), and not in the last 3 days before renewal (the owner can stop the renewal instead).
+
+### 30.9 Disputes (19f)
+The customer opens a dispute; the machine's unreleased money is frozen; measured evidence (uptime, latency, steal, CPU outside partitions, benchmarks) is attached automatically; an admin refunds all, part or nothing, paid from the frozen money.
+
+### 30.10 Trust and safety (19g)
+- No renting your own or a linked account's machine (same person, card or IP).
+- Ratings only from paying, unrelated renters, weighted by money spent.
+- An acceptable-use policy and abuse reports (mail ports are already blocked); owners warned that their connection is exposed and that many residential ISPs forbid servers.
+
+### 30.11 Laws to check before launch (a lawyer's review)
+Money transmission and identity checks once payouts exist; tax reporting for marketplaces (EU DAC7, US 1099-K, UK) and VAT on the commission; data protection (owners are sub-processors; the region is shown); notice and takedown; sanctions screening; consumer refunds (the EU waiver in §30.5).
