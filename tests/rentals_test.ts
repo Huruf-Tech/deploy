@@ -314,7 +314,7 @@ Deno.test({
             (await serverModel.findOne({ _id: new ObjectId(hello.server) }))!;
           assertEquals(server.provider.kind, "rented");
           assert(server.provider.host!.equals(host));
-          assertEquals(server.name, "Huruf · 1 vCPU · 2 GB");
+          assertEquals(server.name, "Rented · 1 vCPU · 2 GB");
           // Up: its lease is current, so no downtime is refunded.
           await serverLeaseModel.updateOne({ _id: server._id }, {
             $set: { aliveUntil: new Date(Date.now() + 365 * DAY) },
@@ -462,6 +462,11 @@ Deno.test({
           });
           assertEquals(plan!.resources!.vcpu, 2);
           assertEquals(plan!.price.amount, priceOf(2, 4096, 50));
+          // Its server's name follows its size.
+          assertEquals(
+            (await serverModel.findOne({ _id: (await sub()).server }))!.name,
+            "Rented · 2 vCPU · 4 GB",
+          );
           assert(await balance() < before, "charged");
           assert(
             before - await balance() < priceOf(2, 4096, 50),

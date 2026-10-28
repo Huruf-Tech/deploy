@@ -70,6 +70,9 @@ const PROPOSAL_CUTOFF_MS = 3 * DAY_MS;
 
 const log = (text: string) => Logger.warn(`[rentals] ${text}`);
 
+/** A rented server's name in the customer's workspace: its size. */
+const rentedName = (plan?: string) => `Rented · ${plan ?? "server"}`;
+
 /** A refusal's message, from its JSON `{ error }` or plain text. */
 const errorText = async (res: Response) => {
   const text = await res.clone().text();
@@ -490,7 +493,7 @@ export class RentalService implements TRentalHooks {
       createdBy: by,
       rental: {
         subscription: sub._id,
-        name: `Huruf · ${plan?.name ?? "Server"}`,
+        name: rentedName(plan?.name),
       },
     });
   }
@@ -636,7 +639,7 @@ export class RentalService implements TRentalHooks {
       $unset: { "rental.pendingChange": "" },
       $set: { updatedAt: new Date() },
     });
-    if (result.result === "active") await this.applySize(sub, size);
+    if (result.result === "active") await this.applySize(sub, size, plan);
     return result;
   }
 
@@ -751,12 +754,31 @@ export class RentalService implements TRentalHooks {
     }
   }
 
-  private async applySize(sub: TSub, size: TRental["size"]) {
+  private async applySize(
+    sub: TSub,
+    size: TRental["size"],
+    plan: Pick<TPlan, "name">,
+  ) {
     await subscriptionModel.updateOne({ _id: sub._id }, {
       $set: { "rental.size": size, updatedAt: new Date() },
     });
     if (sub.rental.host && sub.rental.partition) {
       await resizePartition(sub.rental.host, sub.rental.partition, size);
+    }
+    // Its server's name follows its size, unless the customer renamed it.
+    if (sub.server) {
+      const before = await rentalPlanModel.findOne({ _id: sub.plan }, {
+        projection: { name: 1 },
+      });
+      await serverModel.updateOne({
+        _id: sub.server,
+        name: {
+          $in: [
+            rentedName(before?.name),
+            `Huruf · ${before?.name ?? "Server"}`,
+          ],
+        },
+      }, { $set: { name: rentedName(plan.name) } });
     }
   }
 
@@ -1076,6 +1098,7 @@ export class RentalService implements TRentalHooks {
       await this.applySize(
         rental,
         partitionSize(plan.resources, await this.overheadMb()),
+        plan,
       );
     }
   }
