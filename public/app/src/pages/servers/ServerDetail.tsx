@@ -38,7 +38,7 @@ import { ServerLabels, ServerName } from "./ServerLabels"
 import { HostSetup } from "./HostSetup"
 import { RemoveServerDialog } from "./RemoveServerDialog"
 import { RentalPanel } from "@/pages/rentals/Rentals"
-import { HostingPanel } from "@/pages/rentals/HostingPanel"
+import { HostingPanel, OwnerRequests } from "@/pages/rentals/HostingPanel"
 import { PageHeader } from "@/components/console/page-header"
 import {
   isMachine,
@@ -454,6 +454,10 @@ export default function ServerDetail() {
           </>
         }
       />
+      {/* Renters wait on these: first thing on the machine's page. */}
+      {isMachine(server) && (
+        <OwnerRequests machine={server._id} onChanged={reload} />
+      )}
       {server.provider?.kind === "partition" ? (
         <RemovePartitionDialog
           server={server}

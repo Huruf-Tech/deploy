@@ -2,6 +2,7 @@ import * as React from "react"
 import { useTranslation } from "react-i18next"
 import { ThunderSDK } from "thunder-sdk"
 import { toast } from "sonner"
+import { IconInbox } from "@tabler/icons-react"
 
 import { Button } from "@/components/ui/button"
 import {
@@ -113,7 +114,6 @@ function Hosting({
           </p>
         </section>
       )}
-      <OwnerRequests machine={server._id} onChanged={changed} />
       <MachineRentals info={info} onChanged={changed} />
     </Panel>
   )
@@ -440,6 +440,8 @@ export function OwnerRequests({
   const { data, reload } = useCached(queries.hostingRequests())
   const isOwner = useIsOwner()
   const [declining, setDeclining] = React.useState<TRequest>()
+  // When the page opened: deadlines count down from there.
+  const [now] = React.useState(() => Date.now())
   const rows = (data ?? []).filter((r) => !machine || r.machine === machine)
   if (!rows.length) return null
   const changed = () => {
@@ -465,13 +467,25 @@ export function OwnerRequests({
     }
   }
   return (
-    <section aria-labelledby="requests-title" className="flex flex-col gap-2">
-      <h3 id={`requests-title`} className="text-[13px] font-medium">
-        {machine
-          ? t("Waiting for you")
-          : t("Rental requests for your machines")}
-      </h3>
-      <ul className="flex flex-col divide-y rounded-lg border text-[13px]">
+    <section
+      aria-labelledby="requests-title"
+      className="flex flex-col gap-2 rounded-[10px] border border-primary/50 bg-primary/5 p-3"
+    >
+      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+        <h2
+          id="requests-title"
+          className="flex items-center gap-2 text-sm font-semibold"
+        >
+          <IconInbox className="size-4 text-brand-text" aria-hidden />
+          {t("{{count}} rental requests waiting for you", {
+            count: rows.length,
+          })}
+        </h2>
+        <p className="text-xs text-muted-foreground">
+          {t("Not accepted within 72 hours, a request is declined.")}
+        </p>
+      </div>
+      <ul className="flex flex-col divide-y rounded-lg border bg-card text-[13px]">
         {rows.map((r) => (
           <li
             key={r._id}
@@ -492,6 +506,24 @@ export function OwnerRequests({
                     )} · ${t("{{count}} months", { count: r.termMonths ?? 1 })}`}
                 {" · "}
                 {ago(r.requestedAt)}
+                {!r.resizeTo && (
+                  <>
+                    {" · "}
+                    <span className="text-warning-foreground">
+                      {t("declined in {{hours}} h unless accepted", {
+                        hours: Math.max(
+                          0,
+                          Math.ceil(
+                            (new Date(r.requestedAt).getTime() +
+                              72 * 3_600_000 -
+                              now) /
+                              3_600_000
+                          )
+                        ),
+                      })}
+                    </span>
+                  </>
+                )}
               </span>
             </span>
             {isOwner && (

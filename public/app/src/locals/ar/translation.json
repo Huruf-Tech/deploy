@@ -1918,5 +1918,13 @@
   "No report here.": "لا بلاغات هنا.",
   "Reports come from a rented server's page or a machine.": "تأتي البلاغات من صفحة خادم مؤجّر أو جهاز.",
   "From / about": "من / بشأن",
-  "Oversight of the market: claims to take back, rentals that didn't arrive, and capacity. Disputes and abuse reports have their own pages. Machine owners accept requests themselves.": "الإشراف على السوق: المطالبات المطلوب استردادها، والإيجارات التي لم تصل، والسعة. للنزاعات وبلاغات الإساءة صفحاتها الخاصة. يقبل ملاك الأجهزة الطلبات بأنفسهم."
+  "Oversight of the market: claims to take back, rentals that didn't arrive, and capacity. Disputes and abuse reports have their own pages. Machine owners accept requests themselves.": "الإشراف على السوق: المطالبات المطلوب استردادها، والإيجارات التي لم تصل، والسعة. للنزاعات وبلاغات الإساءة صفحاتها الخاصة. يقبل ملاك الأجهزة الطلبات بأنفسهم.",
+  "Not accepted within 72 hours, a request is declined.": "يُرفض الطلب إن لم يُقبل خلال 72 ساعة.",
+  "declined in {{hours}} h unless accepted": "يُرفض خلال {{hours}} ساعة ما لم يُقبل",
+  "{{count}} rental requests waiting for you": "{{count}} طلب إيجار بانتظارك",
+  "{{count}} rental requests waiting for you_zero": "لا طلبات إيجار بانتظارك",
+  "{{count}} rental requests waiting for you_one": "طلب إيجار واحد بانتظارك",
+  "{{count}} rental requests waiting for you_two": "طلبا إيجار بانتظارك",
+  "{{count}} rental requests waiting for you_few": "{{count}} طلبات إيجار بانتظارك",
+  "{{count}} rental requests waiting for you_many": "{{count}} طلب إيجار بانتظارك"
 }

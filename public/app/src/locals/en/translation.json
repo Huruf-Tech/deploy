@@ -1918,5 +1918,13 @@
   "No report here.": "No report here.",
   "Reports come from a rented server's page or a machine.": "Reports come from a rented server's page or a machine.",
   "From / about": "From / about",
-  "Oversight of the market: claims to take back, rentals that didn't arrive, and capacity. Disputes and abuse reports have their own pages. Machine owners accept requests themselves.": "Oversight of the market: claims to take back, rentals that didn't arrive, and capacity. Disputes and abuse reports have their own pages. Machine owners accept requests themselves."
+  "Oversight of the market: claims to take back, rentals that didn't arrive, and capacity. Disputes and abuse reports have their own pages. Machine owners accept requests themselves.": "Oversight of the market: claims to take back, rentals that didn't arrive, and capacity. Disputes and abuse reports have their own pages. Machine owners accept requests themselves.",
+  "Not accepted within 72 hours, a request is declined.": "Not accepted within 72 hours, a request is declined.",
+  "declined in {{hours}} h unless accepted": "declined in {{hours}} h unless accepted",
+  "{{count}} rental requests waiting for you": "{{count}} rental requests waiting for you",
+  "{{count}} rental requests waiting for you_zero": "{{count}} rental requests waiting for you",
+  "{{count}} rental requests waiting for you_one": "{{count}} rental request waiting for you",
+  "{{count}} rental requests waiting for you_two": "{{count}} rental requests waiting for you",
+  "{{count}} rental requests waiting for you_few": "{{count}} rental requests waiting for you",
+  "{{count}} rental requests waiting for you_many": "{{count}} rental requests waiting for you"
 }
