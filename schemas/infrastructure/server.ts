@@ -17,7 +17,7 @@ export const $rentPrices = z.object({
   vcpu: z.number().min(0).max(1_000),
   memGb: z.number().min(0).max(1_000),
   diskGb: z.number().min(0).max(100),
-  whole: z.number().min(0).max(100_000).optional(),
+  whole: z.number().positive().max(100_000).optional(),
   trafficGb: z.number().int().min(0).max(1_000).default(0),
 });
 

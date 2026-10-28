@@ -10,7 +10,7 @@ export const HOURS_PER_MONTH = 730;
 /**
  * Cents per hour for a partition on a machine (PLAN §30.3); the partition's
  * overhead is paid at the memory rate. The whole machine has its own price
- * when the owner set one, else the sum of what it's made of.
+ * when the owner set one (above 0), else the sum of what it's made of.
  */
 export const hourlyOf = (
   p: TRentPrices,
@@ -18,7 +18,7 @@ export const hourlyOf = (
   overheadMb: number,
   whole = false,
 ) =>
-  whole && p.whole !== undefined
+  whole && p.whole
     ? p.whole
     : r.vcpu * p.vcpu + ((r.memMb + overheadMb) / 1024) * p.memGb +
       r.diskGb * p.diskGb;

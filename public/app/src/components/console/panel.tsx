@@ -27,7 +27,7 @@ export function Panel({
               <h2 className="truncate text-sm font-semibold">{title}</h2>
             )}
             {description && (
-              <p className="truncate text-xs text-muted-foreground">
+              <p className="text-xs text-pretty text-muted-foreground">
                 {description}
               </p>
             )}

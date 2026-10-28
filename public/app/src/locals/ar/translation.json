@@ -1748,5 +1748,20 @@
   "Rentals on {{name}}": "الإيجارات على {{name}}",
   "Security held: {{amount}} of {{cap}}": "التأمين المحتجز: {{amount}} من {{cap}}",
   "No rentals on it now.": "لا إيجارات عليه الآن.",
-  "Refund this rental?": "استرداد هذا الإيجار؟"
+  "Refund this rental?": "استرداد هذا الإيجار؟",
+  "Renters pay by the month; you earn after each month, minus Huruf's commission.": "يدفع المستأجرون شهريًا، وتربح بعد كل شهر بعد خصم عمولة حروف.",
+  "At most half of each month fills the security, up to the machine's whole monthly price. It's paid out 14 days after the machine leaves properly, and goes to its renters if it leaves before their term.": "يذهب نصف كل شهر على الأكثر إلى التأمين، حتى السعر الشهري للجهاز كاملًا. يُصرف بعد 14 يومًا من مغادرة الجهاز بشكل سليم، ويذهب إلى مستأجريه إن غادر قبل انتهاء مدتهم.",
+  "Renters can find this machine and request it.": "يمكن للمستأجرين العثور على هذا الجهاز وطلبه.",
+  "A paid request starts without waiting for you.": "يبدأ الطلب المدفوع دون انتظارك.",
+  "Off: its rentals stay, no new ones.": "عند الإيقاف: تبقى إيجاراته، ولا يقبل جديدًا.",
+  "Prices": "الأسعار",
+  "By the hour; a month is 730 hours. Renters see the monthly price.": "بالساعة؛ الشهر 730 ساعة. يرى المستأجرون السعر الشهري.",
+  "/ hour": "/ ساعة",
+  "Optional: empty adds up the parts": "اختياري: إن تُرك فارغًا يُجمع من الأجزاء",
+  "Traffic over the allowance": "حركة البيانات فوق المسموح",
+  "Beyond the traffic each rental includes": "ما يتجاوز حركة البيانات المضمّنة في كل إيجار",
+  "/ GB": "/ غيغابايت",
+  "What it costs you": "ما يكلّفك",
+  "Only for you: revenue against cost": "لك وحدك: الإيرادات مقابل التكلفة",
+  "/ month": "/ شهر"
 }

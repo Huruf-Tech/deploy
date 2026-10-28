@@ -4,7 +4,11 @@ import { ThunderSDK } from "thunder-sdk"
 import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
+} from "@/components/ui/input-group"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { ConfirmDialog } from "@/components/confirm-dialog"
@@ -30,12 +34,7 @@ type TMachine = NonNullable<
 type TPrices = NonNullable<TMachine["rent"]>["prices"]
 type TRequest = Awaited<ReturnType<typeof ThunderSDK.hosting.requests>>[number]
 
-const PRICE_FIELDS = [
-  ["vcpu", "Per vCPU"],
-  ["memGb", "Per GB of memory"],
-  ["diskGb", "Per GB of disk"],
-  ["whole", "The whole machine (optional)"],
-] as const
+const PRICE_FIELDS = [["vcpu"], ["memGb"], ["diskGb"], ["whole"]] as const
 
 /**
  * Renting a machine out (PLAN §30), the owner's side on its page: prices and
@@ -76,46 +75,103 @@ function Hosting({
     queries.hostingRequests().invalidate()
     onChanged()
   }
+  const listed = !!info.rent?.enabled
   return (
     <Panel
       title={t("Rent it out")}
       description={t(
-        "List this machine in the market: renters pay by the month, you earn after each month, minus Huruf's commission."
+        "Renters pay by the month; you earn after each month, minus Huruf's commission."
       )}
-      bodyClassName="flex flex-col gap-4 py-2"
+      bodyClassName="flex flex-col gap-5"
     >
       <Settings
+        // Saved values reset the form.
+        key={JSON.stringify([info.rent, info.monthlyCost])}
         server={server._id}
         info={info}
         editable={isOwner && ThunderSDK.isPermitted("hosting", "updateMachine")}
         onChanged={changed}
       />
-      <KeyValue
-        items={[
-          {
-            label: t("Earns / costs a month"),
-            value: `${money(info.revenue, "usd")} / ${
-              info.monthlyCost ? money(info.monthlyCost, "usd") : "—"
-            }`,
-          },
-          { label: t("Huruf's commission"), value: `${info.commission}%` },
-          {
-            label: t("Security held"),
-            value: t("{{amount}} of {{cap}}", {
-              amount: money(info.security.amount, "usd"),
-              cap: money(info.security.cap, "usd"),
-            }),
-          },
-        ]}
-      />
-      <p className="-mt-2 text-xs text-muted-foreground">
-        {t(
-          "Half of each month at most fills the security, up to the machine's whole monthly price. It's paid out 14 days after the machine leaves properly, and goes to the renters if it leaves before their term."
-        )}
-      </p>
+      {(listed || info.rentals.length > 0 || info.security.amount > 0) && (
+        <section className="flex flex-col gap-1">
+          <KeyValue
+            items={[
+              {
+                label: t("Earns / costs a month"),
+                value: `${money(info.revenue, "usd")} / ${
+                  info.monthlyCost ? money(info.monthlyCost, "usd") : "—"
+                }`,
+              },
+              { label: t("Huruf's commission"), value: `${info.commission}%` },
+              {
+                label: t("Security held"),
+                value: t("{{amount}} of {{cap}}", {
+                  amount: money(info.security.amount, "usd"),
+                  cap: money(info.security.cap, "usd"),
+                }),
+              },
+            ]}
+          />
+          <p className="text-xs text-pretty text-muted-foreground">
+            {t(
+              "At most half of each month fills the security, up to the machine's whole monthly price. It's paid out 14 days after the machine leaves properly, and goes to its renters if it leaves before their term."
+            )}
+          </p>
+        </section>
+      )}
       <OwnerRequests machine={server._id} onChanged={changed} />
       <MachineRentals info={info} onChanged={changed} />
     </Panel>
+  )
+}
+
+/** A price field: dollars with a unit, and what it comes to a month. */
+function PriceRow({
+  id,
+  label,
+  hint,
+  unit,
+  value,
+  placeholder,
+  onChange,
+}: {
+  id: string
+  label: string
+  hint?: string
+  unit: string
+  value: string
+  placeholder?: string
+  onChange: (value: string) => void
+}) {
+  return (
+    <div className="grid grid-cols-[minmax(0,1fr)_minmax(7.5rem,10rem)] items-center gap-x-4 gap-y-1 py-2">
+      <div className="min-w-0">
+        <Label htmlFor={id} className="text-[13px]">
+          {label}
+        </Label>
+        {hint && (
+          <p className="text-xs text-muted-foreground tabular-nums">{hint}</p>
+        )}
+      </div>
+      <InputGroup className="h-8">
+        <InputGroupAddon>$</InputGroupAddon>
+        <InputGroupInput
+          id={id}
+          type="number"
+          inputMode="decimal"
+          dir="ltr"
+          min={0}
+          step="any"
+          className="tabular-nums"
+          value={value}
+          placeholder={placeholder}
+          onChange={(e) => onChange(e.target.value)}
+        />
+        <InputGroupAddon align="inline-end" className="text-xs">
+          {unit}
+        </InputGroupAddon>
+      </InputGroup>
+    </div>
   )
 }
 
@@ -132,36 +188,44 @@ function Settings({
 }) {
   const { t } = useTranslation()
   const saved = info.rent
-  // Dollars per hour, as typed.
-  const [prices, setPrices] = React.useState<Record<string, string>>(() =>
-    Object.fromEntries(
-      PRICE_FIELDS.map(([k]) => [
-        k,
-        saved?.prices[k] !== undefined ? String(saved.prices[k] / 100) : "",
-      ])
-    )
+  // Dollars per hour, as typed; an empty whole price means "the sum of the parts".
+  const initial = React.useMemo<Record<string, string>>(
+    () => ({
+      ...Object.fromEntries(
+        PRICE_FIELDS.map(([k]) => {
+          const v = saved?.prices[k]
+          return [k, v ? String(Math.round(v * 1e4) / 1e6) : ""]
+        })
+      ),
+      traffic: saved ? String(toDollars(saved.prices.trafficGb)) : "0.1",
+      cost: info.monthlyCost ? String(toDollars(info.monthlyCost)) : "",
+    }),
+    [saved, info.monthlyCost]
   )
-  const [traffic, setTraffic] = React.useState(
-    saved ? String(toDollars(saved.prices.trafficGb)) : "0.1"
-  )
-  const [cost, setCost] = React.useState(
-    info.monthlyCost ? String(toDollars(info.monthlyCost)) : ""
-  )
+  const [form, setForm] = React.useState<Record<string, string>>(initial)
   const [busy, setBusy] = React.useState(false)
+  const dirty = Object.keys(initial).some((k) => form[k] !== initial[k])
+  const set = (k: string) => (v: string) => setForm({ ...form, [k]: v })
 
-  const cents = (k: string) =>
-    prices[k] === "" ? undefined : Number(prices[k]) * 100
-  const typed: TPrices | undefined = [
-    cents("vcpu"),
-    cents("memGb"),
-    cents("diskGb"),
-  ].every((v) => v !== undefined && v >= 0)
+  const cents = (k: string) => {
+    const n = Number(form[k])
+    return form[k] === "" || !Number.isFinite(n) || n < 0 ? undefined : n * 100
+  }
+  const monthly = (k: string) =>
+    cents(k)
+      ? t("{{price}} a month", {
+          price: money(Math.round(cents(k)! * HOURS), "usd"),
+        })
+      : undefined
+  const typed: TPrices | undefined = (
+    ["vcpu", "memGb", "diskGb"] as const
+  ).every((k) => cents(k) !== undefined)
     ? {
         vcpu: cents("vcpu")!,
         memGb: cents("memGb")!,
         diskGb: cents("diskGb")!,
-        ...(cents("whole") !== undefined ? { whole: cents("whole") } : {}),
-        trafficGb: Math.max(0, toCents(traffic) || 0),
+        ...(cents("whole") ? { whole: cents("whole") } : {}),
+        trafficGb: Math.max(0, toCents(form.traffic) || 0),
       }
     : undefined
 
@@ -169,8 +233,12 @@ function Settings({
     enabled?: boolean
     autoAccept?: boolean
     accepting?: boolean
+    prices?: boolean
   }) => {
-    if (!typed && (patch.enabled ?? saved?.enabled)) {
+    // A switch keeps the saved prices; "Save" sends the typed ones.
+    const prices = patch.prices ? typed : (saved?.prices ?? typed)
+    const enabled = patch.enabled ?? saved?.enabled ?? false
+    if (!prices && (enabled || patch.prices)) {
       return toast.error(t("Set the prices per vCPU, memory and disk first"))
     }
     setBusy(true)
@@ -178,20 +246,20 @@ function Settings({
       await ThunderSDK.hosting.updateMachine({
         params: { id: server },
         body: {
-          ...(typed
+          ...(prices
             ? {
                 rent: {
-                  enabled: patch.enabled ?? saved?.enabled ?? false,
+                  enabled,
                   autoAccept: patch.autoAccept ?? saved?.autoAccept ?? false,
-                  prices: typed,
+                  prices,
                 },
               }
             : {}),
           ...(patch.accepting !== undefined
             ? { accepting: patch.accepting }
             : {}),
-          ...(cost !== "" && toCents(cost) >= 0
-            ? { monthlyCost: toCents(cost) }
+          ...(patch.prices && form.cost !== "" && toCents(form.cost) >= 0
+            ? { monthlyCost: toCents(form.cost) }
             : {}),
         },
       })
@@ -204,111 +272,132 @@ function Settings({
     }
   }
 
-  const toggle = (
-    label: string,
-    hint: string,
-    checked: boolean,
-    onChange: (on: boolean) => void
-  ) => (
-    <label className="flex items-center justify-between gap-3 rounded-lg border px-3 py-2 text-[13px]">
-      <span>
-        {label}
-        <span className="block text-xs text-muted-foreground">{hint}</span>
-      </span>
-      <Switch
-        checked={checked}
-        disabled={!editable || busy}
-        onCheckedChange={onChange}
-      />
-    </label>
-  )
+  const switches = [
+    {
+      id: "rent-enabled",
+      label: t("For rent in the market"),
+      hint: t("Renters can find this machine and request it."),
+      checked: !!saved?.enabled,
+      onChange: (enabled: boolean) => save({ enabled }),
+    },
+    {
+      id: "rent-auto",
+      label: t("Accept requests at once"),
+      hint: t("A paid request starts without waiting for you."),
+      checked: !!saved?.autoAccept,
+      onChange: (autoAccept: boolean) => save({ autoAccept }),
+    },
+    {
+      id: "rent-accepting",
+      label: t("Takes new rentals"),
+      hint: t("Off: its rentals stay, no new ones."),
+      checked: info.accepting,
+      onChange: (accepting: boolean) => save({ accepting }),
+    },
+  ]
 
   return (
-    <div className="flex flex-col gap-3">
-      <div className="grid gap-2 sm:grid-cols-3">
-        {toggle(
-          t("For rent in the market"),
-          t("Renters can find and request it."),
-          !!saved?.enabled,
-          (enabled) => save({ enabled })
-        )}
-        {toggle(
-          t("Accept requests at once"),
-          t("Without you: it starts when paid."),
-          !!saved?.autoAccept,
-          (autoAccept) => save({ autoAccept })
-        )}
-        {toggle(
-          t("Takes new rentals"),
-          t("Off keeps its rentals, takes no more."),
-          info.accepting,
-          (accepting) => save({ accepting })
-        )}
-      </div>
-      <fieldset className="grid gap-3 sm:grid-cols-2" disabled={!editable}>
-        <legend className="mb-2 text-[13px] font-medium">
-          {t("Prices, in dollars per hour")}
-        </legend>
-        {PRICE_FIELDS.map(([k, label]) => (
-          <div key={k} className="flex flex-col gap-1.5">
-            <Label htmlFor={`price-${k}`}>{t(label)}</Label>
-            <Input
-              id={`price-${k}`}
-              type="number"
-              dir="ltr"
-              min={0}
-              step="0.0001"
-              value={prices[k]}
-              onChange={(e) => setPrices({ ...prices, [k]: e.target.value })}
+    <div className="flex flex-col gap-5">
+      <ul className="flex flex-col divide-y rounded-lg border">
+        {switches.map((s) => (
+          <li key={s.id} className="flex items-center gap-4 px-3 py-2.5">
+            <div className="min-w-0 flex-1">
+              <Label htmlFor={s.id} className="text-[13px]">
+                {s.label}
+              </Label>
+              <p className="text-xs text-pretty text-muted-foreground">
+                {s.hint}
+              </p>
+            </div>
+            <Switch
+              id={s.id}
+              checked={s.checked}
+              disabled={!editable || busy}
+              onCheckedChange={s.onChange}
             />
-            <span className="text-xs text-muted-foreground tabular-nums">
-              {cents(k) !== undefined
-                ? t("{{price}} a month", {
-                    price: money(Math.round(cents(k)! * HOURS), "usd"),
-                  })
-                : "—"}
-            </span>
-          </div>
+          </li>
         ))}
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="price-traffic">
-            {t("Traffic beyond the allowance ($ per GB)")}
-          </Label>
-          <Input
+      </ul>
+
+      <fieldset disabled={!editable} className="min-w-0">
+        <legend className="text-sm font-semibold">{t("Prices")}</legend>
+        <p className="text-xs text-pretty text-muted-foreground">
+          {t(
+            "By the hour; a month is 730 hours. Renters see the monthly price."
+          )}
+        </p>
+        <div className="mt-1 divide-y">
+          <PriceRow
+            id="price-vcpu"
+            label={t("Per vCPU")}
+            hint={monthly("vcpu")}
+            unit={t("/ hour")}
+            value={form.vcpu}
+            onChange={set("vcpu")}
+          />
+          <PriceRow
+            id="price-memGb"
+            label={t("Per GB of memory")}
+            hint={monthly("memGb")}
+            unit={t("/ hour")}
+            value={form.memGb}
+            onChange={set("memGb")}
+          />
+          <PriceRow
+            id="price-diskGb"
+            label={t("Per GB of disk")}
+            hint={monthly("diskGb")}
+            unit={t("/ hour")}
+            value={form.diskGb}
+            onChange={set("diskGb")}
+          />
+          <PriceRow
+            id="price-whole"
+            label={t("The whole machine")}
+            hint={monthly("whole") ?? t("Optional: empty adds up the parts")}
+            unit={t("/ hour")}
+            value={form.whole}
+            placeholder={t("Optional")}
+            onChange={set("whole")}
+          />
+          <PriceRow
             id="price-traffic"
-            type="number"
-            dir="ltr"
-            min={0}
-            step="0.01"
-            value={traffic}
-            onChange={(e) => setTraffic(e.target.value)}
+            label={t("Traffic over the allowance")}
+            hint={t("Beyond the traffic each rental includes")}
+            unit={t("/ GB")}
+            value={form.traffic}
+            onChange={set("traffic")}
           />
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="price-cost">{t("Monthly cost ($)")}</Label>
-          <Input
+          <PriceRow
             id="price-cost"
-            type="number"
-            dir="ltr"
-            min={0}
-            step="0.01"
-            value={cost}
-            onChange={(e) => setCost(e.target.value)}
+            label={t("What it costs you")}
+            hint={t("Only for you: revenue against cost")}
+            unit={t("/ month")}
+            value={form.cost}
+            onChange={set("cost")}
           />
-          <span className="text-xs text-muted-foreground">
-            {t("What it costs you, for revenue against cost.")}
-          </span>
         </div>
       </fieldset>
       {editable && (
-        <Button
-          size="sm"
-          className="self-start"
-          disabled={busy}
-          onClick={() => save({})}
-        >
-          {t("Save prices")}
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            size="sm"
+            disabled={busy || !dirty}
+            onClick={() => save({ prices: true })}
+          >
+            {t("Save prices")}
+          </Button>
+          {dirty && (
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={busy}
+              onClick={() => setForm(initial)}
+            >
+              {t("Discard")}
+            </Button>
+          )}
+        </div>
       )}
     </div>
   )

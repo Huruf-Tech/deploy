@@ -36,6 +36,16 @@ Deno.test("market: prices, refunds, shares and the security fill", () => {
   // 2 vCPU, 3.875 + 0.125 GB, 50 GB: 2 + 2 + 1 = 5 cents an hour.
   assertEquals(hourlyOf(prices, { vcpu: 2, memMb: 3968, diskGb: 50 }, 128), 5);
   assertEquals(hourlyOf(prices, { vcpu: 8, memMb: 1, diskGb: 1 }, 0, true), 10);
+  // No whole price (or 0): the sum of the parts.
+  assertEquals(
+    hourlyOf(
+      { ...prices, whole: 0 },
+      { vcpu: 2, memMb: 3968, diskGb: 50 },
+      128,
+      true,
+    ),
+    5,
+  );
   assertEquals(monthlyOf(5), 3_650);
   // 10 hours of a $36.50 month: 50 cents; never more than the month.
   assertEquals(refundFor(3_650, 10 * 3_600_000), 50);

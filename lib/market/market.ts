@@ -166,9 +166,7 @@ export async function listMachines(viewer: ObjectId, f: TMarketFilters) {
           vcpu: monthly(prices.vcpu),
           memGb: monthly(prices.memGb),
           diskGb: monthly(prices.diskGb),
-          ...(prices.whole !== undefined
-            ? { whole: monthly(prices.whole) }
-            : {}),
+          ...(prices.whole ? { whole: monthly(prices.whole) } : {}),
         },
         trafficGb: prices.trafficGb,
       },

@@ -1748,5 +1748,20 @@
   "Rentals on {{name}}": "Rentals on {{name}}",
   "Security held: {{amount}} of {{cap}}": "Security held: {{amount}} of {{cap}}",
   "No rentals on it now.": "No rentals on it now.",
-  "Refund this rental?": "Refund this rental?"
+  "Refund this rental?": "Refund this rental?",
+  "Renters pay by the month; you earn after each month, minus Huruf's commission.": "Renters pay by the month; you earn after each month, minus Huruf's commission.",
+  "At most half of each month fills the security, up to the machine's whole monthly price. It's paid out 14 days after the machine leaves properly, and goes to its renters if it leaves before their term.": "At most half of each month fills the security, up to the machine's whole monthly price. It's paid out 14 days after the machine leaves properly, and goes to its renters if it leaves before their term.",
+  "Renters can find this machine and request it.": "Renters can find this machine and request it.",
+  "A paid request starts without waiting for you.": "A paid request starts without waiting for you.",
+  "Off: its rentals stay, no new ones.": "Off: its rentals stay, no new ones.",
+  "Prices": "Prices",
+  "By the hour; a month is 730 hours. Renters see the monthly price.": "By the hour; a month is 730 hours. Renters see the monthly price.",
+  "/ hour": "/ hour",
+  "Optional: empty adds up the parts": "Optional: empty adds up the parts",
+  "Traffic over the allowance": "Traffic over the allowance",
+  "Beyond the traffic each rental includes": "Beyond the traffic each rental includes",
+  "/ GB": "/ GB",
+  "What it costs you": "What it costs you",
+  "Only for you: revenue against cost": "Only for you: revenue against cost",
+  "/ month": "/ month"
 }
