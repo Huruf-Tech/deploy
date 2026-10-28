@@ -152,6 +152,13 @@ export const queries = {
           results: unknown[]
         }
     ),
+  /** Latency, uptime and, for a machine, its rating and class (PLAN §29). */
+  serverProfile: (id: string) =>
+    query(
+      ["servers", id, "profile"],
+      async ({ signal }) =>
+        await ThunderSDK.servers.profile({ params: { id }, signal })
+    ),
   agentRelease: () =>
     query(
       ["servers", "agentRelease"],

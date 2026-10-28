@@ -55,6 +55,8 @@ export type get$return = {
             agentVersion: string;
             /** SHA-256 of the running agent binary: compared with the published one for updates */
             agentSha256?: string | undefined;
+            /** What `systemd-detect-virt` says: none on bare metal, else kvm, microsoft… */
+            virtualization?: string | undefined;
         };
         resources?: {
             /** Used fraction */
@@ -81,6 +83,30 @@ export type get$return = {
                 /** Traffic out since it was created */
                 txBytes: number;
             }[] | undefined;
+            /** Round trip to the control plane: the median of recent polls, its own time left out (PLAN §29) */
+            rttMs?: number | undefined;
+            /** Share of CPU time the hypervisor gave elsewhere: a virtual machine on a busy host */
+            steal?: number | undefined;
+            /** Machines: CPU used outside partitions, averaged over about an hour (PLAN §29) */
+            hostCpu?: number | undefined;
+            /** Machines: the latest tests */
+            benchmark?: {
+                /** When it ran, ISO 8601 */
+                at: string;
+                /** One core compressing, MB/s */
+                cpuSingle: number;
+                /** Every core compressing, MB/s in all */
+                cpuMulti: number;
+                threads: number;
+                /** Copying memory, MB/s */
+                memory: number;
+                /** Writing to the partitions' disk, flushed, MB/s */
+                diskWrite: number;
+                /** A small write made durable (fsync), milliseconds */
+                diskSync: number;
+                /** A spinning disk, says the kernel */
+                rotational?: boolean | undefined;
+            } | undefined;
             reportedAt: Date;
         } | undefined;
         setup?: {
@@ -137,6 +163,31 @@ export type update$body = {
 };
 export type del$params = {
     id: string;
+};
+export type profile$params = {
+    id?: string;
+};
+export type profile$return = {
+    /** Round trip to the control plane */
+    rttMs?: number | undefined;
+    /** Percent, last 30 days */
+    uptime30d?: number | undefined;
+    /** Percent, last 90 days */
+    uptime90d?: number | undefined;
+    /** CPU the hypervisor took, 0..1 */
+    steal?: number | undefined;
+    virtualization?: string | undefined;
+    /** 0..100, machines */
+    rating?: number | undefined;
+    tier?: ("Basic" | "Standard" | "Performance") | undefined;
+    disk?: ("NVMe" | "SSD" | "HDD") | undefined;
+    benchmarkAt?: string | undefined;
+    /** CPU used outside partitions, 0..1, machines */
+    hostCpu?: number | undefined;
+    /** Can be rented whole: nothing else runs on it */
+    dedicated?: boolean | undefined;
+    /** Why it can't, if not */
+    notDedicated?: string | undefined;
 };
 export type partitions$params = {
     id?: string;
@@ -300,6 +351,8 @@ export declare const serversModule: (sdk: typeof BaseSDK) => {
         update$params: update$params;
         update$body: update$body;
         del$params: del$params;
+        profile$params: profile$params;
+        profile$return: profile$return;
         partitions$params: partitions$params;
         partitions$return: partitions$return;
         createPartition$params: createPartition$params;
@@ -384,6 +437,17 @@ export declare const serversModule: (sdk: typeof BaseSDK) => {
         then: <TResult1 = unknown, TResult2 = never>(onfulfilled?: ((value: unknown) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
         catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<unknown>;
         finally: (onfinally?: (() => void) | null | undefined) => Promise<unknown>;
+    };
+    readonly profile: (data: {
+        params: profile$params;
+        query?: undefined;
+        body?: undefined;
+    } & TRequestOptions<profile$return>) => {
+        readonly raw: Promise<import("axios").AxiosResponse<profile$return, any, {}, any>>;
+        readonly data: Promise<profile$return>;
+        then: <TResult1 = profile$return, TResult2 = never>(onfulfilled?: ((value: profile$return) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+        catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<profile$return | TResult>;
+        finally: (onfinally?: (() => void) | null | undefined) => Promise<profile$return>;
     };
     readonly partitions: (data: {
         params: partitions$params;

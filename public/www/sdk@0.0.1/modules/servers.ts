@@ -62,6 +62,8 @@ export type get$return = {
             agentVersion: string;
             /** SHA-256 of the running agent binary: compared with the published one for updates */
             agentSha256?: string | undefined;
+            /** What `systemd-detect-virt` says: none on bare metal, else kvm, microsoft… */
+            virtualization?: string | undefined;
         };
         resources?: {
             /** Used fraction */
@@ -88,6 +90,30 @@ export type get$return = {
                 /** Traffic out since it was created */
                 txBytes: number;
             }[] | undefined;
+            /** Round trip to the control plane: the median of recent polls, its own time left out (PLAN §29) */
+            rttMs?: number | undefined;
+            /** Share of CPU time the hypervisor gave elsewhere: a virtual machine on a busy host */
+            steal?: number | undefined;
+            /** Machines: CPU used outside partitions, averaged over about an hour (PLAN §29) */
+            hostCpu?: number | undefined;
+            /** Machines: the latest tests */
+            benchmark?: {
+                /** When it ran, ISO 8601 */
+                at: string;
+                /** One core compressing, MB/s */
+                cpuSingle: number;
+                /** Every core compressing, MB/s in all */
+                cpuMulti: number;
+                threads: number;
+                /** Copying memory, MB/s */
+                memory: number;
+                /** Writing to the partitions' disk, flushed, MB/s */
+                diskWrite: number;
+                /** A small write made durable (fsync), milliseconds */
+                diskSync: number;
+                /** A spinning disk, says the kernel */
+                rotational?: boolean | undefined;
+            } | undefined;
             reportedAt: Date;
         } | undefined;
         setup?: {
@@ -144,6 +170,31 @@ export type update$body = {
 };
 export type del$params = {
     id: string;
+};
+export type profile$params = {
+    id?: string;
+};
+export type profile$return = {
+    /** Round trip to the control plane */
+    rttMs?: number | undefined;
+    /** Percent, last 30 days */
+    uptime30d?: number | undefined;
+    /** Percent, last 90 days */
+    uptime90d?: number | undefined;
+    /** CPU the hypervisor took, 0..1 */
+    steal?: number | undefined;
+    virtualization?: string | undefined;
+    /** 0..100, machines */
+    rating?: number | undefined;
+    tier?: ("Basic" | "Standard" | "Performance") | undefined;
+    disk?: ("NVMe" | "SSD" | "HDD") | undefined;
+    benchmarkAt?: string | undefined;
+    /** CPU used outside partitions, 0..1, machines */
+    hostCpu?: number | undefined;
+    /** Can be rented whole: nothing else runs on it */
+    dedicated?: boolean | undefined;
+    /** Why it can't, if not */
+    notDedicated?: string | undefined;
 };
 export type partitions$params = {
     id?: string;
@@ -308,6 +359,8 @@ export const serversModule = (sdk: typeof BaseSDK) => {
         update$params: update$params,
         update$body: update$body,
         del$params: del$params,
+        profile$params: profile$params,
+        profile$return: profile$return,
         partitions$params: partitions$params,
         partitions$return: partitions$return,
         createPartition$params: createPartition$params,
@@ -463,6 +516,34 @@ export const serversModule = (sdk: typeof BaseSDK) => {
 
             const method = "delete";
             const toPath = compile("servers/api/:id");
+            const requestPayload = {
+                method,
+                url: toPath(sdk.resolvePathParams(data?.params)),
+                params: data?.query,
+                data: data?.body,
+                signal: data?.signal,
+                ...(data?.axiosConfig
+                ? sdk.resolveAxiosConfig(data.axiosConfig)
+                : undefined),
+            };
+
+            sdk.log("Sending Request:", requestPayload);
+
+            const res = await sdk._axios!.request(requestPayload);
+
+            return res;
+        }, data);
+    },
+        profile(data: {
+        params: profile$params,
+        query?: undefined,
+        body?: undefined,
+    } & TRequestOptions<profile$return>) {
+        return sdk.resolveAxiosResponse(async () => {
+            sdk.checkPermission("servers", "profile");
+
+            const method = "get";
+            const toPath = compile("servers/api/:id/profile");
             const requestPayload = {
                 method,
                 url: toPath(sdk.resolvePathParams(data?.params)),
@@ -936,6 +1017,7 @@ export const serversModule = (sdk: typeof BaseSDK) => {
     (methods.get as any).__scope = "servers";
     (methods.update as any).__scope = "servers";
     (methods.del as any).__scope = "servers";
+    (methods.profile as any).__scope = "servers";
     (methods.partitions as any).__scope = "servers";
     (methods.createPartition as any).__scope = "servers";
     (methods.resizePartition as any).__scope = "servers";
@@ -955,7 +1037,7 @@ export const serversModule = (sdk: typeof BaseSDK) => {
 
     sdk["_moduleGroup"].set(methods, "Infrastructure");
 
-    sdk["_moduleMetadata"].set(methods, {"crud":{"schema":{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","properties":{"name":{"type":"string","minLength":1,"maxLength":60,"canFilter":true},"labels":{"default":{},"description":"Free-form key/value tags, e.g. region=eu, builder=true","type":"object","propertyNames":{"type":"string","maxLength":40},"additionalProperties":{"type":"string","maxLength":80}},"tenant":{"tsType":"string","ref":"tenants"},"status":{"type":"string","enum":["pending","active","rejected"],"canFilter":true},"identity":{"type":"object","properties":{"signPublicKey":{"type":"string"},"boxPublicKey":{"type":"string"},"fingerprint":{"type":"string"}},"required":["signPublicKey","boxPublicKey","fingerprint"],"additionalProperties":false},"pairingCode":{"type":"string"},"pairingExpiresAt":{"type":"string","format":"date-time"},"installMethod":{"default":"manual","canFilter":true,"type":"string","enum":["manual","ssh"]},"provider":{"default":{"kind":"machine"},"type":"object","properties":{"kind":{"type":"string","enum":["machine","partition","rented"]},"host":{"tsType":"string","ref":"servers","canFilter":true},"partition":{"type":"string"},"meshPort":{"type":"integer","minimum":1,"maximum":65535},"subscription":{"tsType":"string"}},"required":["kind"],"additionalProperties":false},"inventory":{"type":"object","properties":{"hostname":{"type":"string","maxLength":255,"canFilter":true},"os":{"type":"string","maxLength":100,"canFilter":true},"arch":{"type":"string","enum":["amd64","arm64"],"canFilter":true},"cpuCores":{"type":"number","minimum":0.1},"memory":{"type":"integer","minimum":0,"maximum":9007199254740991,"description":"Bytes"},"disk":{"type":"integer","minimum":0,"maximum":9007199254740991,"description":"Bytes"},"publicIp":{"canFilter":true,"type":"string","maxLength":64},"privateIp":{"type":"string","maxLength":64},"dockerVersion":{"type":"string","maxLength":50},"agentVersion":{"type":"string","maxLength":50,"canFilter":true},"agentSha256":{"description":"SHA-256 of the running agent binary: compared with the published one for updates","type":"string","maxLength":64}},"required":["hostname","os","arch","cpuCores","memory","disk","agentVersion"],"additionalProperties":false},"resources":{"type":"object","properties":{"cpu":{"type":"number","minimum":0,"maximum":1,"description":"Used fraction"},"memFree":{"type":"integer","minimum":0,"maximum":9007199254740991},"diskFree":{"type":"integer","minimum":0,"maximum":9007199254740991},"partitions":{"description":"Machines only (PLAN §27)","maxItems":200,"type":"array","items":{"type":"object","properties":{"name":{"type":"string","pattern":"^[a-z0-9]{1,12}$"},"state":{"type":"string","description":"Docker state: running, exited…"},"size":{"type":"object","properties":{"cpus":{"type":"number","minimum":0,"maximum":512},"memMb":{"type":"integer","minimum":256,"maximum":9007199254740991},"diskGb":{"type":"integer","minimum":5,"maximum":9007199254740991}},"required":["cpus","memMb","diskGb"],"additionalProperties":false},"cpuMicros":{"type":"integer","minimum":0,"maximum":9007199254740991,"description":"CPU time used since it started"},"memUsed":{"type":"integer","minimum":0,"maximum":9007199254740991,"description":"Bytes it can't give back"},"diskUsed":{"type":"integer","minimum":0,"maximum":9007199254740991},"rxBytes":{"type":"integer","minimum":0,"maximum":9007199254740991,"description":"Traffic in since it was created"},"txBytes":{"type":"integer","minimum":0,"maximum":9007199254740991,"description":"Traffic out since it was created"}},"required":["name","state","size","cpuMicros","memUsed","diskUsed","rxBytes","txBytes"],"additionalProperties":false}},"reportedAt":{"type":"string","format":"date-time"}},"required":["cpu","memFree","diskFree","reportedAt"],"additionalProperties":false},"setup":{"type":"object","properties":{"status":{"type":"string","enum":["pending","ready","failed"]},"dockerVersion":{"type":"string"},"checks":{"type":"array","items":{"type":"object","properties":{"name":{"type":"string"},"ok":{"type":"boolean"},"detail":{"type":"string"}},"required":["name","ok","detail"],"additionalProperties":false}},"notes":{"type":"array","items":{"type":"string"}},"error":{"type":"string"},"updatedAt":{"type":"string","format":"date-time"}},"required":["status","updatedAt"],"additionalProperties":false},"mesh":{"type":"object","properties":{"index":{"type":"integer","minimum":1,"maximum":9007199254740991},"enabled":{"default":true,"type":"boolean"},"publicKey":{"type":"string"},"endpoint":{"type":"string"},"peers":{"type":"object","propertyNames":{"type":"string"},"additionalProperties":{"type":"boolean"}},"error":{"type":"string"},"reportedAt":{"type":"string","format":"date-time"}},"required":["index","enabled"],"additionalProperties":false},"pool":{"type":"object","properties":{"status":{"type":"string","enum":["pending","ready","failed"]},"allocatable":{"type":"object","properties":{"cpus":{"type":"number","minimum":0,"maximum":512},"memMb":{"type":"integer","minimum":256,"maximum":9007199254740991},"diskGb":{"type":"integer","minimum":5,"maximum":9007199254740991}},"required":["cpus","memMb","diskGb"],"additionalProperties":false},"error":{"type":"string"},"updatedAt":{"type":"string","format":"date-time"},"class":{"tsType":"string","ref":"serverClasses"},"accepting":{"type":"boolean"},"monthlyCost":{"type":"integer","minimum":0,"maximum":9007199254740991}},"required":["status","updatedAt"],"additionalProperties":false},"tunnelPort":{"type":"integer","minimum":1,"maximum":65535},"acceptedBy":{"tsType":"string","ref":"users"},"acceptedAt":{"type":"string","format":"date-time"},"createdAt":{"canFilter":true,"type":"string","format":"date-time"}},"required":["name","labels","tenant","status","identity","installMethod","provider","inventory","createdAt"],"additionalProperties":false},"updateSchema":{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","properties":{"name":{"type":"string","minLength":1,"maxLength":60,"canFilter":true},"labels":{"default":{},"description":"Free-form key/value tags, e.g. region=eu, builder=true","type":"object","propertyNames":{"type":"string","maxLength":40},"additionalProperties":{"type":"string","maxLength":80}}},"required":["name"]}}});
+    sdk["_moduleMetadata"].set(methods, {"crud":{"schema":{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","properties":{"name":{"type":"string","minLength":1,"maxLength":60,"canFilter":true},"labels":{"default":{},"description":"Free-form key/value tags, e.g. region=eu, builder=true","type":"object","propertyNames":{"type":"string","maxLength":40},"additionalProperties":{"type":"string","maxLength":80}},"tenant":{"tsType":"string","ref":"tenants"},"status":{"type":"string","enum":["pending","active","rejected"],"canFilter":true},"identity":{"type":"object","properties":{"signPublicKey":{"type":"string"},"boxPublicKey":{"type":"string"},"fingerprint":{"type":"string"}},"required":["signPublicKey","boxPublicKey","fingerprint"],"additionalProperties":false},"pairingCode":{"type":"string"},"pairingExpiresAt":{"type":"string","format":"date-time"},"installMethod":{"default":"manual","canFilter":true,"type":"string","enum":["manual","ssh"]},"provider":{"default":{"kind":"machine"},"type":"object","properties":{"kind":{"type":"string","enum":["machine","partition","rented"]},"host":{"tsType":"string","ref":"servers","canFilter":true},"partition":{"type":"string"},"meshPort":{"type":"integer","minimum":1,"maximum":65535},"subscription":{"tsType":"string"}},"required":["kind"],"additionalProperties":false},"inventory":{"type":"object","properties":{"hostname":{"type":"string","maxLength":255,"canFilter":true},"os":{"type":"string","maxLength":100,"canFilter":true},"arch":{"type":"string","enum":["amd64","arm64"],"canFilter":true},"cpuCores":{"type":"number","minimum":0.1},"memory":{"type":"integer","minimum":0,"maximum":9007199254740991,"description":"Bytes"},"disk":{"type":"integer","minimum":0,"maximum":9007199254740991,"description":"Bytes"},"publicIp":{"canFilter":true,"type":"string","maxLength":64},"privateIp":{"type":"string","maxLength":64},"dockerVersion":{"type":"string","maxLength":50},"agentVersion":{"type":"string","maxLength":50,"canFilter":true},"agentSha256":{"description":"SHA-256 of the running agent binary: compared with the published one for updates","type":"string","maxLength":64},"virtualization":{"description":"What `systemd-detect-virt` says: none on bare metal, else kvm, microsoft…","type":"string","maxLength":40}},"required":["hostname","os","arch","cpuCores","memory","disk","agentVersion"],"additionalProperties":false},"resources":{"type":"object","properties":{"cpu":{"type":"number","minimum":0,"maximum":1,"description":"Used fraction"},"memFree":{"type":"integer","minimum":0,"maximum":9007199254740991},"diskFree":{"type":"integer","minimum":0,"maximum":9007199254740991},"partitions":{"description":"Machines only (PLAN §27)","maxItems":200,"type":"array","items":{"type":"object","properties":{"name":{"type":"string","pattern":"^[a-z0-9]{1,12}$"},"state":{"type":"string","description":"Docker state: running, exited…"},"size":{"type":"object","properties":{"cpus":{"type":"number","minimum":0,"maximum":512},"memMb":{"type":"integer","minimum":256,"maximum":9007199254740991},"diskGb":{"type":"integer","minimum":5,"maximum":9007199254740991}},"required":["cpus","memMb","diskGb"],"additionalProperties":false},"cpuMicros":{"type":"integer","minimum":0,"maximum":9007199254740991,"description":"CPU time used since it started"},"memUsed":{"type":"integer","minimum":0,"maximum":9007199254740991,"description":"Bytes it can't give back"},"diskUsed":{"type":"integer","minimum":0,"maximum":9007199254740991},"rxBytes":{"type":"integer","minimum":0,"maximum":9007199254740991,"description":"Traffic in since it was created"},"txBytes":{"type":"integer","minimum":0,"maximum":9007199254740991,"description":"Traffic out since it was created"}},"required":["name","state","size","cpuMicros","memUsed","diskUsed","rxBytes","txBytes"],"additionalProperties":false}},"rttMs":{"description":"Round trip to the control plane: the median of recent polls, its own time left out (PLAN §29)","type":"number","minimum":0},"steal":{"description":"Share of CPU time the hypervisor gave elsewhere: a virtual machine on a busy host","type":"number","minimum":0,"maximum":1},"hostCpu":{"description":"Machines: CPU used outside partitions, averaged over about an hour (PLAN §29)","type":"number","minimum":0,"maximum":1},"benchmark":{"description":"Machines: the latest tests","type":"object","properties":{"at":{"type":"string","maxLength":40,"description":"When it ran, ISO 8601"},"cpuSingle":{"type":"number","minimum":0,"description":"One core compressing, MB/s"},"cpuMulti":{"type":"number","minimum":0,"description":"Every core compressing, MB/s in all"},"threads":{"type":"integer","minimum":1,"maximum":9007199254740991},"memory":{"type":"number","minimum":0,"description":"Copying memory, MB/s"},"diskWrite":{"type":"number","minimum":0,"description":"Writing to the partitions' disk, flushed, MB/s"},"diskSync":{"type":"number","minimum":0,"description":"A small write made durable (fsync), milliseconds"},"rotational":{"description":"A spinning disk, says the kernel","type":"boolean"}},"required":["at","cpuSingle","cpuMulti","threads","memory","diskWrite","diskSync"],"additionalProperties":false},"reportedAt":{"type":"string","format":"date-time"}},"required":["cpu","memFree","diskFree","reportedAt"],"additionalProperties":false},"setup":{"type":"object","properties":{"status":{"type":"string","enum":["pending","ready","failed"]},"dockerVersion":{"type":"string"},"checks":{"type":"array","items":{"type":"object","properties":{"name":{"type":"string"},"ok":{"type":"boolean"},"detail":{"type":"string"}},"required":["name","ok","detail"],"additionalProperties":false}},"notes":{"type":"array","items":{"type":"string"}},"error":{"type":"string"},"updatedAt":{"type":"string","format":"date-time"}},"required":["status","updatedAt"],"additionalProperties":false},"mesh":{"type":"object","properties":{"index":{"type":"integer","minimum":1,"maximum":9007199254740991},"enabled":{"default":true,"type":"boolean"},"publicKey":{"type":"string"},"endpoint":{"type":"string"},"peers":{"type":"object","propertyNames":{"type":"string"},"additionalProperties":{"type":"boolean"}},"error":{"type":"string"},"reportedAt":{"type":"string","format":"date-time"}},"required":["index","enabled"],"additionalProperties":false},"pool":{"type":"object","properties":{"status":{"type":"string","enum":["pending","ready","failed"]},"allocatable":{"type":"object","properties":{"cpus":{"type":"number","minimum":0,"maximum":512},"memMb":{"type":"integer","minimum":256,"maximum":9007199254740991},"diskGb":{"type":"integer","minimum":5,"maximum":9007199254740991}},"required":["cpus","memMb","diskGb"],"additionalProperties":false},"error":{"type":"string"},"updatedAt":{"type":"string","format":"date-time"},"class":{"tsType":"string","ref":"serverClasses"},"accepting":{"type":"boolean"},"monthlyCost":{"type":"integer","minimum":0,"maximum":9007199254740991}},"required":["status","updatedAt"],"additionalProperties":false},"tunnelPort":{"type":"integer","minimum":1,"maximum":65535},"acceptedBy":{"tsType":"string","ref":"users"},"acceptedAt":{"type":"string","format":"date-time"},"createdAt":{"canFilter":true,"type":"string","format":"date-time"}},"required":["name","labels","tenant","status","identity","installMethod","provider","inventory","createdAt"],"additionalProperties":false},"updateSchema":{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","properties":{"name":{"type":"string","minLength":1,"maxLength":60,"canFilter":true},"labels":{"default":{},"description":"Free-form key/value tags, e.g. region=eu, builder=true","type":"object","propertyNames":{"type":"string","maxLength":40},"additionalProperties":{"type":"string","maxLength":80}}},"required":["name"]}}});
 
     return methods;
 };

@@ -48,6 +48,7 @@ import {
   type TServer,
 } from "./server"
 import { MachinePanel } from "./MachinePanel"
+import { MeasurementsPanel } from "./MeasurementsPanel"
 import { useCached } from "@/hooks/use-cached"
 import { queries } from "@/lib/queries"
 
@@ -535,6 +536,7 @@ export default function ServerDetail() {
               ]}
             />
           </Panel>
+          <MeasurementsPanel server={server._id} machine={isMachine(server)} />
           <Panel title={t("Labels")}>
             <ServerLabels
               server={server._id}

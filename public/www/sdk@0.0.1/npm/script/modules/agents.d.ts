@@ -21,6 +21,8 @@ export type hello$body = {
         agentVersion: string;
         /** SHA-256 of the running agent binary: compared with the published one for updates */
         agentSha256?: string | undefined;
+        /** What `systemd-detect-virt` says: none on bare metal, else kvm, microsoft… */
+        virtualization?: string | undefined;
     };
     /** One-time token from the SSH wizard: activates the server without pairing */
     joinToken?: string | undefined;
@@ -86,6 +88,30 @@ export type poll$body = {
             /** Traffic out since it was created */
             txBytes: number;
         }[] | undefined;
+        /** Round trip to the control plane: the median of recent polls, its own time left out (PLAN §29) */
+        rttMs?: number | undefined;
+        /** Share of CPU time the hypervisor gave elsewhere: a virtual machine on a busy host */
+        steal?: number | undefined;
+        /** Machines: CPU used outside partitions, averaged over about an hour (PLAN §29) */
+        hostCpu?: number | undefined;
+        /** Machines: the latest tests */
+        benchmark?: {
+            /** When it ran, ISO 8601 */
+            at: string;
+            /** One core compressing, MB/s */
+            cpuSingle: number;
+            /** Every core compressing, MB/s in all */
+            cpuMulti: number;
+            threads: number;
+            /** Copying memory, MB/s */
+            memory: number;
+            /** Writing to the partitions' disk, flushed, MB/s */
+            diskWrite: number;
+            /** A small write made durable (fsync), milliseconds */
+            diskSync: number;
+            /** A spinning disk, says the kernel */
+            rotational?: boolean | undefined;
+        } | undefined;
     } | undefined;
     /** Open terminals: session -> highest input seq applied. Only sent while one is open */
     streams?: {
