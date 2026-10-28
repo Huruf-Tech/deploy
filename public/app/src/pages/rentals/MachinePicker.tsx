@@ -42,7 +42,7 @@ export function MachinePicker({
               dir="ltr"
               className="text-xs text-muted-foreground tabular-nums"
             >
-              {t("{{mem}} GB · {{disk}} GB · {{cpu}} vCPU free", {
+              {t("{{mem}} GB · {{disk}} GB · {{cpu}} vCPU available", {
                 mem: gbOfMb(m.free.memMb),
                 disk: m.free.diskGb,
                 cpu: m.cpuRoom,

@@ -196,7 +196,7 @@ export function RequestDialog({
                   className="justify-self-start sm:col-span-3"
                   onClick={() => setSize(freeSize(machine))}
                 >
-                  {t("Use all that's free")}
+                  {t("Use all available")}
                 </Button>
               )}
             </div>

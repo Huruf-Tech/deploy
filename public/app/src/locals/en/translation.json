@@ -1227,7 +1227,6 @@
   "Approved: the first month is charged and the partition is on its way": "Approved: the first month is charged and the partition is on its way",
   "Could not approve it": "Could not approve it",
   "Approve {{plan}} for {{tenant}}": "Approve {{plan}} for {{tenant}}",
-  "{{mem}} GB · {{disk}} GB · {{cpu}} vCPU free": "{{mem}} GB · {{disk}} GB · {{cpu}} vCPU free",
   "No room": "No room",
   "Approve and charge": "Approve and charge",
   "Rejected; the customer is told why": "Rejected; the customer is told why",
@@ -1819,6 +1818,7 @@
   "After its cost of {{cost}}": "After its cost of {{cost}}",
   "Rented now: {{now}} a month, you earn {{earn}}.": "Rented now: {{now}} a month, you earn {{earn}}.",
   "Half of each month at most goes to the security, until it holds one month of the machine's whole price. It's paid out 14 days after the machine leaves properly, and goes to its renters if it leaves before their term.": "Half of each month at most goes to the security, until it holds one month of the machine's whole price. It's paid out 14 days after the machine leaves properly, and goes to its renters if it leaves before their term.",
-  "Use all that's free": "Use all that's free",
-  "All that's free: {{cpu}} vCPU · {{mem}} GB · {{disk}} GB": "All that's free: {{cpu}} vCPU · {{mem}} GB · {{disk}} GB"
+  "All available: {{cpu}} vCPU · {{mem}} GB · {{disk}} GB": "All available: {{cpu}} vCPU · {{mem}} GB · {{disk}} GB",
+  "{{mem}} GB · {{disk}} GB · {{cpu}} vCPU available": "{{mem}} GB · {{disk}} GB · {{cpu}} vCPU available",
+  "Use all available": "Use all available"
 }

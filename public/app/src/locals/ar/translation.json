@@ -1227,7 +1227,6 @@
   "Approved: the first month is charged and the partition is on its way": "تمت الموافقة: خُصم الشهر الأول والقسم قيد الإنشاء",
   "Could not approve it": "تعذّرت الموافقة",
   "Approve {{plan}} for {{tenant}}": "الموافقة على {{plan}} لـ {{tenant}}",
-  "{{mem}} GB · {{disk}} GB · {{cpu}} vCPU free": "متاح {{mem}} GB · {{disk}} GB · {{cpu}} vCPU",
   "No room": "لا توجد مساحة",
   "Approve and charge": "الموافقة والخصم",
   "Rejected; the customer is told why": "رُفض؛ وأُبلغ العميل بالسبب",
@@ -1819,6 +1818,7 @@
   "After its cost of {{cost}}": "بعد تكلفته البالغة {{cost}}",
   "Rented now: {{now}} a month, you earn {{earn}}.": "المؤجّر الآن: {{now}} شهريًا، تربح منها {{earn}}.",
   "Half of each month at most goes to the security, until it holds one month of the machine's whole price. It's paid out 14 days after the machine leaves properly, and goes to its renters if it leaves before their term.": "يذهب نصف كل شهر على الأكثر إلى التأمين، حتى يبلغ شهرًا واحدًا من سعر الجهاز كاملًا. يُصرف بعد 14 يومًا من مغادرة الجهاز بشكل سليم، ويذهب إلى مستأجريه إن غادر قبل انتهاء مدتهم.",
-  "Use all that's free": "استخدم كل المتاح",
-  "All that's free: {{cpu}} vCPU · {{mem}} GB · {{disk}} GB": "كل المتاح: {{cpu}} معالج · {{mem}} غيغابايت · {{disk}} غيغابايت"
+  "All available: {{cpu}} vCPU · {{mem}} GB · {{disk}} GB": "كل المتاح: {{cpu}} معالج · {{mem}} غيغابايت · {{disk}} غيغابايت",
+  "{{mem}} GB · {{disk}} GB · {{cpu}} vCPU available": "متاح {{mem}} GB · {{disk}} GB · {{cpu}} vCPU",
+  "Use all available": "استخدم كل المتاح"
 }

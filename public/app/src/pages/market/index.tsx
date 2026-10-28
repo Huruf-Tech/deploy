@@ -627,7 +627,7 @@ function MachineCard({
       <div className="mt-auto flex items-end justify-between gap-3 border-t px-4 py-3">
         <div className="min-w-0">
           <div dir="ltr" className="text-xs text-muted-foreground tabular-nums">
-            {t("All that's free: {{cpu}} vCPU · {{mem}} GB · {{disk}} GB", {
+            {t("All available: {{cpu}} vCPU · {{mem}} GB · {{disk}} GB", {
               cpu: all.vcpu,
               mem: gbOfMb(all.memMb),
               disk: all.diskGb,
