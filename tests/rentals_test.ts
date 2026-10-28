@@ -415,6 +415,21 @@ Deno.test({
               ?.status,
             400,
           );
+          // The customer takes it back before it's accepted.
+          const withdrawn = await customer.call(
+            "POST",
+            `/rentals/api/${rental}/resize/withdraw`,
+          );
+          assertEquals(withdrawn.status, 200, JSON.stringify(withdrawn.json));
+          assertEquals((await sub()).rental!.pendingChange, undefined);
+          assertEquals(
+            (await customer.call(
+              "POST",
+              `/rentals/api/${rental}/resize/withdraw`,
+            )).status,
+            400,
+            "nothing left to take back",
+          );
 
           // The resize dialog's price: by the rental alone, on its machine.
           const quoted = await customer.call(

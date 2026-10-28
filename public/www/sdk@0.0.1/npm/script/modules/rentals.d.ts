@@ -34,6 +34,8 @@ export type list$return = {
     lostAt?: Date | undefined;
     /** The plan a resize waits for */
     pendingChange?: string | undefined;
+    /** The size a waiting resize asks for */
+    resizeTo?: string | undefined;
     rejectedReason?: string | undefined;
     suspendedAt?: Date | undefined;
     /** Stopped by Huruf, not unpaid */
@@ -87,6 +89,9 @@ export type resize$body = {
     vcpu: number;
     memMb: number;
     diskGb: number;
+};
+export type withdrawResize$params = {
+    id?: string;
 };
 export type cancel$params = {
     id?: string;
@@ -142,6 +147,7 @@ export declare const rentalsModule: (sdk: typeof BaseSDK) => {
         withdraw$params: withdraw$params;
         resize$params: resize$params;
         resize$body: resize$body;
+        withdrawResize$params: withdrawResize$params;
         cancel$params: cancel$params;
         acceptProposal$params: acceptProposal$params;
         acceptProposal$body: acceptProposal$body;
@@ -192,6 +198,17 @@ export declare const rentalsModule: (sdk: typeof BaseSDK) => {
         params: resize$params;
         query?: undefined;
         body: resize$body;
+    } & TRequestOptions<unknown>) => {
+        readonly raw: Promise<import("axios").AxiosResponse<unknown, any, {}, any>>;
+        readonly data: Promise<unknown>;
+        then: <TResult1 = unknown, TResult2 = never>(onfulfilled?: ((value: unknown) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+        catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<unknown>;
+        finally: (onfinally?: (() => void) | null | undefined) => Promise<unknown>;
+    };
+    readonly withdrawResize: (data: {
+        params: withdrawResize$params;
+        query?: undefined;
+        body?: undefined;
     } & TRequestOptions<unknown>) => {
         readonly raw: Promise<import("axios").AxiosResponse<unknown, any, {}, any>>;
         readonly data: Promise<unknown>;

@@ -39,6 +39,8 @@ export type list$return = {
     lostAt?: Date | undefined;
     /** The plan a resize waits for */
     pendingChange?: string | undefined;
+    /** The size a waiting resize asks for */
+    resizeTo?: string | undefined;
     rejectedReason?: string | undefined;
     suspendedAt?: Date | undefined;
     /** Stopped by Huruf, not unpaid */
@@ -92,6 +94,9 @@ export type resize$body = {
     vcpu: number;
     memMb: number;
     diskGb: number;
+};
+export type withdrawResize$params = {
+    id?: string;
 };
 export type cancel$params = {
     id?: string;
@@ -148,6 +153,7 @@ export const rentalsModule = (sdk: typeof BaseSDK) => {
         withdraw$params: withdraw$params,
         resize$params: resize$params,
         resize$body: resize$body,
+        withdrawResize$params: withdrawResize$params,
         cancel$params: cancel$params,
         acceptProposal$params: acceptProposal$params,
         acceptProposal$body: acceptProposal$body,
@@ -258,6 +264,34 @@ export const rentalsModule = (sdk: typeof BaseSDK) => {
 
             const method = "post";
             const toPath = compile("rentals/api/:id/resize");
+            const requestPayload = {
+                method,
+                url: toPath(sdk.resolvePathParams(data?.params)),
+                params: data?.query,
+                data: data?.body,
+                signal: data?.signal,
+                ...(data?.axiosConfig
+                ? sdk.resolveAxiosConfig(data.axiosConfig)
+                : undefined),
+            };
+
+            sdk.log("Sending Request:", requestPayload);
+
+            const res = await sdk._axios!.request(requestPayload);
+
+            return res;
+        }, data);
+    },
+        withdrawResize(data: {
+        params: withdrawResize$params,
+        query?: undefined,
+        body?: undefined,
+    } & TRequestOptions<unknown>) {
+        return sdk.resolveAxiosResponse(async () => {
+            sdk.checkPermission("rentals", "withdrawResize");
+
+            const method = "post";
+            const toPath = compile("rentals/api/:id/resize/withdraw");
             const requestPayload = {
                 method,
                 url: toPath(sdk.resolvePathParams(data?.params)),
@@ -478,6 +512,7 @@ export const rentalsModule = (sdk: typeof BaseSDK) => {
     (methods.request as any).__scope = "rentals";
     (methods.withdraw as any).__scope = "rentals";
     (methods.resize as any).__scope = "rentals";
+    (methods.withdrawResize as any).__scope = "rentals";
     (methods.cancel as any).__scope = "rentals";
     (methods.acceptProposal as any).__scope = "rentals";
     (methods.declineProposal as any).__scope = "rentals";

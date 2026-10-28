@@ -1946,5 +1946,8 @@
   "Didn't start at once: {{reason}}": "لم يبدأ فورًا: {{reason}}",
   "The price couldn't be worked out for this size.": "تعذّر حساب السعر لهذا الحجم.",
   "Its machine has no room for this size now. You can still ask: the owner can move your server to a machine with room, then accept.": "لا يتسع جهازه لهذا الحجم الآن. يمكنك الطلب مع ذلك: يستطيع المالك نقل خادمك إلى جهاز فيه متسع ثم القبول.",
-  "It doesn't fit on this machine now: propose a move to a machine with room (in the rentals below), then accept.": "لا يتسع هذا الجهاز له الآن: اقترح نقله إلى جهاز فيه متسع (في الإيجارات أدناه)، ثم اقبل."
+  "It doesn't fit on this machine now: propose a move to a machine with room (in the rentals below), then accept.": "لا يتسع هذا الجهاز له الآن: اقترح نقله إلى جهاز فيه متسع (في الإيجارات أدناه)، ثم اقبل.",
+  "{{size}}, waiting for the owner": "{{size}}، بانتظار المالك",
+  "Resize canceled": "أُلغي تغيير الحجم",
+  "Cancel resize": "إلغاء تغيير الحجم"
 }

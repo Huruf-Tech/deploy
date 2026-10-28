@@ -236,7 +236,11 @@ export function RentalPanel({ server }: { server: string }) {
             ? [
                 {
                   label: t("Resize requested"),
-                  value: t("Waiting for the owner"),
+                  value: rental.resizeTo
+                    ? t("{{size}}, waiting for the owner", {
+                        size: rental.resizeTo,
+                      })
+                    : t("Waiting for the owner"),
                 },
               ]
             : []),
@@ -291,6 +295,25 @@ export function RentalPanel({ server }: { server: string }) {
       <div className="flex flex-wrap gap-2 pb-2">
         {rental.status === "active" && !rental.cancelAtPeriodEnd && (
           <>
+            {rental.pendingChange && can("withdrawResize") && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={async () => {
+                  try {
+                    await ThunderSDK.rentals.withdrawResize({
+                      params: { id: rental._id },
+                    })
+                    toast.success(t("Resize canceled"))
+                    reload()
+                  } catch (e) {
+                    toast.error(errorMessage(e) ?? t("Could not save"))
+                  }
+                }}
+              >
+                {t("Cancel resize")}
+              </Button>
+            )}
             {can("resize") && !rental.pendingChange && !rental.whole && (
               <Button
                 size="sm"

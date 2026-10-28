@@ -640,6 +640,25 @@ export class RentalService implements TRentalHooks {
     return result;
   }
 
+  /** The customer takes back a resize nobody accepted yet; nothing changes. */
+  async withdrawResize(tenant: ObjectId, id: ObjectId) {
+    const sub = await subscriptionModel.findOneAndUpdate(
+      {
+        _id: id,
+        tenant,
+        kind: "server",
+        "rental.pendingChange": { $exists: true },
+      },
+      {
+        $unset: { "rental.pendingChange": "" },
+        $set: { updatedAt: new Date() },
+      },
+    );
+    const plan = sub?.rental?.pendingChange?.plan;
+    if (!plan) throw Response.badRequest("No resize waiting");
+    await this.dropCustomPlan(plan);
+  }
+
   async rejectResize(id: ObjectId, reason: string, owner?: ObjectId) {
     const sub = await this.rentalOf(id, owner ? { "rental.owner": owner } : {});
     await subscriptionModel.updateOne({ _id: id }, {

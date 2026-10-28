@@ -83,6 +83,26 @@ export const rentalsModule = (sdk) => {
                 return res;
             }, data);
         },
+        withdrawResize(data) {
+            return sdk.resolveAxiosResponse(async () => {
+                sdk.checkPermission("rentals", "withdrawResize");
+                const method = "post";
+                const toPath = compile("rentals/api/:id/resize/withdraw");
+                const requestPayload = {
+                    method,
+                    url: toPath(sdk.resolvePathParams(data?.params)),
+                    params: data?.query,
+                    data: data?.body,
+                    signal: data?.signal,
+                    ...(data?.axiosConfig
+                        ? sdk.resolveAxiosConfig(data.axiosConfig)
+                        : undefined),
+                };
+                sdk.log("Sending Request:", requestPayload);
+                const res = await sdk._axios.request(requestPayload);
+                return res;
+            }, data);
+        },
         cancel(data) {
             return sdk.resolveAxiosResponse(async () => {
                 sdk.checkPermission("rentals", "cancel");
@@ -228,6 +248,7 @@ export const rentalsModule = (sdk) => {
     methods.request.__scope = "rentals";
     methods.withdraw.__scope = "rentals";
     methods.resize.__scope = "rentals";
+    methods.withdrawResize.__scope = "rentals";
     methods.cancel.__scope = "rentals";
     methods.acceptProposal.__scope = "rentals";
     methods.declineProposal.__scope = "rentals";

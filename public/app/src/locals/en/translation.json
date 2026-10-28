@@ -1946,5 +1946,8 @@
   "Didn't start at once: {{reason}}": "Didn't start at once: {{reason}}",
   "The price couldn't be worked out for this size.": "The price couldn't be worked out for this size.",
   "Its machine has no room for this size now. You can still ask: the owner can move your server to a machine with room, then accept.": "Its machine has no room for this size now. You can still ask: the owner can move your server to a machine with room, then accept.",
-  "It doesn't fit on this machine now: propose a move to a machine with room (in the rentals below), then accept.": "It doesn't fit on this machine now: propose a move to a machine with room (in the rentals below), then accept."
+  "It doesn't fit on this machine now: propose a move to a machine with room (in the rentals below), then accept.": "It doesn't fit on this machine now: propose a move to a machine with room (in the rentals below), then accept.",
+  "{{size}}, waiting for the owner": "{{size}}, waiting for the owner",
+  "Resize canceled": "Resize canceled",
+  "Cancel resize": "Cancel resize"
 }

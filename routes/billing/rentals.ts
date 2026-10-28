@@ -70,6 +70,9 @@ export default new Router("/api", function rentals(router) {
         pendingChange: z.string().optional().describe(
           "The plan a resize waits for",
         ),
+        resizeTo: z.string().optional().describe(
+          "The size a waiting resize asks for",
+        ),
         rejectedReason: z.string().optional(),
         suspendedAt: z.date().optional(),
         held: z.boolean().optional().describe("Stopped by Huruf, not unpaid"),
@@ -102,7 +105,14 @@ export default new Router("/api", function rentals(router) {
         const ids = subs.map((s) => s._id);
         const [plans, uptimes, machines, open, stars, ended] = await Promise
           .all([
-            rentalPlanModel.find({ _id: { $in: subs.map((s) => s.plan) } }, {
+            rentalPlanModel.find({
+              _id: {
+                $in: subs.flatMap((
+                  s,
+                ) => [s.plan, s.rental?.pendingChange?.plan])
+                  .filter((x) => !!x),
+              },
+            }, {
               projection: { name: 1, resources: 1, price: 1 },
             }).toArray(),
             rentalService.uptimes(subs),
@@ -161,6 +171,8 @@ export default new Router("/api", function rentals(router) {
             endAt: r.endAt,
             lostAt: r.lostAt,
             pendingChange: r.pendingChange?.plan,
+            resizeTo: r.pendingChange &&
+              plans.find((p) => r.pendingChange!.plan.equals(p._id))?.name,
             rejectedReason: r.rejectedReason,
             suspendedAt: r.suspendedAt,
             ...(r.held ? { held: true } : {}),
@@ -256,6 +268,19 @@ export default new Router("/api", function rentals(router) {
         const size = $size.parse(await bodyAsJson(req));
         const { tenant } = await owner(req);
         await rentalService.requestResize(tenant._id, id, size);
+        return Response.json({ ok: true });
+      },
+    };
+  });
+
+  // Takes back a resize its owner hasn't accepted yet.
+  router.post("/:id/resize/withdraw", function withdrawResize() {
+    return {
+      shape: () => ({ params: $params }),
+      handler: async (req) => {
+        const { id } = $params.parse(paramsAsJson(req));
+        const { tenant } = await owner(req);
+        await rentalService.withdrawResize(tenant._id, id);
         return Response.json({ ok: true });
       },
     };
