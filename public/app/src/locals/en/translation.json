@@ -1500,7 +1500,6 @@
   "Comment (optional)": "Comment (optional)",
   "Commission (%)": "Commission (%)",
   "Community": "Community",
-  "Consumers in the EU otherwise have 14 days to withdraw.": "Consumers in the EU otherwise have 14 days to withdraw.",
   "Could not accept it": "Could not accept it",
   "Could not claim it": "Could not claim it",
   "Could not take it back": "Could not take it back",
@@ -1534,7 +1533,6 @@
   "Includes {{traffic}} GB of traffic a month; beyond it {{rate}} per GB. The price includes {{mb}} MB for the server's own system.": "Includes {{traffic}} GB of traffic a month; beyond it {{rate}} per GB. The price includes {{mb}} MB for the server's own system.",
   "It keeps running until the later of the end of its term and its paid month, then it's deleted. The renter is told now, so they can move.": "It keeps running until the later of the end of its term and its paid month, then it's deleted. The renter is told now, so they can move.",
   "It keeps running until {{date}}, the end of the paid month, then it's deleted with everything on it. The paid month isn't refunded.": "It keeps running until {{date}}, the end of the paid month, then it's deleted with everything on it. The paid month isn't refunded.",
-  "It starts at once: I give up the right to withdraw": "It starts at once: I give up the right to withdraw",
   "It's moving to another machine: it's offline for a few minutes, then everything is as before.": "It's moving to another machine: it's offline for a few minutes, then everything is as before.",
   "Its machine left": "Its machine left",
   "Its machine was down for more than 72 hours, so the rental ended on {{date}}. The downtime came back to your wallet.": "Its machine was down for more than 72 hours, so the rental ended on {{date}}. The downtime came back to your wallet.",
@@ -1820,5 +1818,7 @@
   "Half of each month at most goes to the security, until it holds one month of the machine's whole price. It's paid out 14 days after the machine leaves properly, and goes to its renters if it leaves before their term.": "Half of each month at most goes to the security, until it holds one month of the machine's whole price. It's paid out 14 days after the machine leaves properly, and goes to its renters if it leaves before their term.",
   "All available: {{cpu}} vCPU · {{mem}} GB · {{disk}} GB": "All available: {{cpu}} vCPU · {{mem}} GB · {{disk}} GB",
   "{{mem}} GB · {{disk}} GB · {{cpu}} vCPU available": "{{mem}} GB · {{disk}} GB · {{cpu}} vCPU available",
-  "Use all available": "Use all available"
+  "Use all available": "Use all available",
+  "I understand that a paid month isn't refunded": "I understand that a paid month isn't refunded",
+  "The server starts right away. Only downtime is refunded, by the hour. In the EU, this also gives up the 14-day right to cancel.": "The server starts right away. Only downtime is refunded, by the hour. In the EU, this also gives up the 14-day right to cancel."
 }

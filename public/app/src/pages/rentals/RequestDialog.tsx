@@ -191,9 +191,9 @@ export function RequestDialog({
               {machine && (
                 <Button
                   type="button"
-                  variant="ghost"
+                  variant="link"
                   size="sm"
-                  className="justify-self-start sm:col-span-3"
+                  className="h-auto justify-self-start px-0 text-brand-text sm:col-span-3"
                   onClick={() => setSize(freeSize(machine))}
                 >
                   {t("Use all available")}
@@ -277,9 +277,11 @@ export function RequestDialog({
                 className="mt-0.5"
               />
               <span>
-                {t("It starts at once: I give up the right to withdraw")}
+                {t("I understand that a paid month isn't refunded")}
                 <span className="block text-xs text-muted-foreground">
-                  {t("Consumers in the EU otherwise have 14 days to withdraw.")}
+                  {t(
+                    "The server starts right away. Only downtime is refunded, by the hour. In the EU, this also gives up the 14-day right to cancel."
+                  )}
                 </span>
               </span>
             </label>

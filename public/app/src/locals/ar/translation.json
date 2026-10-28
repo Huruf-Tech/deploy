@@ -1500,7 +1500,6 @@
   "Comment (optional)": "تعليق (اختياري)",
   "Commission (%)": "العمولة (%)",
   "Community": "المجتمع",
-  "Consumers in the EU otherwise have 14 days to withdraw.": "وإلا فللمستهلكين في الاتحاد الأوروبي 14 يومًا للانسحاب.",
   "Could not accept it": "تعذّر القبول",
   "Could not claim it": "تعذّرت المطالبة",
   "Could not take it back": "تعذّر الاسترجاع",
@@ -1534,7 +1533,6 @@
   "Includes {{traffic}} GB of traffic a month; beyond it {{rate}} per GB. The price includes {{mb}} MB for the server's own system.": "يشمل {{traffic}} غيغابايت من حركة البيانات شهريًا؛ وما يزيد بسعر {{rate}} لكل غيغابايت. يشمل السعر {{mb}} ميغابايت لنظام الخادم نفسه.",
   "It keeps running until the later of the end of its term and its paid month, then it's deleted. The renter is told now, so they can move.": "يستمر حتى نهاية مدته أو شهره المدفوع، أيهما أبعد، ثم يُحذف. يُبلَّغ المستأجر الآن ليتمكن من النقل.",
   "It keeps running until {{date}}, the end of the paid month, then it's deleted with everything on it. The paid month isn't refunded.": "يستمر حتى {{date}}، نهاية الشهر المدفوع، ثم يُحذف بكل ما عليه. لا يُسترد الشهر المدفوع.",
-  "It starts at once: I give up the right to withdraw": "يبدأ فورًا: أتنازل عن حق الانسحاب",
   "It's moving to another machine: it's offline for a few minutes, then everything is as before.": "يُنقل إلى جهاز آخر: يتوقف لبضع دقائق، ثم يعود كل شيء كما كان.",
   "Its machine left": "غادر جهازه",
   "Its machine was down for more than 72 hours, so the rental ended on {{date}}. The downtime came back to your wallet.": "توقف جهازه أكثر من 72 ساعة، فانتهى الإيجار في {{date}}. وعاد مقابل التوقف إلى محفظتك.",
@@ -1820,5 +1818,7 @@
   "Half of each month at most goes to the security, until it holds one month of the machine's whole price. It's paid out 14 days after the machine leaves properly, and goes to its renters if it leaves before their term.": "يذهب نصف كل شهر على الأكثر إلى التأمين، حتى يبلغ شهرًا واحدًا من سعر الجهاز كاملًا. يُصرف بعد 14 يومًا من مغادرة الجهاز بشكل سليم، ويذهب إلى مستأجريه إن غادر قبل انتهاء مدتهم.",
   "All available: {{cpu}} vCPU · {{mem}} GB · {{disk}} GB": "كل المتاح: {{cpu}} معالج · {{mem}} غيغابايت · {{disk}} غيغابايت",
   "{{mem}} GB · {{disk}} GB · {{cpu}} vCPU available": "متاح {{mem}} GB · {{disk}} GB · {{cpu}} vCPU",
-  "Use all available": "استخدم كل المتاح"
+  "Use all available": "استخدم كل المتاح",
+  "I understand that a paid month isn't refunded": "أفهم أن الشهر المدفوع لا يُسترد",
+  "The server starts right away. Only downtime is refunded, by the hour. In the EU, this also gives up the 14-day right to cancel.": "يبدأ الخادم فورًا. لا يُسترد إلا وقت التوقف، بالساعة. وفي الاتحاد الأوروبي، يعني هذا أيضًا التنازل عن حق الإلغاء خلال 14 يومًا."
 }
