@@ -544,8 +544,10 @@ export default function ServerDetail() {
               onSaved={reload}
             />
           </Panel>
-          {/* A machine runs no projects: its setup is in the Partitions panel. */}
-          {!isMachine(server) && (
+          {/* A machine runs no projects: its setup is in the Partitions
+              panel. A rented server is set up by Huruf, and its checks are
+              no business of the renter's. */}
+          {!isMachine(server) && server.provider?.kind !== "rented" && (
             <HostSetup
               server={server}
               online={state === "online"}

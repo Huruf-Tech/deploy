@@ -16,10 +16,11 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
+	"github.com/Huruf-Tech/huruf-deploy/agent/internal/cgroup"
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/daemonjson"
+	"github.com/Huruf-Tech/huruf-deploy/agent/internal/host"
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/sh"
 )
 
@@ -330,20 +331,25 @@ func Preflight() []Check {
 		Detail: strings.TrimSpace(release["PRETTY_NAME"] + " (supported: Ubuntu 22.04 or newer)"),
 	}}
 
-	memory := memTotal()
+	// In a partition (PLAN §27, §28) these are its own limits, never the
+	// machine's: a renter sees what they rented, and its size is no fault.
+	partition := cgroup.MemoryMax() > 0 || cgroup.CPUs() > 0
+	memory := host.Memory()
 	checks = append(checks, Check{
-		Name: "memory", Ok: memory >= 1<<30,
-		Detail: fmt.Sprintf("%.1f GiB (at least 1 GiB)", float64(memory)/(1<<30)),
+		Name: "memory", Ok: partition || memory >= 1<<30,
+		Detail: map[bool]string{
+			true:  fmt.Sprintf("%.1f GiB", float64(memory)/(1<<30)),
+			false: fmt.Sprintf("%.1f GiB (at least 1 GiB)", float64(memory)/(1<<30)),
+		}[partition],
 	})
 
-	var st syscall.Statfs_t
-	free := uint64(0)
-	if syscall.Statfs("/", &st) == nil {
-		free = st.Bavail * uint64(st.Bsize)
-	}
+	_, free := host.DataDisk()
 	checks = append(checks, Check{
-		Name: "disk", Ok: free >= 10<<30,
-		Detail: fmt.Sprintf("%.1f GiB free (at least 10 GiB)", float64(free)/(1<<30)),
+		Name: "disk", Ok: partition || free >= 10<<30,
+		Detail: map[bool]string{
+			true:  fmt.Sprintf("%.1f GiB free", float64(free)/(1<<30)),
+			false: fmt.Sprintf("%.1f GiB free (at least 10 GiB)", float64(free)/(1<<30)),
+		}[partition],
 	})
 
 	_, cgroupErr := os.Stat("/sys/fs/cgroup/cgroup.controllers")
@@ -370,16 +376,3 @@ func osRelease() map[string]string {
 	return values
 }
 
-func memTotal() uint64 {
-	data, err := os.ReadFile("/proc/meminfo")
-	if err != nil {
-		return 0
-	}
-	for _, line := range strings.Split(string(data), "\n") {
-		if fields := strings.Fields(line); len(fields) >= 2 && fields[0] == "MemTotal:" {
-			kb, _ := strconv.ParseUint(fields[1], 10, 64)
-			return kb * 1024
-		}
-	}
-	return 0
-}

@@ -348,6 +348,16 @@ export default new Router("/api", function servers(router) {
       handler: async (req) => {
         const { id } = $params.parse(paramsAsJson(req));
         const { tenant, user } = await withTenant(req);
+        const rented = await serverModel.countDocuments({
+          _id: id,
+          tenant: tenant._id,
+          "provider.kind": "rented",
+        }, { limit: 1 });
+        if (rented) {
+          throw Response.badRequest(
+            "Huruf sets up rented servers: there's nothing to run",
+          );
+        }
         const { command, seq } = await prepareHost(id, tenant._id, user._id);
         return Response.json({ command: command.toString(), seq });
       },
