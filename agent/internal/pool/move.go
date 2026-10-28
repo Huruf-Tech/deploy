@@ -33,6 +33,10 @@ import (
 // movedLabel marks images a move committed, so Remove deletes them.
 const movedLabel = "huruf.moved"
 
+// moveErrorTrailer carries why the source stopped sending a part: the
+// target only sees its data end early, the source knows why.
+const moveErrorTrailer = "X-Move-Error"
+
 // moveWait is how long either side waits on the other: for the next part to
 // be fetched (the source may still be stopping the partition, the target may
 // poll later) or for the next bytes of one.
@@ -150,12 +154,16 @@ func serve(ctx context.Context, listen, token, key string, parts map[string][]st
 			}
 			progress.Add(1)
 			w.Header().Set("Content-Type", "application/octet-stream")
+			w.Header().Set("Trailer", moveErrorTrailer)
 			var stderr bytes.Buffer
 			sealed, _ := newSealWriter(key, path, counted{w, &progress})
 			cmd := exec.CommandContext(r.Context(), argv[0], argv[1:]...)
 			cmd.Stdout, cmd.Stderr = sealed, &stderr
 			if err := cmd.Run(); err != nil {
-				results <- fmt.Errorf("sending %s: %w: %s", path, err, sh.Tail(strings.TrimSpace(stderr.String()), 400))
+				err = fmt.Errorf("sending %s: %w: %s", path, err, sh.Tail(strings.TrimSpace(stderr.String()), 400))
+				// One line: a header value can't hold line breaks.
+				w.Header().Set(moveErrorTrailer, strings.Join(strings.Fields(err.Error()), " "))
+				results <- err
 				return
 			}
 			results <- sealed.Close()
@@ -312,6 +320,14 @@ func fetch(ctx context.Context, src *source, token, key, path string, argv ...st
 	}
 	// A wrong key or tampered data: that's why, not what the command made of it.
 	if opened.err != nil {
+		// Cut short: the source says why, when it failed rather than the
+		// connection (the trailer arrives once the body has ended).
+		if errors.Is(opened.err, io.ErrUnexpectedEOF) {
+			if why := resp.Trailer.Get(moveErrorTrailer); why != "" {
+				return string(out), fmt.Errorf("the source machine failed: %s", why)
+			}
+			return string(out), fmt.Errorf("receiving %s: %w (the connection to the source machine dropped)", path, opened.err)
+		}
 		return string(out), fmt.Errorf("receiving %s: %w", path, opened.err)
 	}
 	if err != nil {

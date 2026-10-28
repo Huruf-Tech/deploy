@@ -65,7 +65,11 @@ func TestServeFailsWhenAPartFails(t *testing.T) {
 	go func() {
 		done <- serve(ctx, addr, token, testKey, map[string][]string{"/data": {"sh", "-c", "echo broken >&2; exit 3"}})
 	}()
-	_, _ = fetch(ctx, &source{addrs: []string{addr}}, token, testKey, "/data", "cat")
+	// The target hears why, not only that its data ended early.
+	_, ferr := fetch(ctx, &source{addrs: []string{addr}}, token, testKey, "/data", "cat")
+	if ferr == nil || !strings.Contains(ferr.Error(), "the source machine failed") || !strings.Contains(ferr.Error(), "broken") {
+		t.Fatalf("fetch = %v, want the source's error", ferr)
+	}
 	if err := <-done; err == nil || !strings.Contains(err.Error(), "broken") {
 		t.Fatalf("serve = %v, want the part's error", err)
 	}
