@@ -34,7 +34,7 @@ export function RentServerButton() {
     <Button
       size="sm"
       variant="outline"
-      render={<Link to={getLocalPath("market")} />}
+      render={<Link to={getLocalPath("infrastructure/market")} />}
       nativeButton={false}
     >
       <IconBuildingStore aria-hidden /> {t("Rent a server")}
