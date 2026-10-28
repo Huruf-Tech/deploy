@@ -901,10 +901,20 @@ Deno.test({
           "Not accepted in time",
         ]);
 
-        // Auto-accept: running at once.
+        // A request still waiting (its payment needed the bank, say) on a
+        // machine that accepts at once starts when it's looked at.
+        const waited = new ObjectId(await ask());
         await serverModel.updateOne({ _id: host }, {
           $set: { "pool.rent.autoAccept": true },
         });
+        await rentals.queue(platform.tenantId);
+        assertEquals(
+          (await subscriptionModel.findOne({ _id: waited }))!.status,
+          "active",
+        );
+        await rentals.terminate(waited);
+
+        // Auto-accept: running at once.
         const auto = await customer.call("POST", "/rentals/api/request", {
           machine: host,
           ...small,

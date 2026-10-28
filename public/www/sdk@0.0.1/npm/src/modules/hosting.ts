@@ -113,6 +113,8 @@ export type requests$return = {
         price: number;
     } | undefined;
     requestedAt: Date;
+    /** Why it didn't start at once, on a machine that accepts at once */
+    autoAcceptError?: string | undefined;
 }[];
 export type accept$params = {
     id?: string;

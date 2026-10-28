@@ -1942,5 +1942,6 @@
   "{{name}} belongs to a community owner, not Huruf. Read this before your server moves there.": "{{name}} ملك لمالك من المجتمع وليس لحروف. اقرأ هذا قبل نقل خادمك إليه.",
   "This machine": "هذا الجهاز",
   "Accept and move": "وافق وانقل",
-  "Accepted the community machine's risks (owner's access, leak or loss) on {{when}}, wording of {{version}}": "قبل مخاطر الجهاز المجتمعي (وصول المالك، التسريب أو الفقدان) في {{when}}، بصيغة {{version}}"
+  "Accepted the community machine's risks (owner's access, leak or loss) on {{when}}, wording of {{version}}": "قبل مخاطر الجهاز المجتمعي (وصول المالك، التسريب أو الفقدان) في {{when}}، بصيغة {{version}}",
+  "Didn't start at once: {{reason}}": "لم يبدأ فورًا: {{reason}}"
 }

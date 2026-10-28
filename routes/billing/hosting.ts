@@ -109,6 +109,9 @@ export default new Router("/api", function hosting(router) {
         price: z.number(),
       }).optional().describe("A resize asks for this"),
       requestedAt: z.date(),
+      autoAcceptError: z.string().optional().describe(
+        "Why it didn't start at once, on a machine that accepts at once",
+      ),
     }));
 
     return {
@@ -150,6 +153,7 @@ export default new Router("/api", function hosting(router) {
               ? { resizeTo: { plan: next.name, price: next.price.amount } }
               : {}),
             requestedAt: r.pendingChange?.requestedAt ?? s.startedAt,
+            autoAcceptError: r.autoAcceptError,
           };
         }));
       },

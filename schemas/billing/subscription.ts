@@ -68,6 +68,8 @@ export const $subscription = z.object({
       at: z.date(),
       version: z.string(),
     }).optional(),
+    /** Auto-accept couldn't start it (why), so its owner decides. */
+    autoAcceptError: z.string().max(500).optional(),
     /** The owner stops renting it out: it ends at this date (term and period kept). */
     endAt: z.date().optional(),
     /** Its machine left (removed, or down beyond the limit): ended unpaid. */

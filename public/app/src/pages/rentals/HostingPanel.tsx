@@ -525,6 +525,13 @@ export function OwnerRequests({
                   </>
                 )}
               </span>
+              {r.autoAcceptError && (
+                <span className="block text-xs text-destructive">
+                  {t("Didn't start at once: {{reason}}", {
+                    reason: r.autoAcceptError,
+                  })}
+                </span>
+              )}
             </span>
             {isOwner && (
               <span className="flex gap-1">

@@ -1942,5 +1942,6 @@
   "{{name}} belongs to a community owner, not Huruf. Read this before your server moves there.": "{{name}} belongs to a community owner, not Huruf. Read this before your server moves there.",
   "This machine": "This machine",
   "Accept and move": "Accept and move",
-  "Accepted the community machine's risks (owner's access, leak or loss) on {{when}}, wording of {{version}}": "Accepted the community machine's risks (owner's access, leak or loss) on {{when}}, wording of {{version}}"
+  "Accepted the community machine's risks (owner's access, leak or loss) on {{when}}, wording of {{version}}": "Accepted the community machine's risks (owner's access, leak or loss) on {{when}}, wording of {{version}}",
+  "Didn't start at once: {{reason}}": "Didn't start at once: {{reason}}"
 }

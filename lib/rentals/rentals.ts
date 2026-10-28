@@ -70,6 +70,17 @@ const PROPOSAL_CUTOFF_MS = 3 * DAY_MS;
 
 const log = (text: string) => Logger.warn(`[rentals] ${text}`);
 
+/** A refusal's message, from its JSON `{ error }` or plain text. */
+const errorText = async (res: Response) => {
+  const text = await res.clone().text();
+  try {
+    const body = JSON.parse(text);
+    return String(body?.error?.message ?? body?.error ?? body?.message ?? text);
+  } catch {
+    return text || `HTTP ${res.status}`;
+  }
+};
+
 export type { TResources };
 
 /** A rental's size on a machine (PLAN §30.5): an amount, or the whole machine. */
@@ -330,17 +341,10 @@ export class RentalService implements TRentalHooks {
       await rentalPlanModel.deleteOne({ _id: plan._id });
       throw error;
     }
-    if (q.machine.pool.rent.autoAccept) {
-      try {
-        await this.approve(_id, user);
-        return { result: "active" as const, rental: String(_id) };
-      } catch (error) {
-        log(
-          `auto-accept ${_id}: ${
-            error instanceof Response ? error.status : error
-          }`,
-        );
-      }
+    if (
+      q.machine.pool.rent.autoAccept && await this.tryAutoAccept(_id, user)
+    ) {
+      return { result: "active" as const, rental: String(_id) };
     } else {
       notifyOwner(q.machine.tenant, {
         subject: `{workspace}: a rental request for ${q.machine.name}`,
@@ -1668,17 +1672,66 @@ export class RentalService implements TRentalHooks {
   }
 
   /** The rentals of a tenant, for its Servers page. */
-  list(tenant: ObjectId) {
-    return subscriptionModel.find(
+  async list(tenant: ObjectId) {
+    await this.autoAcceptDue({ tenant });
+    return await subscriptionModel.find(
       { tenant, kind: "server", status: { $nin: ["released"] } },
       { sort: { startedAt: -1 }, limit: 100 },
     ).toArray();
+  }
+
+  /**
+   * Starts a request on a machine that accepts at once (PLAN §30.5); when it
+   * can't, says why on the request (its owner then decides). True if it
+   * started.
+   */
+  private async tryAutoAccept(id: ObjectId, by: ObjectId) {
+    try {
+      await this.approve(id, by);
+      return true;
+    } catch (error) {
+      const reason = error instanceof Response
+        ? await errorText(error)
+        : String(error);
+      log(`auto-accept ${id}: ${reason}`);
+      await subscriptionModel.updateOne({ _id: id, status: "requested" }, {
+        $set: { "rental.autoAcceptError": reason.slice(0, 500) },
+      });
+      return false;
+    }
+  }
+
+  /**
+   * Requests on machines that accept at once, still waiting: their payment
+   * needed the bank (3-D Secure), or starting failed before. Tried again
+   * whenever they're looked at, by the renter or the owner.
+   */
+  private async autoAcceptDue(filter: object) {
+    const waiting = await subscriptionModel.find({
+      kind: "server",
+      status: "requested",
+      ...filter,
+    }, {
+      projection: { createdBy: 1, "rental.host": 1 },
+      limit: 20,
+    }).toArray();
+    if (!waiting.length) return;
+    const accepting = await serverModel.find({
+      _id: { $in: waiting.flatMap((s) => s.rental?.host ?? []) },
+      "pool.rent.autoAccept": true,
+    }, { projection: { _id: 1 } }).toArray();
+    for (const sub of waiting) {
+      if (accepting.some((m) => sub.rental?.host?.equals(m._id))) {
+        await this.tryAutoAccept(sub._id, sub.createdBy);
+      }
+    }
   }
 
   /** Waiting for a machine's owner (PLAN §30.5): new requests and resizes. */
   async queue(owner?: ObjectId) {
     const mine = owner ? { "rental.owner": owner } : {};
     await this.expireRequests(mine);
+    await this.autoAcceptDue(mine);
     return await subscriptionModel.find({
       kind: "server",
       ...mine,
