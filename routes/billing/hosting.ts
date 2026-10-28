@@ -74,6 +74,8 @@ export default new Router("/api", function hosting(router) {
         const body = $body.parse(await bodyAsJson(req));
         const { tenant } = await owner(req);
         const doc = await machineOf(tenant._id, id);
+        // A whole price of 0 means none: the parts add up.
+        if (body.rent && !body.rent.prices.whole) delete body.rent.prices.whole;
         if (body.rent?.enabled && doc.pool!.status !== "ready") {
           throw Response.badRequest(
             "The machine isn't set up for partitions yet",

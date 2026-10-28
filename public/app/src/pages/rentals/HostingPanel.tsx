@@ -236,7 +236,12 @@ function Settings({
     prices?: boolean
   }) => {
     // A switch keeps the saved prices; "Save" sends the typed ones.
-    const prices = patch.prices ? typed : (saved?.prices ?? typed)
+    const kept = saved && {
+      ...saved.prices,
+      // Saved before 0 meant "none": the parts add up.
+      whole: saved.prices.whole || undefined,
+    }
+    const prices = patch.prices ? typed : (kept ?? typed)
     const enabled = patch.enabled ?? saved?.enabled ?? false
     if (!prices && (enabled || patch.prices)) {
       return toast.error(t("Set the prices per vCPU, memory and disk first"))

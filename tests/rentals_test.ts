@@ -184,6 +184,15 @@ Deno.test({
           `/market/api/quote?machine=${host}&vcpu=1.3&memMb=3072&diskGb=40`,
         );
         assertEquals(odd.status, 400);
+        // The owner's switches and prices; a whole price of 0 means none.
+        const saved = await platform.call(
+          "PATCH",
+          `/hosting/api/machines/${host}`,
+          { rent: { ...rent, prices: { ...prices, whole: 0 } } },
+        );
+        assertEquals(saved.status, 200, JSON.stringify(saved.json));
+        const stored = (await serverModel.findOne({ _id: host }))!.pool!.rent!;
+        assertEquals([stored.enabled, stored.prices.whole], [true, undefined]);
         // The owner can't rent their own machine.
         const own = await platform.call("POST", "/rentals/api/request", {
           machine: host,

@@ -12,10 +12,14 @@ export function errorMessage(error: unknown): string | null {
   const body = data as {
     message?: string
     messages?: { message?: string }[]
+    /** The router's validation and server errors. */
+    error?: string | { message?: string }
   } | null
   // A bare Error (no response) is ours, e.g. the bank's reason from Stripe.
   if (!data && error instanceof Error && !("response" in error)) {
     return error.message
   }
-  return body?.messages?.[0]?.message ?? body?.message ?? null
+  const reason =
+    typeof body?.error === "string" ? body.error : body?.error?.message
+  return body?.messages?.[0]?.message ?? body?.message ?? reason ?? null
 }
