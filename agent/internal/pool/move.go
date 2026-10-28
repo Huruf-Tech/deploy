@@ -76,6 +76,14 @@ func (d *Sysbox) Send(ctx context.Context, name, listen, token, key string, rela
 			_ = d.Start(context.WithoutCancel(ctx), name)
 		}
 	}()
+	// A partition made before its layers were mounted from its own directory:
+	// stopped, Sysbox keeps them in the container's writable layer.
+	if upper, err := sh.Run(ctx, "docker", "inspect", "-f", "{{.GraphDriver.Data.UpperDir}}", container(name)); err == nil {
+		held := filepath.Join(strings.TrimSpace(upper), "var", "lib", snapshotsDir)
+		if err := keepSnapshots(ctx, held, filepath.Join(dir(name), snapshotsDir)); err != nil {
+			return err
+		}
+	}
 	if ownRoot(name) {
 		return serve(ctx, listen, token, key, map[string][]string{"/data": tarArgs(name, true)})
 	}

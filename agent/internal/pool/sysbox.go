@@ -63,6 +63,35 @@ var systemDirs = []string{"usr", "etc", "var", "opt", "root", "home", "srv", "mn
 
 func rootDir(name string) string { return filepath.Join(dir(name), "root") }
 
+// snapshotsDir holds the image layers and containers' files of the Docker
+// inside (containerd's snapshotter). Mounted from the partition's own
+// directory: otherwise Sysbox mounts a volume of its own over it, which a
+// move doesn't copy, re-creating the container deletes, and the partition's
+// disk quota doesn't count.
+const snapshotsDir = "containerd/io.containerd.snapshotter.v1.overlayfs"
+
+// keepSnapshots copies a stopped partition's layers from where Sysbox kept
+// them (`vol`: its container's writable layer, while stopped) into its own
+// directory (`own`), when they're only there, so a move takes them.
+func keepSnapshots(ctx context.Context, vol, own string) error {
+	if empty(vol) || !empty(own) {
+		return nil
+	}
+	if err := os.MkdirAll(own, 0o755); err != nil {
+		return err
+	}
+	// -a keeps owners, xattrs and overlay whiteouts (device nodes).
+	if _, err := sh.Run(ctx, "cp", "-a", "--sparse=always", vol+"/.", own+"/"); err != nil {
+		return fmt.Errorf("keeping its image layers: %w", err)
+	}
+	return nil
+}
+
+func empty(path string) bool {
+	entries, err := os.ReadDir(path)
+	return err != nil || len(entries) == 0
+}
+
 // ownRoot: made since its system files live under its quota (PLAN §28);
 // older partitions keep theirs in the container's layer.
 func ownRoot(name string) bool {
@@ -437,10 +466,15 @@ func runPartition(ctx context.Context, name string, size protocol.PartitionSize,
 			return err
 		}
 	}
+	snapshots := filepath.Join(d, snapshotsDir)
+	if err := os.MkdirAll(snapshots, 0o755); err != nil {
+		return err
+	}
 	args := []string{"run", "-d", "--runtime=sysbox-runc", "--name", container(name), "--hostname", name,
 		"--network", bridge(name), "--restart", "unless-stopped", "--pids-limit", "8192",
 		"-v", filepath.Join(d, "docker") + ":/var/lib/docker",
 		"-v", filepath.Join(d, "containerd") + ":/var/lib/containerd",
+		"-v", snapshots + ":/var/lib/" + snapshotsDir,
 		"-v", filepath.Join(d, "agent") + ":/var/lib/huruf-deploy-agent",
 		"--label", "huruf.partition=" + name}
 	for _, sub := range systemDirs {
