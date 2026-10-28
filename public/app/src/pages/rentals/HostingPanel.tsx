@@ -108,7 +108,7 @@ function Hosting({
           />
           <p className="text-xs text-pretty text-muted-foreground">
             {t(
-              "At most half of each month fills the security, up to the machine's whole monthly price. It's paid out 14 days after the machine leaves properly, and goes to its renters if it leaves before their term."
+              "Half of each month at most goes to the security, until it holds one month of the machine's whole price. It's paid out 14 days after the machine leaves properly, and goes to its renters if it leaves before their term."
             )}
           </p>
         </section>

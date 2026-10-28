@@ -2568,20 +2568,21 @@ Kept: partitions and isolation, escrow at request, charging at acceptance, renew
 ### 30.7 Earnings and security (19d)
 - **Commission** is a percentage on each workspace plan (Free: 20 %), taken from the owner's plan and fixed when each month is charged.
 - **A month's money:** paid → in escrow until the month ends → matures, commission to Huruf → the owner's share goes to the machine's security, or to their earnings balance **14 days after maturity** (the window for downtime and disputes).
-- **Security per machine:** capped at the **whole-machine monthly price minus commission**.
+- **Security per machine:** capped at the **whole-machine monthly price**, what renters would pay for all of it (owner, 2026-10-28: the full price, not minus commission). It's filled from the owner's share.
   - Until the cap is full, **at most 50 %** of each matured month fills it; the rest is paid out as above, so owners earn from the first month.
   - Raising the price or adding capacity raises the cap; the following months top it up (50 % at most).
-  - The cap never falls below what the machine's current rentals earn per month; any excess is released with the next normal payout.
+  - The cap never falls below what the machine's current rentals pay per month; any excess is released with the next normal payout.
   - **Released** 14 days after the machine leaves properly (its last rental ran to the end of its term and month), if nothing is disputed. **Forfeited** on breaking a term (§30.6). Disputes are paid from it and from matured, unreleased money.
-- **Example:** whole machine at $100/month, rented whole; the owner earns $80, the cap is $80.
+- **Example:** whole machine at $100/month, rented whole; the owner earns $80, the cap is $100.
 
   | Month | Matures | To security | Paid to the owner |
   |---|---|---|---|
   | Jan | Jan 31 | $40 | $40 on Feb 14 |
-  | Feb | Feb 28 | $40 (full) | $40 on Mar 14 |
-  | Mar onward | month end | — | $80, 14 days after |
+  | Feb | Feb 28 | $40 | $40 on Mar 14 |
+  | Mar | Mar 31 | $20 (full: $100) | $60 on Apr 14 |
+  | Apr onward | month end | — | $80, 14 days after |
 
-  With one $100 partition on a $300 machine (cap $240), $40 a month fills it for 6 months while $40 a month is paid out.
+  With one $100 partition on a $300 machine (cap $300), $40 a month fills it in 7½ months while $40 a month is paid out.
 - **Earnings stay out of the wallet until claimed** (owner, 2026-10-28). Released earnings collect in the owner's *earnings* (one per workspace, each entry by its rental and month). From there the owner either:
   - **claims them into the wallet** to spend on the platform, after a warning that wallet money can never be cashed out; or
   - **withdraws them** to a payout method (Stripe Connect or another, later; until then only the wallet).

@@ -183,6 +183,8 @@ Deno.test({
           assertEquals(charged.market!.commission, 20);
           assert(charged.market!.owner.equals(owner.tenantId));
           const price = charged.amount;
+        // The cap: one month of the whole machine at its full price ($60).
+        assertEquals((await earnings.securityOf(m1)).cap, 6_000);
 
           const before = await balance(customer.tenantId);
           const settled = await mature(10 * 3_600_000);
@@ -323,7 +325,7 @@ Deno.test({
           });
           assertEquals(claim.status, 400);
           const before = await balance(customer.tenantId);
-          const { security } = await earnings.securityOf(m1, 20);
+          const { security } = await earnings.securityOf(m1);
           await disputes.resolve(
             new ObjectId(opened.json.dispute),
             platform.user,
@@ -337,7 +339,7 @@ Deno.test({
           const [paid] = await rows("dispute");
           assertEquals([paid.bucket, paid.amount], ["security", -50]);
           assertEquals(
-            (await earnings.securityOf(m1, 20)).security,
+            (await earnings.securityOf(m1)).security,
             security - 50,
           );
           assertEquals(
@@ -427,7 +429,7 @@ Deno.test({
           });
           rental = new ObjectId(res.json.rental);
           await rentals.approve(rental, owner.user, owner.tenantId);
-          const { security } = await earnings.securityOf(m1, 20);
+          const { security } = await earnings.securityOf(m1);
           assert(security > 0);
           const before = await balance(customer.tenantId);
           const left = await mature(4 * DAY);
@@ -441,7 +443,7 @@ Deno.test({
             left.settled!.commission,
             left.amount - left.settled!.refund,
           );
-          assertEquals((await earnings.securityOf(m1, 20)).security, 0);
+          assertEquals((await earnings.securityOf(m1)).security, 0);
           // The downtime back, and the security as compensation.
           assertEquals(
             await balance(customer.tenantId),

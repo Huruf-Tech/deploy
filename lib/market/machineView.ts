@@ -93,7 +93,7 @@ export async function machineView(
           ),
         },
       }, { projection: { name: 1 } }).toArray(),
-      earnings.securityOf(id, commission),
+      earnings.securityOf(id),
     ]);
   const nameOf = (x?: ObjectId) =>
     x && machines.find((m) => m._id.equals(x))?.name;

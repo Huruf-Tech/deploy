@@ -128,8 +128,11 @@ export class EarningsService {
     return down;
   }
 
-  /** A machine's security now, and its cap (PLAN §30.7). */
-  async securityOf(machine: ObjectId, commission: number) {
+  /**
+   * A machine's security now, and its cap (PLAN §30.7): one month of its
+   * whole price, what renters would pay for all of it.
+   */
+  async securityOf(machine: ObjectId) {
     const [rows, doc, live] = await Promise.all([
       earningModel.find({ machine, bucket: "security" }, {
         projection: { amount: 1 },
@@ -143,10 +146,8 @@ export class EarningsService {
     ]);
     const prices = doc?.pool?.rent?.prices;
     const all = doc?.pool?.allocatable;
-    const keep = (cents: number) =>
-      Math.round(cents * (100 - commission) / 100);
     const whole = prices && all
-      ? keep(monthlyOf(hourlyOf(
+      ? monthlyOf(hourlyOf(
         prices,
         {
           vcpu: all.cpus,
@@ -155,19 +156,17 @@ export class EarningsService {
         },
         0,
         true,
-      )))
+      ))
       : 0;
     const plans = await planModel.find(
       { _id: { $in: live.map((s) => s.plan) } },
       { projection: { price: 1 } },
     ).toArray();
-    // Never below what its rentals earn a month: lowering the price can't free it.
-    const rented = keep(
-      live.reduce(
-        (a, s) =>
-          a + (plans.find((p) => p._id.equals(s.plan))?.price.amount ?? 0),
-        0,
-      ),
+    // Never below what its rentals pay a month: lowering the price can't free it.
+    const rented = live.reduce(
+      (a, s) =>
+        a + (plans.find((p) => p._id.equals(s.plan))?.price.amount ?? 0),
+      0,
     );
     return { security: sum(rows), cap: Math.max(whole, rented) };
   }
@@ -240,7 +239,7 @@ export class EarningsService {
         ? shareOf(p.net, p.c)
         : { commission: 0, share: p.net };
       const { security, cap } = share > 0
-        ? await this.securityOf(p.machine, p.c)
+        ? await this.securityOf(p.machine)
         : { security: 0, cap: 0 };
       return {
         ...p,
@@ -352,7 +351,7 @@ export class EarningsService {
    * customers, in proportion to what they pay a month.
    */
   async forfeit(machine: ObjectId, owner: ObjectId, now = new Date()) {
-    const { security } = await this.securityOf(machine, 0);
+    const { security } = await this.securityOf(machine);
     if (security <= 0) return;
     const subs = await subscriptionModel.find({
       kind: "server",
@@ -448,10 +447,7 @@ export class EarningsService {
           (last?.periodEnd ?? now).getTime() + HOLD_MS,
         );
       } else {
-        const { cap } = await this.securityOf(
-          m._id,
-          await this.commissionOf(owner),
-        );
+        const { cap } = await this.securityOf(m._id);
         amount = m.amount - cap;
       }
       if (amount <= 0) continue;

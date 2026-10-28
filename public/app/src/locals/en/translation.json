@@ -1817,5 +1817,6 @@
   "Huruf's commission ({{pct}}%)": "Huruf's commission ({{pct}}%)",
   "You earn": "You earn",
   "After its cost of {{cost}}": "After its cost of {{cost}}",
-  "Rented now: {{now}} a month, you earn {{earn}}.": "Rented now: {{now}} a month, you earn {{earn}}."
+  "Rented now: {{now}} a month, you earn {{earn}}.": "Rented now: {{now}} a month, you earn {{earn}}.",
+  "Half of each month at most goes to the security, until it holds one month of the machine's whole price. It's paid out 14 days after the machine leaves properly, and goes to its renters if it leaves before their term.": "Half of each month at most goes to the security, until it holds one month of the machine's whole price. It's paid out 14 days after the machine leaves properly, and goes to its renters if it leaves before their term."
 }
