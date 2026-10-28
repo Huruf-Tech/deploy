@@ -1983,5 +1983,8 @@
   "Payment due since {{date}}: {{reason}}": "Payment due since {{date}}: {{reason}}",
   "Try renewing again": "Try renewing again",
   "Renewed": "Renewed",
-  "Still unpaid: {{reason}}": "Still unpaid: {{reason}}"
+  "Still unpaid: {{reason}}": "Still unpaid: {{reason}}",
+  "It isn't set up for rentals yet": "It isn't set up for rentals yet",
+  "It isn't put up for rent": "It isn't put up for rent",
+  "It isn't taking new rentals": "It isn't taking new rentals"
 }

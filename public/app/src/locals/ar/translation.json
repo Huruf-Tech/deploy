@@ -1983,5 +1983,8 @@
   "Payment due since {{date}}: {{reason}}": "الدفع مستحق منذ {{date}}: {{reason}}",
   "Try renewing again": "أعد محاولة التجديد",
   "Renewed": "جُدّد",
-  "Still unpaid: {{reason}}": "ما زال غير مدفوع: {{reason}}"
+  "Still unpaid: {{reason}}": "ما زال غير مدفوع: {{reason}}",
+  "It isn't set up for rentals yet": "لم يُجهَّز للتأجير بعد",
+  "It isn't put up for rent": "لم يُعرض للإيجار",
+  "It isn't taking new rentals": "لا يقبل إيجارات جديدة"
 }

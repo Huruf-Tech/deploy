@@ -54,7 +54,11 @@ export function MachinePicker({
               {t("{{price}} a month", { price: money(m.price, "usd") })}
             </span>
           )}
-          {!m.fits ? (
+          {m.blocked ? (
+            <span className="basis-full text-xs text-muted-foreground">
+              {t(m.blocked)}
+            </span>
+          ) : !m.fits ? (
             <StatusBadge tone="neutral" label={t("No room")} />
           ) : m.reachable === false ? (
             <span className="basis-full text-xs text-warning-foreground">

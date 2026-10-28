@@ -1256,14 +1256,52 @@ export class RentalService implements TRentalHooks {
       projection: { resources: 1 },
     });
     const choice = sub.rental.whole ? { whole: true } : plan?.resources ?? {};
-    const spots = [];
+    const spots: (
+      & {
+        server: string;
+        name: string;
+        own: boolean;
+      }
+      & (
+        | {
+          free: { memMb: number; diskGb: number };
+          cpuRoom: number;
+          fits: boolean;
+          price: number;
+          community: boolean;
+          blocked?: undefined;
+        }
+        | {
+          fits: false;
+          /** Why the owner's own machine can't take it (never the room). */
+          blocked?: string;
+          price?: undefined;
+        }
+      )
+    )[] = [];
     for (const m of candidates) {
       // Never onto the customer's own machines (PLAN §30.10).
       if (m.tenant.equals(sub.tenant)) continue;
+      const own = !!owner && m.tenant.equals(owner);
+      let blocked: string | undefined;
       const q = await this.quote(m._id, choice, {
         machine: m as Awaited<ReturnType<RentalService["rentable"]>>,
-      }).catch(() => null);
-      if (!q) continue;
+      }).catch(async (e) => {
+        blocked = e instanceof Response ? await errorText(e) : String(e);
+        return null;
+      });
+      if (!q) {
+        if (own) {
+          spots.push({
+            server: String(m._id),
+            name: m.name,
+            fits: false,
+            own,
+            blocked,
+          });
+        }
+        continue;
+      }
       spots.push({
         server: String(m._id),
         name: m.name,
@@ -1271,9 +1309,32 @@ export class RentalService implements TRentalHooks {
         cpuRoom: q.room.cpus,
         fits: q.fits,
         price: q.price,
-        own: !!owner && m.tenant.equals(owner),
+        own,
         community: await isCommunity(m.tenant),
       });
+    }
+    // The owner's other machines that aren't taking rentals: say why,
+    // rather than leave them out.
+    if (owner) {
+      const idle = await serverModel.find({
+        tenant: owner,
+        status: "active",
+        "provider.kind": "machine",
+        _id: { $nin: [sub.rental.host, ...candidates.map((m) => m._id)] },
+      }, { projection: { name: 1, pool: 1 }, limit: 50 }).toArray();
+      for (const m of idle) {
+        spots.push({
+          server: String(m._id),
+          name: m.name,
+          fits: false,
+          own: true,
+          blocked: m.pool?.status !== "ready"
+            ? "It isn't set up for rentals yet"
+            : !m.pool?.rent?.enabled
+            ? "It isn't put up for rent"
+            : "It isn't taking new rentals",
+        });
+      }
     }
     // The target fetches from the source's address (TCP MOVE_PORT open), or
     // through the tunnel server when the platform's tunnels are configured.

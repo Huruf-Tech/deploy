@@ -441,14 +441,16 @@ export default new Router("/api", function rentals(router) {
           sub.rental.owner,
         );
         return Response.json(
-          targets.filter((t) => t.fits).map((
-            { server, name, price, community },
-          ) => ({
-            server,
-            name,
-            price,
-            community,
-          })),
+          targets.flatMap((t) =>
+            t.fits
+              ? [{
+                server: t.server,
+                name: t.name,
+                price: t.price,
+                community: t.community,
+              }]
+              : []
+          ),
         );
       },
     };

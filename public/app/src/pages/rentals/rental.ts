@@ -57,6 +57,8 @@ export type TMachineSpot = {
   price?: number
   free?: { memMb: number; diskGb: number }
   cpuRoom?: number
+  /** Why the owner's own machine can't take it, other than room. */
+  blocked?: string
 }
 
 /** It has room and, for a move, its source machine has an address to move from. */

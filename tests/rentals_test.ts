@@ -551,6 +551,25 @@ Deno.test({
             targets.targets.map((m) => [m.name, m.fits, m.reachable]),
             [["pool-2", true, true]],
           );
+          // The owner's own machine that isn't for rent is listed, with why.
+          const { tenant: owner2 } = (await serverModel.findOne({
+            _id: host2,
+          }))!;
+          await serverModel.updateOne({ _id: host2 }, {
+            $set: { "pool.rent.enabled": false },
+          });
+          assertEquals(
+            (await rentals.moveTargets(rental, owner2)).targets.map((m) => [
+              m.name,
+              m.fits,
+              m.blocked,
+            ]),
+            [["pool-2", false, "It isn't put up for rent"]],
+          );
+          assertEquals((await rentals.moveTargets(rental)).targets, []);
+          await serverModel.updateOne({ _id: host2 }, {
+            $set: { "pool.rent.enabled": true },
+          });
 
           // Capacity per machine for rent, and a machine with rentals can't go.
           const { machines } = await rentals.capacity();
@@ -576,7 +595,7 @@ Deno.test({
             },
           });
           const roomy = (await rentals.moveTargets(rental)).targets[0];
-          assertEquals(roomy.free, { memMb: 8192 - 2048, diskGb: 80 });
+          assertEquals("free" in roomy && roomy.free, { memMb: 8192 - 2048, diskGb: 80 });
           await serverModel.updateOne({ _id: host2 }, {
             $unset: { "resources.partitions": "" },
           });

@@ -80,9 +80,9 @@ export function MoveDialog({
     }
   }
   const minutes = info ? Math.max(1, Math.round(info.downtimeSec / 60)) : 0
-  // Nowhere to go: say so and how to make room, instead of a form that
-  // can't be sent.
-  const nowhere = !!info && !pick
+  // No machine at all: say so and how to make room. Machines that can't
+  // take it are still listed, each with why.
+  const nowhere = !!info && !info.targets.length
   return (
     <Dialog open onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
@@ -127,7 +127,7 @@ export function MoveDialog({
             )}
           </div>
         )}
-        {propose && !nowhere && (
+        {propose && pick && (
           <div className="flex flex-col gap-2">
             <Label htmlFor="move-reason">
               {t("Why (the customer sees it)")}

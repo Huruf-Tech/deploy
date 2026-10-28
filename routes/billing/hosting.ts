@@ -273,9 +273,12 @@ export default new Router("/api", function hosting(router) {
         server: z.string(),
         name: z.string(),
         fits: z.boolean(),
-        price: z.number().describe("Cents per month there"),
+        price: z.number().optional().describe("Cents per month there"),
         own: z.boolean(),
         reachable: z.boolean(),
+        blocked: z.string().optional().describe(
+          "Why your own machine can't take it, other than room",
+        ),
       })),
     });
 
@@ -295,6 +298,7 @@ export default new Router("/api", function hosting(router) {
             price: t.price,
             own: t.own,
             reachable: t.reachable,
+            ...(t.blocked ? { blocked: t.blocked } : {}),
           })),
         });
       },

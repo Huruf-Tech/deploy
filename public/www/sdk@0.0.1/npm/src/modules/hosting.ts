@@ -175,9 +175,11 @@ export type moveTargets$return = {
         name: string;
         fits: boolean;
         /** Cents per month there */
-        price: number;
+        price?: number | undefined;
         own: boolean;
         reachable: boolean;
+        /** Why your own machine can't take it, other than room */
+        blocked?: string | undefined;
     }[];
 };
 export type propose$params = {
