@@ -198,13 +198,23 @@ export default new Router("/api", function hosting(router) {
   });
 
   router.post("/:id/resize/accept", function acceptResize() {
+    const $return = z.object({
+      result: z.enum(["active", "scheduled", "resumed"]).describe(
+        "active: applied now; scheduled: a smaller size, from the renewal",
+      ),
+      at: z.date().optional().describe("When a scheduled size starts"),
+    });
+
     return {
-      shape: () => ({ params: $params }),
+      shape: () => ({ params: $params, return: $return }),
       handler: async (req) => {
         const { id } = $params.parse(paramsAsJson(req));
         const { tenant, user } = await owner(req);
-        await rentals.approveResize(id, user._id, tenant._id);
-        return Response.json({ ok: true });
+        const result = await rentals.approveResize(id, user._id, tenant._id);
+        return Response.json({
+          result: result.result,
+          ...("at" in result ? { at: result.at } : {}),
+        });
       },
     };
   });

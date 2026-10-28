@@ -687,6 +687,27 @@ Deno.test({
             String(rental),
           )!;
           assertEquals(Math.round(uptime * 100) / 100, 99.93);
+
+          // A smaller size, accepted: it starts at the renewal, and both
+          // sides see it waiting.
+          await customer.call("POST", `/rentals/api/${rental}/resize`, {
+            vcpu: 1,
+            memMb: 2048,
+            diskGb: 50,
+          });
+          const smaller = await platform.call(
+            "POST",
+            `/hosting/api/${rental}/resize/accept`,
+          );
+          assertEquals(smaller.status, 200, JSON.stringify(smaller.json));
+          assertEquals(smaller.json.result, "scheduled");
+          assertEquals(
+            new Date(smaller.json.at).getTime(),
+            (await sub()).currentPeriodEnd!.getTime(),
+          );
+          const mine = (await customer.call("GET", "/rentals/api")).json
+            .find((r: { _id: string }) => r._id === String(rental));
+          assertEquals(mine.nextSize.plan, "1 vCPU · 2 GB");
         },
       );
 

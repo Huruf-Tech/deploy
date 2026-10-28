@@ -232,6 +232,18 @@ export function RentalPanel({ server }: { server: string }) {
                 },
               ]
             : []),
+          ...(rental.nextSize
+            ? [
+                {
+                  label: t("Next size"),
+                  value: t("{{plan}} at {{price}} a month, from {{date}}", {
+                    plan: rental.nextSize.plan,
+                    price: money(rental.nextSize.price, "usd"),
+                    date: day(rental.nextSize.at),
+                  }),
+                },
+              ]
+            : []),
           ...(rental.pendingChange
             ? [
                 {

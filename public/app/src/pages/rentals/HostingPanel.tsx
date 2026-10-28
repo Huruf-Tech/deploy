@@ -451,8 +451,17 @@ export function OwnerRequests({
   const accept = async (r: TRequest) => {
     try {
       if (r.resizeTo) {
-        await ThunderSDK.hosting.acceptResize({ params: { id: r._id } })
-        toast.success(t("Resize accepted"))
+        const done = await ThunderSDK.hosting.acceptResize({
+          params: { id: r._id },
+        })
+        toast.success(
+          done.result === "scheduled" && done.at
+            ? t(
+                "Accepted: the smaller size starts at their next renewal, on {{date}}",
+                { date: day(done.at) }
+              )
+            : t("Resize accepted: it applies now")
+        )
       } else {
         await ThunderSDK.hosting.accept({ params: { id: r._id } })
         toast.success(
@@ -718,6 +727,14 @@ export function MachineRentals({
               {r.term?.until &&
                 ` · ${t("term until {{date}}", { date: day(r.term.until) })}`}
             </span>
+            {r.nextSize && (
+              <span className="text-xs text-info-foreground">
+                {t("Next size: {{plan}} from {{date}}", {
+                  plan: r.nextSize.plan,
+                  date: day(r.nextSize.at),
+                })}
+              </span>
+            )}
             {r.endAt && (
               <span className="text-xs text-warning-foreground">
                 {t("Ends on {{date}}: you stopped renting it out", {

@@ -1,4 +1,5 @@
 import z from "zod";
+import type { ObjectId } from "mongodb";
 import { Router } from "@/core/http/router.ts";
 import { bodyAsJson, paramsAsJson } from "@/core/http/utils.ts";
 import { Response } from "@/core/http/response.ts";
@@ -17,6 +18,23 @@ import { $subscription } from "@/schemas/billing/subscription.ts";
 import { subscriptionPeriodModel } from "@/schemas/billing/subscriptionPeriod.ts";
 import { disputeModel, machineRatingModel } from "@/schemas/billing/market.ts";
 import { serverModel } from "@/schemas/infrastructure/server.ts";
+
+/** What starts at a rental's renewal: a smaller size, or a move's price. */
+const nextOf = (
+  s: { nextPlan?: ObjectId; currentPeriodEnd?: Date },
+  plans: { _id: ObjectId; name: string; price: { amount: number } }[],
+) => {
+  const next = s.nextPlan && plans.find((p) => p._id.equals(s.nextPlan!));
+  return next && s.currentPeriodEnd
+    ? {
+      nextSize: {
+        plan: next.name,
+        price: next.price.amount,
+        at: s.currentPeriodEnd,
+      },
+    }
+    : {};
+};
 
 /** A size on a machine (PLAN §30.5): an amount, or the whole machine. */
 export const $size = z.object({
@@ -73,6 +91,13 @@ export default new Router("/api", function rentals(router) {
         resizeTo: z.string().optional().describe(
           "The size a waiting resize asks for",
         ),
+        nextSize: z.object({
+          plan: z.string(),
+          price: z.number(),
+          at: z.date(),
+        }).optional().describe(
+          "A smaller size (or a move's price) that starts at the renewal",
+        ),
         rejectedReason: z.string().optional(),
         suspendedAt: z.date().optional(),
         held: z.boolean().optional().describe("Stopped by Huruf, not unpaid"),
@@ -109,7 +134,7 @@ export default new Router("/api", function rentals(router) {
               _id: {
                 $in: subs.flatMap((
                   s,
-                ) => [s.plan, s.rental?.pendingChange?.plan])
+                ) => [s.plan, s.rental?.pendingChange?.plan, s.nextPlan])
                   .filter((x) => !!x),
               },
             }, {
@@ -173,6 +198,7 @@ export default new Router("/api", function rentals(router) {
             pendingChange: r.pendingChange?.plan,
             resizeTo: r.pendingChange &&
               plans.find((p) => r.pendingChange!.plan.equals(p._id))?.name,
+            ...nextOf(s, plans),
             rejectedReason: r.rejectedReason,
             suspendedAt: r.suspendedAt,
             ...(r.held ? { held: true } : {}),

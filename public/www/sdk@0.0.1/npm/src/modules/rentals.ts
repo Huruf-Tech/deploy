@@ -41,6 +41,12 @@ export type list$return = {
     pendingChange?: string | undefined;
     /** The size a waiting resize asks for */
     resizeTo?: string | undefined;
+    /** A smaller size (or a move's price) that starts at the renewal */
+    nextSize?: {
+        plan: string;
+        price: number;
+        at: Date;
+    } | undefined;
     rejectedReason?: string | undefined;
     suspendedAt?: Date | undefined;
     /** Stopped by Huruf, not unpaid */

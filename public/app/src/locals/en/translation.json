@@ -1950,5 +1950,10 @@
   "Resize canceled": "Resize canceled",
   "Cancel resize": "Cancel resize",
   "To move it, add another machine to this workspace and put it up for rent, or free room on one you have.": "To move it, add another machine to this workspace and put it up for rent, or free room on one you have.",
-  "{{server}} is a rented server: it shares its machine's ports, so reach it through a custom domain.": "{{server}} is a rented server: it shares its machine's ports, so reach it through a custom domain."
+  "{{server}} is a rented server: it shares its machine's ports, so reach it through a custom domain.": "{{server}} is a rented server: it shares its machine's ports, so reach it through a custom domain.",
+  "Accepted: the smaller size starts at their next renewal, on {{date}}": "Accepted: the smaller size starts at their next renewal, on {{date}}",
+  "Resize accepted: it applies now": "Resize accepted: it applies now",
+  "Next size: {{plan}} from {{date}}": "Next size: {{plan}} from {{date}}",
+  "Next size": "Next size",
+  "{{plan}} at {{price}} a month, from {{date}}": "{{plan}} at {{price}} a month, from {{date}}"
 }

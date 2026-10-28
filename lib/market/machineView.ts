@@ -42,6 +42,11 @@ export const $machineView = z.object({
       until: z.date().optional(),
     }).optional(),
     endAt: z.date().optional(),
+    nextSize: z.object({
+      plan: z.string(),
+      price: z.number(),
+      at: z.date(),
+    }).optional().describe("What starts at the renewal: a smaller size"),
     currentPeriodEnd: z.date().optional(),
     moving: z.object({
       to: z.string(),
@@ -82,7 +87,13 @@ export async function machineView(
       tenantModel.find({ _id: { $in: subs.map((s) => s.tenant) } }, {
         projection: { name: 1 },
       }).toArray(),
-      rentalPlanModel.find({ _id: { $in: subs.map((s) => s.plan) } }, {
+      rentalPlanModel.find({
+        _id: {
+          $in: subs.flatMap((
+            s,
+          ) => [s.plan, ...(s.nextPlan ? [s.nextPlan] : [])]),
+        },
+      }, {
         projection: { name: 1, price: 1 },
       }).toArray(),
       rentals.uptimes(subs),
@@ -114,6 +125,18 @@ export async function machineView(
       ...(r.overDisk ? { overDisk: r.overDisk.bytes } : {}),
       term: r.term,
       endAt: r.endAt,
+      ...(() => {
+        const next = s.nextPlan && plans.find((p) => p._id.equals(s.nextPlan!));
+        return next && s.currentPeriodEnd
+          ? {
+            nextSize: {
+              plan: next.name,
+              price: next.price.amount,
+              at: s.currentPeriodEnd,
+            },
+          }
+          : {};
+      })(),
       currentPeriodEnd: s.currentPeriodEnd,
       ...(r.move
         ? {

@@ -47,6 +47,12 @@ export type machine$return = {
             until?: Date | undefined;
         } | undefined;
         endAt?: Date | undefined;
+        /** What starts at the renewal: a smaller size */
+        nextSize?: {
+            plan: string;
+            price: number;
+            at: Date;
+        } | undefined;
         currentPeriodEnd?: Date | undefined;
         moving?: {
             to: string;
@@ -125,6 +131,12 @@ export type decline$body = {
 export type acceptResize$params = {
     id?: string;
 };
+export type acceptResize$return = {
+    /** active: applied now; scheduled: a smaller size, from the renewal */
+    result: "active" | "scheduled" | "resumed";
+    /** When a scheduled size starts */
+    at?: Date | undefined;
+};
 export type declineResize$params = {
     id?: string;
 };
@@ -191,6 +203,7 @@ export declare const hostingModule: (sdk: typeof BaseSDK) => {
         decline$params: decline$params;
         decline$body: decline$body;
         acceptResize$params: acceptResize$params;
+        acceptResize$return: acceptResize$return;
         declineResize$params: declineResize$params;
         declineResize$body: declineResize$body;
         end$params: end$params;
@@ -260,12 +273,12 @@ export declare const hostingModule: (sdk: typeof BaseSDK) => {
         params: acceptResize$params;
         query?: undefined;
         body?: undefined;
-    } & TRequestOptions<unknown>) => {
-        readonly raw: Promise<import("axios").AxiosResponse<unknown, any, {}, any>>;
-        readonly data: Promise<unknown>;
-        then: <TResult1 = unknown, TResult2 = never>(onfulfilled?: ((value: unknown) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
-        catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<unknown>;
-        finally: (onfinally?: (() => void) | null | undefined) => Promise<unknown>;
+    } & TRequestOptions<acceptResize$return>) => {
+        readonly raw: Promise<import("axios").AxiosResponse<acceptResize$return, any, {}, any>>;
+        readonly data: Promise<acceptResize$return>;
+        then: <TResult1 = acceptResize$return, TResult2 = never>(onfulfilled?: ((value: acceptResize$return) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+        catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<acceptResize$return | TResult>;
+        finally: (onfinally?: (() => void) | null | undefined) => Promise<acceptResize$return>;
     };
     readonly declineResize: (data: {
         params: declineResize$params;

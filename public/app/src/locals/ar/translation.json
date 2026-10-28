@@ -1950,5 +1950,10 @@
   "Resize canceled": "أُلغي تغيير الحجم",
   "Cancel resize": "إلغاء تغيير الحجم",
   "To move it, add another machine to this workspace and put it up for rent, or free room on one you have.": "لنقله، أضف جهازًا آخر إلى مساحة العمل هذه واعرضه للإيجار، أو أفرغ متسعًا على جهاز لديك.",
-  "{{server}} is a rented server: it shares its machine's ports, so reach it through a custom domain.": "{{server}} خادم مؤجّر: يشارك جهازه منافذه، فاصل إليه عبر نطاق مخصص."
+  "{{server}} is a rented server: it shares its machine's ports, so reach it through a custom domain.": "{{server}} خادم مؤجّر: يشارك جهازه منافذه، فاصل إليه عبر نطاق مخصص.",
+  "Accepted: the smaller size starts at their next renewal, on {{date}}": "قُبل: يبدأ الحجم الأصغر عند التجديد القادم، في {{date}}",
+  "Resize accepted: it applies now": "قُبل تغيير الحجم: يُطبّق الآن",
+  "Next size: {{plan}} from {{date}}": "الحجم التالي: {{plan}} من {{date}}",
+  "Next size": "الحجم التالي",
+  "{{plan}} at {{price}} a month, from {{date}}": "{{plan}} بسعر {{price}} شهريًا، من {{date}}"
 }

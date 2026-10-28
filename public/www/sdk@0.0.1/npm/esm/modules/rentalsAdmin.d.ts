@@ -147,6 +147,12 @@ export type machine$return = {
             until?: Date | undefined;
         } | undefined;
         endAt?: Date | undefined;
+        /** What starts at the renewal: a smaller size */
+        nextSize?: {
+            plan: string;
+            price: number;
+            at: Date;
+        } | undefined;
         currentPeriodEnd?: Date | undefined;
         moving?: {
             to: string;

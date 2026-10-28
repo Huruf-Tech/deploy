@@ -52,6 +52,12 @@ export type machine$return = {
             until?: Date | undefined;
         } | undefined;
         endAt?: Date | undefined;
+        /** What starts at the renewal: a smaller size */
+        nextSize?: {
+            plan: string;
+            price: number;
+            at: Date;
+        } | undefined;
         currentPeriodEnd?: Date | undefined;
         moving?: {
             to: string;
@@ -130,6 +136,12 @@ export type decline$body = {
 export type acceptResize$params = {
     id?: string;
 };
+export type acceptResize$return = {
+    /** active: applied now; scheduled: a smaller size, from the renewal */
+    result: "active" | "scheduled" | "resumed";
+    /** When a scheduled size starts */
+    at?: Date | undefined;
+};
 export type declineResize$params = {
     id?: string;
 };
@@ -197,6 +209,7 @@ export const hostingModule = (sdk: typeof BaseSDK) => {
         decline$params: decline$params,
         decline$body: decline$body,
         acceptResize$params: acceptResize$params,
+        acceptResize$return: acceptResize$return,
         declineResize$params: declineResize$params,
         declineResize$body: declineResize$body,
         end$params: end$params,
@@ -354,7 +367,7 @@ export const hostingModule = (sdk: typeof BaseSDK) => {
         params: acceptResize$params,
         query?: undefined,
         body?: undefined,
-    } & TRequestOptions<unknown>) {
+    } & TRequestOptions<acceptResize$return>) {
         return sdk.resolveAxiosResponse(async () => {
             sdk.checkPermission("hosting", "acceptResize");
 
