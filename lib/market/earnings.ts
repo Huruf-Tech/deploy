@@ -14,7 +14,7 @@ import {
   securityFill,
   shareOf,
 } from "@/lib/market/pricing.ts";
-import { planModel } from "@/schemas/billing/plan.ts";
+import { planModel, rentalPlanModel } from "@/schemas/billing/plan.ts";
 import {
   LIVE_RENTAL,
   RUNNING_RENTAL,
@@ -158,7 +158,7 @@ export class EarningsService {
         true,
       ))
       : 0;
-    const plans = await planModel.find(
+    const plans = await rentalPlanModel.find(
       { _id: { $in: live.map((s) => s.plan) } },
       { projection: { price: 1 } },
     ).toArray();
@@ -361,7 +361,7 @@ export class EarningsService {
         { "rental.lostAt": { $gte: new Date(now.getTime() - 40 * DAY_MS) } },
       ],
     }, { projection: { tenant: 1, plan: 1 } }).toArray();
-    const plans = await planModel.find(
+    const plans = await rentalPlanModel.find(
       { _id: { $in: subs.map((s) => s.plan) } },
       { projection: { price: 1 } },
     ).toArray();

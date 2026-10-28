@@ -1,7 +1,7 @@
 import { serverOutageModel } from "@/schemas/infrastructure/serverOutage.ts";
 import { storageModel } from "@/schemas/infrastructure/storage.ts";
 import { subscriptionModel } from "@/schemas/billing/subscription.ts";
-import { planModel } from "@/schemas/billing/plan.ts";
+import { planModel, rentalPlanModel } from "@/schemas/billing/plan.ts";
 import {
   abuseReportModel,
   claimRevertModel,
@@ -97,6 +97,12 @@ async function migrateToMarket() {
     $set: { custom: true, visibility: "private" },
     $unset: { class: "" } as never,
   });
+  // Rentals' plans have their own collection (PLAN §30.3): the plans
+  // admins manage are workspace plans only.
+  for await (const plan of planModel.find({ kind: "server" })) {
+    await rentalPlanModel.replaceOne({ _id: plan._id }, plan, { upsert: true });
+    await planModel.deleteOne({ _id: plan._id });
+  }
   const platform = await platformTenantId();
   if (platform) {
     await subscriptionModel.updateMany({

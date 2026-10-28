@@ -7,7 +7,7 @@ import { billing, entitlements } from "@/lib/services.ts";
 import { prorate } from "@/lib/billing/billing.ts";
 import { Wallet } from "@/plugins/Huruf-Tech/thunder-core/lib/wallet.ts";
 import { Env } from "@/core/utils/env.ts";
-import { $plan, planModel } from "@/schemas/billing/plan.ts";
+import { $plan, plansFor } from "@/schemas/billing/plan.ts";
 import { subscriptionModel } from "@/schemas/billing/subscription.ts";
 import { subscriptionPeriodModel } from "@/schemas/billing/subscriptionPeriod.ts";
 import { testSession } from "./_session.ts";
@@ -67,12 +67,13 @@ Deno.test({
         interval: "month" | "year",
         extra = {},
       ) => {
-        const { insertedId } = await planModel.insertOne($plan.parse({
+        const doc = $plan.parse({
           name,
           slug: `${name.toLowerCase().replaceAll(" ", "-")}-${Date.now()}`,
           price: { amount, currency: "usd", interval },
           ...extra,
-        }));
+        });
+        const { insertedId } = await plansFor(doc.kind).insertOne(doc);
         created.push(insertedId);
         return insertedId;
       };
@@ -251,7 +252,8 @@ Deno.test({
     } finally {
       config.PLATFORM_TENANT = previous;
       await Promise.all([
-        planModel.deleteMany({ _id: { $in: created } }),
+        plansFor("workspace").deleteMany({ _id: { $in: created } }),
+        plansFor("server").deleteMany({ _id: { $in: created } }),
         ...["subscriptions", "subscriptionPeriods"].map((name) =>
           d.collection(name).deleteMany({ tenant: tenantId })
         ),

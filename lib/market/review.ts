@@ -5,7 +5,7 @@ import { userModel } from "@/plugins/Huruf-Tech/thunder-core/schemas/user.ts";
 import { profilesOf } from "@/lib/agents/profile.ts";
 import { earnings, rentals } from "@/lib/services.ts";
 import { linked, ratingsOf } from "@/lib/market/market.ts";
-import { planModel } from "@/schemas/billing/plan.ts";
+import { rentalPlanModel } from "@/schemas/billing/plan.ts";
 import {
   LIVE_RENTAL,
   subscriptionModel,
@@ -160,7 +160,7 @@ export async function disputeDetail(id: ObjectId) {
         sort: { periodStart: -1 },
         limit: 24,
       }).toArray(),
-      sub && planModel.findOne({ _id: sub.plan }, {
+      sub && rentalPlanModel.findOne({ _id: sub.plan }, {
         projection: { name: 1, price: 1, resources: 1 },
       }),
       machineFacts(dispute.machine),
@@ -254,7 +254,8 @@ export async function reportDetail(id: ObjectId) {
   const [reporter, machine, plan] = await Promise.all([
     party(report.tenant, "customer"),
     machineId ? machineFacts(machineId) : Promise.resolve(null),
-    sub && planModel.findOne({ _id: sub.plan }, { projection: { name: 1 } }),
+    sub &&
+    rentalPlanModel.findOne({ _id: sub.plan }, { projection: { name: 1 } }),
   ]);
   const ownerId = machine && machine.owner;
   const [owner, rentsIt, earlier] = await Promise.all([

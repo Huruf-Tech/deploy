@@ -9,7 +9,7 @@ import { tenantModel } from "@/plugins/Huruf-Tech/thunder-core/schemas/tenant.ts
 import { tenantOwner } from "@/lib/billing/owner.ts";
 import { rentals } from "@/lib/services.ts";
 import { $machineView, machineView } from "@/lib/market/machineView.ts";
-import { planModel } from "@/schemas/billing/plan.ts";
+import { rentalPlanModel } from "@/schemas/billing/plan.ts";
 import { $rentPrices, serverModel } from "@/schemas/infrastructure/server.ts";
 
 const $size = z.object({
@@ -120,7 +120,7 @@ export default new Router("/api", function hosting(router) {
           tenantModel.find({ _id: { $in: subs.map((s) => s.tenant) } }, {
             projection: { name: 1 },
           }).toArray(),
-          planModel.find({
+          rentalPlanModel.find({
             _id: {
               $in: subs.flatMap((s) => [s.plan, s.rental?.pendingChange?.plan])
                 .filter((x) => !!x),

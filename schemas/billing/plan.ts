@@ -110,3 +110,15 @@ export type TPlanResources = z.output<typeof $planResources>;
 export type TPlan = z.output<typeof $plan>;
 
 export const planModel = mongodb.db().collection<TPlan>("plans");
+
+/**
+ * Rentals' own plans (PLAN §30.3): one per rental (and per resize or agreed
+ * move), priced by its machine and never offered. Kept apart from `plans` so
+ * the plans admins manage are workspace plans only; billing reads a
+ * subscription's plan from the collection of its kind.
+ */
+export const rentalPlanModel = mongodb.db().collection<TPlan>("rentalPlans");
+
+/** Where a subscription kind's plans live. */
+export const plansFor = (kind?: "workspace" | "server") =>
+  kind === "server" ? rentalPlanModel : planModel;

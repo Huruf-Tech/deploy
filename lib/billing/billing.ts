@@ -19,7 +19,7 @@ import type {
   Entitlements,
   TEntitlements,
 } from "@/lib/billing/entitlements.ts";
-import { planModel, type TPlan } from "@/schemas/billing/plan.ts";
+import { planModel, plansFor, type TPlan } from "@/schemas/billing/plan.ts";
 import {
   subscriptionModel,
   type TSubscription,
@@ -172,7 +172,7 @@ export class BillingService {
 
   /** Active public plans of a kind, plus private ones offered to this tenant. */
   available(tenant: ObjectId, kind: TSubject["kind"] = "workspace") {
-    return planModel.find({
+    return plansFor(kind).find({
       ...this.planKind(kind),
       active: true,
       $or: [{ visibility: "public" }, { allowedTenants: tenant }],
@@ -191,7 +191,7 @@ export class BillingService {
     id: ObjectId,
     kind: TSubject["kind"],
   ) {
-    const plan = await planModel.findOne({
+    const plan = await plansFor(kind).findOne({
       _id: id,
       ...this.planKind(kind),
       active: true,
@@ -346,7 +346,7 @@ export class BillingService {
     const sub = await subscriptionModel.findOne(subjectFilter(tenant, subject));
     const current = await this.periodOf(tenant, subject, sub, now);
     const currentPlan = current &&
-      await planModel.findOne({ _id: current.plan }, {
+      await plansFor(subject.kind).findOne({ _id: current.plan }, {
         projection: { price: 1 },
       });
     const scheduled = plan.isFree ||
@@ -540,7 +540,7 @@ export class BillingService {
       status: "requested",
     });
     if (!sub) throw Response.badRequest("No requested rental with this id");
-    const plan = await planModel.findOne({ _id: sub.plan });
+    const plan = await plansFor("server").findOne({ _id: sub.plan });
     if (!plan) throw Response.notFound("Plan not found");
     const key = `sub:${sub._id}:first`;
     const extra = await this.rentals?.periodFields(sub);
@@ -707,7 +707,7 @@ export class BillingService {
 
     // A plan no longer offered (`active: false`) still renews its subscribers.
     const plan = verdict !== "end" && !sub.cancelAtPeriodEnd && sub.autoRenew &&
-      await planModel.findOne({ _id: sub.nextPlan ?? sub.plan });
+      await plansFor(sub.kind).findOne({ _id: sub.nextPlan ?? sub.plan });
     if (!plan || plan.isFree) {
       const { modifiedCount } = await subscriptionModel.updateOne(guard, {
         $set: { status: "canceled", updatedAt: now },

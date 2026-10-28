@@ -10,7 +10,7 @@ import { counterDelta, overageOf } from "@/lib/rentals/rentals.ts";
 import { hourlyOf, monthlyOf } from "@/lib/market/pricing.ts";
 import { openSealed } from "@/lib/agents/sealing.ts";
 import { registerAgent } from "@/lib/agents/servers.ts";
-import { planModel } from "@/schemas/billing/plan.ts";
+import { rentalPlanModel } from "@/schemas/billing/plan.ts";
 import { subscriptionModel } from "@/schemas/billing/subscription.ts";
 import { subscriptionPeriodModel } from "@/schemas/billing/subscriptionPeriod.ts";
 import { serverModel } from "@/schemas/infrastructure/server.ts";
@@ -413,7 +413,9 @@ Deno.test({
           await serverModel.updateOne({ _id: host }, {
             $unset: { "pool.accepting": "" },
           });
-          const plan = await planModel.findOne({ _id: (await sub()).plan });
+          const plan = await rentalPlanModel.findOne({
+            _id: (await sub()).plan,
+          });
           assertEquals(plan!.resources!.vcpu, 2);
           assertEquals(plan!.price.amount, priceOf(2, 4096, 50));
           assert(await balance() < before, "charged");
@@ -974,7 +976,7 @@ Deno.test({
       Mailer.onSendMail = undefined;
       const tenants = [platform.tenantId, tenant];
       await Promise.all([
-        planModel.deleteMany({ allowedTenants: tenant }),
+        rentalPlanModel.deleteMany({ allowedTenants: tenant }),
         ...[
           "subscriptions",
           "subscriptionPeriods",

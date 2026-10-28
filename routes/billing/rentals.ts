@@ -11,7 +11,7 @@ import {
   rentals as rentalService,
 } from "@/lib/services.ts";
 import { rate, reportAbuse } from "@/lib/market/market.ts";
-import { planModel } from "@/schemas/billing/plan.ts";
+import { rentalPlanModel } from "@/schemas/billing/plan.ts";
 import { $subscription } from "@/schemas/billing/subscription.ts";
 import { subscriptionPeriodModel } from "@/schemas/billing/subscriptionPeriod.ts";
 import { disputeModel, machineRatingModel } from "@/schemas/billing/market.ts";
@@ -97,7 +97,7 @@ export default new Router("/api", function rentals(router) {
         const ids = subs.map((s) => s._id);
         const [plans, uptimes, machines, open, stars, ended] = await Promise
           .all([
-            planModel.find({ _id: { $in: subs.map((s) => s.plan) } }, {
+            rentalPlanModel.find({ _id: { $in: subs.map((s) => s.plan) } }, {
               projection: { name: 1, resources: 1, price: 1 },
             }).toArray(),
             rentalService.uptimes(subs),

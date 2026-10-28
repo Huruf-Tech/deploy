@@ -12,7 +12,7 @@ import {
   earnings,
   rentals as rentalService,
 } from "@/lib/services.ts";
-import { planModel } from "@/schemas/billing/plan.ts";
+import { rentalPlanModel } from "@/schemas/billing/plan.ts";
 import {
   abuseReportModel,
   claimRevertModel,
@@ -211,7 +211,7 @@ export default new Router("/api", function rentalsAdmin(router) {
           tenantModel.find({ _id: { $in: rows.map((r) => r.sub.tenant) } }, {
             projection: { name: 1 },
           }).toArray(),
-          planModel.find({ _id: { $in: rows.map((r) => r.sub.plan) } }, {
+          rentalPlanModel.find({ _id: { $in: rows.map((r) => r.sub.plan) } }, {
             projection: { name: 1 },
           }).toArray(),
         ]);

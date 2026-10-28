@@ -2,7 +2,7 @@ import z from "zod";
 import type { ObjectId } from "mongodb";
 import { tenantModel } from "@/plugins/Huruf-Tech/thunder-core/schemas/tenant.ts";
 import { earnings, rentals } from "@/lib/services.ts";
-import { planModel } from "@/schemas/billing/plan.ts";
+import { rentalPlanModel } from "@/schemas/billing/plan.ts";
 import { $rentPrices, serverModel } from "@/schemas/infrastructure/server.ts";
 
 const $size = z.object({
@@ -82,7 +82,7 @@ export async function machineView(
       tenantModel.find({ _id: { $in: subs.map((s) => s.tenant) } }, {
         projection: { name: 1 },
       }).toArray(),
-      planModel.find({ _id: { $in: subs.map((s) => s.plan) } }, {
+      rentalPlanModel.find({ _id: { $in: subs.map((s) => s.plan) } }, {
         projection: { name: 1, price: 1 },
       }).toArray(),
       rentals.uptimes(subs),

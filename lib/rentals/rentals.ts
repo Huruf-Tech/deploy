@@ -36,7 +36,7 @@ import {
   startPartition,
   stopPartition,
 } from "@/lib/pool/pool.ts";
-import { $plan, planModel, type TPlan } from "@/schemas/billing/plan.ts";
+import { $plan, rentalPlanModel, type TPlan } from "@/schemas/billing/plan.ts";
 import {
   LIVE_RENTAL as LIVE,
   RUNNING_RENTAL as RUNNING,
@@ -236,7 +236,7 @@ export class RentalService implements TRentalHooks {
       allowedTenants: [tenant],
       price: { amount: q.price, currency: "usd", interval: "month" },
     });
-    await planModel.insertOne({ _id, ...plan });
+    await rentalPlanModel.insertOne({ _id, ...plan });
     return { _id, ...plan } as WithId<TPlan>;
   }
 
@@ -317,7 +317,7 @@ export class RentalService implements TRentalHooks {
       }
       // Declined: no request is left behind.
       await subscriptionModel.deleteOne({ _id });
-      await planModel.deleteOne({ _id: plan._id });
+      await rentalPlanModel.deleteOne({ _id: plan._id });
       throw error;
     }
     if (q.machine.pool.rent.autoAccept) {
@@ -377,7 +377,7 @@ export class RentalService implements TRentalHooks {
       }],
       status: { $nin: ["canceled", "rejected", "released"] },
     }, { limit: 1 });
-    if (!inUse) await planModel.deleteOne({ _id: plan, custom: true });
+    if (!inUse) await rentalPlanModel.deleteOne({ _id: plan, custom: true });
   }
 
   /**
@@ -447,7 +447,7 @@ export class RentalService implements TRentalHooks {
       ...sub,
       rental: { ...sub.rental, host, partition: name },
     }, by);
-    const plan = await planModel.findOne({ _id: sub.plan }, {
+    const plan = await rentalPlanModel.findOne({ _id: sub.plan }, {
       projection: { name: 1 },
     });
     notifyOwner(sub.tenant, {
@@ -465,7 +465,7 @@ export class RentalService implements TRentalHooks {
     if (!sub.rental.host || !sub.rental.partition) {
       throw Response.badRequest("The rental isn't placed yet");
     }
-    const plan = await planModel.findOne({ _id: sub.plan }, {
+    const plan = await rentalPlanModel.findOne({ _id: sub.plan }, {
       projection: { name: 1 },
     });
     return await createPartition({
@@ -574,7 +574,7 @@ export class RentalService implements TRentalHooks {
         "It's moving: accept the resize once it's done",
       );
     }
-    const plan = await planModel.findOne({ _id: change.plan });
+    const plan = await rentalPlanModel.findOne({ _id: change.plan });
     if (!plan?.resources) throw Response.notFound("Plan not found");
     const size = partitionSize(plan.resources, await this.overheadMb());
     const growing = size.memMb > sub.rental.size.memMb ||
@@ -794,7 +794,7 @@ export class RentalService implements TRentalHooks {
           "Only onto another machine of the same owner",
         );
       }
-      const plan = await planModel.findOne({ _id: sub.plan }, {
+      const plan = await rentalPlanModel.findOne({ _id: sub.plan }, {
         projection: { resources: 1 },
       });
       const q = await this.quote(
@@ -1072,7 +1072,7 @@ export class RentalService implements TRentalHooks {
       },
       limit: 200,
     }).toArray();
-    const plan = await planModel.findOne({ _id: sub.plan }, {
+    const plan = await rentalPlanModel.findOne({ _id: sub.plan }, {
       projection: { resources: 1 },
     });
     const choice = sub.rental.whole ? { whole: true } : plan?.resources ?? {};
@@ -1285,7 +1285,7 @@ export class RentalService implements TRentalHooks {
    */
   private async agreedMoveDone(sub: TSub, to: ObjectId, now: Date) {
     const target = await this.machineOf(to);
-    const plan = await planModel.findOne({ _id: sub.plan });
+    const plan = await rentalPlanModel.findOne({ _id: sub.plan });
     const q = await this.quote(
       to,
       sub.rental.whole ? { whole: true } : plan?.resources ?? {},
@@ -1536,7 +1536,7 @@ export class RentalService implements TRentalHooks {
         projection: { plan: 1, status: 1, "rental.host": 1, "rental.size": 1 },
       }).toArray(),
     ]);
-    const plans = await planModel.find(
+    const plans = await rentalPlanModel.find(
       { _id: { $in: subs.map((s) => s.plan) } },
       { projection: { price: 1 } },
     ).toArray();

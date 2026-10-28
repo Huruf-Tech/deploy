@@ -20,6 +20,7 @@ import {
   $planFeatures,
   $planLimits,
   planModel,
+  rentalPlanModel,
 } from "@/schemas/billing/plan.ts";
 import {
   $subscription,
@@ -222,10 +223,12 @@ export default new Router("/api", function billing(router) {
             projection: { limitsSnapshot: 0, featuresSnapshot: 0 },
           },
         ).toArray();
-        const plans = await planModel.find(
-          { _id: { $in: periods.map((p) => p.plan) } },
-          { projection: { name: 1 } },
-        ).toArray();
+        const ids = { _id: { $in: periods.map((p) => p.plan) } };
+        const plans = (await Promise.all(
+          [planModel, rentalPlanModel].map((m) =>
+            m.find(ids, { projection: { name: 1 } }).toArray()
+          ),
+        )).flat();
         return Response.json(periods.map((p) => ({
           ...p,
           planName: plans.find((x) => x._id.equals(p.plan))?.name,

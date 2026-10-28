@@ -15,7 +15,7 @@ import {
   LIVE_RENTAL,
   subscriptionModel,
 } from "@/schemas/billing/subscription.ts";
-import { planModel } from "@/schemas/billing/plan.ts";
+import { rentalPlanModel } from "@/schemas/billing/plan.ts";
 import { tenantModel } from "@/plugins/Huruf-Tech/thunder-core/schemas/tenant.ts";
 import { detachServer } from "@/lib/deploy/projects.ts";
 import { freeOf, takenOn } from "@/lib/pool/room.ts";
@@ -219,7 +219,7 @@ export async function partitionsOf(tenant: ObjectId, machine: ObjectId) {
     tenantModel.find({ _id: { $in: rentals.map((r) => r.tenant) } }, {
       projection: { name: 1 },
     }).toArray(),
-    planModel.find({ _id: { $in: rentals.map((r) => r.plan) } }, {
+    rentalPlanModel.find({ _id: { $in: rentals.map((r) => r.plan) } }, {
       projection: { name: 1 },
     }).toArray(),
   ]);

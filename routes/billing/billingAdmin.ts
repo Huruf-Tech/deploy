@@ -6,7 +6,7 @@ import { $objectId } from "@/core/utils/createCRUD.ts";
 import { withAuthSession } from "@/plugins/Huruf-Tech/thunder-core/utils/withAuthSession.ts";
 import { tenantModel } from "@/plugins/Huruf-Tech/thunder-core/schemas/tenant.ts";
 import { billing } from "@/lib/services.ts";
-import { planModel } from "@/schemas/billing/plan.ts";
+import { planModel, rentalPlanModel } from "@/schemas/billing/plan.ts";
 import {
   $subscription,
   subscriptionModel,
@@ -49,9 +49,13 @@ export default new Router("/api", function billingAdmin(router) {
           tenantModel.find({ _id: { $in: subs.map((s) => s.tenant) } }, {
             projection: { name: 1 },
           }).toArray(),
-          planModel.find({ _id: { $in: subs.map((s) => s.plan) } }, {
-            projection: { name: 1 },
-          }).toArray(),
+          Promise.all(
+            [planModel, rentalPlanModel].map((m) =>
+              m.find({ _id: { $in: subs.map((s) => s.plan) } }, {
+                projection: { name: 1 },
+              }).toArray()
+            ),
+          ).then((all) => all.flat()),
         ]);
         return Response.json(subs.map((s) => ({
           _id: s._id,

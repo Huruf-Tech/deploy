@@ -16,7 +16,7 @@ import {
   securityFill,
   shareOf,
 } from "@/lib/market/pricing.ts";
-import { planModel } from "@/schemas/billing/plan.ts";
+import { rentalPlanModel } from "@/schemas/billing/plan.ts";
 import { subscriptionModel } from "@/schemas/billing/subscription.ts";
 import { subscriptionPeriodModel } from "@/schemas/billing/subscriptionPeriod.ts";
 import { earningModel } from "@/schemas/billing/market.ts";
@@ -506,7 +506,7 @@ Deno.test({
       Mailer.onSendMail = undefined;
       const tenants = [platform.tenantId, owner.tenantId, customer.tenantId];
       await Promise.all([
-        planModel.deleteMany({ allowedTenants: customer.tenantId }),
+        rentalPlanModel.deleteMany({ allowedTenants: customer.tenantId }),
         d.collection("earnings").deleteMany({ owner: owner.tenantId }),
         d.collection("claimReverts").deleteMany({ owner: owner.tenantId }),
         d.collection("disputes").deleteMany({ owner: owner.tenantId }),
