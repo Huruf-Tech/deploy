@@ -78,6 +78,13 @@ function ConnectDialog({
   const [owner, setOwner] = React.useState<"user" | "org">("user")
   const [org, setOrg] = React.useState("")
   const [busy, setBusy] = React.useState(false)
+  // The browser leaves for GitHub; coming back with Back restores this page
+  // from its cache, still "busy", so the button stayed disabled.
+  React.useEffect(() => {
+    const reset = () => setBusy(false)
+    window.addEventListener("pageshow", reset)
+    return () => window.removeEventListener("pageshow", reset)
+  }, [])
 
   const submit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -94,7 +101,14 @@ function ConnectDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        // Closing starts the next attempt afresh.
+        if (!next) setBusy(false)
+        onOpenChange(next)
+      }}
+    >
       <DialogContent>
         <form onSubmit={submit} className="flex flex-col gap-4">
           <DialogHeader>
