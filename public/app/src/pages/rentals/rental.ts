@@ -61,3 +61,20 @@ export type TMachineSpot = {
 
 /** It has room and, for a move, its source machine has an address to move from. */
 export const usable = (m: TMachineSpot) => m.fits && m.reachable !== false
+
+/** Size steps (PLAN §30.5): 0.25 vCPU, 256 MB of memory, 1 GB of disk. */
+export const stepSize = (
+  s: { vcpu: number; memMb: number; diskGb: number },
+  round: (n: number) => number = Math.round
+) => ({
+  vcpu: Math.max(0.25, round(s.vcpu * 4) / 4),
+  memMb: Math.max(512, round(s.memMb / 256) * 256),
+  diskGb: Math.max(5, round(s.diskGb)),
+})
+
+/** Everything free on a machine, in whole steps (rounded down so it fits). */
+export const freeSize = (m: TMarketMachine) =>
+  stepSize(
+    { vcpu: m.free.cpus, memMb: m.free.memMb, diskGb: m.free.diskGb },
+    Math.floor
+  )

@@ -18,7 +18,7 @@ import { serverModel } from "@/schemas/infrastructure/server.ts";
 
 /** A size on a machine (PLAN §30.5): an amount, or the whole machine. */
 export const $size = z.object({
-  vcpu: z.number().min(0.5).max(256),
+  vcpu: z.number().min(0.25).max(256),
   memMb: z.number().int().min(512),
   diskGb: z.number().int().min(5),
 });

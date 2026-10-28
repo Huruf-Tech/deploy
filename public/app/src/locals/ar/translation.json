@@ -1818,5 +1818,7 @@
   "You earn": "تربح",
   "After its cost of {{cost}}": "بعد تكلفته البالغة {{cost}}",
   "Rented now: {{now}} a month, you earn {{earn}}.": "المؤجّر الآن: {{now}} شهريًا، تربح منها {{earn}}.",
-  "Half of each month at most goes to the security, until it holds one month of the machine's whole price. It's paid out 14 days after the machine leaves properly, and goes to its renters if it leaves before their term.": "يذهب نصف كل شهر على الأكثر إلى التأمين، حتى يبلغ شهرًا واحدًا من سعر الجهاز كاملًا. يُصرف بعد 14 يومًا من مغادرة الجهاز بشكل سليم، ويذهب إلى مستأجريه إن غادر قبل انتهاء مدتهم."
+  "Half of each month at most goes to the security, until it holds one month of the machine's whole price. It's paid out 14 days after the machine leaves properly, and goes to its renters if it leaves before their term.": "يذهب نصف كل شهر على الأكثر إلى التأمين، حتى يبلغ شهرًا واحدًا من سعر الجهاز كاملًا. يُصرف بعد 14 يومًا من مغادرة الجهاز بشكل سليم، ويذهب إلى مستأجريه إن غادر قبل انتهاء مدتهم.",
+  "Use all that's free": "استخدم كل المتاح",
+  "All that's free: {{cpu}} vCPU · {{mem}} GB · {{disk}} GB": "كل المتاح: {{cpu}} معالج · {{mem}} غيغابايت · {{disk}} غيغابايت"
 }

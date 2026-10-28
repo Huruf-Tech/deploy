@@ -29,18 +29,13 @@ import { money } from "@/lib/plans"
 import { queries } from "@/lib/queries"
 import { errorMessage } from "@/lib/utils"
 import { confirmPayment } from "@/pages/billing/stripe"
-import type { TMarketMachine } from "./rental"
+import { freeSize, stepSize, type TMarketMachine } from "./rental"
 
 type TSize = { vcpu: number; memMb: number; diskGb: number }
 
 const TERMS = [1, 3, 6, 12] as const
 
-/** Rounds to the size steps: 0.5 vCPU, 0.5 GB memory, 5 GB disk. */
-const stepped = (s: TSize): TSize => ({
-  vcpu: Math.max(0.5, Math.round(s.vcpu * 2) / 2),
-  memMb: Math.max(512, Math.round(s.memMb / 512) * 512),
-  diskGb: Math.max(5, Math.round(s.diskGb / 5) * 5),
-})
+const stepped = (s: TSize): TSize => stepSize(s)
 
 /**
  * Rent a machine from the market, or resize a rental on its machine
@@ -67,7 +62,9 @@ export function RequestDialog({
   const machineId = machine?._id ?? resize!.machine
   const [whole, setWhole] = React.useState(false)
   const [size, setSize] = React.useState<TSize>(
-    resize?.size ?? { vcpu: 1, memMb: 2048, diskGb: 25 }
+    // Everything free, as the market's card prices it.
+    resize?.size ??
+      (machine ? freeSize(machine) : { vcpu: 1, memMb: 2048, diskGb: 25 })
   )
   const [term, setTerm] = React.useState<(typeof TERMS)[number]>(1)
   const [waived, setWaived] = React.useState(false)
@@ -182,15 +179,26 @@ export function RequestDialog({
           )}
           {!whole && (
             <div className="grid gap-3 sm:grid-cols-3">
-              {field("vcpu", t("vCPU"), 0.5, 1, machine?.free.cpus)}
+              {field("vcpu", t("vCPU"), 0.25, 1, machine?.free.cpus)}
               {field(
                 "memMb",
                 t("Memory (GB)"),
-                0.5,
+                0.25,
                 1024,
                 machine ? gbOfMb(machine.free.memMb) : undefined
               )}
-              {field("diskGb", t("Disk (GB)"), 5, 1, machine?.free.diskGb)}
+              {field("diskGb", t("Disk (GB)"), 1, 1, machine?.free.diskGb)}
+              {machine && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="justify-self-start sm:col-span-3"
+                  onClick={() => setSize(freeSize(machine))}
+                >
+                  {t("Use all that's free")}
+                </Button>
+              )}
             </div>
           )}
 

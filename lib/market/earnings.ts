@@ -519,7 +519,8 @@ export class EarningsService {
     const isFrozen = (r: { machine?: ObjectId }) =>
       !!r.machine && frozenIds.has(String(r.machine));
     const earnings = rows.filter((r) => r.bucket === "earnings");
-    const ready = earnings.filter((r) => r.availableAt <= now);
+    // Money out (claims, disputes) counts at once, whenever it's stamped.
+    const ready = earnings.filter((r) => r.amount < 0 || r.availableAt <= now);
     const security = new Map<string, number>();
     for (const r of rows.filter((r) => r.bucket === "security")) {
       const k = String(r.machine);
@@ -532,7 +533,7 @@ export class EarningsService {
     return {
       available: Math.max(0, total - frozen),
       frozen: Math.min(frozen, Math.max(0, total)),
-      held: sum(earnings.filter((r) => r.availableAt > now)),
+      held: sum(earnings.filter((r) => r.amount > 0 && r.availableAt > now)),
       pending: running.reduce(
         (a, p) => a + shareOf(p.amount, p.market!.commission).share,
         0,
@@ -555,61 +556,87 @@ export class EarningsService {
     const frozen = await this.frozenMachines(owner);
     const _id = new ObjectId();
     const now = new Date();
-    await mongodb.withSession((client) =>
-      client.withTransaction(async (session) => {
-        // The transfer first: it creates the owner's wallet when it has
-        // none, which a transaction can only see before its first read.
-        const transfer = await fromPlatform({
-          to: owner,
-          amount,
-          key: `claim:${_id}`,
-          description: "Earnings claimed",
-          user,
-          session,
-        });
-        // One claim at a time per owner: two at once would both see the
-        // same balance (the lock makes the second retry and re-read).
-        await this.lock(owner, session);
-        const ready = await earningModel.find({
-          owner,
-          bucket: "earnings",
-          availableAt: { $lte: now },
-        }, { projection: { amount: 1, machine: 1 }, session }).toArray();
-        const held = sum(
-          ready.filter((r) =>
-            r.amount > 0 && !!r.machine && frozen.has(String(r.machine))
-          ),
+    await this.locked(owner, async (session) => {
+      const ready = await earningModel.find({
+        owner,
+        bucket: "earnings",
+        // Money out counts whenever it's stamped: a claim committed a
+        // moment after this one began is stamped later than `now`.
+        $or: [{ availableAt: { $lte: now } }, { amount: { $lt: 0 } }],
+      }, { projection: { amount: 1, machine: 1 }, session }).toArray();
+      const held = sum(
+        ready.filter((r) =>
+          r.amount > 0 && !!r.machine && frozen.has(String(r.machine))
+        ),
+      );
+      const available = Math.max(0, sum(ready) - held);
+      if (amount < 1 || amount > available) {
+        throw Response.badRequest(
+          `You can claim up to ${(available / 100).toFixed(2)} USD`,
         );
-        const available = Math.max(0, sum(ready) - held);
-        if (amount < 1 || amount > available) {
-          throw Response.badRequest(
-            `You can claim up to ${(available / 100).toFixed(2)} USD`,
-          );
-        }
-        await earningModel.insertOne({
-          _id,
-          owner,
-          bucket: "earnings",
-          amount: -amount,
-          availableAt: now,
-          type: "claim",
-          key: `claim:${_id}`,
-          walletReference: transfer.reference,
-          createdAt: now,
-        }, { session });
-      })
-    );
+      }
+      const transfer = await fromPlatform({
+        to: owner,
+        amount,
+        key: `claim:${_id}`,
+        description: "Earnings claimed",
+        user,
+        session,
+      });
+      await earningModel.insertOne({
+        _id,
+        owner,
+        bucket: "earnings",
+        amount: -amount,
+        availableAt: now,
+        type: "claim",
+        key: `claim:${_id}`,
+        walletReference: transfer.reference,
+        createdAt: now,
+      }, { session });
+    });
     return { claim: String(_id) };
   }
 
-  /** Serializes an owner's claims and reverts inside a transaction. */
-  private lock(owner: ObjectId, session: ClientSession) {
-    return mongodb.db().collection<{ _id: ObjectId; seq: number }>(
+  /**
+   * Runs `fn` in a transaction that only commits if no other claim or
+   * revert of this owner committed since it began: it reads the owner's
+   * version first and moves it on last, so the second of two at once
+   * retries and reads the first's result (PLAN §30.7).
+   */
+  private async locked(
+    owner: ObjectId,
+    fn: (session: ClientSession) => Promise<void>,
+  ) {
+    const locks = mongodb.db().collection<{ _id: ObjectId; seq: number }>(
       "earningLocks",
-    ).updateOne({ _id: owner }, { $inc: { seq: 1 } }, {
-      upsert: true,
-      session,
-    });
+    );
+    // Outside the transaction: what it reads must exist before it starts.
+    await Promise.all([
+      locks.updateOne({ _id: owner }, { $setOnInsert: { seq: 0 } }, {
+        upsert: true,
+      }),
+      Wallet.resolve({ tenant: owner, currency: "usd" }),
+    ]);
+    for (let attempt = 1;; attempt++) {
+      try {
+        await mongodb.withSession((client) =>
+          client.withTransaction(async (session) => {
+            const lock = await locks.findOne({ _id: owner }, { session });
+            await fn(session);
+            const { modifiedCount } = await locks.updateOne(
+              { _id: owner, seq: lock!.seq },
+              { $inc: { seq: 1 } },
+              { session },
+            );
+            if (!modifiedCount) throw new Moved();
+          })
+        );
+        return;
+      } catch (error) {
+        if (!(error instanceof Moved) || attempt >= 5) throw error;
+      }
+    }
   }
 
   /** The owner's machines with an open dispute: their money waits. */
@@ -653,21 +680,18 @@ export class EarningsService {
     try {
       // Checked inside the transaction that moves the money: a payment made
       // meanwhile touches the same wallet, so this retries and sees it.
-      await mongodb.withSession((client) =>
-        client.withTransaction(async (session) => {
-          await this.lock(owner, session);
-          if (
-            await walletLedgerModel.countDocuments(sinceClaim, {
-              limit: 1,
-              session,
-            })
-          ) throw new Moved();
-          await this.moveBack(owner, claimId, amount, user, session);
-        })
-      );
+      await this.locked(owner, async (session) => {
+        if (
+          await walletLedgerModel.countDocuments(sinceClaim, {
+            limit: 1,
+            session,
+          })
+        ) throw new WalletMoved();
+        await this.moveBack(owner, claimId, amount, user, session);
+      });
       return { result: "reverted" as const, amount };
     } catch (error) {
-      if (!(error instanceof Moved)) throw error;
+      if (!(error instanceof WalletMoved)) throw error;
     }
     const since = await walletLedgerModel.find(sinceClaim, {
       projection: { type: 1, amount: 1 },
@@ -859,4 +883,7 @@ export class EarningsService {
 }
 
 class Settled extends Error {}
+/** Another claim or revert of the owner committed meanwhile: try again. */
 class Moved extends Error {}
+/** The wallet moved since a claim: an admin decides its revert. */
+class WalletMoved extends Error {}

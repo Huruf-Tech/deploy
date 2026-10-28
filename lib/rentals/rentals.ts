@@ -176,12 +176,12 @@ export class RentalService implements TRentalHooks {
     } else {
       const { vcpu = 0, memMb = 0, diskGb = 0 } = choice;
       if (
-        vcpu < 0.5 || vcpu * 2 % 1 !== 0 ||
-        memMb < 512 || memMb % 512 !== 0 ||
-        diskGb < 5 || diskGb % 5 !== 0
+        vcpu < 0.25 || vcpu * 4 % 1 !== 0 ||
+        memMb < 512 || memMb % 256 !== 0 ||
+        diskGb < 5 || diskGb % 1 !== 0
       ) {
         throw Response.badRequest(
-          "Sizes go in steps: 0.5 vCPU, 0.5 GB memory, 5 GB disk (at least 0.5, 0.5 and 5)",
+          "Sizes go in steps of 0.25 vCPU, 0.25 GB of memory and 1 GB of disk, from 0.25 vCPU, 0.5 GB and 5 GB",
         );
       }
       r = { vcpu, memMb, diskGb };

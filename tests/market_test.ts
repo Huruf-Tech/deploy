@@ -183,8 +183,8 @@ Deno.test({
           assertEquals(charged.market!.commission, 20);
           assert(charged.market!.owner.equals(owner.tenantId));
           const price = charged.amount;
-        // The cap: one month of the whole machine at its full price ($60).
-        assertEquals((await earnings.securityOf(m1)).cap, 6_000);
+          // The cap: one month of the whole machine at its full price ($60).
+          assertEquals((await earnings.securityOf(m1)).cap, 6_000);
 
           const before = await balance(customer.tenantId);
           const settled = await mature(10 * 3_600_000);
@@ -253,16 +253,22 @@ Deno.test({
         );
         assertEquals(twice.status, 400);
 
-        // Two claims at once: one gets it.
-        const both = await Promise.all([
-          earnings.claim(owner.tenantId, owner.user, claimable),
-          earnings.claim(owner.tenantId, owner.user, claimable),
-        ].map((p) => p.then((r) => r.claim, () => null)));
-        assertEquals(both.filter((c) => c).length, 1);
-        assertEquals(await balance(owner.tenantId), wallet + claimable);
-        const winner = both.find((c) => c)!;
-        await owner.call("POST", `/earnings/api/claims/${winner}/revert`);
-        assertEquals(await balance(owner.tenantId), wallet);
+        // Claims at once: one gets it, every time.
+        for (let round = 0; round < 5; round++) {
+          const all = await Promise.all(
+            [0, 1, 2].map(() =>
+              earnings.claim(owner.tenantId, owner.user, claimable).then(
+                (r) => r.claim,
+                () => null,
+              )
+            ),
+          );
+          assertEquals(all.filter((c) => c).length, 1, `round ${round}`);
+          assertEquals(await balance(owner.tenantId), wallet + claimable);
+          const winner = all.find((c) => c)!;
+          await owner.call("POST", `/earnings/api/claims/${winner}/revert`);
+          assertEquals(await balance(owner.tenantId), wallet);
+        }
 
         // Spent since: an admin decides, up to what wasn't spent.
         const again = await owner.call("POST", "/earnings/api/claim", {

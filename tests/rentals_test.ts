@@ -184,6 +184,13 @@ Deno.test({
           `/market/api/quote?machine=${host}&vcpu=1.3&memMb=3072&diskGb=40`,
         );
         assertEquals(odd.status, 400);
+        // Quarter vCPU, 256 MB and 1 GB steps: what's left can be rented.
+        const quarter = await customer.call(
+          "GET",
+          `/market/api/quote?machine=${host}&vcpu=1.75&memMb=1280&diskGb=27`,
+        );
+        assertEquals(quarter.status, 200, JSON.stringify(quarter.json));
+        assertEquals(quarter.json.price, priceOf(1.75, 1280, 27));
         // The owner's switches and prices; a whole price of 0 means none.
         const saved = await platform.call(
           "PATCH",

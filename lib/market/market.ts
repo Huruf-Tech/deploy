@@ -221,7 +221,7 @@ export async function listMachines(viewer: ObjectId, f: TMarketFilters) {
     (!f.minVcpu || m.free.cpus >= f.minVcpu) &&
     (!f.minMemMb || m.free.memMb >= f.minMemMb) &&
     (!f.minDiskGb || m.free.diskGb >= f.minDiskGb) &&
-    (m.free.memMb >= 512 && m.free.cpus >= 0.5 && m.free.diskGb >= 5)
+    (m.free.memMb >= 512 && m.free.cpus >= 0.25 && m.free.diskGb >= 5)
   );
   const by = {
     price: (a: typeof rows[0], b: typeof rows[0]) =>

@@ -37,7 +37,11 @@ import { money } from "@/lib/plans"
 import { queries } from "@/lib/queries"
 import { cn } from "@/lib/utils"
 import { RequestDialog } from "@/pages/rentals/RequestDialog"
-import { type TMarketMachine, useRentals } from "@/pages/rentals/rental"
+import {
+  freeSize,
+  type TMarketMachine,
+  useRentals,
+} from "@/pages/rentals/rental"
 import { notifyServersChanged } from "@/pages/servers/events"
 
 type TFilters = Parameters<typeof queries.market>[0]
@@ -486,10 +490,14 @@ function MachineCard({
 }) {
   const { t } = useTranslation()
   const p = m.prices.hourly
-  // The smallest size (0.5 vCPU, 0.5 GB, 5 GB), as the market's "from".
-  const from = Math.ceil(
-    (0.5 * p.vcpu + ((512 + m.overheadMb) / 1024) * p.memGb + 5 * p.diskGb) *
-      HOURS
+  // Everything free on it, as the Rent dialog opens with it.
+  const all = freeSize(m)
+  const price = Math.ceil(
+    (all.vcpu * p.vcpu +
+      ((all.memMb + m.overheadMb) / 1024) * p.memGb +
+      all.diskGb * p.diskGb) *
+      HOURS -
+      1e-9
   )
   const monthly = m.prices.monthly
 
@@ -587,16 +595,6 @@ function MachineCard({
       </div>
 
       <div className="flex flex-col gap-2 px-4 py-3">
-        <div className="flex justify-between gap-3">
-          <span className="text-muted-foreground">{t("Free now")}</span>
-          <span dir="ltr" className="text-end tabular-nums">
-            {t("{{cpu}} vCPU · {{mem}} GB · {{disk}} GB", {
-              cpu: m.free.cpus,
-              mem: gbOfMb(m.free.memMb),
-              disk: m.free.diskGb,
-            })}
-          </span>
-        </div>
         {(m.newArrival || m.dedicated || m.autoAccept) && (
           <div className="flex flex-wrap gap-1">
             {m.newArrival && (
@@ -628,9 +626,15 @@ function MachineCard({
 
       <div className="mt-auto flex items-end justify-between gap-3 border-t px-4 py-3">
         <div className="min-w-0">
-          <div className="text-xs text-muted-foreground">{t("From")}</div>
+          <div dir="ltr" className="text-xs text-muted-foreground tabular-nums">
+            {t("All that's free: {{cpu}} vCPU · {{mem}} GB · {{disk}} GB", {
+              cpu: all.vcpu,
+              mem: gbOfMb(all.memMb),
+              disk: all.diskGb,
+            })}
+          </div>
           <div className="tabular-nums">
-            <span className="text-lg font-semibold">{money(from, "usd")}</span>
+            <span className="text-lg font-semibold">{money(price, "usd")}</span>
             <span className="text-xs text-muted-foreground">
               {" "}
               {t("/ month")}
