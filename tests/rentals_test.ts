@@ -479,6 +479,18 @@ Deno.test({
             diskGb: 50,
           });
           assertEquals((await sub()).rental!.pendingChange, undefined);
+          // Shown as resizing until the machine applies it, or why it didn't.
+          const state = async () =>
+            (await rentals.resizeStates([await sub()])).get(String(rental));
+          assertEquals(await state(), { resizing: true });
+          await agentCommandModel.updateOne({ _id: resize._id }, {
+            $set: { status: "failed", error: "no room" },
+          });
+          assertEquals(await state(), { resizeError: "no room" });
+          await agentCommandModel.updateOne({ _id: resize._id }, {
+            $set: { status: "done" },
+          });
+          assertEquals(await state(), undefined);
         },
       );
 
@@ -595,7 +607,10 @@ Deno.test({
             },
           });
           const roomy = (await rentals.moveTargets(rental)).targets[0];
-          assertEquals("free" in roomy && roomy.free, { memMb: 8192 - 2048, diskGb: 80 });
+          assertEquals("free" in roomy && roomy.free, {
+            memMb: 8192 - 2048,
+            diskGb: 80,
+          });
           await serverModel.updateOne({ _id: host2 }, {
             $unset: { "resources.partitions": "" },
           });

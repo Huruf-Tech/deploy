@@ -2,7 +2,8 @@ import * as React from "react"
 import { useTranslation } from "react-i18next"
 import { ThunderSDK } from "thunder-sdk"
 import { toast } from "sonner"
-import { IconInbox } from "@tabler/icons-react"
+import { IconInbox, IconLoader2 } from "@tabler/icons-react"
+import { usePolling } from "@/hooks/use-polling"
 
 import { Button } from "@/components/ui/button"
 import {
@@ -71,6 +72,10 @@ function Hosting({
   const { t } = useTranslation()
   const { data: info, reload } = useCached(queries.hostingMachine(server._id))
   const isOwner = useIsOwner()
+  // A resize applies on the machine in the background: follow it.
+  usePolling(() => {
+    if (info?.rentals.some((r) => r.resizing)) reload()
+  }, 5_000)
   if (!info) return null
   const changed = () => {
     reload()
@@ -752,6 +757,22 @@ export function MachineRentals({
                 {t("Payment due since {{date}}: {{reason}}", {
                   date: day(r.pastDueSince),
                   reason: r.lastError ?? t("the payment didn't go through"),
+                })}
+              </span>
+            )}
+            {r.resizing && (
+              <span
+                role="status"
+                className="flex items-center gap-1 text-xs text-info-foreground"
+              >
+                <IconLoader2 className="size-3 animate-spin" aria-hidden />
+                {t("Resizing on this machine…")}
+              </span>
+            )}
+            {r.resizeError && (
+              <span className="text-xs text-destructive">
+                {t("The resize didn't apply: {{reason}}", {
+                  reason: r.resizeError,
                 })}
               </span>
             )}

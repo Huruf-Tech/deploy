@@ -100,6 +100,12 @@ export default new Router("/api", function rentals(router) {
           "A smaller size (or a move's price) that starts at the renewal",
         ),
         rejectedReason: z.string().optional(),
+        resizing: z.boolean().optional().describe(
+          "A resize is applying on its machine",
+        ),
+        resizeError: z.string().optional().describe(
+          "Its machine couldn't apply the latest resize",
+        ),
         amountDue: z.number().optional().describe(
           "Cents its renewal needs, when it couldn't be charged",
         ),
@@ -139,8 +145,8 @@ export default new Router("/api", function rentals(router) {
         const { tenant } = await withTenant(req);
         const subs = await rentalService.list(tenant._id);
         const ids = subs.map((s) => s._id);
-        const [plans, uptimes, machines, open, stars, ended] = await Promise
-          .all([
+        const [plans, uptimes, machines, open, stars, ended, resizes] =
+          await Promise.all([
             rentalPlanModel.find({
               _id: {
                 $in: subs.flatMap((
@@ -171,6 +177,7 @@ export default new Router("/api", function rentals(router) {
               kind: "paid",
               settled: { $exists: true },
             }),
+            rentalService.resizeStates(subs),
           ]);
         const platform = await platformTenantId();
         const communityOwners = new Set(
@@ -228,6 +235,7 @@ export default new Router("/api", function rentals(router) {
               plans.find((p) => r.pendingChange!.plan.equals(p._id))?.name,
             ...nextOf(s, plans),
             rejectedReason: r.rejectedReason,
+            ...resizes.get(String(s._id)),
             amountDue: due.get(String(s._id)),
             pastDueSince: s.pastDueSince,
             ...(s.status === "pastDue"

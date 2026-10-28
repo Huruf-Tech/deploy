@@ -1986,5 +1986,9 @@
   "Still unpaid: {{reason}}": "Still unpaid: {{reason}}",
   "It isn't set up for rentals yet": "It isn't set up for rentals yet",
   "It isn't put up for rent": "It isn't put up for rent",
-  "It isn't taking new rentals": "It isn't taking new rentals"
+  "It isn't taking new rentals": "It isn't taking new rentals",
+  "Resizing to {{size}} on its machine. It keeps running; this takes a moment.": "Resizing to {{size}} on its machine. It keeps running; this takes a moment.",
+  "Its machine couldn't apply the resize: {{reason}}": "Its machine couldn't apply the resize: {{reason}}",
+  "Resizing on this machine…": "Resizing on this machine…",
+  "The resize didn't apply: {{reason}}": "The resize didn't apply: {{reason}}"
 }

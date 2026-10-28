@@ -44,6 +44,8 @@ export type machine$return = {
         held?: boolean | undefined;
         uptime?: number | undefined;
         overDisk?: number | undefined;
+        resizing?: boolean | undefined;
+        resizeError?: string | undefined;
         term?: {
             months: number;
             until?: Date | undefined;

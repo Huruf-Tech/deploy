@@ -40,6 +40,8 @@ export const $machineView = z.object({
     held: z.boolean().optional(),
     uptime: z.number().optional(),
     overDisk: z.number().optional(),
+    resizing: z.boolean().optional(),
+    resizeError: z.string().optional(),
     term: z.object({
       months: z.number(),
       until: z.date().optional(),
@@ -85,7 +87,7 @@ export async function machineView(
   const id = doc._id;
   const subs = await rentals.onMachine(id);
   const commission = await earnings.commissionOf(doc.tenant);
-  const [tenants, plans, uptimes, machines, security] = await Promise
+  const [tenants, plans, uptimes, machines, security, resizes] = await Promise
     .all([
       tenantModel.find({ _id: { $in: subs.map((s) => s.tenant) } }, {
         projection: { name: 1 },
@@ -108,6 +110,7 @@ export async function machineView(
         },
       }, { projection: { name: 1 } }).toArray(),
       earnings.securityOf(id),
+      rentals.resizeStates(subs),
     ]);
   const nameOf = (x?: ObjectId) =>
     x && machines.find((m) => m._id.equals(x))?.name;
@@ -129,6 +132,7 @@ export async function machineView(
       ...(r.held ? { held: true } : {}),
       uptime: uptimes.get(String(s._id)),
       ...(r.overDisk ? { overDisk: r.overDisk.bytes } : {}),
+      ...resizes.get(String(s._id)),
       term: r.term,
       endAt: r.endAt,
       ...(() => {

@@ -48,6 +48,10 @@ export type list$return = {
         at: Date;
     } | undefined;
     rejectedReason?: string | undefined;
+    /** A resize is applying on its machine */
+    resizing?: boolean | undefined;
+    /** Its machine couldn't apply the latest resize */
+    resizeError?: string | undefined;
     /** Cents its renewal needs, when it couldn't be charged */
     amountDue?: number | undefined;
     pastDueSince?: Date | undefined;

@@ -763,7 +763,14 @@ export class RentalService implements TRentalHooks {
       $set: { "rental.size": size, updatedAt: new Date() },
     });
     if (sub.rental.host && sub.rental.partition) {
-      await resizePartition(sub.rental.host, sub.rental.partition, size);
+      const { command } = await resizePartition(
+        sub.rental.host,
+        sub.rental.partition,
+        size,
+      );
+      await subscriptionModel.updateOne({ _id: sub._id }, {
+        $set: { "rental.resize": { command, at: new Date() } },
+      });
     }
     // Its server's name follows its size, unless the customer renamed it.
     if (sub.server) {
@@ -1730,6 +1737,42 @@ export class RentalService implements TRentalHooks {
   }
 
   /** This period's uptime so far, in percent, per rental (an ongoing outage included). */
+  /**
+   * Rentals whose latest resize hasn't applied on the machine yet, or
+   * failed there; one done (or gone) is left out.
+   */
+  async resizeStates(
+    subs: { _id: ObjectId; rental?: { resize?: { command: ObjectId } } }[],
+  ) {
+    const ids = subs.flatMap((s) =>
+      s.rental?.resize ? [s.rental.resize.command] : []
+    );
+    const commands = ids.length
+      ? await agentCommandModel.find({
+        _id: { $in: ids },
+        status: { $ne: "done" },
+      }, { projection: { status: 1, error: 1, expiresAt: 1 } }).toArray()
+      : [];
+    const now = new Date();
+    const states = new Map<
+      string,
+      { resizing: true } | { resizeError: string }
+    >();
+    for (const s of subs) {
+      const c = commands.find((c) => c._id.equals(s.rental?.resize?.command));
+      if (!c) continue;
+      states.set(
+        String(s._id),
+        c.status === "failed"
+          ? { resizeError: c.error ?? "The machine couldn't resize it" }
+          : c.expiresAt < now
+          ? { resizeError: "Its machine didn't pick up the resize in time" }
+          : { resizing: true },
+      );
+    }
+    return states;
+  }
+
   async uptimes(subs: { _id: ObjectId; server?: ObjectId }[]) {
     const now = new Date();
     const [periods, leases] = await Promise.all([

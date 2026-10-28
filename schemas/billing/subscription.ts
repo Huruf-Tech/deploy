@@ -100,6 +100,11 @@ export const $subscription = z.object({
       requestedAt: z.date(),
     }).optional(),
     rejectedReason: z.string().max(500).optional(),
+    /** The latest resize sent to its machine, to show while it applies. */
+    resize: z.object({
+      command: $objectId.meta({ ref: "agentCommands" }),
+      at: z.date(),
+    }).optional(),
     suspendedAt: z.date().optional(),
     /** Suspended by an admin: not renewed until resumed (the status it goes back to). */
     held: z.object({

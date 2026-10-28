@@ -5,9 +5,11 @@ import { ThunderSDK } from "thunder-sdk"
 import { toast } from "sonner"
 import {
   IconBuildingStore,
+  IconLoader2,
   IconStar,
   IconStarFilled,
 } from "@tabler/icons-react"
+import { usePolling } from "@/hooks/use-polling"
 import {
   COMMUNITY_CONSENT_VERSION,
   CommunityConsentDialog,
@@ -149,6 +151,10 @@ export function RentalPanel({ server }: { server: string }) {
   const { t } = useTranslation()
   const { rentals, reload } = useRentals()
   const rental = rentals?.find((r) => r.server === server)
+  // A resize applies on the machine in the background: follow it.
+  usePolling(() => {
+    if (rental?.resizing) reload()
+  }, 5_000)
   const [dialog, setDialog] = React.useState<
     "resize" | "cancel" | "dispute" | "report" | "rate"
   >()
@@ -279,6 +285,25 @@ export function RentalPanel({ server }: { server: string }) {
         </p>
       )}
       {rental.proposal && <Proposal rental={rental} onDone={reload} />}
+      {rental.resizing && (
+        <p
+          role="status"
+          className="flex items-center gap-2 rounded-lg bg-info-soft px-3 py-2 text-[13px] text-info-foreground"
+        >
+          <IconLoader2 className="size-4 animate-spin" aria-hidden />
+          {t(
+            "Resizing to {{size}} on its machine. It keeps running; this takes a moment.",
+            { size: rental.plan?.name ?? "" }
+          )}
+        </p>
+      )}
+      {rental.resizeError && (
+        <p className="rounded-lg bg-destructive-soft px-3 py-2 text-[13px] text-destructive-foreground">
+          {t("Its machine couldn't apply the resize: {{reason}}", {
+            reason: rental.resizeError,
+          })}
+        </p>
+      )}
       {rental.moving && (
         <p className="rounded-lg bg-info-soft px-3 py-2 text-[13px] text-info-foreground">
           {t(
