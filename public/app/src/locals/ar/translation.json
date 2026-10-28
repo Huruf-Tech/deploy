@@ -1281,7 +1281,6 @@
   "Per rental, whatever its size": "لكل إيجار، أيًّا كان حجمه",
   "Server classes": "فئات الخوادم",
   "Usage": "الاستخدام",
-  "{{server}} is rented from Huruf: it shares its machine's ports, so reach it through a custom domain.": "{{server}} مستأجر من Huruf: يشارك منافذ جهازه، لذا استخدم نطاقًا مخصّصًا للوصول إليه.",
   "Rented server": "خادم مستأجر",
   "The machine it's on can't be reached: it has no address, and tunnels aren't set up": "لا يمكن الوصول إلى الخادم الذي يعمل عليه: ليس له عنوان، والأنفاق غير مُعدّة",
   "Moving: it's offline until it starts on the new machine": "جارٍ النقل: يبقى متوقفًا حتى يعمل على الجهاز الجديد",
@@ -1950,5 +1949,6 @@
   "{{size}}, waiting for the owner": "{{size}}، بانتظار المالك",
   "Resize canceled": "أُلغي تغيير الحجم",
   "Cancel resize": "إلغاء تغيير الحجم",
-  "To move it, add another machine to this workspace and put it up for rent, or free room on one you have.": "لنقله، أضف جهازًا آخر إلى مساحة العمل هذه واعرضه للإيجار، أو أفرغ متسعًا على جهاز لديك."
+  "To move it, add another machine to this workspace and put it up for rent, or free room on one you have.": "لنقله، أضف جهازًا آخر إلى مساحة العمل هذه واعرضه للإيجار، أو أفرغ متسعًا على جهاز لديك.",
+  "{{server}} is a rented server: it shares its machine's ports, so reach it through a custom domain.": "{{server}} خادم مؤجّر: يشارك جهازه منافذه، فاصل إليه عبر نطاق مخصص."
 }

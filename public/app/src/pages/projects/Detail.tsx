@@ -561,7 +561,7 @@ function Settings({
               {rentedOn && (
                 <FieldDescription>
                   {t(
-                    "{{server}} is rented from Huruf: it shares its machine's ports, so reach it through a custom domain.",
+                    "{{server}} is a rented server: it shares its machine's ports, so reach it through a custom domain.",
                     { server: rentedOn.name }
                   )}
                 </FieldDescription>

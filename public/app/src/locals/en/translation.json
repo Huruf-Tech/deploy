@@ -1281,7 +1281,6 @@
   "Per rental, whatever its size": "Per rental, whatever its size",
   "Server classes": "Server classes",
   "Usage": "Usage",
-  "{{server}} is rented from Huruf: it shares its machine's ports, so reach it through a custom domain.": "{{server}} is rented from Huruf: it shares its machine's ports, so reach it through a custom domain.",
   "Rented server": "Rented server",
   "The machine it's on can't be reached: it has no address, and tunnels aren't set up": "The machine it's on can't be reached: it has no address, and tunnels aren't set up",
   "Moving: it's offline until it starts on the new machine": "Moving: it's offline until it starts on the new machine",
@@ -1950,5 +1949,6 @@
   "{{size}}, waiting for the owner": "{{size}}, waiting for the owner",
   "Resize canceled": "Resize canceled",
   "Cancel resize": "Cancel resize",
-  "To move it, add another machine to this workspace and put it up for rent, or free room on one you have.": "To move it, add another machine to this workspace and put it up for rent, or free room on one you have."
+  "To move it, add another machine to this workspace and put it up for rent, or free room on one you have.": "To move it, add another machine to this workspace and put it up for rent, or free room on one you have.",
+  "{{server}} is a rented server: it shares its machine's ports, so reach it through a custom domain.": "{{server}} is a rented server: it shares its machine's ports, so reach it through a custom domain."
 }

@@ -183,7 +183,7 @@ async function assertPortFree(opts: {
   }, { projection: { name: 1 } });
   if (rented) {
     throw Response.badRequest(
-      `${rented.name} is rented from Huruf: use a custom domain instead of a public port`,
+      `${rented.name} is a rented server: it shares its machine's ports, so use a custom domain instead of a public port`,
     );
   }
   // Partitions of one machine share its ports (PLAN §27.3).

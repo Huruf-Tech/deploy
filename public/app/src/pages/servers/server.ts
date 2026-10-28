@@ -105,7 +105,7 @@ export const stateOf = (server: TServer, live?: TLiveness): TServerState =>
 export const isMachine = (server: Pick<TServer, "provider">) =>
   server.provider?.kind === "machine"
 
-/** A partition: its own (on the tenant's machine) or rented from Huruf. */
+/** A partition: its own (on the tenant's machine) or rented in the market. */
 export const isPartition = (server: Pick<TServer, "provider">) =>
   server.provider?.kind === "partition" || server.provider?.kind === "rented"
 
