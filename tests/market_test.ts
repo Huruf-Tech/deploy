@@ -229,6 +229,17 @@ Deno.test({
         );
         assertEquals(twice.status, 400);
 
+        // Two claims at once: one gets it.
+        const both = await Promise.all([
+          earnings.claim(owner.tenantId, owner.user, claimable),
+          earnings.claim(owner.tenantId, owner.user, claimable),
+        ].map((p) => p.then((r) => r.claim, () => null)));
+        assertEquals(both.filter((c) => c).length, 1);
+        assertEquals(await balance(owner.tenantId), wallet + claimable);
+        const winner = both.find((c) => c)!;
+        await owner.call("POST", `/earnings/api/claims/${winner}/revert`);
+        assertEquals(await balance(owner.tenantId), wallet);
+
         // Spent since: an admin decides, up to what wasn't spent.
         const again = await owner.call("POST", "/earnings/api/claim", {
           amount: claimable,

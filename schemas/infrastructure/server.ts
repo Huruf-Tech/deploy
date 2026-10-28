@@ -110,7 +110,8 @@ export const $server = $serverUpdate.extend({
   }).optional(),
   /** The country of its public address (PLAN §30.3), looked up, never typed. */
   region: z.object({
-    country: z.string().max(2),
+    /** Absent while the lookup fails (tried again monthly). */
+    country: z.string().max(2).optional(),
     ip: z.string(),
     at: z.date(),
   }).optional(),

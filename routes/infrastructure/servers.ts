@@ -65,7 +65,7 @@ async function assertRemovable(id: ObjectId, tenant: ObjectId) {
     throw Response.badRequest(
       `${rented} rented partition${
         rented === 1 ? "" : "s"
-      } live on this machine: stop it taking rentals and move them to other machines first`,
+      } live on this machine: stop renting them out (each ends after its term and paid month) or move them to other machines first`,
     );
   }
 }

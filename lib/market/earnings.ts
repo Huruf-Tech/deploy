@@ -555,16 +555,14 @@ export class EarningsService {
    * platform, never cashed out from there.
    */
   async claim(owner: ObjectId, user: ObjectId, amount: number) {
-    const { available } = await this.summary(owner);
-    if (amount < 1 || amount > available) {
-      throw Response.badRequest(
-        `You can claim up to ${(Math.max(0, available) / 100).toFixed(2)} USD`,
-      );
-    }
+    await this.summary(owner);
+    const frozen = await this.frozenMachines(owner);
     const _id = new ObjectId();
     const now = new Date();
     await mongodb.withSession((client) =>
       client.withTransaction(async (session) => {
+        // The transfer first: it creates the owner's wallet when it has
+        // none, which a transaction can only see before its first read.
         const transfer = await fromPlatform({
           to: owner,
           amount,
@@ -573,6 +571,25 @@ export class EarningsService {
           user,
           session,
         });
+        // One claim at a time per owner: two at once would both see the
+        // same balance (the lock makes the second retry and re-read).
+        await this.lock(owner, session);
+        const ready = await earningModel.find({
+          owner,
+          bucket: "earnings",
+          availableAt: { $lte: now },
+        }, { projection: { amount: 1, machine: 1 }, session }).toArray();
+        const held = sum(
+          ready.filter((r) =>
+            r.amount > 0 && !!r.machine && frozen.has(String(r.machine))
+          ),
+        );
+        const available = Math.max(0, sum(ready) - held);
+        if (amount < 1 || amount > available) {
+          throw Response.badRequest(
+            `You can claim up to ${(available / 100).toFixed(2)} USD`,
+          );
+        }
         await earningModel.insertOne({
           _id,
           owner,
@@ -587,6 +604,24 @@ export class EarningsService {
       })
     );
     return { claim: String(_id) };
+  }
+
+  /** Serializes an owner's claims and reverts inside a transaction. */
+  private lock(owner: ObjectId, session: ClientSession) {
+    return mongodb.db().collection<{ _id: ObjectId; seq: number }>(
+      "earningLocks",
+    ).updateOne({ _id: owner }, { $inc: { seq: 1 } }, {
+      upsert: true,
+      session,
+    });
+  }
+
+  /** The owner's machines with an open dispute: their money waits. */
+  private async frozenMachines(owner: ObjectId) {
+    const open = await disputeModel.find({ owner, status: "open" }, {
+      projection: { machine: 1 },
+    }).toArray();
+    return new Set(open.map((d) => String(d.machine)));
   }
 
   /**
@@ -614,15 +649,34 @@ export class EarningsService {
       );
     }
     const amount = -claim.amount;
-    const since = await walletLedgerModel.find({
+    const sinceClaim = {
       tenant: owner,
       createdAt: { $gt: claim.createdAt },
       reference: { $ne: claim.walletReference },
-    }, { projection: { type: 1, amount: 1 }, limit: 1_000 }).toArray();
-    if (!since.length) {
-      await this.moveBack(owner, claimId, amount, user);
+    };
+    try {
+      // Checked inside the transaction that moves the money: a payment made
+      // meanwhile touches the same wallet, so this retries and sees it.
+      await mongodb.withSession((client) =>
+        client.withTransaction(async (session) => {
+          await this.lock(owner, session);
+          if (
+            await walletLedgerModel.countDocuments(sinceClaim, {
+              limit: 1,
+              session,
+            })
+          ) throw new Moved();
+          await this.moveBack(owner, claimId, amount, user, session);
+        })
+      );
       return { result: "reverted" as const, amount };
+    } catch (error) {
+      if (!(error instanceof Moved)) throw error;
     }
+    const since = await walletLedgerModel.find(sinceClaim, {
+      projection: { type: 1, amount: 1 },
+      limit: 1_000,
+    }).toArray();
     const charged = since.filter((t) => t.type === "debit")
       .reduce((a, t) => a + Math.abs(Number(t.amount)), 0);
     const max = Math.max(0, amount - charged);
@@ -647,33 +701,30 @@ export class EarningsService {
     claim: ObjectId,
     amount: number,
     user: ObjectId,
+    session: ClientSession,
   ) {
     const now = new Date();
-    await mongodb.withSession((client) =>
-      client.withTransaction(async (session) => {
-        const transfer = await Wallet.transfer({
-          fromTenant: owner,
-          toTenant: await platformTenant(),
-          amount,
-          currency: "usd",
-          idempotencyKey: `revert:${claim}`,
-          description: "Claim taken back to earnings",
-          purpose: "earnings",
-          user,
-          databaseSession: session,
-        });
-        await earningModel.insertOne({
-          owner,
-          bucket: "earnings",
-          amount,
-          availableAt: now,
-          type: "revert",
-          key: `revert:${claim}`,
-          walletReference: transfer.reference,
-          createdAt: now,
-        }, { session });
-      })
-    );
+    const transfer = await Wallet.transfer({
+      fromTenant: owner,
+      toTenant: await platformTenant(),
+      amount,
+      currency: "usd",
+      idempotencyKey: `revert:${claim}`,
+      description: "Claim taken back to earnings",
+      purpose: "earnings",
+      user,
+      databaseSession: session,
+    });
+    await earningModel.insertOne({
+      owner,
+      bucket: "earnings",
+      amount,
+      availableAt: now,
+      type: "revert",
+      key: `revert:${claim}`,
+      walletReference: transfer.reference,
+      createdAt: now,
+    }, { session });
   }
 
   /** An admin decides a revert request, up to its `max`. */
@@ -703,7 +754,17 @@ export class EarningsService {
     );
     if (!modifiedCount) throw Response.badRequest("Decided meanwhile");
     if (decision.amount > 0) {
-      await this.moveBack(request.owner, request.claim, decision.amount, admin);
+      await mongodb.withSession((client) =>
+        client.withTransaction((session) =>
+          this.moveBack(
+            request.owner,
+            request.claim,
+            decision.amount,
+            admin,
+            session,
+          )
+        )
+      );
     }
   }
 
@@ -802,3 +863,4 @@ export class EarningsService {
 }
 
 class Settled extends Error {}
+class Moved extends Error {}

@@ -1,11 +1,11 @@
 # Huruf Deploy — Product & Technical Plan
 
-> Status: **v4.9 — Phases 0–13 and 15–18 are built** (status notes in §16); Phase 19 (the market, §30) is planned, Phase 14 is the backlog, managed servers (D42, §24) are not built.
+> Status: **v4.9 — Phases 0–13 and 15–19 are built** (status notes in §16; Phase 19, the market, §30, pending review); Phase 14 is the backlog, managed servers (D42, §24) are not built.
 > Product: **Huruf Deploy**. Reference product: Dokploy (inspiration, not a clone).
 > Every phase in §16 ends with a review checkpoint before the next one starts.
 
 **v4.9:**
-- **A market of machines** (D50, §30, Phase 19, planned): anyone rents out a machine at hourly prices; customers find it in a market and pay monthly in advance; the owner earns after each month minus a commission set by their workspace plan, with a security per machine. Measurements it relies on are built (§29). AWS provisioning moves to Phase 20.
+- **A market of machines** (D50, §30, Phase 19, built, pending review): anyone rents out a machine at hourly prices; customers find it in a market and pay monthly in advance; the owner earns after each month minus a commission set by their workspace plan, with a security per machine. Measurements it relies on are built (§29). AWS provisioning moves to Phase 20.
 
 **v4.8:**
 - **Rentals on any machine** (D49, §28, Phase 18): no pool machines; an admin gives any platform machine a class, and rentals are isolated one by one. Every partition's whole disk is capped at its size. Phase 18 addendum in §16 logs the review fixes (billing keys, admin suspend/resume/delete, deploy pruning, agent shutdown).
@@ -1530,7 +1530,7 @@ The owner's decision (2026-10-27): no pool machines. An admin adds machines like
   - S3 volumes inside partitions don't work yet: in a Sysbox partition a FUSE mount can't be handed to a container (the Docker plugin, a bind at start and a bind after start all fail); mounting the bucket inside each project container is the likely way, to be designed.
   - Not built elsewhere in the plan: audited variable reveals and resolve reads (§12), template `cachePaths` (stored, unused).
 
-### Phase 19 — A market of machines (planned, D50, §30)
+### Phase 19 — A market of machines (built, pending review, D50, §30)
 The owner's idea (2026-10-27/28): anyone with a spare machine installs the agent, sets prices and rents it out; customers find machines in a market. Breaking changes and data migrations are fine (nothing is public yet). The measurements it needs are built (§29). One stage at a time, each with the owner's review; nothing starts before the owner says go.
 - **19a Pricing on the machine** (§30.3): hourly prices on the machine; server plans for rentals and the classes' rate cards go; the class comes from the rating; region from the IP address.
 - **19b The market** (§30.4): listing, filters, New arrivals, the community warning, a price calculator.
@@ -1539,6 +1539,27 @@ The owner's idea (2026-10-27/28): anyone with a spare machine installs the agent
 - **19e Downtime, leaving and agreed moves** (§30.6, §30.8): hourly downtime refunds, the 72-hour rule, forfeits, owner-proposed moves with the customer's consent.
 - **19f Disputes** (§30.9) and **19g Trust and safety** (§30.10).
 - **Later:** payouts out of the platform (Stripe Connect or another method), longer-term discounts, fraud monitoring of New arrivals (the data for it is recorded from 19b).
+- **Status: built (pending review), the owner said go for the whole phase (2026-10-28).**
+  - **Control plane:**
+    - `lib/market/`: `pricing.ts` (hourly prices, monthly ×730, refunds to the minute, shares, the security fill), `earnings.ts` (`EarningsService`: maturity, security and its cap, release, forfeit, claims and reverts, dispute payments), `market.ts` (the listing, `linked`, ratings, abuse reports, `DisputeService`), `region.ts` (country of a machine's address).
+    - `RentalService` reshaped: requests on a machine (`rental.host`, `owner`, `term`, `whole`), the owner's acceptance (or auto-accept), expiry after 72 hours, resizes accepted by the owner, `end` (stop renting it out), agreed moves (`propose`, `acceptProposal`, `declineProposal`; the split recorded on the period), a machine that left (`beforeRenew`: down over 72 hours ends the rental without a charge).
+    - Billing hooks: `periodFields` (the period's `market`: owner, machine, commission) and `beforeRenew`; renewals, unpaid renewals and endings mature the ended period.
+    - Routes: `market` (machines, quote), `rentals` (request, resize, cancel, proposals, dispute, rate, report), `hosting` (a machine's prices and switches, requests, accept/decline, resizes, end, move targets, propose, capacity), `earnings` (summary, claim, revert), `rentalsAdmin` (oversight: disputes, reverts, reports; the request queue, approval and class routes are gone).
+    - Removed: `serverClasses` (schema, routes, seeding), server size plans (made per rental now), `pool.class`.
+    - Migration (`syncDeployIndexes`): a class's rate card becomes its machines' hourly prices (rentals on, auto-accept off); size plans become private; existing rentals belong to the platform; requests made before the market are declined (nothing was charged). New indexes for earnings, disputes, ratings, reports, reverts and market periods.
+    - Settings: `RENTAL_REQUEST_HOURS` (72), `RENTAL_TRAFFIC_PER_VCPU_GB` (100), `GEOIP_URL` (`https://ipinfo.io/{ip}/country`; `off` disables it).
+    - Fixed on the way: a deleted or refunded rental's join token kept its machine's room taken.
+  - **Tests:** `tests/market_test.ts` (prices and shares; maturity with a refund, commission, security and the 14-day hold; claim, revert at once, revert decided by an admin; a dispute freezing and paying; ratings; an agreed move's split; a broken term's forfeit; linked workspaces) and `tests/rentals_test.ts` reshaped for the market (owner's acceptance, own machine refused, waiver required, expiry, auto-accept, the owner ending a rental, a machine that left).
+  - **Decisions made while building (owner to confirm):**
+    - **No CPU overcommit:** cores sold never exceed the machine's (memory and disk as before); this answers §30.3's open point.
+    - **A rental's price lives on its own private plan** (made at request, resize and agreed move), not on the subscription: billing, proration and renewals stay as they were.
+    - **Disputes pay** from the machine's earnings still in their 14 days, then from its security; while a dispute is open, none of that machine's money can be claimed.
+    - **The security is released** 14 days after the last period of a machine with no rental left and rentals switched off, or when it's above the cap (14 days after it was noticed).
+    - **A machine down over 72 hours** is detected at renewal (no charge, the rental ends) and at maturity (the month earns nothing). A rental's data isn't deleted before its renewal, in case the machine comes back.
+    - **Official machines** (the platform tenant's) earn nothing as an owner: their money is Huruf's; their renters still get downtime refunds.
+    - **The withdrawal waiver** is asked of every customer, not only EU consumers (we can't tell them apart).
+    - **Region** is looked up by the control plane from the machine's public address through `GEOIP_URL` (an outside service, five lookups per market load, kept a month).
+  - **Open:** the dashboard for all of it (in progress); fraud monitoring of New arrivals and payouts out of the platform (later, as planned); a dispute's evidence is a snapshot at opening, not updated.
 - **Done when:**
   1. Ali adds his spare computer, sets hourly prices and switches rentals on; it appears under New arrivals with its measured rating, class, disk, region, latency and uptime, and the community warning.
   2. Salha picks it, chooses 2 vCPU / 4 GB / 40 GB and a 6-month term, pays into escrow and Ali accepts; her server joins her workspace as rentals do today.
@@ -2522,7 +2543,7 @@ Kept: partitions and isolation, escrow at request, charging at acceptance, renew
 - The owner sets **hourly** prices: per vCPU, per GB of memory, per GB of disk, and one whole-machine price (Dedicated). Also their own monthly cost (for their revenue view), minimum and maximum sizes, rentals on or off, "takes new rentals", auto-accept.
 - **Monthly charge = hourly price × 730** (average hours in a month), so every month costs the same; hours (to the minute) are used for downtime refunds and mid-month changes.
 - **The class is measured, never chosen:** rating 0–100 and tier, disk kind, steal, bare metal or VM (§29). Region is looked up from the machine's IP address.
-- Open for 19a: whether owners may overcommit CPU (today a class setting).
+- **No CPU overcommit** (decided while building): the cores sold never exceed the machine's, like memory and disk.
 
 ### 30.4 The market (19b)
 - **Listing:** machines with room; official or community; region, measured latency, uptime (30/90 days), rating and tier, disk, steal, bare metal or VM, renters' rating, price calculator; Dedicated (whole machine) while nothing else runs on it.
