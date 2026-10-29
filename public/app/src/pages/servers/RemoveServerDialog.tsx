@@ -97,9 +97,11 @@ export function RemoveServerDialog({
 
   const forget = async () => {
     await ThunderSDK.servers.del({ params: { id: server._id } })
-    await ThunderSDK.forgetCache(["servers", server._id], { subKeys: true })
+    // Off its page first: forgetting its cache while the page is open makes
+    // its panels fetch the removed server again (404s).
     onOpenChange(false)
     navigate("..", { relative: "path" })
+    await ThunderSDK.forgetCache(["servers", server._id], { subKeys: true })
   }
 
   const remove = async () => {
