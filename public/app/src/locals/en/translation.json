@@ -2038,5 +2038,7 @@
   "The platform's certificate; it renews automatically.": "The platform's certificate; it renews automatically.",
   "Get a free test domain": "Get a free test domain",
   "You to Huruf {{you}} ms + Huruf to this machine {{machine}} ms: the way visitors near you reach it": "You to Huruf {{you}} ms + Huruf to this machine {{machine}} ms: the way visitors near you reach it",
-  "{{ms}} ms from you": "{{ms}} ms from you"
+  "{{ms}} ms from you": "{{ms}} ms from you",
+  "name (empty: random)": "name (empty: random)",
+  "Test domain name": "Test domain name"
 }

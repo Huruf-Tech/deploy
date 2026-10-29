@@ -53,6 +53,8 @@ Deno.test({
       });
       return _id.toString();
     };
+    // Only `a` may name its test domains.
+    config.APP_DOMAIN_CUSTOM_TENANTS = `other, ${a.tenantId}`;
     const pa = await projectOf(a.tenantId);
     const pb = await projectOf(b.tenantId);
     const host = `app-${Date.now()}.example.test`;
@@ -546,8 +548,45 @@ Deno.test({
           );
         },
       );
+      await t.step(
+        "a named test domain: only for the workspaces allowed",
+        async () => {
+          assertEquals((await a.call("GET", "/domains/api/app")).json, {
+            domain: "apps.test",
+            canName: true,
+          });
+          const refused = await b.call("POST", "/domains/api/app", {
+            project: pb,
+            name: "shop",
+          });
+          assertEquals(refused.status, 403);
+          for (const name of ["-shop", "a.b", "my-bank"]) {
+            const bad = await a.call("POST", "/domains/api/app", {
+              project: pa,
+              name,
+            });
+            assertEquals(bad.status, 400, name);
+          }
+          const res = await a.call("POST", "/domains/api/app", {
+            project: pa,
+            name: " My-Shop ",
+          });
+          assertEquals(res.status, 200, JSON.stringify(res.json));
+          const named = (await get(a.call, pa)).find((d: { _id: string }) =>
+            d._id === res.json._id
+          );
+          assertEquals(named.hostname, "my-shop.apps.test");
+          const taken = await a.call("POST", "/domains/api/app", {
+            project: await projectOf(a.tenantId),
+            name: "my-shop",
+          });
+          assertEquals(taken.status, 400);
+          assertMatch(String(taken.json), /is taken/);
+        },
+      );
     } finally {
       delete config.APP_DOMAIN;
+      delete config.APP_DOMAIN_CUSTOM_TENANTS;
       Object.assign(resolver, real);
       await domainModel.deleteMany({
         tenant: { $in: [a.tenantId, b.tenantId] },

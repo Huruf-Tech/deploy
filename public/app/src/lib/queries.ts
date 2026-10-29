@@ -90,7 +90,7 @@ export const queries = {
     query(["domains", "app"], async ({ signal }) =>
       can("domains", "appDomainInfo")
         ? await ThunderSDK.domains.appDomainInfo({ signal })
-        : { domain: undefined }
+        : { domain: undefined, canName: undefined }
     ),
   /** The workspace's Cloudflare connection, for domains' records (PLAN §14). */
   cloudflare: () =>

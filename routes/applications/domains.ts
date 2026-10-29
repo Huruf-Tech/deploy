@@ -18,7 +18,11 @@ import {
   domainModel,
 } from "@/schemas/applications/domain.ts";
 import { tenantOwner } from "@/lib/billing/owner.ts";
-import { addAppDomain, appDomain } from "@/lib/domains/appDomain.ts";
+import {
+  addAppDomain,
+  appDomain,
+  canNameAppDomain,
+} from "@/lib/domains/appDomain.ts";
 import {
   authorizeUrl,
   completeOAuth,
@@ -116,24 +120,41 @@ export default new Router("/api", function domains(router) {
   router.get("/app", function appDomainInfo() {
     return {
       shape: () => ({
-        return: z.object({ domain: z.string().optional() }),
+        return: z.object({
+          domain: z.string().optional(),
+          canName: z.boolean().optional().describe(
+            "This workspace may choose the name",
+          ),
+        }),
       }),
       handler: async (req) => {
-        await withTenant(req);
+        const { tenant } = await withTenant(req);
         const domain = await appDomain();
-        return Response.json(domain ? { domain } : {});
+        return Response.json(
+          domain
+            ? {
+              domain,
+              ...(await canNameAppDomain(tenant._id) ? { canName: true } : {}),
+            }
+            : {},
+        );
       },
     };
   });
 
   router.post("/app", function addTestDomain() {
-    const $body = z.object({ project: $objectId });
+    const $body = z.object({
+      project: $objectId,
+      name: z.string().max(63).optional().describe(
+        "`<name>.<domain>`, for workspaces allowed to choose it",
+      ),
+    });
     return {
       shape: () => ({ body: $body, return: z.object({ _id: z.string() }) }),
       handler: async (req) => {
-        const { project } = $body.parse(await bodyAsJson(req));
+        const { project, name } = $body.parse(await bodyAsJson(req));
         const { tenant, user } = await withTenant(req);
-        const _id = await addAppDomain(tenant._id, user._id, project);
+        const _id = await addAppDomain(tenant._id, user._id, project, name);
         return Response.json({ _id: _id.toString() });
       },
     };

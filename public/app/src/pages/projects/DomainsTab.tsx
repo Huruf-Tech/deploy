@@ -259,17 +259,25 @@ export function DomainsTab({ project }: { project: string }) {
   const [hostname, setHostname] = React.useState("")
   const [adding, setAdding] = React.useState(false)
   const { data, isLoading, reload } = useCached(queries.domains(project))
-  const app = useCached(queries.appDomain()).data?.domain
+  const appInfo = useCached(queries.appDomain()).data
+  const app = appInfo?.domain
   const [gettingFree, setGettingFree] = React.useState(false)
+  // Workspaces an admin allowed choose the name; empty: a random one.
+  const [freeName, setFreeName] = React.useState("")
   const canGetFree =
     !!app &&
     !!data &&
     !data.some((d) => d.appDomain) &&
     ThunderSDK.isPermitted("domains", "addTestDomain")
-  const getFree = async () => {
+  const getFree = async (e?: React.FormEvent) => {
+    e?.preventDefault()
     setGettingFree(true)
     try {
-      await ThunderSDK.domains.addTestDomain({ body: { project } })
+      const name = freeName.trim()
+      await ThunderSDK.domains.addTestDomain({
+        body: { project, ...(name ? { name } : {}) },
+      })
+      setFreeName("")
       reload()
     } catch (err) {
       toast.error(errorMessage(err) ?? t("Could not get a test domain"))
@@ -382,13 +390,13 @@ export function DomainsTab({ project }: { project: string }) {
           )}
           {t("Add domain")}
         </Button>
-        {canGetFree && (
+        {canGetFree && !appInfo?.canName && (
           <Button
             size="sm"
             type="button"
             variant="outline"
             disabled={gettingFree}
-            onClick={getFree}
+            onClick={() => getFree()}
           >
             {gettingFree ? (
               <IconLoader2 className="animate-spin" aria-hidden />
@@ -399,6 +407,39 @@ export function DomainsTab({ project }: { project: string }) {
           </Button>
         )}
       </form>
+      {canGetFree && appInfo?.canName && (
+        <form onSubmit={getFree} className="flex flex-wrap items-center gap-2">
+          <div
+            className="flex h-8 max-w-sm min-w-0 flex-1 items-center gap-1"
+            dir="ltr"
+          >
+            <Input
+              value={freeName}
+              onChange={(e) => setFreeName(e.target.value)}
+              placeholder={t("name (empty: random)")}
+              aria-label={t("Test domain name")}
+              className="h-8 min-w-0 flex-1 font-mono text-[13px]"
+              maxLength={63}
+            />
+            <span className="shrink-0 font-mono text-[13px] text-muted-foreground">
+              .{app}
+            </span>
+          </div>
+          <Button
+            size="sm"
+            type="submit"
+            variant="outline"
+            disabled={gettingFree}
+          >
+            {gettingFree ? (
+              <IconLoader2 className="animate-spin" aria-hidden />
+            ) : (
+              <IconWorld aria-hidden />
+            )}
+            {t("Get a free test domain")}
+          </Button>
+        </form>
+      )}
 
       {!isLoading && !data?.length ? (
         <EmptyState

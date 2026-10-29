@@ -43,9 +43,13 @@ export type create$return = {
 };
 export type appDomainInfo$return = {
     domain?: string | undefined;
+    /** This workspace may choose the name */
+    canName?: boolean | undefined;
 };
 export type addTestDomain$body = {
     project?: string;
+    /** `<name>.<domain>`, for workspaces allowed to choose it */
+    name?: string | undefined;
 };
 export type addTestDomain$return = {
     _id: string;

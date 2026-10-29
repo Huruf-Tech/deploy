@@ -42,16 +42,47 @@ export function appHostname(project: string, domain: string) {
   return `${slug}-${suffix}.${domain}`;
 }
 
-/** A project's free test domain: one each, live at once. */
+/**
+ * Whether the tenant may name its test domain (`<name>.<APP_DOMAIN>`):
+ * workspaces an admin listed in `APP_DOMAIN_CUSTOM_TENANTS` (ids, comma or
+ * space separated).
+ */
+export const canNameAppDomain = async (tenant: ObjectId) =>
+  (await readTextSetting("APP_DOMAIN_CUSTOM_TENANTS", "")).split(/[\s,]+/)
+    .includes(String(tenant));
+
+/** A chosen name: one DNS label (the wildcard covers one level), not official-looking. */
+function customLabel(name: string) {
+  const label = name.trim().toLowerCase();
+  if (!/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(label)) {
+    throw Response.badRequest(
+      "A name is letters, digits and hyphens (not at either end), up to 63",
+    );
+  }
+  if (RESERVED.test(label)) {
+    throw Response.badRequest("This name would look official: pick another");
+  }
+  return label;
+}
+
+/**
+ * A project's free test domain: one each, live at once. `name` is for the
+ * tenants allowed to choose it; otherwise it comes from the project.
+ */
 export async function addAppDomain(
   tenant: ObjectId,
   user: ObjectId,
   projectId: ObjectId,
+  name?: string,
 ) {
   const domain = await appDomain();
   if (!domain) {
     throw Response.badRequest("Free test domains aren't available here");
   }
+  if (name !== undefined && !await canNameAppDomain(tenant)) {
+    throw Response.forbidden("This workspace can't choose its test domain");
+  }
+  const label = name === undefined ? undefined : customLabel(name);
   const project = await getProject(tenant, projectId);
   const now = new Date();
   for (let attempt = 0; attempt < 3; attempt++) {
@@ -61,7 +92,9 @@ export async function addAppDomain(
         _id,
         tenant,
         project: projectId,
-        hostname: appHostname(project.name, domain),
+        hostname: label
+          ? `${label}.${domain}`
+          : appHostname(project.name, domain),
         token: encodeHex(crypto.getRandomValues(new Uint8Array(16))),
         status: "active",
         appDomain: true,
@@ -78,6 +111,7 @@ export async function addAppDomain(
       if (await domainModel.findOne({ project: projectId, appDomain: true })) {
         throw Response.badRequest("This project already has a test domain");
       }
+      if (label) throw Response.badRequest(`${label}.${domain} is taken`);
       // The random part was taken: another one.
     }
   }
