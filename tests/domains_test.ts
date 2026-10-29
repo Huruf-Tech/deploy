@@ -355,7 +355,7 @@ Deno.test({
           const revoked: string[] = [];
           const records: Record<string, unknown>[] = [];
           const real = cloudflareApi.fetch;
-          cloudflareApi.fetch = async (url, init) => {
+          const answer = (url: string, init: RequestInit) => {
             const u = new URL(url);
             const auth = new Headers(init.headers).get("Authorization") ?? "";
             if (u.pathname.startsWith("/oauth2/")) {
@@ -415,6 +415,8 @@ Deno.test({
             }
             return ok([]);
           };
+          cloudflareApi.fetch = (url, init) =>
+            Promise.resolve(answer(url, init));
           try {
             let conn = await b.call(
               "GET",
