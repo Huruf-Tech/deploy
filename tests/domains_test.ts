@@ -336,7 +336,14 @@ Deno.test({
                 ],
               ],
             );
-            assertEquals(d.status, "checking", "the check started");
+            assertEquals(d.status, "issuing", "verified without lookups");
+            assert(d.verifiedAt);
+            const doc = await domainModel.findOne({ hostname });
+            const wait = doc!.issueAt!.getTime() - Date.now();
+            assert(
+              wait > 20_000 && wait <= 30_000,
+              `ordered shortly after: ${wait}`,
+            );
             // Again: nothing new to create.
             const third = await setUp();
             assertEquals([third.json.applied, third.json.created], [true, []]);

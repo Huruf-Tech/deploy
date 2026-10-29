@@ -215,9 +215,12 @@ export function CloudflareSetUp({
       }
       setConflicts(undefined)
       toast.success(
-        t("Records created in Cloudflare ({{zone}}): checking now", {
-          zone: result.zone ?? hostname,
-        })
+        t(
+          "Records created in Cloudflare ({{zone}}): its certificate comes in about a minute",
+          {
+            zone: result.zone ?? hostname,
+          }
+        )
       )
       onDone()
     } catch (e) {

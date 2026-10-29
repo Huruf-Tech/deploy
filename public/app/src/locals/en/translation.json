@@ -2024,7 +2024,6 @@
   "In Cloudflare, create an API token from the \"Edit zone DNS\" template, for the zones your domains are in, and paste it here. It's stored encrypted and only creates your domains' records.": "In Cloudflare, create an API token from the \"Edit zone DNS\" template, for the zones your domains are in, and paste it here. It's stored encrypted and only creates your domains' records.",
   "Open API tokens": "Open API tokens",
   "API token": "API token",
-  "Records created in Cloudflare ({{zone}}): checking now": "Records created in Cloudflare ({{zone}}): checking now",
   "Could not create the records": "Could not create the records",
   "Create records in Cloudflare": "Create records in Cloudflare",
   "{{name}} already points elsewhere in Cloudflare: the workspace owner can replace those records.": "{{name}} already points elsewhere in Cloudflare: the workspace owner can replace those records.",
@@ -2032,5 +2031,6 @@
   "It already points elsewhere in Cloudflare. These records are deleted and replaced with the platform's, so whatever they served stops:": "It already points elsewhere in Cloudflare. These records are deleted and replaced with the platform's, so whatever they served stops:",
   "proxied": "proxied",
   "Replace them": "Replace them",
-  "Cloudflare is connected": "Cloudflare is connected"
+  "Cloudflare is connected": "Cloudflare is connected",
+  "Records created in Cloudflare ({{zone}}): its certificate comes in about a minute": "Records created in Cloudflare ({{zone}}): its certificate comes in about a minute"
 }

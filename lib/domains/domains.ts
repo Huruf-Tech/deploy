@@ -248,6 +248,40 @@ export async function checkOnce(domain: WithId<TDomain>, now = new Date()) {
   );
 }
 
+/**
+ * Records just created through the DNS provider's API (Cloudflare, with the
+ * zone owner's authorization) prove ownership and DNS: verified now, with no
+ * lookup (a resolver may still hold the "no such name" from when it was
+ * added), and the certificate ordered after `delayMs`, once the provider
+ * serves the records. Let's Encrypt's own validation still applies.
+ */
+export async function verifyByProvider(
+  tenant: ObjectId,
+  id: ObjectId,
+  delayMs: number,
+) {
+  const now = new Date();
+  try {
+    await domainModel.updateOne(
+      { _id: id, tenant, status: { $in: ["pending", "failed", "checking"] } },
+      {
+        $set: {
+          status: "issuing",
+          verifiedAt: now,
+          checks: { ownership: true, dns: true, checkedAt: now },
+          issueAt: new Date(now.getTime() + delayMs),
+          issueFailures: 0,
+          updatedAt: now,
+        },
+        $unset: { nextCheckAt: "", checkUntil: "", error: "" },
+      },
+    );
+  } catch (error) {
+    if (!isDuplicateKeyError(error)) throw error;
+    throw Response.badRequest("This domain is in use by another account");
+  }
+}
+
 /** "Check now": checks right away, then every minute for 30 minutes. */
 export async function startCheck(tenant: ObjectId, id: ObjectId) {
   const now = new Date();

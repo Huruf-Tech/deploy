@@ -4,7 +4,7 @@ import { Env } from "@/core/utils/env.ts";
 import { OAuth2 } from "@/plugins/Huruf-Tech/thunder-core/lib/oauth2.ts";
 import { readTextSetting } from "@/lib/core/settings.ts";
 import { keyring } from "@/lib/services.ts";
-import { domainRecords, startCheck } from "@/lib/domains/domains.ts";
+import { domainRecords, verifyByProvider } from "@/lib/domains/domains.ts";
 import {
   cloudflareConnectionModel,
   domainModel,
@@ -18,6 +18,9 @@ import {
  */
 
 const API = "https://api.cloudflare.com/client/v4";
+
+/** Cloudflare serves new records within seconds; ordered after this. */
+const ISSUE_DELAY_MS = 30_000;
 
 type TRecord = {
   id: string;
@@ -362,7 +365,7 @@ const unquote = (s: string) => s.replace(/^"|"$/g, "");
  * the hostname pointed at the ingress (CNAME, or A records at a zone's apex
  * when the platform has IPs), DNS only. Records already pointing elsewhere
  * are conflicts: listed, and replaced only with `replace` (the owner's call).
- * Then the domain's check starts.
+ * Then the domain is verified and its certificate ordered shortly after.
  */
 export async function setUpInCloudflare(
   tenant: ObjectId,
@@ -456,6 +459,7 @@ export async function setUpInCloudflare(
     });
     created.push(`${w.type} ${domain.hostname}`);
   }
-  await startCheck(tenant, id);
+  // Created through the zone owner's own access: verified, no lookups.
+  await verifyByProvider(tenant, id, ISSUE_DELAY_MS);
   return { applied: true as const, created, zone: zone.name };
 }

@@ -2024,7 +2024,6 @@
   "In Cloudflare, create an API token from the \"Edit zone DNS\" template, for the zones your domains are in, and paste it here. It's stored encrypted and only creates your domains' records.": "في Cloudflare أنشئ رمز API من قالب \"Edit zone DNS\" للمناطق التي فيها نطاقاتك، والصقه هنا. يُخزَّن مشفّرًا ولا يُستخدم إلا لإنشاء سجلات نطاقاتك.",
   "Open API tokens": "فتح رموز API",
   "API token": "رمز API",
-  "Records created in Cloudflare ({{zone}}): checking now": "أُنشئت السجلات في Cloudflare ({{zone}}): جارٍ الفحص",
   "Could not create the records": "تعذّر إنشاء السجلات",
   "Create records in Cloudflare": "إنشاء السجلات في Cloudflare",
   "{{name}} already points elsewhere in Cloudflare: the workspace owner can replace those records.": "{{name}} يشير إلى مكان آخر في Cloudflare: يمكن لمالك مساحة العمل استبدال تلك السجلات.",
@@ -2032,5 +2031,6 @@
   "It already points elsewhere in Cloudflare. These records are deleted and replaced with the platform's, so whatever they served stops:": "يشير بالفعل إلى مكان آخر في Cloudflare. ستُحذف هذه السجلات وتُستبدل بسجلات المنصة، فيتوقف ما كانت تخدمه:",
   "proxied": "عبر الوكيل",
   "Replace them": "استبدلها",
-  "Cloudflare is connected": "تم ربط Cloudflare"
+  "Cloudflare is connected": "تم ربط Cloudflare",
+  "Records created in Cloudflare ({{zone}}): its certificate comes in about a minute": "أُنشئت السجلات في Cloudflare ({{zone}}): تصدر شهادته خلال دقيقة تقريبًا"
 }
