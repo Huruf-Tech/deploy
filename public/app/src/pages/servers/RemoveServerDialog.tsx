@@ -101,7 +101,10 @@ export function RemoveServerDialog({
     // its panels fetch the removed server again (404s).
     onOpenChange(false)
     navigate("..", { relative: "path" })
-    await ThunderSDK.forgetCache(["servers", server._id], { subKeys: true })
+    // After React has left the page.
+    setTimeout(() => {
+      void ThunderSDK.forgetCache(["servers", server._id], { subKeys: true })
+    })
   }
 
   const remove = async () => {
