@@ -2036,5 +2036,7 @@
   "Could not get a test domain": "Could not get a test domain",
   "Test domain": "Test domain",
   "The platform's certificate; it renews automatically.": "The platform's certificate; it renews automatically.",
-  "Get a free test domain": "Get a free test domain"
+  "Get a free test domain": "Get a free test domain",
+  "You to Huruf {{you}} ms + Huruf to this machine {{machine}} ms: the way visitors near you reach it": "You to Huruf {{you}} ms + Huruf to this machine {{machine}} ms: the way visitors near you reach it",
+  "{{ms}} ms from you": "{{ms}} ms from you"
 }

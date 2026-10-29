@@ -2036,5 +2036,7 @@
   "Could not get a test domain": "تعذّر الحصول على نطاق تجريبي",
   "Test domain": "نطاق تجريبي",
   "The platform's certificate; it renews automatically.": "شهادة المنصة؛ تتجدد تلقائيًا.",
-  "Get a free test domain": "احصل على نطاق تجريبي مجاني"
+  "Get a free test domain": "احصل على نطاق تجريبي مجاني",
+  "You to Huruf {{you}} ms + Huruf to this machine {{machine}} ms: the way visitors near you reach it": "منك إلى Huruf ‏{{you}} مللي ثانية + من Huruf إلى هذا الجهاز {{machine}} مللي ثانية: الطريق الذي يصل به الزوار القريبون منك",
+  "{{ms}} ms from you": "{{ms}} مللي ثانية منك"
 }

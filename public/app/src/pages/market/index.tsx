@@ -42,6 +42,7 @@ import {
   useRentals,
 } from "@/pages/rentals/rental"
 import { notifyServersChanged } from "@/pages/servers/events"
+import { usePlatformRtt } from "@/lib/latency"
 
 type TFilters = Parameters<typeof queries.market>[0]
 
@@ -167,7 +168,18 @@ export default function Market() {
   const { t } = useTranslation()
   const [filters, setFilters] = React.useState<TFilters>({ sort: "rating" })
   const set = (patch: Partial<TFilters>) => setFilters({ ...filters, ...patch })
-  const { data } = useCached(queries.market(filters))
+  // Visitors reach a rented machine through the platform's ingress: what
+  // the user sees is their way to it plus the machine's (PLAN §30.4).
+  const myRtt = usePlatformRtt()
+  const { data } = useCached(
+    queries.market({
+      ...filters,
+      // The machine's share of the latency asked for.
+      ...(filters.maxRttMs !== undefined
+        ? { maxRttMs: Math.max(0, filters.maxRttMs - (myRtt ?? 0)) }
+        : {}),
+    })
+  )
   const { reload } = useRentals()
   const [renting, setRenting] = React.useState<TMarketMachine>()
   const canRent = ThunderSDK.isPermitted("rentals", "request")
@@ -418,6 +430,7 @@ export default function Market() {
               key={m._id}
               machine={m}
               countryName={country(m.country)}
+              myRtt={myRtt}
               onRent={canRent && !m.yours ? () => setRenting(m) : undefined}
             />
           ))}
@@ -481,10 +494,13 @@ function Flag({ code }: { code?: string }) {
 function MachineCard({
   machine: m,
   countryName,
+  myRtt,
   onRent,
 }: {
   machine: TMarketMachine
   countryName?: string
+  /** This browser's round trip to the platform, once measured. */
+  myRtt?: number
   onRent?: () => void
 }) {
   const { t } = useTranslation()
@@ -521,9 +537,26 @@ function MachineCard({
             )}
             {m.rttMs !== undefined && (
               <>
-                <span className="shrink-0">
-                  {t("{{ms}} ms away", { ms: Math.round(m.rttMs) })}
-                </span>
+                {myRtt !== undefined ? (
+                  <span
+                    className="shrink-0"
+                    title={t(
+                      "You to Huruf {{you}} ms + Huruf to this machine {{machine}} ms: the way visitors near you reach it",
+                      {
+                        you: Math.round(myRtt),
+                        machine: Math.round(m.rttMs),
+                      }
+                    )}
+                  >
+                    {t("{{ms}} ms from you", {
+                      ms: Math.round(myRtt + m.rttMs),
+                    })}
+                  </span>
+                ) : (
+                  <span className="shrink-0">
+                    {t("{{ms}} ms away", { ms: Math.round(m.rttMs) })}
+                  </span>
+                )}
                 <span aria-hidden>·</span>
               </>
             )}
