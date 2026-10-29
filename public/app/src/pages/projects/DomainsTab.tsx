@@ -259,6 +259,24 @@ export function DomainsTab({ project }: { project: string }) {
   const [hostname, setHostname] = React.useState("")
   const [adding, setAdding] = React.useState(false)
   const { data, isLoading, reload } = useCached(queries.domains(project))
+  const app = useCached(queries.appDomain()).data?.domain
+  const [gettingFree, setGettingFree] = React.useState(false)
+  const canGetFree =
+    !!app &&
+    !!data &&
+    !data.some((d) => d.appDomain) &&
+    ThunderSDK.isPermitted("domains", "addTestDomain")
+  const getFree = async () => {
+    setGettingFree(true)
+    try {
+      await ThunderSDK.domains.addTestDomain({ body: { project } })
+      reload()
+    } catch (err) {
+      toast.error(errorMessage(err) ?? t("Could not get a test domain"))
+    } finally {
+      setGettingFree(false)
+    }
+  }
   const working = data?.some(
     (d) =>
       d.status === "checking" ||
@@ -289,16 +307,21 @@ export function DomainsTab({ project }: { project: string }) {
       sortValue: (d) => d.hostname,
       cell: (d) =>
         d.status === "active" ? (
-          <a
-            href={`https://${d.hostname}`}
-            target="_blank"
-            rel="noreferrer"
-            dir="ltr"
-            className="inline-flex items-center gap-1 font-mono text-xs break-all text-brand-text hover:underline"
-          >
-            {d.hostname}
-            <IconExternalLink className="size-3" aria-hidden />
-          </a>
+          <span className="inline-flex flex-wrap items-center gap-2">
+            <a
+              href={`https://${d.hostname}`}
+              target="_blank"
+              rel="noreferrer"
+              dir="ltr"
+              className="inline-flex items-center gap-1 font-mono text-xs break-all text-brand-text hover:underline"
+            >
+              {d.hostname}
+              <IconExternalLink className="size-3" aria-hidden />
+            </a>
+            {d.appDomain && (
+              <StatusBadge tone="neutral" label={t("Test domain")} />
+            )}
+          </span>
         ) : (
           <span dir="ltr" className="font-mono text-xs break-all">
             {d.hostname}
@@ -316,7 +339,11 @@ export function DomainsTab({ project }: { project: string }) {
       header: t("Certificate"),
       className: "max-md:hidden",
       cell: (d) =>
-        d.status === "active" && d.certificate ? (
+        d.appDomain ? (
+          <span className="text-xs text-muted-foreground">
+            {t("The platform's certificate; it renews automatically.")}
+          </span>
+        ) : d.status === "active" && d.certificate ? (
           <span className="text-xs text-muted-foreground">
             {t("Certificate valid until {{date}}; it renews automatically.", {
               date: day(d.certificate.notAfter),
@@ -355,6 +382,22 @@ export function DomainsTab({ project }: { project: string }) {
           )}
           {t("Add domain")}
         </Button>
+        {canGetFree && (
+          <Button
+            size="sm"
+            type="button"
+            variant="outline"
+            disabled={gettingFree}
+            onClick={getFree}
+          >
+            {gettingFree ? (
+              <IconLoader2 className="animate-spin" aria-hidden />
+            ) : (
+              <IconWorld aria-hidden />
+            )}
+            {t("Get a free test domain")}
+          </Button>
+        )}
       </form>
 
       {!isLoading && !data?.length ? (

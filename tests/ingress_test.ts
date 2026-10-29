@@ -7,7 +7,11 @@ import { parse } from "@std/yaml";
 import { Env } from "@/core/utils/env.ts";
 import { mongodb } from "@/database.ts";
 import { keyring } from "@/lib/services.ts";
-import { domainModel } from "@/schemas/applications/domain.ts";
+import {
+  appCertificateModel,
+  domainModel,
+} from "@/schemas/applications/domain.ts";
+import { PLATFORM_OWNER } from "@/schemas/monitoring/alert.ts";
 
 // What Traefik polls (PLAN §14, Phase 11): routes, weighted services and
 // certificate files, all from the database.
@@ -25,6 +29,8 @@ Deno.test({
     config.INGRESS_CONFIG_TOKEN = TOKEN;
     config.TRAEFIK_CERTS_DIR = dir;
     config.INGRESS_TUNNEL_HOST = "127.0.0.1";
+    // Settings are cached a minute: on from the start.
+    config.APP_DOMAIN = "apps.test";
 
     const db = mongodb.db();
     const tenant = new ObjectId();
@@ -177,7 +183,58 @@ Deno.test({
           assert(!(await certificates()).includes("CERT "));
         },
       );
+
+      await t.step(
+        "a free test domain: routed, wildcard certificate",
+        async () => {
+          const free = new ObjectId();
+          const later = new Date(Date.now() + 90 * 86_400_000);
+          await domainModel.insertOne({
+            _id: free,
+            tenant,
+            project,
+            hostname: "web-abc123.apps.test",
+            token: "t",
+            status: "active",
+            appDomain: true,
+            verifiedAt: new Date(),
+            createdBy: new ObjectId(),
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          });
+          await appCertificateModel.insertOne({
+            _id: "apps.test",
+            pem: "WILDCARD CERT",
+            keyEnc: await keyring.encrypt(
+              { kind: "tenant", ref: PLATFORM_OWNER },
+              "WILDCARD KEY",
+              "certificate:*.apps.test",
+            ),
+            notAfter: later,
+            issuedAt: new Date(),
+            renewAt: later,
+          });
+          try {
+            await sleep(2_100); // the config is shared for 2 s
+            const { json } = await poll();
+            assertEquals(
+              json.http.routers[`d-${free}`]?.rule,
+              "Host(`web-abc123.apps.test`)",
+            );
+            const { tls } = parse(await certificates()) as TTls;
+            assert(
+              tls.certificates.some((c) =>
+                c.certFile === "WILDCARD CERT" && c.keyFile === "WILDCARD KEY"
+              ),
+            );
+          } finally {
+            await appCertificateModel.deleteOne({ _id: "apps.test" });
+            await domainModel.deleteOne({ _id: free });
+          }
+        },
+      );
     } finally {
+      delete config.APP_DOMAIN;
       await Promise.all([
         domainModel.deleteMany({ tenant }),
         db.collection("projects").deleteMany({ tenant }),

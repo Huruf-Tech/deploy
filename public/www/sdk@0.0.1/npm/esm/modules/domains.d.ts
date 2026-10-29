@@ -8,6 +8,8 @@ export type list$return = {
     project: string;
     hostname: string;
     status: "pending" | "checking" | "issuing" | "verifying" | "active" | "failed";
+    /** A free test domain */
+    appDomain?: boolean | undefined;
     checks?: {
         ownership: boolean;
         dns: boolean;
@@ -37,6 +39,15 @@ export type create$body = {
     hostname: string;
 };
 export type create$return = {
+    _id: string;
+};
+export type appDomainInfo$return = {
+    domain?: string | undefined;
+};
+export type addTestDomain$body = {
+    project?: string;
+};
+export type addTestDomain$return = {
     _id: string;
 };
 export type check$params = {
@@ -88,6 +99,9 @@ export declare const domainsModule: (sdk: typeof BaseSDK) => {
         list$return: list$return;
         create$body: create$body;
         create$return: create$return;
+        appDomainInfo$return: appDomainInfo$return;
+        addTestDomain$body: addTestDomain$body;
+        addTestDomain$return: addTestDomain$return;
         check$params: check$params;
         cloudflareConnection$return: cloudflareConnection$return;
         connectCloudflareToken$body: connectCloudflareToken$body;
@@ -120,6 +134,28 @@ export declare const domainsModule: (sdk: typeof BaseSDK) => {
         then: <TResult1 = create$return, TResult2 = never>(onfulfilled?: ((value: create$return) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
         catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<create$return | TResult>;
         finally: (onfinally?: (() => void) | null | undefined) => Promise<create$return>;
+    };
+    readonly appDomainInfo: (data?: {
+        params?: undefined;
+        query?: undefined;
+        body?: undefined;
+    } & TRequestOptions<appDomainInfo$return>) => {
+        readonly raw: Promise<import("axios").AxiosResponse<appDomainInfo$return, any, {}, any>>;
+        readonly data: Promise<appDomainInfo$return>;
+        then: <TResult1 = appDomainInfo$return, TResult2 = never>(onfulfilled?: ((value: appDomainInfo$return) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+        catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<appDomainInfo$return | TResult>;
+        finally: (onfinally?: (() => void) | null | undefined) => Promise<appDomainInfo$return>;
+    };
+    readonly addTestDomain: (data: {
+        params?: undefined;
+        query?: undefined;
+        body: addTestDomain$body;
+    } & TRequestOptions<addTestDomain$return>) => {
+        readonly raw: Promise<import("axios").AxiosResponse<addTestDomain$return, any, {}, any>>;
+        readonly data: Promise<addTestDomain$return>;
+        then: <TResult1 = addTestDomain$return, TResult2 = never>(onfulfilled?: ((value: addTestDomain$return) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+        catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<addTestDomain$return | TResult>;
+        finally: (onfinally?: (() => void) | null | undefined) => Promise<addTestDomain$return>;
     };
     readonly check: (data: {
         params: check$params;

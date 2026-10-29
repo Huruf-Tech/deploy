@@ -2032,5 +2032,9 @@
   "proxied": "عبر الوكيل",
   "Replace them": "استبدلها",
   "Cloudflare is connected": "تم ربط Cloudflare",
-  "Records created in Cloudflare ({{zone}}): its certificate comes in about a minute": "أُنشئت السجلات في Cloudflare ({{zone}}): تصدر شهادته خلال دقيقة تقريبًا"
+  "Records created in Cloudflare ({{zone}}): its certificate comes in about a minute": "أُنشئت السجلات في Cloudflare ({{zone}}): تصدر شهادته خلال دقيقة تقريبًا",
+  "Could not get a test domain": "تعذّر الحصول على نطاق تجريبي",
+  "Test domain": "نطاق تجريبي",
+  "The platform's certificate; it renews automatically.": "شهادة المنصة؛ تتجدد تلقائيًا.",
+  "Get a free test domain": "احصل على نطاق تجريبي مجاني"
 }

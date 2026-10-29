@@ -6,7 +6,12 @@ import { Env } from "@/core/utils/env.ts";
 import { Logger } from "@/core/utils/logger.ts";
 import { keyring } from "@/lib/services.ts";
 import { readFlagSetting, readTextSetting } from "@/lib/core/settings.ts";
-import { domainModel } from "@/schemas/applications/domain.ts";
+import {
+  appCertificateModel,
+  domainModel,
+} from "@/schemas/applications/domain.ts";
+import { appDomain } from "@/lib/domains/appDomain.ts";
+import { PLATFORM_OWNER } from "@/schemas/monitoring/alert.ts";
 import { projectModel } from "@/schemas/applications/project.ts";
 import { serverModel } from "@/schemas/infrastructure/server.ts";
 import { serverLeaseModel } from "@/schemas/infrastructure/serverLease.ts";
@@ -79,14 +84,22 @@ async function platformConfig() {
 const ids = (list: ObjectId[]) => [...new Set(list.map(String))];
 
 async function buildConfig() {
-  const domains = await domainModel.find(
+  const app = await appDomain();
+  const domains = (await domainModel.find(
     // Served while verifying too: that check is a request through here.
     {
       status: { $in: ["active", "verifying"] },
-      "certificate.notAfter": { $gt: new Date() },
+      $or: [
+        { "certificate.notAfter": { $gt: new Date() } },
+        // Free test domains: the wildcard certificate, from the file.
+        { appDomain: true },
+      ],
     },
-    { projection: { hostname: 1, project: 1 } },
-  ).toArray();
+    { projection: { hostname: 1, project: 1, appDomain: 1 } },
+  ).toArray()).filter((d) =>
+    // Only while the platform still hands them out (APP_DOMAIN unset: off).
+    !d.appDomain || (!!app && d.hostname.endsWith(`.${app}`))
+  );
 
   const projects = await projectModel.find(
     { _id: { $in: domains.map((d) => d.project) } },
@@ -248,9 +261,17 @@ async function sync() {
     },
     { projection: { "certificate.issuedAt": 1 }, sort: { _id: 1 } },
   ).toArray();
-  const version = domains.map((d) =>
-    `${d._id}-${d.certificate!.issuedAt.getTime()}`
-  ).join(",");
+  const app = await appDomain();
+  const wildcard = app
+    ? await appCertificateModel.findOne({
+      _id: app,
+      notAfter: { $gt: new Date() },
+    })
+    : null;
+  const version = [
+    ...domains.map((d) => `${d._id}-${d.certificate!.issuedAt.getTime()}`),
+    ...(wildcard ? [`*.${app}-${wildcard.issuedAt!.getTime()}`] : []),
+  ].join(",");
   if (version === written) return;
 
   const full = await domainModel.find(
@@ -268,6 +289,16 @@ async function sync() {
       `certificate:${d.hostname}`,
     ),
   })));
+  if (wildcard?.pem && wildcard.keyEnc) {
+    certificates.push({
+      certFile: wildcard.pem,
+      keyFile: await keyring.decrypt(
+        { kind: "tenant", ref: PLATFORM_OWNER },
+        wildcard.keyEnc,
+        `certificate:*.${app}`,
+      ),
+    });
+  }
 
   await Deno.mkdir(dir, { recursive: true });
   const tmp = join(dir, ".certificates.yml.tmp");

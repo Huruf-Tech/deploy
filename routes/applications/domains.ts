@@ -18,6 +18,7 @@ import {
   domainModel,
 } from "@/schemas/applications/domain.ts";
 import { tenantOwner } from "@/lib/billing/owner.ts";
+import { addAppDomain, appDomain } from "@/lib/domains/appDomain.ts";
 import {
   authorizeUrl,
   completeOAuth,
@@ -38,6 +39,7 @@ export default new Router("/api", function domains(router) {
     project: z.string(),
     hostname: z.string(),
     status: $domainStatus,
+    appDomain: z.boolean().optional().describe("A free test domain"),
     checks: $domainChecks.extend({ checkedAt: z.string() }).optional(),
     checkUntil: z.string().optional(),
     verifiedAt: z.string().optional(),
@@ -105,6 +107,33 @@ export default new Router("/api", function domains(router) {
         const { project, hostname } = $body.parse(await bodyAsJson(req));
         const { tenant, user } = await withTenant(req);
         const _id = await addDomain(tenant._id, user._id, project, hostname);
+        return Response.json({ _id: _id.toString() });
+      },
+    };
+  });
+
+  // Free test domains (PLAN §14): whether the platform hands them out.
+  router.get("/app", function appDomainInfo() {
+    return {
+      shape: () => ({
+        return: z.object({ domain: z.string().optional() }),
+      }),
+      handler: async (req) => {
+        await withTenant(req);
+        const domain = await appDomain();
+        return Response.json(domain ? { domain } : {});
+      },
+    };
+  });
+
+  router.post("/app", function addTestDomain() {
+    const $body = z.object({ project: $objectId });
+    return {
+      shape: () => ({ body: $body, return: z.object({ _id: z.string() }) }),
+      handler: async (req) => {
+        const { project } = $body.parse(await bodyAsJson(req));
+        const { tenant, user } = await withTenant(req);
+        const _id = await addAppDomain(tenant._id, user._id, project);
         return Response.json({ _id: _id.toString() });
       },
     };

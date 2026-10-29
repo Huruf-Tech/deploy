@@ -54,8 +54,21 @@ export async function challengeAnswer(token: string) {
   return found?.keyAuthorization;
 }
 
-/** Orders a certificate for one hostname; throws Let's Encrypt's error. */
-export async function orderCertificate(hostname: string, tenant: ObjectId) {
+/** Proves a name through DNS (a wildcard needs it): sets and clears its TXT. */
+export type TDnsChallenge = {
+  create: (name: string, value: string) => Promise<void>;
+  remove: (name: string, value: string) => Promise<void>;
+};
+
+/**
+ * Orders a certificate for one hostname; throws Let's Encrypt's error. With
+ * `dns`, it's proved by a TXT record instead of over HTTP.
+ */
+export async function orderCertificate(
+  hostname: string,
+  tenant: ObjectId,
+  dns?: TDnsChallenge,
+) {
   const directoryUrl = await directory();
   const { key: accountKey, url: accountUrl } = await account(directoryUrl);
   const client = new acme.Client({ directoryUrl, accountKey, accountUrl });
@@ -87,9 +100,16 @@ export async function orderCertificate(hostname: string, tenant: ObjectId) {
 
   const pem = await client.auto({
     csr,
-    challengePriority: ["http-01"],
-    skipChallengeVerification: !acmeOptions.selfCheck,
-    challengeCreateFn: async (_authz, challenge, keyAuthorization) => {
+    challengePriority: [dns ? "dns-01" : "http-01"],
+    // DNS: the provider serves it within seconds (`dns.create` waits).
+    skipChallengeVerification: !!dns || !acmeOptions.selfCheck,
+    challengeCreateFn: async (authz, challenge, keyAuthorization) => {
+      if (dns) {
+        return await dns.create(
+          `_acme-challenge.${authz.identifier.value}`,
+          keyAuthorization,
+        );
+      }
       await acmeChallengeModel.updateOne({ _id: challenge.token }, {
         $set: {
           keyAuthorization,
@@ -97,7 +117,13 @@ export async function orderCertificate(hostname: string, tenant: ObjectId) {
         },
       }, { upsert: true });
     },
-    challengeRemoveFn: async (_authz, challenge) => {
+    challengeRemoveFn: async (authz, challenge, keyAuthorization) => {
+      if (dns) {
+        return await dns.remove(
+          `_acme-challenge.${authz.identifier.value}`,
+          keyAuthorization,
+        );
+      }
       await acmeChallengeModel.deleteOne({ _id: challenge.token });
     },
   });

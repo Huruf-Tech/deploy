@@ -15,6 +15,7 @@ import {
   domainModel,
 } from "@/schemas/applications/domain.ts";
 import { cloudflareApi, completeOAuth } from "@/lib/domains/cloudflare.ts";
+import { appHostname } from "@/lib/domains/appDomain.ts";
 
 // Custom domains (PLAN §14, Phase 11): add, DNS records, Check now, rechecks.
 
@@ -27,6 +28,8 @@ Deno.test({
     const config = Env.getAll<Record<string, string>>();
     config.INGRESS_HOSTNAME = "ingress.platform.test";
     config.INGRESS_IPV4 = "203.0.113.10";
+    // Settings are cached a minute: on from the start.
+    config.APP_DOMAIN = "apps.test";
 
     const dns = {
       txt: {} as Record<string, string[]>,
@@ -502,7 +505,49 @@ Deno.test({
           }
         },
       );
+      await t.step(
+        "a free test domain: live at once, one per project",
+        async () => {
+          assertEquals((await b.call("GET", "/domains/api/app")).json, {
+            domain: "apps.test",
+          });
+          const quota = (await get(b.call, pb)).length;
+          const res = await b.call("POST", "/domains/api/app", { project: pb });
+          assertEquals(res.status, 200, JSON.stringify(res.json));
+          const free = (await get(b.call, pb)).find((d: { _id: string }) =>
+            d._id === res.json._id
+          );
+          assertMatch(free.hostname, /^web-[0-9a-f]{6}\.apps\.test$/);
+          assertEquals([free.status, free.appDomain], ["active", true]);
+          assertEquals((await get(b.call, pb)).length, quota + 1);
+          const again = await b.call("POST", "/domains/api/app", {
+            project: pb,
+          });
+          assertEquals(again.status, 400);
+          assertMatch(String(again.json), /already has a test domain/);
+          // Never added as a custom domain, nor named to look official.
+          const custom = await b.call("POST", "/domains/api", {
+            project: pb,
+            hostname: "mine.apps.test",
+          });
+          assertEquals(custom.status, 400);
+          assertMatch(
+            appHostname("Huruf Login", "apps.test"),
+            /^app-[0-9a-f]{6}\.apps\.test$/,
+          );
+          assertMatch(
+            appHostname("My Shop!", "apps.test"),
+            /^my-shop-[0-9a-f]{6}\.apps\.test$/,
+          );
+          // Removing it frees no quota it never took.
+          assertEquals(
+            (await b.call("DELETE", `/domains/api/${res.json._id}`)).status,
+            200,
+          );
+        },
+      );
     } finally {
+      delete config.APP_DOMAIN;
       Object.assign(resolver, real);
       await domainModel.deleteMany({
         tenant: { $in: [a.tenantId, b.tenantId] },

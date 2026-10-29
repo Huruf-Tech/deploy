@@ -2032,5 +2032,9 @@
   "proxied": "proxied",
   "Replace them": "Replace them",
   "Cloudflare is connected": "Cloudflare is connected",
-  "Records created in Cloudflare ({{zone}}): its certificate comes in about a minute": "Records created in Cloudflare ({{zone}}): its certificate comes in about a minute"
+  "Records created in Cloudflare ({{zone}}): its certificate comes in about a minute": "Records created in Cloudflare ({{zone}}): its certificate comes in about a minute",
+  "Could not get a test domain": "Could not get a test domain",
+  "Test domain": "Test domain",
+  "The platform's certificate; it renews automatically.": "The platform's certificate; it renews automatically.",
+  "Get a free test domain": "Get a free test domain"
 }

@@ -13,6 +13,8 @@ export type list$return = {
     project: string;
     hostname: string;
     status: "pending" | "checking" | "issuing" | "verifying" | "active" | "failed";
+    /** A free test domain */
+    appDomain?: boolean | undefined;
     checks?: {
         ownership: boolean;
         dns: boolean;
@@ -42,6 +44,15 @@ export type create$body = {
     hostname: string;
 };
 export type create$return = {
+    _id: string;
+};
+export type appDomainInfo$return = {
+    domain?: string | undefined;
+};
+export type addTestDomain$body = {
+    project?: string;
+};
+export type addTestDomain$return = {
     _id: string;
 };
 export type check$params = {
@@ -94,6 +105,9 @@ export const domainsModule = (sdk: typeof BaseSDK) => {
         list$return: list$return,
         create$body: create$body,
         create$return: create$return,
+        appDomainInfo$return: appDomainInfo$return,
+        addTestDomain$body: addTestDomain$body,
+        addTestDomain$return: addTestDomain$return,
         check$params: check$params,
         cloudflareConnection$return: cloudflareConnection$return,
         connectCloudflareToken$body: connectCloudflareToken$body,
@@ -146,6 +160,62 @@ export const domainsModule = (sdk: typeof BaseSDK) => {
 
             const method = "post";
             const toPath = compile("domains/api/");
+            const requestPayload = {
+                method,
+                url: toPath(sdk.resolvePathParams(data?.params)),
+                params: data?.query,
+                data: data?.body,
+                signal: data?.signal,
+                ...(data?.axiosConfig
+                ? sdk.resolveAxiosConfig(data.axiosConfig)
+                : undefined),
+            };
+
+            sdk.log("Sending Request:", requestPayload);
+
+            const res = await sdk._axios!.request(requestPayload);
+
+            return res;
+        }, data);
+    },
+        appDomainInfo(data?: {
+        params?: undefined,
+        query?: undefined,
+        body?: undefined,
+    } & TRequestOptions<appDomainInfo$return>) {
+        return sdk.resolveAxiosResponse(async () => {
+            sdk.checkPermission("domains", "appDomainInfo");
+
+            const method = "get";
+            const toPath = compile("domains/api/app");
+            const requestPayload = {
+                method,
+                url: toPath(sdk.resolvePathParams(data?.params)),
+                params: data?.query,
+                data: data?.body,
+                signal: data?.signal,
+                ...(data?.axiosConfig
+                ? sdk.resolveAxiosConfig(data.axiosConfig)
+                : undefined),
+            };
+
+            sdk.log("Sending Request:", requestPayload);
+
+            const res = await sdk._axios!.request(requestPayload);
+
+            return res;
+        }, data);
+    },
+        addTestDomain(data: {
+        params?: undefined,
+        query?: undefined,
+        body: addTestDomain$body,
+    } & TRequestOptions<addTestDomain$return>) {
+        return sdk.resolveAxiosResponse(async () => {
+            sdk.checkPermission("domains", "addTestDomain");
+
+            const method = "post";
+            const toPath = compile("domains/api/app");
             const requestPayload = {
                 method,
                 url: toPath(sdk.resolvePathParams(data?.params)),
@@ -392,6 +462,8 @@ export const domainsModule = (sdk: typeof BaseSDK) => {
 
     (methods.list as any).__scope = "domains";
     (methods.create as any).__scope = "domains";
+    (methods.appDomainInfo as any).__scope = "domains";
+    (methods.addTestDomain as any).__scope = "domains";
     (methods.check as any).__scope = "domains";
     (methods.cloudflareConnection as any).__scope = "domains";
     (methods.connectCloudflareToken as any).__scope = "domains";

@@ -85,6 +85,13 @@ export const queries = {
         ? await ThunderSDK.domains.list({ signal, query: { project } })
         : []
     ),
+  /** The platform's free test domain, when it hands them out (PLAN §14). */
+  appDomain: () =>
+    query(["domains", "app"], async ({ signal }) =>
+      can("domains", "appDomainInfo")
+        ? await ThunderSDK.domains.appDomainInfo({ signal })
+        : { domain: undefined }
+    ),
   /** The workspace's Cloudflare connection, for domains' records (PLAN §14). */
   cloudflare: () =>
     query(["domains", "cloudflare"], async ({ signal }) =>

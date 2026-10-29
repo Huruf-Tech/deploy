@@ -58,6 +58,11 @@ export const $domain = z.object({
   issueFailures: z.number().int().optional(),
   /** Recent orders, for the per-hour cap. */
   issueOrders: z.array(z.date()).optional(),
+  /**
+   * A free test domain under the platform's `APP_DOMAIN` (PLAN §14): live at
+   * once, served with the platform's wildcard certificate, one per project.
+   */
+  appDomain: z.boolean().optional(),
   createdBy: $objectId.meta({ ref: "users" }),
   createdAt: z.date(),
   updatedAt: z.date(),
@@ -78,6 +83,22 @@ export const certificateArchiveModel = mongodb.db().collection<{
   certificate: z.output<typeof $domainCertificate>;
   archivedAt: Date;
 }>("certificateArchive");
+
+/**
+ * The wildcard certificate for free test domains (`*.<APP_DOMAIN>`, PLAN
+ * §14), by domain; sealed under the platform. `renewAt` also backs off
+ * after a failed order.
+ */
+export const appCertificateModel = mongodb.db().collection<{
+  _id: string;
+  pem?: string;
+  keyEnc?: string;
+  notAfter?: Date;
+  issuedAt?: Date;
+  renewAt: Date;
+  failures?: number;
+  error?: string;
+}>("appCertificates");
 
 /** HTTP-01 answers, so any instance can reply to Let's Encrypt. */
 export const acmeChallengeModel = mongodb.db().collection<

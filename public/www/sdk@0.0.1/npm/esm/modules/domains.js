@@ -43,6 +43,46 @@ export const domainsModule = (sdk) => {
                 return res;
             }, data);
         },
+        appDomainInfo(data) {
+            return sdk.resolveAxiosResponse(async () => {
+                sdk.checkPermission("domains", "appDomainInfo");
+                const method = "get";
+                const toPath = compile("domains/api/app");
+                const requestPayload = {
+                    method,
+                    url: toPath(sdk.resolvePathParams(data?.params)),
+                    params: data?.query,
+                    data: data?.body,
+                    signal: data?.signal,
+                    ...(data?.axiosConfig
+                        ? sdk.resolveAxiosConfig(data.axiosConfig)
+                        : undefined),
+                };
+                sdk.log("Sending Request:", requestPayload);
+                const res = await sdk._axios.request(requestPayload);
+                return res;
+            }, data);
+        },
+        addTestDomain(data) {
+            return sdk.resolveAxiosResponse(async () => {
+                sdk.checkPermission("domains", "addTestDomain");
+                const method = "post";
+                const toPath = compile("domains/api/app");
+                const requestPayload = {
+                    method,
+                    url: toPath(sdk.resolvePathParams(data?.params)),
+                    params: data?.query,
+                    data: data?.body,
+                    signal: data?.signal,
+                    ...(data?.axiosConfig
+                        ? sdk.resolveAxiosConfig(data.axiosConfig)
+                        : undefined),
+                };
+                sdk.log("Sending Request:", requestPayload);
+                const res = await sdk._axios.request(requestPayload);
+                return res;
+            }, data);
+        },
         check(data) {
             return sdk.resolveAxiosResponse(async () => {
                 sdk.checkPermission("domains", "check");
@@ -206,6 +246,8 @@ export const domainsModule = (sdk) => {
     };
     methods.list.__scope = "domains";
     methods.create.__scope = "domains";
+    methods.appDomainInfo.__scope = "domains";
+    methods.addTestDomain.__scope = "domains";
     methods.check.__scope = "domains";
     methods.cloudflareConnection.__scope = "domains";
     methods.connectCloudflareToken.__scope = "domains";

@@ -4,6 +4,8 @@ import { Env } from "@/core/utils/env.ts";
 import { OAuth2 } from "@/plugins/Huruf-Tech/thunder-core/lib/oauth2.ts";
 import { readTextSetting } from "@/lib/core/settings.ts";
 import { keyring } from "@/lib/services.ts";
+import type { TDnsChallenge } from "@/lib/domains/acme.ts";
+import { ingressTargets } from "@/lib/domains/dns.ts";
 import { domainRecords, verifyByProvider } from "@/lib/domains/domains.ts";
 import {
   cloudflareConnectionModel,
@@ -462,4 +464,70 @@ export async function setUpInCloudflare(
   // Created through the zone owner's own access: verified, no lookups.
   await verifyByProvider(tenant, id, ISSUE_DELAY_MS);
   return { applied: true as const, created, zone: zone.name };
+}
+
+// --- The platform's own zone, for free test domains (PLAN §14) ---
+
+/** How long a new TXT record gets before Let's Encrypt looks; tests set 0. */
+export const dnsWait = { ms: 20_000 };
+
+/** The DNS challenge for the wildcard certificate, in the platform's zone. */
+export function cloudflareDnsChallenge(token: string): TDnsChallenge {
+  return {
+    create: async (name, value) => {
+      const zone = await zoneOf(token, name);
+      await cf(token, `/zones/${zone.id}/dns_records`, {
+        method: "POST",
+        body: {
+          type: "TXT",
+          name,
+          content: `"${value}"`,
+          ttl: 60,
+          comment: "Huruf Deploy: certificate",
+        },
+      });
+      await new Promise((r) => setTimeout(r, dnsWait.ms));
+    },
+    remove: async (name, value) => {
+      const zone = await zoneOf(token, name);
+      const records = await cf<TRecord[]>(
+        token,
+        `/zones/${zone.id}/dns_records?type=TXT&name=${
+          encodeURIComponent(name)
+        }`,
+      );
+      for (const r of records.filter((r) => unquote(r.content) === value)) {
+        await cf(token, `/zones/${zone.id}/dns_records/${r.id}`, {
+          method: "DELETE",
+        });
+      }
+    },
+  };
+}
+
+/** `*.<domain>` points at the ingress, DNS only: created when it's missing. */
+export async function ensureWildcardRecord(token: string, domain: string) {
+  const zone = await zoneOf(token, domain);
+  const name = `*.${domain}`;
+  const existing = await cf<TRecord[]>(
+    token,
+    `/zones/${zone.id}/dns_records?name=${encodeURIComponent(name)}`,
+  );
+  if (existing.some((r) => ["A", "AAAA", "CNAME"].includes(r.type))) return;
+  const { hostname, ipv4 } = await ingressTargets();
+  const records = hostname
+    ? [{ type: "CNAME", content: hostname }]
+    : ipv4.map((ip) => ({ type: "A", content: ip }));
+  for (const r of records) {
+    await cf(token, `/zones/${zone.id}/dns_records`, {
+      method: "POST",
+      body: {
+        ...r,
+        name,
+        ttl: 1,
+        proxied: false,
+        comment: "Huruf Deploy: free test domains",
+      },
+    });
+  }
 }

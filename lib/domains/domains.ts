@@ -15,6 +15,7 @@ import {
   ownershipName,
 } from "@/lib/domains/dns.ts";
 import { orderCertificate } from "@/lib/domains/acme.ts";
+import { appDomain, ensureAppCertificate } from "@/lib/domains/appDomain.ts";
 import { refreshSpecs } from "@/lib/deploy/specs.ts";
 import { projectModel } from "@/schemas/applications/project.ts";
 import {
@@ -66,6 +67,8 @@ export async function normalizeHostname(input: string) {
   const own = [
     new URL(Env.getSync("BASE_URL", true) || "http://localhost").hostname,
     (await ingressTargets()).hostname,
+    // Free test domains are handed out, never added (PLAN §14).
+    await appDomain(),
   ].filter((h) => h && h !== "localhost");
   if (own.some((h) => hostname === h || hostname.endsWith(`.${h}`))) {
     throw Response.badRequest("The platform's own domain can't be used");
@@ -331,7 +334,8 @@ export async function removeDomain(tenant: ObjectId, id: ObjectId) {
   const domain = await domainModel.findOneAndDelete({ _id: id, tenant });
   if (!domain) throw Response.notFound("Domain not found");
   await archiveCertificates([domain]);
-  await quotaGuard.release(tenant, "domains");
+  // A free test domain never took a place in the plan's quota.
+  if (!domain.appDomain) await quotaGuard.release(tenant, "domains");
 }
 
 /** With its project: frees each domain's quota, keeps its certificate. */
@@ -345,7 +349,8 @@ export async function removeProjectDomains(
     _id: { $in: domains.map((d) => d._id) },
   });
   await archiveCertificates(domains);
-  for (let i = 0; i < deletedCount; i++) {
+  const counted = deletedCount - domains.filter((d) => d.appDomain).length;
+  for (let i = 0; i < counted; i++) {
     await quotaGuard.release(tenant, "domains");
   }
 }
@@ -526,5 +531,6 @@ export const domainChecks = new PiggybackScheduler(
     await checkDue();
     await issueDue();
     await verifyDue();
+    await ensureAppCertificate();
   },
 );

@@ -387,6 +387,12 @@ export const syncDeployIndexes = async () => {
       partialFilterExpression: { verifiedAt: { $exists: true } },
     }),
     domainModel.createIndex({ project: 1 }, { name: "project" }),
+    // One free test domain per project (PLAN §14).
+    domainModel.createIndex({ project: 1 }, {
+      name: "oneAppDomain",
+      unique: true,
+      partialFilterExpression: { appDomain: true },
+    }),
     // Uptime (PLAN §29): a server's outages over a window; kept 120 days.
     serverOutageModel.createIndex({ server: 1, to: -1 }, { name: "serverTo" }),
     serverOutageModel.createIndex({ expiresAt: 1 }, {
