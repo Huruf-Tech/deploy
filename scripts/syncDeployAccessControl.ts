@@ -19,6 +19,13 @@ export const syncDeployAccessControl = async () => {
   // Payment gateway webhooks: verified by the gateway's signature inside (PLAN §25.6).
   await ACManager.resolvePolicy("public", ["payments.webhook"]);
 
+  const finance = await ACManager.resolvePolicy("finance", [
+    // Everyone sees plan & usage; subscribe/cancel check for the owner.
+    "billing",
+    // Cards and Add funds; every handler but config checks for the owner.
+    "payments",
+  ]);
+
   const deploy = await ACManager.resolvePolicy("deploy", [
     "servers",
     "variables",
@@ -38,10 +45,6 @@ export const syncDeployAccessControl = async () => {
     "registries",
     "domains",
     "storages",
-    // Everyone sees plan & usage; subscribe/cancel check for the owner.
-    "billing",
-    // Cards and Add funds; every handler but config checks for the owner.
-    "payments",
     // Rented servers (PLAN §26): everyone sees them; renting checks for the owner.
     "rentals",
     // The market, renting machines out and their earnings (PLAN §30):
@@ -52,11 +55,6 @@ export const syncDeployAccessControl = async () => {
     "networks",
     "alertRules",
     "alertEvents",
-    // The workspace's wallet, read-only: plan payments come out of it.
-    // Transfers and overdraft limits stay with admins.
-    "wallets.get",
-    "wallets.metadata",
-    "walletLedgers.get",
   ]);
   // Older setups granted every stream handler through `deploy`.
   await ACManager.denyFromPolicy("deploy", ["streams"]);
@@ -71,13 +69,16 @@ export const syncDeployAccessControl = async () => {
   const variableApi = await ACManager.resolvePolicy("variableApi", [
     "variables.resolve",
   ]);
-  await ACManager.resolveRole("user", [deploy, shell, variableApi]);
+  await ACManager.resolveRole("user", [deploy, finance, shell, variableApi]);
 
   // Roles a workspace owner can invite members with.
   const member = ["public", "developer", "iam", "media", deploy, variableApi];
+
   await ACManager.resolveRole("operator", [...member, shell]);
   await ACManager.resolveRole("deployer", member);
+
   await ACManager.setSubRole("user", ["operator", "deployer"]);
+  await ACManager.setSubRole("admin", ["operator", "deployer"]);
 };
 
 if (import.meta.main) {
