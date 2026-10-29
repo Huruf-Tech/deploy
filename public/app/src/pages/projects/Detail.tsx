@@ -1165,7 +1165,7 @@ export default function ProjectDetail() {
                     copy: internal,
                   },
                   ...(domains ?? []).map((d) => ({
-                    label: t("Domain"),
+                    label: d.appDomain ? t("Test domain") : t("Domain"),
                     value:
                       d.status === "active" ? (
                         <a
