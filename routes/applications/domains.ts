@@ -19,7 +19,11 @@ import {
 } from "@/schemas/applications/domain.ts";
 import { tenantOwner } from "@/lib/billing/owner.ts";
 import {
+  authorizeUrl,
+  completeOAuth,
   connectCloudflare,
+  disconnectCloudflare as disconnect,
+  oauthClient,
   setUpInCloudflare,
 } from "@/lib/domains/cloudflare.ts";
 
@@ -124,6 +128,9 @@ export default new Router("/api", function domains(router) {
       connected: z.boolean(),
       zones: z.number().optional(),
       connectedAt: z.date().optional(),
+      signIn: z.boolean().describe(
+        "Connecting is a sign-in on Cloudflare; else an API token is pasted",
+      ),
     });
     return {
       shape: () => ({ return: $return }),
@@ -132,14 +139,16 @@ export default new Router("/api", function domains(router) {
         const doc = await cloudflareConnectionModel.findOne({
           _id: tenant._id,
         }, { projection: { zones: 1, connectedAt: 1 } });
+        const signIn = !!await oauthClient();
         return Response.json(
           doc
             ? {
               connected: true,
               zones: doc.zones,
               connectedAt: doc.connectedAt,
+              signIn,
             }
-            : { connected: false },
+            : { connected: false, signIn },
         );
       },
     };
@@ -162,12 +171,39 @@ export default new Router("/api", function domains(router) {
     };
   });
 
+  // Signing in with Cloudflare: its consent page, then back here.
+  router.get("/cloudflare/authorize", function authorizeCloudflare() {
+    const $query = z.object({
+      back: z.string().max(500).describe("The dashboard path to return to"),
+    });
+    return {
+      shape: () => ({ query: $query, return: z.object({ url: z.string() }) }),
+      handler: async (req) => {
+        const { back } = $query.parse(queryAsJson(req));
+        const { tenant, user } = await tenantOwner(req, "connect Cloudflare");
+        return Response.json({
+          url: await authorizeUrl(tenant._id, user._id, back),
+        });
+      },
+    };
+  });
+
+  // Cloudflare's redirect: public, trusted through its signed `state`.
+  router.get("/cloudflare/callback", function cloudflareCallback() {
+    return async (req) => {
+      const params = new URL(req.url).searchParams;
+      return Response.redirect(
+        await completeOAuth(params.get("code"), params.get("state")),
+      );
+    };
+  });
+
   router.del("/cloudflare/connection", function disconnectCloudflare() {
     return {
       shape: () => ({}),
       handler: async (req) => {
         const { tenant } = await tenantOwner(req, "disconnect Cloudflare");
-        await cloudflareConnectionModel.deleteOne({ _id: tenant._id });
+        await disconnect(tenant._id);
         return Response.json({ ok: true });
       },
     };

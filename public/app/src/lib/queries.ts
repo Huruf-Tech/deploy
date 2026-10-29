@@ -90,7 +90,7 @@ export const queries = {
     query(["domains", "cloudflare"], async ({ signal }) =>
       can("domains", "cloudflareConnection")
         ? await ThunderSDK.domains.cloudflareConnection({ signal })
-        : { connected: false }
+        : { connected: false, signIn: false, zones: undefined }
     ),
   variables: (scope: TQueryOf<typeof ThunderSDK.variables.list>) =>
     query(

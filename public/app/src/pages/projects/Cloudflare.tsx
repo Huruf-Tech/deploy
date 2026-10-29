@@ -30,7 +30,34 @@ export function CloudflareConnection() {
   const { data, reload } = useCached(queries.cloudflare())
   const [open, setOpen] = React.useState(false)
   const [busy, setBusy] = React.useState(false)
+  // Back from Cloudflare's sign-in: `?cloudflare=connected`, or why not.
+  React.useEffect(() => {
+    const url = new URL(window.location.href)
+    const result = url.searchParams.get("cloudflare")
+    if (!result) return
+    if (result === "connected") {
+      toast.success(t("Cloudflare is connected"))
+      reload()
+    } else toast.error(result)
+    url.searchParams.delete("cloudflare")
+    window.history.replaceState(window.history.state, "", url)
+  }, [t, reload])
   if (!data || (!data.connected && !isOwner)) return null
+
+  // A sign-in on Cloudflare's consent page; else (no OAuth app) a token.
+  const connect = async () => {
+    if (!data.signIn) return setOpen(true)
+    setBusy(true)
+    try {
+      const { url } = await ThunderSDK.domains.authorizeCloudflare({
+        query: { back: window.location.pathname + window.location.search },
+      })
+      window.location.assign(url)
+    } catch (e) {
+      toast.error(errorMessage(e) ?? t("Could not connect"))
+      setBusy(false)
+    }
+  }
 
   const disconnect = async () => {
     setBusy(true)
@@ -69,7 +96,8 @@ export function CloudflareConnection() {
             {t("Disconnect")}
           </Button>
         ) : (
-          <Button size="xs" variant="outline" onClick={() => setOpen(true)}>
+          <Button size="xs" variant="outline" disabled={busy} onClick={connect}>
+            {busy && <IconLoader2 className="animate-spin" aria-hidden />}
             {t("Connect Cloudflare")}
           </Button>
         ))}

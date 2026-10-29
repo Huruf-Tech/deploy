@@ -1,5 +1,8 @@
-import type { ObjectId } from "mongodb";
+import { ObjectId } from "mongodb";
 import { Response } from "@/core/http/response.ts";
+import { Env } from "@/core/utils/env.ts";
+import { OAuth2 } from "@/plugins/Huruf-Tech/thunder-core/lib/oauth2.ts";
+import { readTextSetting } from "@/lib/core/settings.ts";
 import { keyring } from "@/lib/services.ts";
 import { domainRecords, startCheck } from "@/lib/domains/domains.ts";
 import {
@@ -8,8 +11,9 @@ import {
 } from "@/schemas/applications/domain.ts";
 
 /**
- * Cloudflare DNS for custom domains (PLAN §14): with a workspace's API token
- * (Zone → DNS → Edit), a domain's records are created in its zone, DNS only,
+ * Cloudflare DNS for custom domains (PLAN §14): the workspace owner signs in
+ * with Cloudflare once (or pastes an API token where the platform has no
+ * OAuth app), then a domain's records are created in its zone, DNS only,
  * instead of copied by hand. Nothing else is read or changed there.
  */
 
@@ -66,41 +70,273 @@ async function cf<T>(
   return body.result as T;
 }
 
-/** Checks the token reaches at least one zone, and stores it sealed. */
+const seal = (tenant: ObjectId, value: string, field = "") =>
+  keyring.encrypt(
+    { kind: "tenant", ref: tenant },
+    value,
+    `cloudflare:${tenant}${field}`,
+  );
+const open = (tenant: ObjectId, value: string, field = "") =>
+  keyring.decrypt(
+    { kind: "tenant", ref: tenant },
+    value,
+    `cloudflare:${tenant}${field}`,
+  );
+
+/** The zones a token reaches: at least one, or it's no use here. */
+async function zonesOf(token: string) {
+  const zones = await cf<unknown[]>(token, "/zones?per_page=50");
+  if (!zones.length) {
+    throw Response.badRequest(
+      "Cloudflare gave access to no zone: allow the zones your domains are in",
+    );
+  }
+  return zones.length;
+}
+
+/** Without the platform's OAuth app: a pasted API token, checked and sealed. */
 export async function connectCloudflare(
   tenant: ObjectId,
   user: ObjectId,
   token: string,
 ) {
-  const zones = await cf<unknown[]>(token, "/zones?per_page=50");
-  if (!zones.length) {
-    throw Response.badRequest(
-      "The token reaches no zone: give it Zone → DNS → Edit on your domains' zones",
-    );
-  }
+  const zones = await zonesOf(token);
   await cloudflareConnectionModel.updateOne({ _id: tenant }, {
     $set: {
-      tokenEnc: await keyring.encrypt(
-        { kind: "tenant", ref: tenant },
-        token,
-        `cloudflare:${tenant}`,
-      ),
-      zones: zones.length,
+      tokenEnc: await seal(tenant, token),
+      zones,
       connectedBy: user,
       connectedAt: new Date(),
     },
+    $unset: { refreshTokenEnc: "", expiresAt: "" },
   }, { upsert: true });
-  return { zones: zones.length };
+  return { zones };
 }
 
+// --- Signing in with Cloudflare (OAuth, PLAN §14) ---
+
+const AUTHORIZE = "https://dash.cloudflare.com/oauth2/auth";
+const TOKEN = "https://dash.cloudflare.com/oauth2/token";
+const REVOKE = "https://dash.cloudflare.com/oauth2/revoke";
+
+/**
+ * The platform's Cloudflare OAuth app. Set, connecting is a sign-in on
+ * Cloudflare; unset (e.g. a self-hosted platform), a pasted API token.
+ */
+export async function oauthClient() {
+  const [id, secret, scopes] = await Promise.all([
+    readTextSetting("CLOUDFLARE_OAUTH_CLIENT_ID", ""),
+    readTextSetting("CLOUDFLARE_OAUTH_CLIENT_SECRET", ""),
+    readTextSetting(
+      "CLOUDFLARE_OAUTH_SCOPES",
+      "offline_access zone.read dns.read dns.write",
+    ),
+  ]);
+  return id && secret ? { id, secret, scopes } : null;
+}
+
+const callbackUrl = async () =>
+  `${await Env.get("BASE_URL")}/domains/api/cloudflare/callback`;
+
+/** Signed `state`: who started it, and the dashboard page to go back to. */
+type TState = { tenant: string; user: string; back: string };
+const STATE_SECRET = "cloudflare-oauth";
+
+const verifyState = async (token: string | null) => {
+  if (!token) return null;
+  try {
+    return (await OAuth2.verifyJWT<TState>(token, { secret: STATE_SECRET }))
+      .payload;
+  } catch {
+    return null;
+  }
+};
+
+/** Cloudflare's consent page for the owner; `back` is a dashboard path. */
+export async function authorizeUrl(
+  tenant: ObjectId,
+  user: ObjectId,
+  back: string,
+) {
+  const client = await oauthClient();
+  if (!client) {
+    throw Response.badRequest("Signing in with Cloudflare isn't set up here");
+  }
+  const state = await OAuth2.signJWT(
+    { tenant: String(tenant), user: String(user), back } satisfies TState,
+    { secret: STATE_SECRET, subject: String(user), ttl: 15 * 60 },
+  );
+  const url = new URL(AUTHORIZE);
+  url.search = new URLSearchParams({
+    response_type: "code",
+    client_id: client.id,
+    redirect_uri: await callbackUrl(),
+    scope: client.scopes,
+    state,
+  }).toString();
+  return url.toString();
+}
+
+type TTokens = {
+  access_token: string;
+  refresh_token?: string;
+  expires_in?: number;
+};
+
+async function tokenRequest(
+  client: NonNullable<Awaited<ReturnType<typeof oauthClient>>>,
+  body: Record<string, string>,
+) {
+  let res: globalThis.Response;
+  try {
+    res = await cloudflareApi.fetch(TOKEN, {
+      method: "POST",
+      headers: {
+        Authorization: `Basic ${btoa(`${client.id}:${client.secret}`)}`,
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams(body).toString(),
+      signal: AbortSignal.timeout(15_000),
+    });
+  } catch {
+    throw Response.badRequest("Cloudflare didn't answer: try again");
+  }
+  const json = await res.json().catch(() => ({})) as Partial<TTokens> & {
+    error?: string;
+    error_description?: string;
+  };
+  if (!res.ok || !json.access_token) {
+    throw Response.badRequest(
+      `Cloudflare: ${
+        json.error_description ?? json.error ?? `HTTP ${res.status}`
+      }`,
+    );
+  }
+  return json as TTokens;
+}
+
+const tokenFields = async (tenant: ObjectId, t: TTokens) => ({
+  tokenEnc: await seal(tenant, t.access_token),
+  ...(t.refresh_token
+    ? { refreshTokenEnc: await seal(tenant, t.refresh_token, ":refresh") }
+    : {}),
+  ...(t.expires_in
+    ? { expiresAt: new Date(Date.now() + t.expires_in * 1000) }
+    : {}),
+});
+
+const reason = async (e: unknown) => {
+  if (!(e instanceof globalThis.Response)) return String(e);
+  const text = await e.clone().text();
+  try {
+    return String(JSON.parse(text)?.error ?? text);
+  } catch {
+    return text;
+  }
+};
+
+/**
+ * Cloudflare sends the owner back here: the code becomes tokens (checked
+ * against their zones and sealed), then the dashboard page they left.
+ * Returns where to redirect.
+ */
+export async function completeOAuth(
+  code: string | null,
+  stateToken: string | null,
+) {
+  const base = await Env.get("BASE_URL");
+  const state = await verifyState(stateToken);
+  // Only back into the dashboard, whatever the state says.
+  const back = new URL(
+    state?.back.startsWith("/app/") ? state.back : "/app",
+    base,
+  );
+  const done = (params: Record<string, string>) => {
+    for (const [k, v] of Object.entries(params)) back.searchParams.set(k, v);
+    return back.toString();
+  };
+  if (!state || !code) {
+    return done({
+      cloudflare: "Signing in with Cloudflare expired: try again",
+    });
+  }
+  try {
+    const client = await oauthClient();
+    if (!client) {
+      throw Response.badRequest("Signing in with Cloudflare isn't set up here");
+    }
+    const tokens = await tokenRequest(client, {
+      grant_type: "authorization_code",
+      code,
+      redirect_uri: await callbackUrl(),
+    });
+    const tenant = ObjectId.createFromHexString(state.tenant);
+    const zones = await zonesOf(tokens.access_token);
+    await cloudflareConnectionModel.updateOne({ _id: tenant }, {
+      $set: {
+        ...await tokenFields(tenant, tokens),
+        zones,
+        connectedBy: ObjectId.createFromHexString(state.user),
+        connectedAt: new Date(),
+      },
+    }, { upsert: true });
+    return done({ cloudflare: "connected" });
+  } catch (e) {
+    return done({ cloudflare: await reason(e) });
+  }
+}
+
+/** Its access token, refreshed when it's about to expire. */
 async function tokenOf(tenant: ObjectId) {
   const doc = await cloudflareConnectionModel.findOne({ _id: tenant });
   if (!doc) throw Response.badRequest("Connect Cloudflare first");
-  return await keyring.decrypt(
-    { kind: "tenant", ref: tenant },
-    doc.tokenEnc,
-    `cloudflare:${tenant}`,
-  );
+  if (
+    !doc.refreshTokenEnc || !doc.expiresAt ||
+    doc.expiresAt.getTime() - Date.now() > 60_000
+  ) {
+    return await open(tenant, doc.tokenEnc);
+  }
+  const client = await oauthClient();
+  try {
+    if (!client) throw new Error("no OAuth app");
+    const tokens = await tokenRequest(client, {
+      grant_type: "refresh_token",
+      refresh_token: await open(tenant, doc.refreshTokenEnc, ":refresh"),
+    });
+    await cloudflareConnectionModel.updateOne({ _id: tenant }, {
+      $set: await tokenFields(tenant, tokens),
+    });
+    return tokens.access_token;
+  } catch {
+    // Another instance may have refreshed first (refresh tokens rotate).
+    const now = await cloudflareConnectionModel.findOne({ _id: tenant });
+    if (now?.expiresAt && now.expiresAt.getTime() - Date.now() > 60_000) {
+      return await open(tenant, now.tokenEnc);
+    }
+    throw Response.badRequest(
+      "Cloudflare's access ran out: connect Cloudflare again",
+    );
+  }
+}
+
+/** Forgets the connection, revoking a sign-in's access at Cloudflare. */
+export async function disconnectCloudflare(tenant: ObjectId) {
+  const doc = await cloudflareConnectionModel.findOneAndDelete({ _id: tenant });
+  const client = await oauthClient();
+  if (doc?.refreshTokenEnc && client) {
+    await cloudflareApi.fetch(REVOKE, {
+      method: "POST",
+      headers: {
+        Authorization: `Basic ${btoa(`${client.id}:${client.secret}`)}`,
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({
+        token: await open(tenant, doc.refreshTokenEnc, ":refresh"),
+        token_type_hint: "refresh_token",
+      }).toString(),
+      signal: AbortSignal.timeout(15_000),
+    }).catch(() => {}); // best effort: it's forgotten here either way
+  }
 }
 
 /** The hostname's zone: the longest of its parent names the token reaches. */

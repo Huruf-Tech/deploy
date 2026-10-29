@@ -51,12 +51,21 @@ export type cloudflareConnection$return = {
     connected: boolean;
     zones?: number | undefined;
     connectedAt?: Date | undefined;
+    /** Connecting is a sign-in on Cloudflare; else an API token is pasted */
+    signIn: boolean;
 };
 export type connectCloudflareToken$body = {
     token: string;
 };
 export type connectCloudflareToken$return = {
     zones: number;
+};
+export type authorizeCloudflare$query = {
+    /** The dashboard path to return to */
+    back: string;
+};
+export type authorizeCloudflare$return = {
+    url: string;
 };
 export type setUpCloudflare$params = {
     id?: string;
@@ -89,6 +98,8 @@ export const domainsModule = (sdk: typeof BaseSDK) => {
         cloudflareConnection$return: cloudflareConnection$return,
         connectCloudflareToken$body: connectCloudflareToken$body,
         connectCloudflareToken$return: connectCloudflareToken$return,
+        authorizeCloudflare$query: authorizeCloudflare$query,
+        authorizeCloudflare$return: authorizeCloudflare$return,
         setUpCloudflare$params: setUpCloudflare$params,
         setUpCloudflare$body: setUpCloudflare$body,
         setUpCloudflare$return: setUpCloudflare$return,
@@ -265,6 +276,62 @@ export const domainsModule = (sdk: typeof BaseSDK) => {
             return res;
         }, data);
     },
+        authorizeCloudflare(data: {
+        params?: undefined,
+        query: authorizeCloudflare$query,
+        body?: undefined,
+    } & TRequestOptions<authorizeCloudflare$return>) {
+        return sdk.resolveAxiosResponse(async () => {
+            sdk.checkPermission("domains", "authorizeCloudflare");
+
+            const method = "get";
+            const toPath = compile("domains/api/cloudflare/authorize");
+            const requestPayload = {
+                method,
+                url: toPath(sdk.resolvePathParams(data?.params)),
+                params: data?.query,
+                data: data?.body,
+                signal: data?.signal,
+                ...(data?.axiosConfig
+                ? sdk.resolveAxiosConfig(data.axiosConfig)
+                : undefined),
+            };
+
+            sdk.log("Sending Request:", requestPayload);
+
+            const res = await sdk._axios!.request(requestPayload);
+
+            return res;
+        }, data);
+    },
+        cloudflareCallback(data?: {
+        params?: undefined,
+        query?: undefined,
+        body?: undefined,
+    } & TRequestOptions<unknown>) {
+        return sdk.resolveAxiosResponse(async () => {
+            sdk.checkPermission("domains", "cloudflareCallback");
+
+            const method = "get";
+            const toPath = compile("domains/api/cloudflare/callback");
+            const requestPayload = {
+                method,
+                url: toPath(sdk.resolvePathParams(data?.params)),
+                params: data?.query,
+                data: data?.body,
+                signal: data?.signal,
+                ...(data?.axiosConfig
+                ? sdk.resolveAxiosConfig(data.axiosConfig)
+                : undefined),
+            };
+
+            sdk.log("Sending Request:", requestPayload);
+
+            const res = await sdk._axios!.request(requestPayload);
+
+            return res;
+        }, data);
+    },
         setUpCloudflare(data: {
         params: setUpCloudflare$params,
         query?: undefined,
@@ -329,6 +396,8 @@ export const domainsModule = (sdk: typeof BaseSDK) => {
     (methods.cloudflareConnection as any).__scope = "domains";
     (methods.connectCloudflareToken as any).__scope = "domains";
     (methods.disconnectCloudflare as any).__scope = "domains";
+    (methods.authorizeCloudflare as any).__scope = "domains";
+    (methods.cloudflareCallback as any).__scope = "domains";
     (methods.setUpCloudflare as any).__scope = "domains";
     (methods.del as any).__scope = "domains";
 

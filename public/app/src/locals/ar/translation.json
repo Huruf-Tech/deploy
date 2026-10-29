@@ -2031,5 +2031,6 @@
   "Replace {{name}}'s records?": "استبدال سجلات {{name}}؟",
   "It already points elsewhere in Cloudflare. These records are deleted and replaced with the platform's, so whatever they served stops:": "يشير بالفعل إلى مكان آخر في Cloudflare. ستُحذف هذه السجلات وتُستبدل بسجلات المنصة، فيتوقف ما كانت تخدمه:",
   "proxied": "عبر الوكيل",
-  "Replace them": "استبدلها"
+  "Replace them": "استبدلها",
+  "Cloudflare is connected": "تم ربط Cloudflare"
 }

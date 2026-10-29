@@ -105,12 +105,17 @@ export const domainJobSlotModel = mongodb.db().collection<
 >("domainJobSlots");
 
 /**
- * A workspace's Cloudflare connection (PLAN §14): an API token allowed to
- * edit its zones' DNS, sealed under the workspace. One per workspace (`_id`).
+ * A workspace's Cloudflare connection (PLAN §14): a sign-in's tokens, or a
+ * pasted API token, allowed to edit its zones' DNS, sealed under the
+ * workspace. One per workspace (`_id`).
  */
 export const cloudflareConnectionModel = mongodb.db().collection<{
   _id: TDomain["tenant"];
+  /** The access token (a sign-in's, or the pasted API token). */
   tokenEnc: string;
+  /** A sign-in: renews the access token before `expiresAt`. */
+  refreshTokenEnc?: string;
+  expiresAt?: Date;
   /** Zones the token reached when connected, for the dashboard. */
   zones: number;
   connectedBy: TDomain["createdBy"];

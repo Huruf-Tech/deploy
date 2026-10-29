@@ -46,12 +46,21 @@ export type cloudflareConnection$return = {
     connected: boolean;
     zones?: number | undefined;
     connectedAt?: Date | undefined;
+    /** Connecting is a sign-in on Cloudflare; else an API token is pasted */
+    signIn: boolean;
 };
 export type connectCloudflareToken$body = {
     token: string;
 };
 export type connectCloudflareToken$return = {
     zones: number;
+};
+export type authorizeCloudflare$query = {
+    /** The dashboard path to return to */
+    back: string;
+};
+export type authorizeCloudflare$return = {
+    url: string;
 };
 export type setUpCloudflare$params = {
     id?: string;
@@ -83,6 +92,8 @@ export declare const domainsModule: (sdk: typeof BaseSDK) => {
         cloudflareConnection$return: cloudflareConnection$return;
         connectCloudflareToken$body: connectCloudflareToken$body;
         connectCloudflareToken$return: connectCloudflareToken$return;
+        authorizeCloudflare$query: authorizeCloudflare$query;
+        authorizeCloudflare$return: authorizeCloudflare$return;
         setUpCloudflare$params: setUpCloudflare$params;
         setUpCloudflare$body: setUpCloudflare$body;
         setUpCloudflare$return: setUpCloudflare$return;
@@ -144,6 +155,28 @@ export declare const domainsModule: (sdk: typeof BaseSDK) => {
         finally: (onfinally?: (() => void) | null | undefined) => Promise<connectCloudflareToken$return>;
     };
     readonly disconnectCloudflare: (data?: {
+        params?: undefined;
+        query?: undefined;
+        body?: undefined;
+    } & TRequestOptions<unknown>) => {
+        readonly raw: Promise<import("axios").AxiosResponse<unknown, any, {}, any>>;
+        readonly data: Promise<unknown>;
+        then: <TResult1 = unknown, TResult2 = never>(onfulfilled?: ((value: unknown) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+        catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<unknown>;
+        finally: (onfinally?: (() => void) | null | undefined) => Promise<unknown>;
+    };
+    readonly authorizeCloudflare: (data: {
+        params?: undefined;
+        query: authorizeCloudflare$query;
+        body?: undefined;
+    } & TRequestOptions<authorizeCloudflare$return>) => {
+        readonly raw: Promise<import("axios").AxiosResponse<authorizeCloudflare$return, any, {}, any>>;
+        readonly data: Promise<authorizeCloudflare$return>;
+        then: <TResult1 = authorizeCloudflare$return, TResult2 = never>(onfulfilled?: ((value: authorizeCloudflare$return) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+        catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<authorizeCloudflare$return | TResult>;
+        finally: (onfinally?: (() => void) | null | undefined) => Promise<authorizeCloudflare$return>;
+    };
+    readonly cloudflareCallback: (data?: {
         params?: undefined;
         query?: undefined;
         body?: undefined;

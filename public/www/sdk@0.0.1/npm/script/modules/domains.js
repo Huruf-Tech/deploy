@@ -126,6 +126,46 @@ const domainsModule = (sdk) => {
                 return res;
             }, data);
         },
+        authorizeCloudflare(data) {
+            return sdk.resolveAxiosResponse(async () => {
+                sdk.checkPermission("domains", "authorizeCloudflare");
+                const method = "get";
+                const toPath = (0, path_to_regexp_1.compile)("domains/api/cloudflare/authorize");
+                const requestPayload = {
+                    method,
+                    url: toPath(sdk.resolvePathParams(data?.params)),
+                    params: data?.query,
+                    data: data?.body,
+                    signal: data?.signal,
+                    ...(data?.axiosConfig
+                        ? sdk.resolveAxiosConfig(data.axiosConfig)
+                        : undefined),
+                };
+                sdk.log("Sending Request:", requestPayload);
+                const res = await sdk._axios.request(requestPayload);
+                return res;
+            }, data);
+        },
+        cloudflareCallback(data) {
+            return sdk.resolveAxiosResponse(async () => {
+                sdk.checkPermission("domains", "cloudflareCallback");
+                const method = "get";
+                const toPath = (0, path_to_regexp_1.compile)("domains/api/cloudflare/callback");
+                const requestPayload = {
+                    method,
+                    url: toPath(sdk.resolvePathParams(data?.params)),
+                    params: data?.query,
+                    data: data?.body,
+                    signal: data?.signal,
+                    ...(data?.axiosConfig
+                        ? sdk.resolveAxiosConfig(data.axiosConfig)
+                        : undefined),
+                };
+                sdk.log("Sending Request:", requestPayload);
+                const res = await sdk._axios.request(requestPayload);
+                return res;
+            }, data);
+        },
         setUpCloudflare(data) {
             return sdk.resolveAxiosResponse(async () => {
                 sdk.checkPermission("domains", "setUpCloudflare");
@@ -173,6 +213,8 @@ const domainsModule = (sdk) => {
     methods.cloudflareConnection.__scope = "domains";
     methods.connectCloudflareToken.__scope = "domains";
     methods.disconnectCloudflare.__scope = "domains";
+    methods.authorizeCloudflare.__scope = "domains";
+    methods.cloudflareCallback.__scope = "domains";
     methods.setUpCloudflare.__scope = "domains";
     methods.del.__scope = "domains";
     sdk["_moduleGroup"].set(methods, "Applications");

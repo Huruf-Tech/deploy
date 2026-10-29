@@ -14,7 +14,7 @@ import {
   cloudflareConnectionModel,
   domainModel,
 } from "@/schemas/applications/domain.ts";
-import { cloudflareApi } from "@/lib/domains/cloudflare.ts";
+import { cloudflareApi, completeOAuth } from "@/lib/domains/cloudflare.ts";
 
 // Custom domains (PLAN §14, Phase 11): add, DNS records, Check now, rechecks.
 
@@ -342,6 +342,153 @@ Deno.test({
             assertEquals([third.json.applied, third.json.created], [true, []]);
           } finally {
             cloudflareApi.fetch = real;
+            await cloudflareConnectionModel.deleteOne({ _id: b.tenantId });
+          }
+        },
+      );
+
+      await t.step(
+        "Cloudflare sign-in: consent, tokens, renewal, revoke",
+        async () => {
+          config.CLOUDFLARE_OAUTH_CLIENT_ID = "cid";
+          config.CLOUDFLARE_OAUTH_CLIENT_SECRET = "csecret";
+          const revoked: string[] = [];
+          const records: Record<string, unknown>[] = [];
+          const real = cloudflareApi.fetch;
+          cloudflareApi.fetch = async (url, init) => {
+            const u = new URL(url);
+            const auth = new Headers(init.headers).get("Authorization") ?? "";
+            if (u.pathname.startsWith("/oauth2/")) {
+              assertEquals(auth, `Basic ${btoa("cid:csecret")}`);
+              const form = new URLSearchParams(String(init.body));
+              if (u.pathname === "/oauth2/revoke") {
+                revoked.push(form.get("token")!);
+                return Response.json({});
+              }
+              const grant = form.get("grant_type");
+              if (
+                grant === "authorization_code" && form.get("code") === "good"
+              ) {
+                assertMatch(
+                  form.get("redirect_uri")!,
+                  /\/domains\/api\/cloudflare\/callback$/,
+                );
+                return Response.json({
+                  access_token: "cf-access-1",
+                  refresh_token: "r1",
+                  expires_in: 3600,
+                });
+              }
+              if (
+                grant === "refresh_token" && form.get("refresh_token") === "r1"
+              ) {
+                return Response.json({
+                  access_token: "cf-access-2",
+                  refresh_token: "r2",
+                  expires_in: 3600,
+                });
+              }
+              return Response.json({ error: "invalid_grant" }, { status: 400 });
+            }
+            const ok = (result: unknown) =>
+              Response.json({ success: true, result });
+            // An expired access token is refused.
+            if (
+              auth !== "Bearer cf-access-1" && auth !== "Bearer cf-access-2"
+            ) {
+              return Response.json({
+                success: false,
+                errors: [{ message: "Invalid token" }],
+              }, { status: 403 });
+            }
+            if (u.pathname.endsWith("/zones")) {
+              const name = u.searchParams.get("name");
+              return ok(
+                !name || name === "example.test"
+                  ? [{ id: "z1", name: "example.test" }]
+                  : [],
+              );
+            }
+            if (init.method === "POST") {
+              records.push({ auth, ...JSON.parse(String(init.body)) });
+              return ok({});
+            }
+            return ok([]);
+          };
+          try {
+            let conn = await b.call(
+              "GET",
+              "/domains/api/cloudflare/connection",
+            );
+            assertEquals(conn.json, { connected: false, signIn: true });
+            const back = `/app/${b.tenantId}/projects/${pb}`;
+            const auth = await b.call(
+              "GET",
+              `/domains/api/cloudflare/authorize?back=${
+                encodeURIComponent(back)
+              }`,
+            );
+            const consent = new URL(auth.json.url);
+            assertEquals(
+              consent.origin + consent.pathname,
+              "https://dash.cloudflare.com/oauth2/auth",
+            );
+            assertEquals(consent.searchParams.get("client_id"), "cid");
+            assertMatch(consent.searchParams.get("scope")!, /offline_access/);
+            const state = consent.searchParams.get("state");
+
+            // A forged or missing state connects nothing.
+            assertMatch(
+              await completeOAuth("good", "forged"),
+              /cloudflare=Signing/,
+            );
+            // Back from Cloudflare: connected, then the page it left.
+            const landed = new URL(await completeOAuth("good", state));
+            assertEquals(landed.pathname, back);
+            assertEquals(landed.searchParams.get("cloudflare"), "connected");
+            conn = await b.call("GET", "/domains/api/cloudflare/connection");
+            assertEquals([conn.json.connected, conn.json.zones], [true, 1]);
+
+            // Its access token ran out: renewed when records are created.
+            await cloudflareConnectionModel.updateOne({ _id: b.tenantId }, {
+              $set: { expiresAt: new Date() },
+            });
+            const added = await b.call("POST", "/domains/api", {
+              project: pb,
+              hostname: "signin.example.test",
+            });
+            const setUp = await b.call(
+              "POST",
+              `/domains/api/${added.json._id}/cloudflare`,
+              {},
+            );
+            assertEquals(setUp.json.applied, true, JSON.stringify(setUp.json));
+            assert(
+              records.length > 0 &&
+                records.every((r) => r.auth === "Bearer cf-access-2"),
+            );
+            const doc = await cloudflareConnectionModel.findOne({
+              _id: b.tenantId,
+            });
+            assert(doc!.expiresAt!.getTime() > Date.now() + 60_000, "renewed");
+
+            // Disconnecting revokes the (rotated) refresh token.
+            assertEquals(
+              (await b.call("DELETE", "/domains/api/cloudflare/connection"))
+                .status,
+              200,
+            );
+            assertEquals(revoked, ["r2"]);
+            assertEquals(
+              await cloudflareConnectionModel.countDocuments({
+                _id: b.tenantId,
+              }),
+              0,
+            );
+          } finally {
+            cloudflareApi.fetch = real;
+            delete config.CLOUDFLARE_OAUTH_CLIENT_ID;
+            delete config.CLOUDFLARE_OAUTH_CLIENT_SECRET;
             await cloudflareConnectionModel.deleteOne({ _id: b.tenantId });
           }
         },

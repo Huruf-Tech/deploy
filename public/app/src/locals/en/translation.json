@@ -2031,5 +2031,6 @@
   "Replace {{name}}'s records?": "Replace {{name}}'s records?",
   "It already points elsewhere in Cloudflare. These records are deleted and replaced with the platform's, so whatever they served stops:": "It already points elsewhere in Cloudflare. These records are deleted and replaced with the platform's, so whatever they served stops:",
   "proxied": "proxied",
-  "Replace them": "Replace them"
+  "Replace them": "Replace them",
+  "Cloudflare is connected": "Cloudflare is connected"
 }

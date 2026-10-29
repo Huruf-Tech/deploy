@@ -14,6 +14,8 @@ export const syncDeployAccessControl = async () => {
   await ACManager.resolvePolicy("public", ["githubHooks"]);
   // Let's Encrypt and Traefik: challenges are public, the config needs a token.
   await ACManager.resolvePolicy("public", ["ingress"]);
+  // Cloudflare's sign-in redirect: authorized by its signed state inside (PLAN §14).
+  await ACManager.resolvePolicy("public", ["domains.cloudflareCallback"]);
   // Payment gateway webhooks: verified by the gateway's signature inside (PLAN §25.6).
   await ACManager.resolvePolicy("public", ["payments.webhook"]);
 
