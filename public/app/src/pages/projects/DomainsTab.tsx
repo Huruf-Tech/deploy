@@ -25,6 +25,7 @@ import { cn, errorMessage } from "@/lib/utils"
 import { useCached } from "@/hooks/use-cached"
 import { queries } from "@/lib/queries"
 import { day } from "@/lib/format"
+import { CloudflareConnection, CloudflareSetUp } from "./Cloudflare"
 
 type TDomain = Awaited<ReturnType<typeof ThunderSDK.domains.list>>[number]
 
@@ -128,7 +129,13 @@ function DomainActions({
 }
 
 /** The DNS records a domain that isn't live yet still needs. */
-function DomainSetup({ domain }: { domain: TDomain }) {
+function DomainSetup({
+  domain,
+  onChanged,
+}: {
+  domain: TDomain
+  onChanged: () => void
+}) {
   const { t } = useTranslation()
   const { records } = domain
   const configured = !!records.cname || !!records.ipv4?.length
@@ -217,6 +224,16 @@ function DomainSetup({ domain }: { domain: TDomain }) {
               "If your DNS is on Cloudflare, set the record to DNS only (grey cloud)."
             )}
           </p>
+          {["pending", "failed", "checking"].includes(domain.status) &&
+            ThunderSDK.isPermitted("domains", "setUpCloudflare") && (
+              <div className="flex flex-col items-start gap-2">
+                <CloudflareSetUp
+                  domain={domain._id}
+                  hostname={domain.hostname}
+                  onDone={onChanged}
+                />
+              </div>
+            )}
         </>
       )}
       {(domain.error || domain.checks?.detail) && (
@@ -320,6 +337,7 @@ export function DomainsTab({ project }: { project: string }) {
 
   return (
     <div className="flex flex-col gap-4">
+      <CloudflareConnection />
       <form onSubmit={add} className="flex flex-wrap gap-2">
         <Input
           value={hostname}
@@ -357,7 +375,7 @@ export function DomainsTab({ project }: { project: string }) {
             loading={isLoading}
           />
           {pending.map((d) => (
-            <DomainSetup key={d._id} domain={d} />
+            <DomainSetup key={d._id} domain={d} onChanged={onChanged} />
           ))}
         </div>
       )}

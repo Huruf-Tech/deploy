@@ -103,3 +103,16 @@ export const tunnelCertModel = mongodb.db().collection<
 export const domainJobSlotModel = mongodb.db().collection<
   { _id: number; nextRunAt: Date }
 >("domainJobSlots");
+
+/**
+ * A workspace's Cloudflare connection (PLAN §14): an API token allowed to
+ * edit its zones' DNS, sealed under the workspace. One per workspace (`_id`).
+ */
+export const cloudflareConnectionModel = mongodb.db().collection<{
+  _id: TDomain["tenant"];
+  tokenEnc: string;
+  /** Zones the token reached when connected, for the dashboard. */
+  zones: number;
+  connectedBy: TDomain["createdBy"];
+  connectedAt: Date;
+}>("cloudflareConnections");

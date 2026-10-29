@@ -85,6 +85,13 @@ export const queries = {
         ? await ThunderSDK.domains.list({ signal, query: { project } })
         : []
     ),
+  /** The workspace's Cloudflare connection, for domains' records (PLAN §14). */
+  cloudflare: () =>
+    query(["domains", "cloudflare"], async ({ signal }) =>
+      can("domains", "cloudflareConnection")
+        ? await ThunderSDK.domains.cloudflareConnection({ signal })
+        : { connected: false }
+    ),
   variables: (scope: TQueryOf<typeof ThunderSDK.variables.list>) =>
     query(
       ["variables", scope.scope, scope.project ?? ""],

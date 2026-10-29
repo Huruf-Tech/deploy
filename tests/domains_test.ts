@@ -10,7 +10,11 @@ import {
   checkDue,
   ownershipToken,
 } from "@/lib/domains/domains.ts";
-import { domainModel } from "@/schemas/applications/domain.ts";
+import {
+  cloudflareConnectionModel,
+  domainModel,
+} from "@/schemas/applications/domain.ts";
+import { cloudflareApi } from "@/lib/domains/cloudflare.ts";
 
 // Custom domains (PLAN §14, Phase 11): add, DNS records, Check now, rechecks.
 
@@ -218,6 +222,130 @@ Deno.test({
             `huruf-verify=${await ownershipToken(a.tenantId, shared)}`,
         );
       });
+      await t.step(
+        "Cloudflare: records created in the zone, DNS only",
+        async () => {
+          // A Cloudflare holding one zone, example.test.
+          const records: Record<string, unknown>[] = [{
+            id: "old",
+            type: "A",
+            name: `cf.example.test`,
+            content: "198.51.100.7",
+            proxied: true,
+          }];
+          const real = cloudflareApi.fetch;
+          cloudflareApi.fetch = (url, init) => {
+            const u = new URL(url);
+            const ok = (result: unknown) =>
+              Promise.resolve(Response.json({ success: true, result }));
+            if (
+              init.headers &&
+              !JSON.stringify(init.headers).includes("cf-token-0123456789")
+            ) {
+              return Promise.resolve(
+                Response.json({
+                  success: false,
+                  errors: [{ message: "Invalid token" }],
+                }, { status: 403 }),
+              );
+            }
+            if (u.pathname.endsWith("/zones")) {
+              const name = u.searchParams.get("name");
+              return ok(
+                !name || name === "example.test"
+                  ? [{ id: "z1", name: "example.test" }]
+                  : [],
+              );
+            }
+            if (init.method === "DELETE") {
+              const at = records.findIndex((r) =>
+                u.pathname.endsWith(`/${r.id}`)
+              );
+              records.splice(at, 1);
+              return ok({});
+            }
+            if (init.method === "POST") {
+              records.push({
+                id: crypto.randomUUID(),
+                ...JSON.parse(String(init.body)),
+              });
+              return ok({});
+            }
+            return ok(
+              records.filter((r) => r.name === u.searchParams.get("name")),
+            );
+          };
+          try {
+            const hostname = "cf.example.test";
+            const added = await b.call("POST", "/domains/api", {
+              project: pb,
+              hostname,
+            });
+            const setUp = () =>
+              b.call("POST", `/domains/api/${added.json._id}/cloudflare`, {});
+            assertEquals((await setUp()).status, 400, "not connected");
+            const bad = await b.call(
+              "PUT",
+              "/domains/api/cloudflare/connection",
+              {
+                token: "wrong-token-0123456789",
+              },
+            );
+            assertEquals(bad.status, 400);
+            const connected = await b.call(
+              "PUT",
+              "/domains/api/cloudflare/connection",
+              {
+                token: "cf-token-0123456789abcdef",
+              },
+            );
+            assertEquals(connected.json, { zones: 1 });
+
+            // An A record pointing elsewhere (proxied): a conflict, kept.
+            const first = await setUp();
+            assertEquals(first.json.applied, false);
+            assertEquals(first.json.conflicts, [{
+              type: "A",
+              content: "198.51.100.7",
+              proxied: true,
+            }]);
+            assertEquals(records.length, 1);
+            // Replaced on request: the TXT and a CNAME, DNS only.
+            const second = await b.call(
+              "POST",
+              `/domains/api/${added.json._id}/cloudflare`,
+              { replace: true },
+            );
+            assertEquals(
+              second.json.applied,
+              true,
+              JSON.stringify(second.json),
+            );
+            const [d] = (await get(b.call, pb)).filter((
+              x: { hostname: string },
+            ) => x.hostname === hostname);
+            assertEquals(
+              records.map((r) => [r.type, r.name, r.content, r.proxied]).sort(),
+              [
+                ["CNAME", hostname, "ingress.platform.test", false],
+                [
+                  "TXT",
+                  `_huruf.${hostname}`,
+                  `"${d.records.ownership.value}"`,
+                  undefined,
+                ],
+              ],
+            );
+            assertEquals(d.status, "checking", "the check started");
+            // Again: nothing new to create.
+            const third = await setUp();
+            assertEquals([third.json.applied, third.json.created], [true, []]);
+          } finally {
+            cloudflareApi.fetch = real;
+            await cloudflareConnectionModel.deleteOne({ _id: b.tenantId });
+          }
+        },
+      );
     } finally {
       Object.assign(resolver, real);
       await domainModel.deleteMany({

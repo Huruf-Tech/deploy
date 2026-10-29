@@ -14,8 +14,14 @@ import {
 import {
   $domainChecks,
   $domainStatus,
+  cloudflareConnectionModel,
   domainModel,
 } from "@/schemas/applications/domain.ts";
+import { tenantOwner } from "@/lib/billing/owner.ts";
+import {
+  connectCloudflare,
+  setUpInCloudflare,
+} from "@/lib/domains/cloudflare.ts";
 
 /**
  * A project's custom domains (PLAN §14, D43): the user adds a domain, creates
@@ -108,6 +114,91 @@ export default new Router("/api", function domains(router) {
         const { tenant } = await withTenant(req);
         await startCheck(tenant._id, id);
         return Response.json({ ok: true });
+      },
+    };
+  });
+
+  // Cloudflare (PLAN §14): the workspace's token creates domains' records.
+  router.get("/cloudflare/connection", function cloudflareConnection() {
+    const $return = z.object({
+      connected: z.boolean(),
+      zones: z.number().optional(),
+      connectedAt: z.date().optional(),
+    });
+    return {
+      shape: () => ({ return: $return }),
+      handler: async (req) => {
+        const { tenant } = await withTenant(req);
+        const doc = await cloudflareConnectionModel.findOne({
+          _id: tenant._id,
+        }, { projection: { zones: 1, connectedAt: 1 } });
+        return Response.json(
+          doc
+            ? {
+              connected: true,
+              zones: doc.zones,
+              connectedAt: doc.connectedAt,
+            }
+            : { connected: false },
+        );
+      },
+    };
+  });
+
+  router.put("/cloudflare/connection", function connectCloudflareToken() {
+    const $body = z.object({ token: z.string().trim().min(20).max(200) });
+    return {
+      shape: () => ({
+        body: $body,
+        return: z.object({ zones: z.number() }),
+      }),
+      handler: async (req) => {
+        const { token } = $body.parse(await bodyAsJson(req));
+        const { tenant, user } = await tenantOwner(req, "connect Cloudflare");
+        return Response.json(
+          await connectCloudflare(tenant._id, user._id, token),
+        );
+      },
+    };
+  });
+
+  router.del("/cloudflare/connection", function disconnectCloudflare() {
+    return {
+      shape: () => ({}),
+      handler: async (req) => {
+        const { tenant } = await tenantOwner(req, "disconnect Cloudflare");
+        await cloudflareConnectionModel.deleteOne({ _id: tenant._id });
+        return Response.json({ ok: true });
+      },
+    };
+  });
+
+  router.post("/:id/cloudflare", function setUpCloudflare() {
+    const $body = z.object({
+      replace: z.boolean().optional().describe(
+        "Replace records pointing elsewhere (the owner only)",
+      ),
+    });
+    const $return = z.object({
+      applied: z.boolean(),
+      created: z.array(z.string()).optional(),
+      zone: z.string().optional(),
+      conflicts: z.array(z.object({
+        type: z.string(),
+        content: z.string(),
+        proxied: z.boolean(),
+      })).optional(),
+    });
+    return {
+      shape: () => ({ params: $params, body: $body, return: $return }),
+      handler: async (req) => {
+        const { id } = $params.parse(paramsAsJson(req));
+        const { replace } = $body.parse(await bodyAsJson(req));
+        // Replacing changes what the owner's zone already serves: theirs to do.
+        const { tenant } = replace
+          ? await tenantOwner(req, "replace DNS records")
+          : await withTenant(req);
+        return Response.json(await setUpInCloudflare(tenant._id, id, replace));
       },
     };
   });
