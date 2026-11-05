@@ -85,6 +85,16 @@ export type reveal$body = {
 export type reveal$return = {
     value: string;
 };
+export type exportEnv$query = {
+    scope: "global" | "tenant" | "project";
+    /** Required for the project scope */
+    project?: string | undefined;
+};
+export type exportEnv$return = {
+    env: string;
+    /** File variables, not env lines */
+    skipped: string[];
+};
 export type resolve$query = {
     stage?: ("build" | "runtime") | undefined;
     /** A project's slug: include its variables (they win) */
@@ -114,6 +124,8 @@ export const variablesModule = (sdk: typeof BaseSDK) => {
         reveal$params: reveal$params,
         reveal$body: reveal$body,
         reveal$return: reveal$return,
+        exportEnv$query: exportEnv$query,
+        exportEnv$return: exportEnv$return,
         resolve$query: resolve$query,
         resolve$return: resolve$return,
     };
@@ -288,6 +300,34 @@ export const variablesModule = (sdk: typeof BaseSDK) => {
             return res;
         }, data);
     },
+        exportEnv(data: {
+        params?: undefined,
+        query: exportEnv$query,
+        body?: undefined,
+    } & TRequestOptions<exportEnv$return>) {
+        return sdk.resolveAxiosResponse(async () => {
+            sdk.checkPermission("variables", "exportEnv");
+
+            const method = "get";
+            const toPath = compile("variables/api/export");
+            const requestPayload = {
+                method,
+                url: toPath(sdk.resolvePathParams(data?.params)),
+                params: data?.query,
+                data: data?.body,
+                signal: data?.signal,
+                ...(data?.axiosConfig
+                ? sdk.resolveAxiosConfig(data.axiosConfig)
+                : undefined),
+            };
+
+            sdk.log("Sending Request:", requestPayload);
+
+            const res = await sdk._axios!.request(requestPayload);
+
+            return res;
+        }, data);
+    },
         resolve(data: {
         params?: undefined,
         query: resolve$query,
@@ -324,6 +364,7 @@ export const variablesModule = (sdk: typeof BaseSDK) => {
     (methods.update as any).__scope = "variables";
     (methods.del as any).__scope = "variables";
     (methods.reveal as any).__scope = "variables";
+    (methods.exportEnv as any).__scope = "variables";
     (methods.resolve as any).__scope = "variables";
 
     sdk["_moduleGroup"].set(methods, "Configuration");

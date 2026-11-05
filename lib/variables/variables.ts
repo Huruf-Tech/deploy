@@ -341,6 +341,30 @@ export async function revealVariable(owner: TVariableOwner, id: ObjectId) {
   return await unseal(owner, doc);
 }
 
+/** A .env value the dashboard's import reads back as is: quoted unless plain. */
+export const envValue = (value: string) =>
+  /^[\w./:@+,-]*$/.test(value) ? value : `"${
+    value.replace(
+      /[\\"\n\r\t]/g,
+      (c) => ({ "\n": "\\n", "\r": "\\r", "\t": "\\t" })[c] ?? `\\${c}`,
+    )
+  }"`;
+
+/**
+ * A scope's variables as a .env file, secrets included (references kept as
+ * written). File variables aren't env lines: they're listed, not exported.
+ */
+export async function exportVariables(owner: TVariableOwner) {
+  const docs = await variablesOf(owner);
+  const lines: string[] = [];
+  const skipped: string[] = [];
+  for (const doc of docs) {
+    if (doc.kind === "file") skipped.push(doc.key);
+    else lines.push(`${doc.key}=${envValue(await unseal(owner, doc))}`);
+  }
+  return { env: lines.length ? lines.join("\n") + "\n" : "", skipped };
+}
+
 /**
  * Everything the viewer resolves (project over tenant over global),
  * references expanded, with each key's kind and stage from the winning scope.

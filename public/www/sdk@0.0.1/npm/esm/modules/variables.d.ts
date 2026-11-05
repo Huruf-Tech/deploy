@@ -80,6 +80,16 @@ export type reveal$body = {
 export type reveal$return = {
     value: string;
 };
+export type exportEnv$query = {
+    scope: "global" | "tenant" | "project";
+    /** Required for the project scope */
+    project?: string | undefined;
+};
+export type exportEnv$return = {
+    env: string;
+    /** File variables, not env lines */
+    skipped: string[];
+};
 export type resolve$query = {
     stage?: ("build" | "runtime") | undefined;
     /** A project's slug: include its variables (they win) */
@@ -108,6 +118,8 @@ export declare const variablesModule: (sdk: typeof BaseSDK) => {
         reveal$params: reveal$params;
         reveal$body: reveal$body;
         reveal$return: reveal$return;
+        exportEnv$query: exportEnv$query;
+        exportEnv$return: exportEnv$return;
         resolve$query: resolve$query;
         resolve$return: resolve$return;
     };
@@ -176,6 +188,17 @@ export declare const variablesModule: (sdk: typeof BaseSDK) => {
         then: <TResult1 = reveal$return, TResult2 = never>(onfulfilled?: ((value: reveal$return) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
         catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<reveal$return | TResult>;
         finally: (onfinally?: (() => void) | null | undefined) => Promise<reveal$return>;
+    };
+    readonly exportEnv: (data: {
+        params?: undefined;
+        query: exportEnv$query;
+        body?: undefined;
+    } & TRequestOptions<exportEnv$return>) => {
+        readonly raw: Promise<import("axios").AxiosResponse<exportEnv$return, any, {}, any>>;
+        readonly data: Promise<exportEnv$return>;
+        then: <TResult1 = exportEnv$return, TResult2 = never>(onfulfilled?: ((value: exportEnv$return) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+        catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<exportEnv$return | TResult>;
+        finally: (onfinally?: (() => void) | null | undefined) => Promise<exportEnv$return>;
     };
     readonly resolve: (data: {
         params?: undefined;

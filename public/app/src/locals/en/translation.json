@@ -2040,5 +2040,8 @@
   "You to Huruf {{you}} ms + Huruf to this machine {{machine}} ms: the way visitors near you reach it": "You to Huruf {{you}} ms + Huruf to this machine {{machine}} ms: the way visitors near you reach it",
   "{{ms}} ms from you": "{{ms}} ms from you",
   "name (empty: random)": "name (empty: random)",
-  "Test domain name": "Test domain name"
+  "Test domain name": "Test domain name",
+  "Export .env": "Export .env",
+  "Could not export the variables": "Could not export the variables",
+  "File variables aren't .env lines, left out: {{keys}}": "File variables aren't .env lines, left out: {{keys}}"
 }

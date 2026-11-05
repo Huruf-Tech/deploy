@@ -1,6 +1,7 @@
 import { assert, assertEquals, assertNotEquals } from "@std/assert";
 import { variableModel } from "@/schemas/configuration/variable.ts";
 import { testSession } from "./_session.ts";
+import { parseEnv } from "../public/app/src/lib/dotenv.ts";
 
 // The owner invites members as `deployer` or `operator`; only operators get shells.
 Deno.test({
@@ -77,10 +78,62 @@ Deno.test({
           assertEquals(json.env, { OWNER_REGION: "eu-west" });
         },
       );
+      await t.step(
+        "only the owner exports the workspace's .env, secrets included",
+        async () => {
+          const tricky = 'a "b" #c\nd\\e';
+          for (
+            const [key, value, isSecret] of [
+              ["PLAIN", "postgres://u@h:5432/db", false],
+              ["TRICKY", tricky, true],
+              ["EMPTY", "", false],
+            ] as const
+          ) {
+            const res = await owner.call("POST", "/variables/api", {
+              scope: "tenant",
+              key,
+              value,
+              isSecret,
+            });
+            assertEquals(res.status, 200, JSON.stringify(res.json));
+          }
+          await owner.call("POST", "/variables/api", {
+            scope: "tenant",
+            key: "CERT",
+            value: "-----BEGIN-----",
+            kind: "file",
+          });
+          const { status, json } = await owner.call(
+            "GET",
+            "/variables/api/export?scope=tenant",
+          );
+          assertEquals(status, 200, JSON.stringify(json));
+          assertEquals(json.skipped, ["CERT"]);
+          // What the dashboard's import reads back.
+          assertEquals(
+            Object.fromEntries(
+              parseEnv(json.env).entries.map((e) => [e.key, e.value]),
+            ),
+            { EMPTY: "", PLAIN: "postgres://u@h:5432/db", TRICKY: tricky },
+          );
+          assertEquals(
+            (await asDeployer("GET", "/variables/api/export?scope=tenant"))
+              .status,
+            403,
+          );
+          // Your own variables are yours to export.
+          const mine = await asDeployer(
+            "GET",
+            "/variables/api/export?scope=global",
+          );
+          assertEquals(mine.json.env, "MEMBER_ONLY=x\n");
+        },
+      );
     } finally {
       await variableModel.deleteMany({
         user: { $in: [owner.user, deployer.user, operator.user] },
       });
+      await variableModel.deleteMany({ tenant: owner.tenantId });
       for (const session of [owner, deployer, operator]) {
         await session.cleanup();
       }

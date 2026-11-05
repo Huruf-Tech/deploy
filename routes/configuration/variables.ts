@@ -7,6 +7,7 @@ import { withTenant } from "@/plugins/Huruf-Tech/thunder-core/utils/withTenant.t
 import {
   createVariable,
   deleteVariable,
+  exportVariables,
   importVariables,
   listVariables,
   resolveVariables,
@@ -16,6 +17,7 @@ import {
   updateVariable,
 } from "@/lib/variables/variables.ts";
 import { projectIn } from "@/lib/deploy/projects.ts";
+import { tenantOwner } from "@/lib/billing/owner.ts";
 import {
   $variableKey,
   $variableScope,
@@ -193,6 +195,27 @@ export default new Router("/api", function variables(router) {
           $scoped.parse(await bodyAsJson(req)),
         );
         return Response.json({ value: await revealVariable(owner, id) });
+      },
+    };
+  });
+
+  // A scope's variables as a .env file, secrets included: a workspace's
+  // and its projects' for the owner only; your own (global) for you.
+  router.get("/export", function exportEnv() {
+    const $return = z.object({
+      env: z.string(),
+      skipped: z.array(z.string()).describe("File variables, not env lines"),
+    });
+
+    return {
+      shape: () => ({ query: $scoped, return: $return }),
+      handler: async (req) => {
+        const scoped = $scoped.parse(queryAsJson(req));
+        if (scoped.scope !== "global") {
+          await tenantOwner(req, "export its variables");
+        }
+        const { owner } = await context(req, scoped);
+        return Response.json(await exportVariables(owner));
       },
     };
   });

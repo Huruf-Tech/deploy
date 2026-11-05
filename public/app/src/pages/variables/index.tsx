@@ -10,6 +10,7 @@ import {
   IconKey,
   IconLock,
   IconPencil,
+  IconFileExport,
   IconFileImport,
   IconPlus,
   IconTrash,
@@ -47,6 +48,7 @@ import { ImportEnvDialog } from "./ImportEnvDialog"
 import { ago } from "@/lib/format"
 import { useCached } from "@/hooks/use-cached"
 import { queries } from "@/lib/queries"
+import { useIsOwner } from "@/pages/rentals/rental"
 
 function SecretValue({
   variable,
@@ -172,8 +174,50 @@ export function VariableTable({
     both: t("Build and runtime"),
   }
 
+  // A workspace's and its projects' secrets leave in one file: the owner's call.
+  const isOwner = useIsOwner()
+  const canExport =
+    (scope.scope === "global" || isOwner) &&
+    ThunderSDK.isPermitted("variables", "exportEnv")
+  const [exporting, setExporting] = React.useState(false)
+  const exportEnv = async () => {
+    setExporting(true)
+    try {
+      const { env, skipped } = await ThunderSDK.variables.exportEnv({
+        query: scope,
+      })
+      const url = URL.createObjectURL(new Blob([env], { type: "text/plain" }))
+      const a = document.createElement("a")
+      a.href = url
+      a.download = ".env"
+      a.click()
+      URL.revokeObjectURL(url)
+      if (skipped.length) {
+        toast.info(
+          t("File variables aren't .env lines, left out: {{keys}}", {
+            keys: skipped.join(", "),
+          })
+        )
+      }
+    } catch (e) {
+      toast.error(errorMessage(e) ?? t("Could not export the variables"))
+    } finally {
+      setExporting(false)
+    }
+  }
+
   const add = (
     <>
+      {canExport && !!data?.length && (
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={exportEnv}
+          disabled={exporting}
+        >
+          <IconFileExport aria-hidden /> {t("Export .env")}
+        </Button>
+      )}
       <Button size="sm" variant="outline" onClick={() => setImporting(true)}>
         <IconFileImport aria-hidden /> {t("Import .env")}
       </Button>

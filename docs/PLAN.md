@@ -975,6 +975,7 @@ Each phase ends with a **review checkpoint** (demo + code review + approval). Ph
   - **Encryption:** values are AES-256-GCM under the owner's data key, with the variable's `_id` in the AAD, so a ciphertext copied onto another variable fails. Non-secret values are encrypted too. Master key rotation: `scripts/rewrapKeyring.ts` (re-runnable).
   - **References:** `${{KEY}}` (merged set) and `${{global.KEY}}` / `${{tenant.KEY}}`. Saves that would create a cycle are rejected; missing references fail at resolve time.
   - **Secrets:** left out of lists, read one at a time with `reveal`. **Reveals are not audited**: audit logs are off by the owner's decision.
+  - **Export .env** (`variables.exportEnv`): a scope's variables as one file, secrets included, references as written, in the format Import reads back. The workspace's and its projects' are for the workspace owner only; your account's are yours. File variables are listed and left out.
   - **Kinds:** `env`/`file` and `build`/`runtime`/`both` are stored and returned by `resolve` (`env` and `files`). Delivery to containers is Phase 6.
   - **External access:** `GET /variables/api/resolve` with `X-Api-Key` + `X-TENANT-ID`, rate-limited by `variableApiReadsPerMinute`. A key with the `variableApi` scope can only resolve.
   - **Quota:** `variablesPerScope`, a count bounded by the limit on the unique `(scope, user, tenant, key)` index.

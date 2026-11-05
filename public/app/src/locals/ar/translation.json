@@ -2040,5 +2040,8 @@
   "You to Huruf {{you}} ms + Huruf to this machine {{machine}} ms: the way visitors near you reach it": "منك إلى Huruf ‏{{you}} مللي ثانية + من Huruf إلى هذا الجهاز {{machine}} مللي ثانية: الطريق الذي يصل به الزوار القريبون منك",
   "{{ms}} ms from you": "{{ms}} مللي ثانية منك",
   "name (empty: random)": "الاسم (فارغ: عشوائي)",
-  "Test domain name": "اسم النطاق التجريبي"
+  "Test domain name": "اسم النطاق التجريبي",
+  "Export .env": "تصدير .env",
+  "Could not export the variables": "تعذّر تصدير المتغيرات",
+  "File variables aren't .env lines, left out: {{keys}}": "متغيرات الملفات ليست أسطر .env، لم تُضمَّن: {{keys}}"
 }
