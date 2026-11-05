@@ -166,6 +166,26 @@ const projectsModule = (sdk) => {
                 return res;
             }, data);
         },
+        restartProject(data) {
+            return sdk.resolveAxiosResponse(async () => {
+                sdk.checkPermission("projects", "restartProject");
+                const method = "post";
+                const toPath = (0, path_to_regexp_1.compile)("projects/api/:id/restart");
+                const requestPayload = {
+                    method,
+                    url: toPath(sdk.resolvePathParams(data?.params)),
+                    params: data?.query,
+                    data: data?.body,
+                    signal: data?.signal,
+                    ...(data?.axiosConfig
+                        ? sdk.resolveAxiosConfig(data.axiosConfig)
+                        : undefined),
+                };
+                sdk.log("Sending Request:", requestPayload);
+                const res = await sdk._axios.request(requestPayload);
+                return res;
+            }, data);
+        },
         clearCache(data) {
             return sdk.resolveAxiosResponse(async () => {
                 sdk.checkPermission("projects", "clearCache");
@@ -295,6 +315,7 @@ const projectsModule = (sdk) => {
     methods.del.__scope = "projects";
     methods.deployProject.__scope = "projects";
     methods.rollbackProject.__scope = "projects";
+    methods.restartProject.__scope = "projects";
     methods.clearCache.__scope = "projects";
     methods.releases.__scope = "projects";
     methods.reach.__scope = "projects";

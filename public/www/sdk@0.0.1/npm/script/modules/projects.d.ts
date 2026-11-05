@@ -336,6 +336,12 @@ export type rollbackProject$body = {
 export type rollbackProject$return = {
     deployment: string;
 };
+export type restartProject$params = {
+    id?: string;
+};
+export type restartProject$return = {
+    deployment: string;
+};
 export type clearCache$params = {
     id?: string;
 };
@@ -432,7 +438,7 @@ export type deployments$query = {
 export type deployments$return = {
     _id: string;
     status: "queued" | "building" | "deploying" | "healthy" | "failed" | "cancelled";
-    trigger: "manual" | "push" | "rollback";
+    trigger: "manual" | "push" | "rollback" | "restart";
     strategy: "rolling" | "allAtOnce" | "stopFirst";
     releaseNumber?: number | undefined;
     commit?: {
@@ -453,7 +459,7 @@ export type deployment$params = {
 export type deployment$return = {
     _id: string;
     status: "queued" | "building" | "deploying" | "healthy" | "failed" | "cancelled";
-    trigger: "manual" | "push" | "rollback";
+    trigger: "manual" | "push" | "rollback" | "restart";
     strategy: "rolling" | "allAtOnce" | "stopFirst";
     releaseNumber?: number | undefined;
     commit?: {
@@ -500,6 +506,8 @@ export declare const projectsModule: (sdk: typeof BaseSDK) => {
         rollbackProject$params: rollbackProject$params;
         rollbackProject$body: rollbackProject$body;
         rollbackProject$return: rollbackProject$return;
+        restartProject$params: restartProject$params;
+        restartProject$return: restartProject$return;
         clearCache$params: clearCache$params;
         releases$params: releases$params;
         releases$return: releases$return;
@@ -599,6 +607,17 @@ export declare const projectsModule: (sdk: typeof BaseSDK) => {
         then: <TResult1 = rollbackProject$return, TResult2 = never>(onfulfilled?: ((value: rollbackProject$return) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
         catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<rollbackProject$return | TResult>;
         finally: (onfinally?: (() => void) | null | undefined) => Promise<rollbackProject$return>;
+    };
+    readonly restartProject: (data: {
+        params: restartProject$params;
+        query?: undefined;
+        body?: undefined;
+    } & TRequestOptions<restartProject$return>) => {
+        readonly raw: Promise<import("axios").AxiosResponse<restartProject$return, any, {}, any>>;
+        readonly data: Promise<restartProject$return>;
+        then: <TResult1 = restartProject$return, TResult2 = never>(onfulfilled?: ((value: restartProject$return) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+        catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<restartProject$return | TResult>;
+        finally: (onfinally?: (() => void) | null | undefined) => Promise<restartProject$return>;
     };
     readonly clearCache: (data: {
         params: clearCache$params;

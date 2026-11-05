@@ -341,6 +341,12 @@ export type rollbackProject$body = {
 export type rollbackProject$return = {
     deployment: string;
 };
+export type restartProject$params = {
+    id?: string;
+};
+export type restartProject$return = {
+    deployment: string;
+};
 export type clearCache$params = {
     id?: string;
 };
@@ -437,7 +443,7 @@ export type deployments$query = {
 export type deployments$return = {
     _id: string;
     status: "queued" | "building" | "deploying" | "healthy" | "failed" | "cancelled";
-    trigger: "manual" | "push" | "rollback";
+    trigger: "manual" | "push" | "rollback" | "restart";
     strategy: "rolling" | "allAtOnce" | "stopFirst";
     releaseNumber?: number | undefined;
     commit?: {
@@ -458,7 +464,7 @@ export type deployment$params = {
 export type deployment$return = {
     _id: string;
     status: "queued" | "building" | "deploying" | "healthy" | "failed" | "cancelled";
-    trigger: "manual" | "push" | "rollback";
+    trigger: "manual" | "push" | "rollback" | "restart";
     strategy: "rolling" | "allAtOnce" | "stopFirst";
     releaseNumber?: number | undefined;
     commit?: {
@@ -506,6 +512,8 @@ export const projectsModule = (sdk: typeof BaseSDK) => {
         rollbackProject$params: rollbackProject$params,
         rollbackProject$body: rollbackProject$body,
         rollbackProject$return: rollbackProject$return,
+        restartProject$params: restartProject$params,
+        restartProject$return: restartProject$return,
         clearCache$params: clearCache$params,
         releases$params: releases$params,
         releases$return: releases$return,
@@ -745,6 +753,34 @@ export const projectsModule = (sdk: typeof BaseSDK) => {
             return res;
         }, data);
     },
+        restartProject(data: {
+        params: restartProject$params,
+        query?: undefined,
+        body?: undefined,
+    } & TRequestOptions<restartProject$return>) {
+        return sdk.resolveAxiosResponse(async () => {
+            sdk.checkPermission("projects", "restartProject");
+
+            const method = "post";
+            const toPath = compile("projects/api/:id/restart");
+            const requestPayload = {
+                method,
+                url: toPath(sdk.resolvePathParams(data?.params)),
+                params: data?.query,
+                data: data?.body,
+                signal: data?.signal,
+                ...(data?.axiosConfig
+                ? sdk.resolveAxiosConfig(data.axiosConfig)
+                : undefined),
+            };
+
+            sdk.log("Sending Request:", requestPayload);
+
+            const res = await sdk._axios!.request(requestPayload);
+
+            return res;
+        }, data);
+    },
         clearCache(data: {
         params: clearCache$params,
         query?: undefined,
@@ -923,6 +959,7 @@ export const projectsModule = (sdk: typeof BaseSDK) => {
     (methods.del as any).__scope = "projects";
     (methods.deployProject as any).__scope = "projects";
     (methods.rollbackProject as any).__scope = "projects";
+    (methods.restartProject as any).__scope = "projects";
     (methods.clearCache as any).__scope = "projects";
     (methods.releases as any).__scope = "projects";
     (methods.reach as any).__scope = "projects";

@@ -2064,5 +2064,12 @@
   "Edge proxy": "Edge proxy",
   "Not routed": "Not routed",
   "Public port {{port}}": "Public port {{port}}",
-  "On each server's address": "On each server's address"
+  "On each server's address": "On each server's address",
+  "Restarting with the current variables": "Restarting with the current variables",
+  "Could not restart": "Could not restart",
+  "Restart (apply variables, no build)": "Restart (apply variables, no build)",
+  "Restart": "Restart",
+  "restart": "restart",
+  "Restart to apply": "Restart to apply",
+  "Variables apply on the next deploy or restart; they override tenant and global variables.": "Variables apply on the next deploy or restart; they override tenant and global variables."
 }

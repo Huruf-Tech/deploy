@@ -68,7 +68,8 @@ export const $deployment = z.object({
   project: $objectId.meta({ ref: "projects" }),
   release: $objectId.meta({ ref: "releases" }).optional(),
   releaseNumber: z.number().int().optional(),
-  trigger: z.enum(["manual", "push", "rollback"]),
+  /** `restart`: the live build again, with today's variables and settings. */
+  trigger: z.enum(["manual", "push", "rollback", "restart"]),
   strategy: $deployStrategy,
   distribution: z.enum(["local", "perServer", "registry", "builtin"])
     .optional(),

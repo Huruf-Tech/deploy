@@ -199,8 +199,19 @@ async function start(deployment: TDeploymentDoc) {
     return await beginRollout(deployment._id);
   }
 
+  // A restart (PLAN §10): the live build, with the variables and settings as
+  // they are now; whatever is live when it starts, not when it was asked for.
+  const live = deployment.trigger === "restart" && project.activeRelease
+    ? await releaseModel.findOne({ _id: project.activeRelease })
+    : null;
+  if (deployment.trigger === "restart") {
+    if (!live) return await fail(deployment._id, "Nothing is live to restart");
+    const missing = missingBuilds(live, deployment.servers);
+    if (missing) return await fail(deployment._id, missing);
+  }
+
   const source = sourceOf(project);
-  const commit = deployment.commit ??
+  const commit = live ? live.commit : deployment.commit ??
     await source.commit(project, deployment.ref ?? defaultRef(project));
   const variables = await resolveVariableSet({
     user: await tenantCreator(project.tenant),
@@ -219,9 +230,10 @@ async function start(deployment: TDeploymentDoc) {
   // The project id's tail keeps names unique: a project deleted and created
   // again with the same slug (and commit) would reuse release 1's name, and
   // the old project's registry cleanup would then delete the new image.
-  const tag = `huruf/${project.slug}-${
-    String(project._id).slice(-6)
-  }:${number}${commit ? `-${commit.sha.slice(0, 7)}` : ""}`;
+  const tag = live?.image ??
+    `huruf/${project.slug}-${String(project._id).slice(-6)}:${number}${
+      commit ? `-${commit.sha.slice(0, 7)}` : ""
+    }`;
   const cacheKey = `${project._id}-${project.cacheEpoch}`;
 
   const { services, dockerfile } = await serviceSpecs(project, {
@@ -232,8 +244,8 @@ async function start(deployment: TDeploymentDoc) {
     values: Object.fromEntries(variables.map((v) => [v.key, v.value])),
   });
 
-  const builds = project.build.mode === "template" ||
-    project.build.mode === "dockerfile";
+  const builds = !live && (project.build.mode === "template" ||
+    project.build.mode === "dockerfile");
   const releaseId = new ObjectId();
   const release: TRelease = {
     tenant: project.tenant,
@@ -241,6 +253,16 @@ async function start(deployment: TDeploymentDoc) {
     number,
     ...(builds ? { image: tag } : {}),
     builtOn: [],
+    // A restart runs the live release's image, wherever it is.
+    ...(live
+      ? {
+        ...(live.image ? { image: live.image } : {}),
+        ...(live.pushedImage ? { pushedImage: live.pushedImage } : {}),
+        ...(live.registry ? { registry: live.registry } : {}),
+        ...(live.builtinRegistry ? { builtinRegistry: true } : {}),
+        builtOn: live.builtOn,
+      }
+      : {}),
     ...(commit ? { commit } : {}),
     specEnc: await sealReleaseSpec(project.tenant, releaseId, services),
     services: services.map((s) => s.name),
@@ -964,17 +986,8 @@ export async function rollback(opts: {
     releaseModel.findOne({ _id: opts.release, project: opts.project }),
   ]);
   if (!project || !release) throw Response.notFound("Release not found");
-  // A per-server build only exists on the servers that built it.
-  if (release.image && !release.pushedImage) {
-    const missing = project.servers.filter((s) =>
-      !release.builtOn.some((b) => b.equals(s))
-    );
-    if (missing.length) {
-      throw Response.badRequest(
-        `Release ${release.number} was built on other servers; deploy again to build it for the current ones`,
-      );
-    }
-  }
+  const missing = missingBuilds(release, project.servers);
+  if (missing) throw Response.badRequest(missing);
   return await deploy({
     tenant: opts.tenant,
     project: opts.project,
@@ -982,6 +995,42 @@ export async function rollback(opts: {
     trigger: "rollback",
     release: release._id,
   });
+}
+
+/** A per-server build only exists on the servers that built it. */
+function missingBuilds(
+  release: Pick<TRelease, "number" | "image" | "pushedImage" | "builtOn">,
+  servers: ObjectId[],
+) {
+  if (!release.image || release.pushedImage) return undefined;
+  return servers.some((s) => !release.builtOn.some((b) => b.equals(s)))
+    ? `Release ${release.number} was built on other servers; deploy again to build it for the current ones`
+    : undefined;
+}
+
+/**
+ * Restart (PLAN §10): the live build rolls out again with the variables and
+ * settings as they are now, as a new release, without building. With the
+ * rolling strategy the app stays up.
+ */
+export async function restart(opts: {
+  tenant: ObjectId;
+  project: ObjectId;
+  user: ObjectId;
+}) {
+  const project = await projectModel.findOne(
+    { _id: opts.project, tenant: opts.tenant },
+    { projection: { activeRelease: 1, servers: 1 } },
+  );
+  if (!project) throw Response.notFound("Project not found");
+  const live = project.activeRelease &&
+    await releaseModel.findOne({ _id: project.activeRelease }, {
+      projection: { number: 1, image: 1, pushedImage: 1, builtOn: 1 },
+    });
+  if (!live) throw Response.badRequest("Deploy it first: nothing is live yet");
+  const missing = missingBuilds(live, project.servers);
+  if (missing) throw Response.badRequest(missing);
+  return await deploy({ ...opts, trigger: "restart" });
 }
 
 /**

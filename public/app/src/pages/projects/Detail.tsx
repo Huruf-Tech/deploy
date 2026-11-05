@@ -10,6 +10,7 @@ import {
   IconExternalLink,
   IconFileText,
   IconHistory,
+  IconRefresh,
   IconRocket,
   IconServer2,
   IconTerminal2,
@@ -89,6 +90,68 @@ const TerminalSheet = React.lazy(() => import("@/pages/servers/TerminalSheet"))
 
 type TStrategy = TProject["deployStrategy"]
 
+/**
+ * Restart (PLAN §10): the live build again with today's variables and
+ * settings, no build. Undefined until something is live.
+ */
+function useRestart(project: TProject, onDeployed: (id: string) => void) {
+  const { t } = useTranslation()
+  const [busy, setBusy] = React.useState(false)
+  if (!project.release || !ThunderSDK.isPermitted("projects", "restartProject"))
+    return undefined
+  const restart = async () => {
+    setBusy(true)
+    try {
+      const { deployment } = await ThunderSDK.projects.restartProject({
+        params: { id: project._id },
+      })
+      toast.success(t("Restarting with the current variables"))
+      onDeployed(deployment)
+    } catch (e) {
+      toast.error(errorMessage(e) ?? t("Could not restart"))
+    } finally {
+      setBusy(false)
+    }
+  }
+  return { restart, busy }
+}
+
+/** When variables apply, and the way to apply them now. */
+function VariablesNote({
+  project,
+  onDeployed,
+}: {
+  project: TProject
+  onDeployed: (id: string) => void
+}) {
+  const { t } = useTranslation()
+  const restart = useRestart(project, onDeployed)
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-2">
+      <p className="text-[13px] text-muted-foreground">
+        {t(
+          "Variables apply on the next deploy or restart; they override tenant and global variables."
+        )}
+      </p>
+      {restart && (
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={restart.restart}
+          disabled={restart.busy}
+        >
+          {restart.busy ? (
+            <IconLoader2 className="animate-spin" aria-hidden />
+          ) : (
+            <IconRefresh aria-hidden />
+          )}
+          {t("Restart to apply")}
+        </Button>
+      )}
+    </div>
+  )
+}
+
 function DeployButton({
   project,
   onDeployed,
@@ -97,7 +160,9 @@ function DeployButton({
   onDeployed: (id: string) => void
 }) {
   const { t } = useTranslation()
-  const [busy, setBusy] = React.useState(false)
+  const [deploying, setBusy] = React.useState(false)
+  const restart = useRestart(project, onDeployed)
+  const busy = deploying || !!restart?.busy
 
   const deploy = async (noCache: boolean) => {
     setBusy(true)
@@ -138,6 +203,11 @@ function DeployButton({
           <IconChevronDown />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
+          {restart && (
+            <DropdownMenuItem onClick={restart.restart}>
+              {t("Restart (apply variables, no build)")}
+            </DropdownMenuItem>
+          )}
           <DropdownMenuItem onClick={() => deploy(true)}>
             {t("Deploy without build cache")}
           </DropdownMenuItem>
@@ -170,8 +240,10 @@ function DeploymentsTable({
       cell: (d) => (
         <div className="min-w-40">
           <div className="truncate">
-            {d.commit?.message ??
-              (d.trigger === "rollback" ? t("Rollback") : t("Deployment"))}
+            {d.trigger === "restart"
+              ? t("Restart")
+              : (d.commit?.message ??
+                (d.trigger === "rollback" ? t("Rollback") : t("Deployment")))}
           </div>
           <div className="truncate text-xs text-muted-foreground">
             {[
@@ -180,7 +252,9 @@ function DeploymentsTable({
                 ? t("push")
                 : d.trigger === "rollback"
                   ? t("rollback")
-                  : t("manual"),
+                  : d.trigger === "restart"
+                    ? t("restart")
+                    : t("manual"),
               d.noCache && t("no cache"),
             ]
               .filter(Boolean)
@@ -1276,11 +1350,7 @@ export default function ProjectDetail() {
         </TabsContent>
 
         <TabsContent value="variables" className="flex flex-col gap-3">
-          <p className="text-[13px] text-muted-foreground">
-            {t(
-              "Variables apply on the next deploy; they override tenant and global variables."
-            )}
-          </p>
+          <VariablesNote project={project} onDeployed={deployed} />
           <VariableTable scope={{ scope: "project", project: project._id }} />
         </TabsContent>
 

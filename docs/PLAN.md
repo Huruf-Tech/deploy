@@ -592,6 +592,7 @@ The **control plane orchestrates rollouts across servers**. There is no backgrou
 - **Failures:** a server that doesn't report healthy within the timeout fails the deployment. Servers already switched revert to the previous release.
 - **Crash restarts** are handled by Docker. Rollouts are handled by us.
 - **Rollback:** select a kept release → a new deployment (`trigger: rollback`) rolls it out with the project's strategy, without rebuilding while the image is still kept.
+- **Restart** (`trigger: restart`): the live release's image as a new release, with the variables and settings resolved again, rolled out with the project's strategy (rolling keeps the app up), no build. It restarts whatever is live when it starts, not when it was asked for. A per-server build must exist on every current server (else deploy again). Restart releases share their image with the release they came from, so the built-in registry deletes an image only once no kept release names it.
 - **Manual scale:** `replicasPerServer`.
 - **Autoscale (MVP):** agent-local, within min/max replicas per server, using CPU/memory targets with cooldown. Changes are reported as events. Adding servers stays manual (§7).
 

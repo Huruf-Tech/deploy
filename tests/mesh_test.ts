@@ -224,6 +224,25 @@ Deno.test({
       );
 
       await t.step(
+        "restarts share the live image: pruning their source keeps it",
+        async () => {
+          // Five restarts of release 6 prune releases 2 to 6.
+          for (let i = 0; i < 5; i++) {
+            const res = await call("POST", `/projects/api/${shop}/restart`);
+            assertEquals(res.status, 200, JSON.stringify(res.json));
+            for (let r = 0; r < 3; r++) await pollAll();
+          }
+          const tags = (await mongodb.db().collection("agentCommands")
+            .find({ tenant: tenantId, type: "registry.delete" }).toArray())
+            .flatMap((c) => c.payload.tags);
+          assert(tags.includes(`${repo}:5`), tags.join(", "));
+          assert(!tags.includes(`${repo}:6`), "the live image was deleted");
+          const keep = agents[1].spec!.keepImages;
+          assert(keep.includes(`10.209.0.1:5000/${repo}:6`), keep.join(", "));
+        },
+      );
+
+      await t.step(
         "a project that can't reach what it uses gets a warning",
         async () => {
           const { json: templates } = await call("GET", "/templates/api");

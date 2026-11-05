@@ -2,7 +2,10 @@ import type { ObjectId } from "mongodb";
 import { Logger } from "@/core/utils/logger.ts";
 import { issueCommand } from "@/lib/agents/commands.ts";
 import { builtinRegistry } from "@/lib/network/mesh.ts";
-import type { TRelease } from "@/schemas/applications/deployment.ts";
+import {
+  releaseModel,
+  type TRelease,
+} from "@/schemas/applications/deployment.ts";
 
 /**
  * Releases that are gone (pruned, failed before running, or their project
@@ -15,9 +18,15 @@ export async function dropBuiltinImages(
   tenant: ObjectId,
   releases: Pick<TRelease, "pushedImage" | "builtinRegistry">[],
 ) {
-  const pushed = releases.flatMap((r) =>
+  const named = releases.flatMap((r) =>
     r.builtinRegistry && r.pushedImage ? [r.pushedImage] : []
   );
+  if (!named.length) return;
+  // A restart's release shares its image with the release it came from.
+  const shared = new Set(
+    await releaseModel.distinct("pushedImage", { pushedImage: { $in: named } }),
+  );
+  const pushed = named.filter((p) => !shared.has(p));
   if (!pushed.length) return;
   try {
     const registry = await builtinRegistry(tenant);

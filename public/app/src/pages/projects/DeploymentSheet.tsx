@@ -219,7 +219,9 @@ export function DeploymentSheet({
                     ? t("Pushed")
                     : data.trigger === "rollback"
                       ? t("Rollback")
-                      : t("Manual"),
+                      : data.trigger === "restart"
+                        ? t("Restart")
+                        : t("Manual"),
                   data.commit &&
                     `${shortSha(data.commit.sha)} ${data.commit.message ?? ""}`,
                   ago(data.createdAt),

@@ -2064,5 +2064,12 @@
   "Edge proxy": "وكيل الحافة",
   "Not routed": "غير موجَّه",
   "Public port {{port}}": "المنفذ العام {{port}}",
-  "On each server's address": "على عنوان كل خادم"
+  "On each server's address": "على عنوان كل خادم",
+  "Restarting with the current variables": "إعادة التشغيل بالمتغيرات الحالية",
+  "Could not restart": "تعذّرت إعادة التشغيل",
+  "Restart (apply variables, no build)": "إعادة التشغيل (تطبيق المتغيرات، بلا بناء)",
+  "Restart": "إعادة تشغيل",
+  "restart": "إعادة تشغيل",
+  "Restart to apply": "أعد التشغيل للتطبيق",
+  "Variables apply on the next deploy or restart; they override tenant and global variables.": "تُطبَّق المتغيرات عند النشر التالي أو إعادة التشغيل؛ وهي تتجاوز متغيرات المستأجر والمتغيرات العامة."
 }

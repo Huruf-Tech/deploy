@@ -262,6 +262,39 @@ Deno.test({
       );
 
       await t.step(
+        "restart: a changed variable goes live without building",
+        async () => {
+          await call("POST", "/variables/api", {
+            scope: "project",
+            project,
+            key: "FEATURE",
+            value: "on",
+          });
+          const builds = agents.map((a) => a.builds.length);
+          const { json: before } = await call(
+            "GET",
+            `/projects/api/${project}`,
+          );
+          const res = await call("POST", `/projects/api/${project}/restart`);
+          assertEquals(res.status, 200, JSON.stringify(res.json));
+          await pollAll(2);
+
+          const d = await deployment(res.json.deployment);
+          assertEquals([d.status, d.trigger], ["healthy", "restart"]);
+          assertEquals(agents.map((a) => a.builds.length), builds, "rebuilt");
+          for (const agent of agents) {
+            const [live] = agent.spec!.workloads[0].releases;
+            assertEquals(live.env.FEATURE, "on");
+            // The live release's image (release 1, rolled back to), as built.
+            assertMatch(live.image, /^huruf\/shop-[0-9a-f]{6}:1$/);
+          }
+          const { json: p } = await call("GET", `/projects/api/${project}`);
+          assert(p.release.number > before.release.number, "a new release");
+          assertEquals(p.release.commit.sha, before.release.commit.sha);
+        },
+      );
+
+      await t.step(
         "clear build cache: a new cache id and no layer cache next time",
         async () => {
           await call("POST", `/projects/api/${project}/clearCache`, {});

@@ -21,6 +21,7 @@ import {
   clearBuildCache,
   deploy,
   expireStale,
+  restart,
   rollback,
 } from "@/lib/deploy/deployments.ts";
 import {
@@ -474,6 +475,25 @@ export default new Router("/api", function projects(router) {
     };
   });
 
+  // Variables and settings changed: the live build again, no rebuild.
+  router.post("/:id/restart", function restartProject() {
+    const $return = z.object({ deployment: z.string() });
+
+    return {
+      shape: () => ({ params: $params, return: $return }),
+      handler: async (req) => {
+        const { id } = $params.parse(paramsAsJson(req));
+        const { tenant, user } = await withTenant(req);
+        const deployment = await restart({
+          tenant: tenant._id,
+          project: id,
+          user: user._id,
+        });
+        return Response.json({ deployment: deployment.toString() });
+      },
+    };
+  });
+
   router.post("/:id/clearCache", function clearCache() {
     return {
       shape: () => ({ params: $params }),
@@ -520,7 +540,7 @@ export default new Router("/api", function projects(router) {
   const $deploymentSummary = z.object({
     _id: z.string(),
     status: $deploymentStatus,
-    trigger: z.enum(["manual", "push", "rollback"]),
+    trigger: z.enum(["manual", "push", "rollback", "restart"]),
     strategy: $deployStrategy,
     releaseNumber: z.number().optional(),
     commit: $commit.optional(),
