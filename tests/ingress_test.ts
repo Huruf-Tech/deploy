@@ -141,6 +141,7 @@ Deno.test({
         const lb = services[`p-${project}-s-${b}`].loadBalancer;
         assertEquals(lb.servers, [{ url: "http://127.0.0.1:20002" }]);
         assertEquals(lb.healthCheck.path, "/health");
+        assertEquals(lb.healthCheck.hostname, hostname, "a visitor's Host");
         assertEquals(lb.healthCheck.headers, {
           "X-Huruf-Project": String(project),
         });

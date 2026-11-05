@@ -156,6 +156,9 @@ async function buildConfig() {
     if (!entries.length) continue; // no route: Traefik answers 404, not a hang
 
     const health = project.runtime?.healthcheckPath;
+    // The check carries a Host of the project's, as visitors do: apps that
+    // allow known hosts only (Vite, Django, Rails…) refuse `frps:<port>`.
+    const host = domains.find((d) => d.project.equals(project._id))!.hostname;
     for (const { server, port } of entries) {
       services[`p-${id}-s-${server}`] = {
         loadBalancer: {
@@ -165,6 +168,7 @@ async function buildConfig() {
             ? {
               healthCheck: {
                 path: health,
+                hostname: host,
                 interval: "10s",
                 timeout: "3s",
                 headers: { [PROJECT_HEADER]: id },
