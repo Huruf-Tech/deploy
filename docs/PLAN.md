@@ -1458,6 +1458,7 @@ The owner said go for all stages (2026-10-27). Every agent is a host; after inst
     - Removing a machine shows the agent's plan with one Sysbox checkbox.
   - **Found and fixed in the end-to-end run:**
     - Forwards matched every packet to the port, so a partition's own connection to another machine's forwarded 51821 was sent back into itself. They now match only traffic for the machine (`fib daddr type local`).
+    - **No open port between partitions** (2026-11-06): a partition's WireGuard left through Docker's masquerade from another source port than its forwarded one, so its peer's stateful firewall (a cloud security group) saw `A:51820 → B:51821` while expecting a reply from `A:51821`, and both sides dropped the handshakes unless the port was opened. A forwarded UDP port now also leaves from itself (`masquerade to :<meshPort>`, priority `srcnat - 1`, before Docker's), so both directions are one flow (`A:51821 ↔ B:51821`) and the firewalls let the replies in, as they already did for servers (51820 to 51820). Opening the port is only needed where a NAT rewrites ports.
     - On a machine, a partition's data quota is its whole disk size, and its agent reports that size, not the host's disk. (Phase 18 caps its system files too: §28.)
     - The Partitions panel's lookup needed a typed ObjectId filter.
   - **Verified locally** on a machine whose other tool's container was never restarted:

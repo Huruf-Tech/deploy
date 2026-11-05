@@ -182,6 +182,11 @@ func TestForwardRulesMatchTheMachineOnly(t *testing.T) {
 	if !strings.Contains(rules, "fib daddr type local udp dport 51821 dnat to 172.19.0.2:51820") {
 		t.Fatalf("rules:\n%s", rules)
 	}
+	// Its private network leaves from the port peers send to, before Docker's masquerade.
+	if !strings.Contains(rules, "ip saddr 172.19.0.2 udp sport 51820 fib daddr type != local masquerade to :51821") ||
+		!strings.Contains(rules, "priority srcnat - 1") {
+		t.Fatalf("rules:\n%s", rules)
+	}
 	if strings.Contains(rules, "8080") {
 		t.Fatal("a stopped partition's forward was written")
 	}

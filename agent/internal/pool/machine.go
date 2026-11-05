@@ -79,16 +79,29 @@ func (d *Sysbox) Forward(ctx context.Context, forwards, added []protocol.PortFor
 // traffic to the machine itself is forwarded (`fib daddr type local`): a
 // partition's own connections to the same port elsewhere, e.g. another
 // machine's forwarded private-network port, must go out (found in 17).
+//
+// A forwarded UDP port also leaves from itself: a partition's private network
+// then sends from the machine's port its peers send to, so both directions
+// are the same flow and stateful firewalls on both sides (cloud security
+// groups) let the replies in without an inbound rule, as they do for servers
+// on 51820 to 51820. Before Docker's masquerade (srcnat), which would pick
+// another source port.
 func forwardRules(forwards []protocol.PortForward, ips map[string]string) string {
-	var rules strings.Builder
+	var rules, sources strings.Builder
 	for _, f := range forwards {
 		if ip := ips[f.Partition]; ip != "" {
 			fmt.Fprintf(&rules, "    fib daddr type local %s dport %d dnat to %s:%d\n", f.Protocol, f.Port, ip, f.To)
+			if f.Protocol == "udp" {
+				fmt.Fprintf(&sources, "    ip saddr %s udp sport %d fib daddr type != local masquerade to :%d\n", ip, f.To, f.Port)
+			}
 		}
 	}
 	return replaceTable("ip", forwardTable, `  chain prerouting {
     type nat hook prerouting priority dstnat; policy accept;
 `+rules.String()+`  }
+  chain postrouting {
+    type nat hook postrouting priority srcnat - 1; policy accept;
+`+sources.String()+`  }
 `)
 }
 
