@@ -127,7 +127,9 @@ func (b *Builder) run(ctx context.Context, p protocol.BuildRunPayload, log io.Wr
 	}
 	args = append(args, contextDir)
 	logf("Building %s", p.Image)
-	if err := stream(ctx, log, []string{"DOCKER_BUILDKIT=1"}, "docker", args...); err != nil {
+	// The commit is the release's (cloned without a git binary): Buildx needn't
+	// look for one, and warn in every log that it can't.
+	if err := stream(ctx, log, []string{"DOCKER_BUILDKIT=1", "BUILDX_GIT_INFO=0"}, "docker", args...); err != nil {
 		return nil, errors.New("docker build failed; see the build log")
 	}
 
