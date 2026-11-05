@@ -246,7 +246,8 @@ function ConsoleSidebar({
           <img
             src={logo || (resolvedTheme === "dark" ? LogoDark : LogoLight)}
             alt={appName}
-            className="size-6 shrink-0 object-contain"
+            // By height, so a wordmark keeps its size; collapsed, it fits the rail.
+            className="h-8 w-auto max-w-44 shrink-0 object-contain object-start group-data-[collapsible=icon]:h-auto group-data-[collapsible=icon]:max-h-8 group-data-[collapsible=icon]:max-w-8"
           />
         </Link>
       </SidebarHeader>
