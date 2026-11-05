@@ -400,10 +400,46 @@ access/refresh/authorization codes), `signIdToken` (RS256, JWKS-based), and
 `generateAuthorizationCode`/`exchangeToken`/`revoke`/`verifyAccessToken` (S256 PKCE only).
 
 Concepts not obvious from method names:
-- Consent versioning: each consent has a `version`; `exchangeToken` increments it, which
-  revokes previously issued tokens carrying an older version.
 - Refresh tokens are only issued when the consent includes `offline_access`; ID tokens
   only when it includes `openid`.
+- **Rotation is per session, not per consent.** `uniqueConsentPerClient` gives a user
+  exactly one consent per client, so every device shares it. The rotation counter
+  therefore lives in `consent.sessions[sid]`, keyed by the better-auth session id, and
+  one device refreshing cannot touch another's tokens. The consent-wide `version` field
+  is legacy: it is still the starting point for a session that has no entry yet, but it
+  is no longer incremented on refresh.
+- **A superseded refresh token keeps working for `OAUTH_REFRESH_GRACE_MS`** (60s,
+  exported from `lib/oauth2.ts`). Rotation makes a refresh token single-use, which breaks
+  two ordinary situations: an app firing several requests that all 401 at once and each
+  starting a refresh, and a refresh whose response never reaches the client. Inside the
+  window the old token is accepted and returns the *current* tokens without rotating
+  again, so parallel refreshes converge on one valid token instead of signing the user
+  out. Outside it, the token is dead.
+- **The grace window does not apply to authorization codes.** Codes stay strictly
+  single-use; extending the window to them would be a code-replay hole.
+- A session's first exchange *adopts* it — `sessions[sid]` is created on the fly. That is
+  how a code exchange and any token issued before per-session rotation existed both keep
+  working.
+- **Old access tokens are NOT revoked by a rotation.** `verifyAccessToken` checks only
+  that the consent still exists; it does not compare `payload.version`. An access token
+  stays valid until it expires (1 hour), which is ordinary OAuth2 behaviour for a
+  short-lived bearer token. If you need revocation to bite immediately, shorten the
+  access-token lifetime rather than adding a per-request version check.
+- `revoke()` signs out **only the session** whose token you pass, by tombstoning
+  `sessions[sid]` with `version: 0`. The entry is tombstoned rather than erased because
+  an absent entry reads as a first use and would be adopted, letting the revoked token
+  straight back in. Pass `allSessions: true` to sign out every device. When no live
+  session is left the consent is deleted, so the user has to grant again.
+- `resolveJWKs` keeps **one** signing key: reads take the oldest document
+  (`createdAt`, `_id`) so every instance agrees which key is canonical, and creation
+  relies on a unique index (`singleJwk`) with duplicate-key recovery. Signing an ID token
+  with a key `/jwks` does not publish causes intermittent, confusing verification
+  failures in clients.
+
+> If your `jwks` collection already holds more than one document — from before
+> `resolveJWKs` was made atomic — the `singleJwk` index cannot build, and
+> `syncDBIndexes` swallows that failure. Reads stay deterministic either way, but delete
+> all but the oldest document and re-run setup to get the guard in place.
 - `signJWT`/`verifyJWT` take `issuer`/`audience` as **optional** — both default to
   `BASE_URL`. That makes them reusable as a general-purpose signed-token helper for
   non-OAuth flows (the wallet transfer challenge token uses exactly this), e.g.
@@ -869,6 +905,10 @@ deno task test:integration
 
 A **replica set** is required — the ledger writes its pairs in transactions. `.env.test`
 is gitignored.
+
+`lib/oauth2.integration_test.ts` uses the same harness for token rotation: parallel
+refreshes, two devices on one consent, the grace window expiring, authorization-code
+replay, per-session and all-session revocation, and concurrent JWK cold starts.
 
 The suite **skips itself** unless `ENV_TYPE=test` *and* the resolved `DATABASE_URL`
 points at localhost. These tests delete collections, and the project's `.env` points at

@@ -28,6 +28,7 @@ import TenantForm from "./form"
 import {
   IconAlertCircle,
   IconDots,
+  IconLogout,
   IconPlus,
   IconUser,
 } from "@tabler/icons-react"
@@ -45,6 +46,10 @@ import {
   SelectTrigger,
 } from "@/components/ui/select"
 import { cn } from "@/lib/utils"
+import { toast } from "sonner"
+import { useLogout } from "@/core/protected"
+import { useBranding } from "@/core/hooks/useBranding"
+import { ConfirmationDialog } from "@/core/custom/ConfirmationDialog"
 
 
 // delay controls
@@ -110,6 +115,19 @@ export function SelectTenant() {
   >()
   const navigate = useNavigate()
   const { hash } = useLocation()
+  const logout = useLogout()
+  const { appName, logo } = useBranding()
+
+  /**
+   * The tenant awaiting a delete confirmation.
+   *
+   * The action is chosen from a row's menu, and a menu item cannot be the
+   * dialog's trigger -- it unmounts as the menu closes. So the choice is parked
+   * here and one controlled dialog below reads it.
+   */
+  const [pendingDelete, setPendingDelete] = React.useState<
+    { _id: string; name: string } | null
+  >(null)
 
   const tenants = React.useCallback(
     async ({ signal }: { signal?: AbortSignal }) => {
@@ -123,6 +141,21 @@ export function SelectTenant() {
   )
 
   const { data, error, isLoading, refetch } = use(tenants)
+
+  //! Present on both cards on purpose. A user with no tenants lands on the
+  //! create form, which has no dismiss, so without this there is no way out of
+  //! the app short of clearing storage.
+  const logoutButton = (
+    <Button
+      variant="ghost"
+      size="sm"
+      onClick={() => void logout()}
+      className="text-muted-foreground hover:text-foreground"
+    >
+      <IconLogout className="size-4 rtl:rotate-180" />
+      {t("Log out")}
+    </Button>
+  )
 
   if (data?.results.length === 1 && hash !== "#list")
     return <Navigate to={`/${data?.results[0].tenant._id}`} />
@@ -143,16 +176,23 @@ export function SelectTenant() {
           <CardHeader className="flex items-center justify-between gap-3">
             <div className="flex w-full grow flex-col">
               <div className="flex shrink-0 items-center gap-3">
-                <img src={Logo} alt="Logo" className="h-5 w-auto shrink-0" />
+                <img
+                  src={logo || Logo}
+                  alt={appName}
+                  className="h-5 w-auto shrink-0"
+                />
               </div>
               <CardTitle>{t("Select Tenant")}</CardTitle>
               <CardDescription>{t("Choose a tenant to proceed")}</CardDescription>
             </div>
 
-            <div className="flex w-full items-center justify-end">
+            <div className="flex w-full items-center justify-end gap-2">
+              {logoutButton}
+
               <Button
                 variant="secondary"
                 size="icon-sm"
+                aria-label={t("Add tenant")}
                 onClick={() => setAddTenant({ name: "" })}
               >
                 <IconPlus />
@@ -219,12 +259,13 @@ export function SelectTenant() {
                             {t("Members")}
                           </Button>
 
+                          {/*
+                            `items` used to be passed here as well as rendered
+                            as children below, leaving the same list declared
+                            twice for one menu.
+                          */}
                           <Select
-                            items={[
-                              { label: t("Edit"), value: "edit" },
-                              { label: t("Delete"), value: "delete" },
-                            ]}
-                            onValueChange={async (value) => {
+                            onValueChange={(value) => {
                               switch (value) {
                                 case "edit":
                                   setAddTenant({
@@ -233,15 +274,15 @@ export function SelectTenant() {
                                     name: tenant.name,
                                   })
                                   break
+
                                 case "delete":
-                                  {
-                                    setLoading(true)
-                                    await ThunderSDK.tenants.del({
-                                      params: { id: tenant._id },
-                                    })
-                                    setLoading(false)
-                                    refetch()
-                                  }
+                                  //! Deleting a tenant takes everything in it
+                                  //! and cannot be undone, so it is confirmed
+                                  //! rather than run straight from the menu.
+                                  setPendingDelete({
+                                    _id: tenant._id,
+                                    name: tenant.name,
+                                  })
                                   break
                               }
                             }}
@@ -288,9 +329,14 @@ export function SelectTenant() {
               <IconUser className="size-4" />
             </div>
 
-            <CardTitle>{t("Create Tenant")}</CardTitle>
+            {/* Read "Create Tenant" while editing, since nothing branched. */}
+            <CardTitle>
+              {AddTenant?._id ? t("Edit Tenant") : t("Create Tenant")}
+            </CardTitle>
             <CardDescription>
-              {t("Please fill the form to create a new tenant")}
+              {AddTenant?._id
+                ? t("Update the tenant name and logo")
+                : t("Please fill the form to create a new tenant")}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -309,12 +355,64 @@ export function SelectTenant() {
                   >
                     {t("Dismiss")}
                   </Button>
-                ) : null
+                ) : (
+                  <div className="flex justify-center">{logoutButton}</div>
+                )
               }
             />
           </CardContent>
         </Card>
       )}
+
+      {/*
+        One dialog for the whole list, driven by `pendingDelete`. `type="strict"`
+        asks for the tenant name to be typed out: this is the most destructive
+        action on the page and there is no undo behind it.
+      */}
+      <ConfirmationDialog
+        trigger={undefined}
+        open={!!pendingDelete}
+        onOpenChange={(open) => {
+          if (!open) setPendingDelete(null)
+        }}
+        type="strict"
+        hint={pendingDelete?.name ?? ""}
+        variant="destructive"
+        title={t("Delete tenant")}
+        description={t(
+          "This permanently deletes {{name}} and everything inside it. This cannot be undone.",
+          { name: pendingDelete?.name ?? "" }
+        )}
+        confirmText={t("Delete")}
+        confirmingText={t("Deleting...")}
+        onConfirm={async () => {
+          if (!pendingDelete) return
+
+          setLoading(true)
+
+          try {
+            await ThunderSDK.tenants.del({ params: { id: pendingDelete._id } })
+
+            toast.success(t("Deleted successfully."))
+
+            //! Closed by clearing the state that opens it, rather than through
+            //! the dialog's `dismiss()`: while `open` is controlled, the state
+            //! here is the source of truth and the imperative close would be
+            //! fighting it.
+            setPendingDelete(null)
+
+            await refetch()
+          } catch (err) {
+            //! The old call had no catch and reset the loader on the happy path
+            //! only, so a failed delete left the page spinning for good.
+            toast.error(
+              err instanceof Error ? err.message : t("Failed to delete tenant.")
+            )
+          } finally {
+            setLoading(false)
+          }
+        }}
+      />
     </div>
   )
 }

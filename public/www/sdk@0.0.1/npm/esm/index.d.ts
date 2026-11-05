@@ -3,6 +3,7 @@
  *
  * This is a generated file. Do not edit the contents of this file!
  */
+import "./_dnt.polyfills.js";
 import { BaseSDK } from "./base.js";
 import { domainsModule } from "./modules/domains.js";
 import { projectGroupsModule } from "./modules/projectGroups.js";

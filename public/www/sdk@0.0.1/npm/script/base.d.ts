@@ -1,3 +1,4 @@
+import "./_dnt.polyfills.js";
 import { type AxiosRequestConfig, type AxiosInstance, type AxiosResponse } from "axios";
 import type { TSDKOptions, TCacheKey, TCacheOptions } from "./types.js";
 export declare class BaseSDK {
@@ -45,12 +46,19 @@ export declare class BaseSDK {
     }): Promise<string[]>;
     static clearCache(): Promise<void>;
     static cacheKeys(startsWith?: string): Promise<string[]>;
+    /** Whether a cached entry needs refetching: marked expired, or older than `cacheTTL` (seconds). */
+    static isCacheStale<T>(cached: {
+        value: T;
+        timestamp: number;
+        expired?: boolean;
+    }, options?: TCacheOptions<T>): boolean;
     static useCache<T>(callback: () => T | Promise<T>, options?: TCacheOptions<T>): Promise<T>;
     static useCaching<T>(cacheKey: TCacheKey, callback: (opts: {
         signal: AbortSignal;
     }) => T | Promise<T>, options?: Omit<TCacheOptions<T>, "cacheKey">, freshMethods?: boolean): {
         key: string;
         get: () => Promise<T>;
+        iterate: () => AsyncGenerator<T>;
         expire: (options?: {
             stopPropagation?: boolean;
         }) => Promise<boolean>;

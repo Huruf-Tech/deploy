@@ -35,6 +35,13 @@ type ConfirmationDialogBase = {
   description?: React.ReactNode;
   confirmText?: React.ReactNode;
   confirmingText?: React.ReactNode;
+  /**
+   * Controlled open state. Pass this (with no `trigger`) when the dialog is
+   * opened from something that cannot be a trigger itself -- a menu item, which
+   * unmounts as the menu closes, or a row action chosen from a select.
+   */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
   variant?: "default" | "destructive" | "outline" | "secondary" | "ghost" | "link";
 };
 
@@ -66,11 +73,18 @@ export const ConfirmationDialog = (props: ConfirmationDialogProps) => {
   return (
     <Sheet
       actionsRef={sheetRef}
+      open={props.open}
       onOpenChange={(value) => {
         if (!value) setValue("");
+
+        props.onOpenChange?.(value);
       }}
     >
-      <SheetTrigger render={props.trigger}></SheetTrigger>
+      {/*
+        `render={undefined}` would have Base UI fall back to rendering its own
+        bare button, so a controlled dialog would leave a stray one on the page.
+      */}
+      {props.trigger ? <SheetTrigger render={props.trigger} /> : null}
       <SheetContent side="bottom" className="mx-auto mb-2 max-w-sm rounded-2xl">
         <SheetHeader>
           <SheetTitle className="text-xl">{props.title ?? t("Confirmation")}</SheetTitle>

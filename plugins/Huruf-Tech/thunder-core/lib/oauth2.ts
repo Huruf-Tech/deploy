@@ -9,8 +9,13 @@ import {
 import { Env } from "@/core/utils/env.ts";
 import { createHashBase64 } from "@/core/utils/hash.ts";
 import { oauthClientModel } from "../schemas/oauthClient.ts";
-import { ObjectId } from "mongodb";
-import { oauthConsentModel } from "../schemas/oauthConsent.ts";
+import { ObjectId, WithId } from "mongodb";
+import z from "zod";
+import { isDuplicateKeyError } from "@/database.ts";
+import {
+  oauthConsentModel,
+  oauthConsentSchema,
+} from "../schemas/oauthConsent.ts";
 import { jwkModel, jwkSchema } from "../schemas/jwk.ts";
 
 export type TAuthTokenPayload = {
@@ -31,11 +36,52 @@ export type TJwks = {
   privateJwk: JsonWebKey;
 };
 
-export class OAuth2 {
-  static async resolveJWKs(): Promise<TJwks> {
-    const jwks = await jwkModel.findOne();
+/**
+ * How long a just-superseded refresh token keeps working.
+ *
+ * Rotation makes a refresh token single-use, which breaks two ordinary
+ * situations: an app firing several requests that all 401 at once and each
+ * starting a refresh, and a refresh whose response never reaches the client.
+ * Both would otherwise strand the session with a token the server has already
+ * retired. Inside this window the superseded token is accepted and returns the
+ * current tokens instead of rotating again.
+ */
+export const OAUTH_REFRESH_GRACE_MS = 60_000;
 
-    if (jwks) return jwks as unknown as TJwks;
+/**
+ * Session entries older than the longest-lived refresh token are dead weight
+ * and get pruned, so a consent does not grow forever as a user signs in.
+ */
+const OAUTH_SESSION_TTL_MS = 60 * 60 * 24 * 31 * 1000;
+
+type TConsent = WithId<z.infer<typeof oauthConsentSchema>>;
+
+export class OAuth2 {
+  /**
+   * Encodes a session id for use as a MongoDB field name, which cannot
+   * contain `.` or start with `$`. Injective: `%` is escaped first, so no two
+   * distinct session ids can collide on one key.
+   */
+  static sessionKey(sid: string) {
+    return sid
+      .replaceAll("%", "%25")
+      .replaceAll("$", "%24")
+      .replaceAll(".", "%2E");
+  }
+
+  /** The rotation version a session is currently at, if it has one. */
+  static sessionVersion(consent: Pick<TConsent, "sessions">, sid: string) {
+    return consent.sessions?.[this.sessionKey(sid)]?.version;
+  }
+
+  static async resolveJWKs(): Promise<TJwks> {
+    // Oldest wins, so every instance agrees which key is canonical even if
+    // duplicates already exist from before this was made atomic. Without the
+    // sort, `findOne` could hand out a key that /jwks does not publish.
+    const existing = await jwkModel.find().sort({ createdAt: 1, _id: 1 })
+      .limit(1).next();
+
+    if (existing) return existing as unknown as TJwks;
 
     const { publicKey, privateKey } = await generateKeyPair("RS256", {
       modulusLength: 2048,
@@ -64,9 +110,22 @@ export class OAuth2 {
       privateJwk,
     });
 
-    await jwkModel.insertOne(doc);
+    try {
+      await jwkModel.insertOne(doc);
 
-    return doc as TJwks;
+      return doc as TJwks;
+    } catch (error) {
+      // Lost the race with another cold start. Its key is the canonical one;
+      // ours is discarded unused.
+      if (!isDuplicateKeyError(error)) throw error;
+
+      const winner = await jwkModel.find().sort({ createdAt: 1, _id: 1 })
+        .limit(1).next();
+
+      if (!winner) throw error;
+
+      return winner as unknown as TJwks;
+    }
   }
 
   static async createOAuthConfig() {
@@ -191,7 +250,6 @@ export class OAuth2 {
     issuer?: string;
     audience?: string | string[];
   }) {
-
     const iss = await Env.get("BASE_URL");
 
     const secret = new TextEncoder().encode(
@@ -258,6 +316,115 @@ export class OAuth2 {
     throw new Error("Unsupported code challenge method");
   }
 
+  /**
+   * Drops session entries that can no longer hold a usable refresh token.
+   */
+  protected static async pruneSessions(consent: TConsent) {
+    const cutoff = Date.now() - OAUTH_SESSION_TTL_MS;
+
+    const stale = Object.entries(consent.sessions ?? {}).filter(
+      ([, session]) => {
+        const at = session?.rotatedAt
+          ? new Date(session.rotatedAt).getTime()
+          : 0;
+
+        // No timestamp means we cannot judge its age; leave it alone.
+        return at > 0 && at < cutoff;
+      },
+    );
+
+    if (!stale.length) return;
+
+    await oauthConsentModel.updateOne({ _id: consent._id }, {
+      $unset: Object.fromEntries(
+        stale.map(([key]) => [`sessions.${key}`, ""]),
+      ),
+    });
+  }
+
+  /**
+   * Spends the rotation version a grant token carries, returning the version
+   * the newly issued tokens should carry.
+   *
+   * Rotation is per session, so one device refreshing cannot invalidate
+   * another's tokens. `allowGrace` must be false for an authorization code:
+   * codes have to stay strictly single-use, and replaying one inside a grace
+   * window would be a code-replay hole.
+   */
+  protected static async consumeVersion(opts: {
+    consentId: ObjectId;
+    sid?: string;
+    version: number;
+    allowGrace: boolean;
+  }): Promise<{ consent: TConsent; version: number } | null> {
+    const now = new Date();
+
+    // A token minted before `sid` was carried: fall back to the consent-wide
+    // counter, which is all such tokens ever had.
+    if (!opts.sid) {
+      const consent = await oauthConsentModel.findOneAndUpdate(
+        { _id: opts.consentId, version: opts.version },
+        { $inc: { version: 1 } },
+        { returnDocument: "after" },
+      );
+
+      return consent ? { consent, version: consent.version } : null;
+    }
+
+    const path = `sessions.${this.sessionKey(opts.sid)}`;
+
+    /** The token we just superseded, still inside the grace window. */
+    const tryGrace = async () => {
+      if (!opts.allowGrace) return null;
+
+      const graced = await oauthConsentModel.findOne({
+        _id: opts.consentId,
+        [`${path}.version`]: opts.version + 1,
+        [`${path}.rotatedAt`]: {
+          $gt: new Date(now.getTime() - OAUTH_REFRESH_GRACE_MS),
+        },
+      });
+
+      // Issue the current tokens without rotating again, so parallel
+      // refreshes all end up holding the same valid refresh token.
+      return graced ? { consent: graced, version: opts.version + 1 } : null;
+    };
+
+    // 1. Normal rotation.
+    const rotated = await oauthConsentModel.findOneAndUpdate(
+      { _id: opts.consentId, [`${path}.version`]: opts.version },
+      {
+        $inc: { [`${path}.version`]: 1 },
+        $set: { [`${path}.rotatedAt`]: now },
+      },
+      { returnDocument: "after" },
+    );
+
+    if (rotated) {
+      await this.pruneSessions(rotated);
+
+      return { consent: rotated, version: opts.version + 1 };
+    }
+
+    const graced = await tryGrace();
+
+    if (graced) return graced;
+
+    // 2. First use of this session: an authorization code being exchanged, or
+    //    a refresh token issued before per-session rotation existed.
+    const adopted = await oauthConsentModel.findOneAndUpdate(
+      { _id: opts.consentId, [path]: { $exists: false } },
+      { $set: { [path]: { version: opts.version + 1, rotatedAt: now } } },
+      { returnDocument: "after" },
+    );
+
+    if (adopted) return { consent: adopted, version: opts.version + 1 };
+
+    // Another request adopted this session while we were trying to; if it did
+    // so just now, the grace window covers us.
+    return await tryGrace();
+  }
+
   static async exchangeToken(opts: {
     grantType: "authorization_code" | "refresh_token";
     token: string;
@@ -297,18 +464,20 @@ export class OAuth2 {
       }
     }
 
-    const consent = await oauthConsentModel.findOneAndUpdate(
-      {
-        _id: new ObjectId(payload.consentId),
-        version: payload.version,
-      },
-      { $inc: { version: 1 } },
-      { returnDocument: "after" },
-    );
+    const consumed = await this.consumeVersion({
+      consentId: new ObjectId(payload.consentId),
+      sid: payload.sid,
+      version: payload.version,
+      // An authorization code must stay single-use; only a refresh token may
+      // be replayed inside the grace window.
+      allowGrace: payload.type === "refresh_token",
+    });
 
-    if (!consent) {
+    if (!consumed) {
       throw new Error("Consent not found or has been revoked");
     }
+
+    const { consent } = consumed;
 
     const basePayload: Omit<
       TAuthTokenPayload,
@@ -318,7 +487,7 @@ export class OAuth2 {
       userId: payload.userId,
       sid: payload.sid,
       consentId: payload.consentId,
-      version: consent.version,
+      version: consumed.version,
       nonce: payload.nonce,
     };
 
@@ -378,6 +547,12 @@ export class OAuth2 {
   static async revoke(opts: {
     tokenTypeHint?: "access_token" | "refresh_token";
     token: string;
+    /**
+     * Sign out every session on the consent rather than just the one this
+     * token belongs to. Deleting the consent means the user has to grant
+     * again, so it is the "sign out everywhere" switch, not the default.
+     */
+    allSessions?: boolean;
   }) {
     const baseUrl = await Env.get("BASE_URL");
 
@@ -386,7 +561,43 @@ export class OAuth2 {
       audience: baseUrl,
     });
 
-    await oauthConsentModel.deleteOne({ _id: new ObjectId(payload.consentId) });
+    const consentId = new ObjectId(payload.consentId);
+
+    if (opts.allSessions || !payload.sid) {
+      await oauthConsentModel.deleteOne({ _id: consentId });
+
+      return;
+    }
+
+    const now = new Date();
+
+    // Revoking one device's token must not sign out the others, which all
+    // share this consent. Tombstone the session rather than erasing it: an
+    // absent entry reads as a first use and would be adopted, letting the
+    // revoked token straight back in.
+    const consent = await oauthConsentModel.findOneAndUpdate(
+      { _id: consentId },
+      {
+        $set: {
+          [`sessions.${this.sessionKey(payload.sid)}`]: {
+            version: 0,
+            rotatedAt: now,
+            revokedAt: now,
+          },
+        },
+      },
+      { returnDocument: "after" },
+    );
+
+    const live = Object.values(consent?.sessions ?? {}).filter(
+      (session) => session.version > 0,
+    );
+
+    // Nothing live left: drop the consent so a fresh grant is required, which
+    // is what revoking used to do unconditionally.
+    if (consent && !live.length) {
+      await oauthConsentModel.deleteOne({ _id: consentId });
+    }
   }
 
   static async verifyAccessToken(token: string) {

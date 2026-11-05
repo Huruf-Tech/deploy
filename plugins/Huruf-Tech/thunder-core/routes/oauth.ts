@@ -63,6 +63,8 @@ export default new Router("/", function oauth(router) {
             );
           }
 
+          const sid = session.session._id.toString();
+
           const code = await OAuth2.generateAuthorizationCode({
             clientId: client._id.toString(),
             userId: session.user._id.toString(),
@@ -70,8 +72,11 @@ export default new Router("/", function oauth(router) {
             codeChallenge: query.code_challenge,
             codeChallengeMethod: query.code_challenge_method,
             redirectUri: query.redirect_uri,
-            version: consent.version,
-            sid: session.session._id.toString(),
+            // Rotation is per session, so the code has to start from this
+            // session's version. Using the consent-wide one would mismatch
+            // the moment a session has refreshed even once.
+            version: OAuth2.sessionVersion(consent, sid) ?? consent.version,
+            sid,
             nonce: query.nonce,
           });
 

@@ -26,7 +26,7 @@ export default function TenantForm({
   footerContent,
   afterSubmitSuccess,
 }: {
-  data?: { logo?: string; name: string }
+  data?: { _id?: string; logo?: string; name: string }
   afterSubmitSuccess?: () => void
   footerContent?: () => React.ReactNode
 }) {
@@ -102,13 +102,14 @@ export default function TenantForm({
         </Field>
 
         <Field>
-          <FieldLabel htmlFor="fname">{t("Tenant Name")}</FieldLabel>
+          {/* Was `htmlFor="fname"`, which matched no input on the page. */}
+          <FieldLabel htmlFor="name">{t("Tenant Name")}</FieldLabel>
           <Input
             id="name"
             type="text"
-            placeholder={"e.g John Doe"}
+            placeholder={t("e.g Acme Inc")}
             {...register("name", {
-              required: "Tenant name is required!",
+              required: t("Tenant name is required!"),
             })}
           />
 
@@ -117,7 +118,7 @@ export default function TenantForm({
 
         <Field>
           <Button type="submit" disabled={formState.isSubmitting}>
-            {data ? "Update tenant" : "Create tenant"}
+            {data?._id ? t("Update tenant") : t("Create tenant")}
           </Button>
 
           {footerContent?.()}

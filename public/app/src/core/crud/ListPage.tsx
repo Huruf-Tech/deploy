@@ -292,6 +292,7 @@ export function ListPage({ group, name }: IListPageProps) {
     data: getData,
     error: getError,
     isLoading: getLoading,
+    isValidating: getValidating,
     refetch: refetchGet,
   } = use(get, {
     manualTrigger: isCard,
@@ -299,7 +300,10 @@ export function ListPage({ group, name }: IListPageProps) {
 
   const error = countError || getError
   const isLoading = !getData?.results.length && getLoading
-  const isRefetching = getLoading
+  //! `isValidating` is the background half of a cached-then-fresh load: the
+  //! rows on screen are the cached copy and the fresh ones are still coming.
+  //! Without it the refresh affordance went dark for exactly that window.
+  const isRefetching = getLoading || getValidating
 
   const fetcher = React.useCallback(
     (project?: Record<string, 1>, sort?: Record<string, 1 | -1>) => {

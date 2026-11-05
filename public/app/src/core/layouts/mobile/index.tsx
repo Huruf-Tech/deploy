@@ -5,7 +5,8 @@ import { IconArrowLeft, IconSettings } from "@tabler/icons-react";
 
 import { Button } from "@/components/ui/button";
 import { useTheme } from "@/components/theme-provider";
-import { appName, getNavRoutes } from "@/core/lib/utils";
+import { getNavRoutes } from "@/core/lib/utils";
+import { useBranding } from "@/core/hooks/useBranding";
 import { BottomTabs } from "./bottom-tabs";
 import { SubNav } from "../shared/sub-nav";
 import { useLayout } from "../layout-provider";
@@ -26,6 +27,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate();
   const { t } = useTranslation();
   const { resolvedTheme } = useTheme();
+  const { appName, logo: brandLogo } = useBranding();
 
   const { subRoutes } = React.useMemo(
     () => getNavRoutes(router.routes),
@@ -43,9 +45,13 @@ export function Layout({ children }: { children: React.ReactNode }) {
   );
 
   const isHome = !activeParent || activeParent === "overview";
-  const logoSrc = `${import.meta.env.BASE_URL}${
-    resolvedTheme === "dark" ? "logo-dark.png" : "logo-light.png"
-  }`;
+  //! The backend's logo is one image for both schemes; the bundled pair is
+  //! per-scheme, so it stays the fallback rather than being replaced outright.
+  const logoSrc =
+    brandLogo ||
+    `${import.meta.env.BASE_URL}${
+      resolvedTheme === "dark" ? "logo-dark.png" : "logo-light.png"
+    }`;
 
   // Current user
   const _me = React.useCallback(
@@ -86,10 +92,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
           {/* centered logo */}
           <Link
             to="overview"
-            aria-label={appName()}
+            aria-label={appName}
             className="absolute start-1/2 -translate-x-1/2 rtl:translate-x-1/2"
           >
-            <img src={logoSrc} alt={appName()} className="h-7 w-auto" />
+            <img src={logoSrc} alt={appName} className="h-7 w-auto" />
           </Link>
 
           <div className="flex items-center gap-1">

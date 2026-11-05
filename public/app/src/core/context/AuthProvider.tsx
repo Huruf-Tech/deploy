@@ -124,7 +124,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
     void userManager
       .getUser()
-      .then(async (user) => {
+      .then(async (stored) => {
+        if (cancelled) return
+
+        //! `getUser()` only reads the store -- it never renews. An access token
+        //! that expired while the app was closed therefore arrived here marked
+        //! `expired` and fell straight through to the catch below, which starts
+        //! a fresh interactive login. That threw away a refresh token that was
+        //! still perfectly valid, which is the other half of being logged out
+        //! for no reason. Spend it first.
+        //!
+        //! Only when there is a refresh token to spend: without one
+        //! `signinSilent()` falls back to an iframe, and no
+        //! `silent_redirect_uri` is configured, so that path only wastes a
+        //! round trip before throwing.
+        const user =
+          stored?.expired && stored.refresh_token
+            ? await userManager.signinSilent()
+            : stored
+
         if (cancelled) return
 
         if (!user || user.expired) {
@@ -176,6 +194,33 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     //! lifetime of the provider (a `useMemo`/`useCallback`/`useState` initialiser
     //! respectively), so listing them cannot re-trigger the login flow.
   }, [callbackUri, handleLogin, userManager])
+
+  //! `automaticSilentRenew` defaults to **on**, so the UserManager has been
+  //! renewing tokens in the background and announcing each new user on
+  //! `addUserLoaded` all along -- with nothing subscribed. React's `user` was
+  //! therefore frozen at whatever sign-in produced, for the whole session.
+  //!
+  //! `addUserUnloaded` is deliberately not subscribed: the only thing that
+  //! unloads a user here is `useLogout()`, which navigates the page a moment
+  //! later, and clearing state first would flash the sign-in screen on the way
+  //! out.
+  React.useEffect(() => {
+    const onUserLoaded = (next: User) => setUser(next)
+
+    //! A failed renewal is not necessarily terminal -- the next request's 401
+    //! drives another attempt through the SDK interceptor -- so this is logged
+    //! rather than raised, where a flaky network would become an error screen.
+    const onSilentRenewError = (renewError: Error) =>
+      console.error("Silent renew error:", renewError)
+
+    userManager.events.addUserLoaded(onUserLoaded)
+    userManager.events.addSilentRenewError(onSilentRenewError)
+
+    return () => {
+      userManager.events.removeUserLoaded(onUserLoaded)
+      userManager.events.removeSilentRenewError(onSilentRenewError)
+    }
+  }, [userManager])
 
   return (
     <authContext.Provider

@@ -24,8 +24,22 @@ function ProtectedWithOAuth({ children }: { children: React.ReactNode }) {
 
   React.useEffect(() => {
     if (auth.isAuthenticated) {
+      //! Both callbacks read through `userManager`, never through `auth.user`.
+      //!
+      //! This is the spurious-logout bug. The effect only re-runs when
+      //! `isAuthenticated` flips, so these callbacks are captured once and keep
+      //! whatever `auth.user` held at sign-in. `signinSilent()` stores a
+      //! renewed user in the UserManager but does not replace that captured
+      //! value, so the request interceptor kept sending the *first* access
+      //! token for the life of the session. Once it expired: 401 -> refresh ->
+      //! re-read the same dead token -> retry -> 401, until
+      //! `registerPermissions()` below failed and the app showed
+      //! "Sign in again?" with a perfectly good refresh token still in store.
+      //!
+      //! `getUser()` only reads the store, so it costs nothing and is always
+      //! the token the refresh just wrote.
       ThunderSDK.plugins.essentials.registerAuthInterceptors(
-        async () => auth.user?.access_token ?? null,
+        async () => (await auth.userManager.getUser())?.access_token ?? null,
         async () => {
           await auth.userManager.signinSilent()
         }

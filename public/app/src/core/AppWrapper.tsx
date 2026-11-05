@@ -8,6 +8,8 @@ import { Capacitor, SystemBars, SystemBarsStyle } from "@capacitor/core"
 import { EdgeToEdge } from "@capawesome/capacitor-android-edge-to-edge-support"
 import { useCssVar } from "@/core/lib/cssVars"
 import { useTheme } from "@/components/theme-provider"
+import { useBranding } from "@/core/hooks/useBranding"
+import { applyThemeVars, setFavicon } from "@/core/lib/branding"
 
 //! These take an already-converted hex value. They used to call `rgbToHex` a
 //! second time on the output of the caller's conversion.
@@ -15,6 +17,31 @@ const setSystemBars = async (hexColor: string, style: SystemBarsStyle) => {
   await SystemBars.setStyle({ style })
   await EdgeToEdge.setStatusBarColor({ color: hexColor })
   await EdgeToEdge.setNavigationBarColor({ color: hexColor })
+}
+
+/**
+ * Applies the backend's branding to the document.
+ *
+ * Mounted inside `AppWrapper` rather than written into it, so the branding
+ * request does not re-render the provider tree underneath on every state change
+ * of its own.
+ */
+function Branding() {
+  const { branding, appName, logo } = useBranding()
+
+  React.useEffect(() => {
+    if (branding?.theme) applyThemeVars(branding.theme)
+  }, [branding])
+
+  React.useEffect(() => {
+    if (logo) setFavicon(logo)
+  }, [logo])
+
+  React.useEffect(() => {
+    document.title = appName
+  }, [appName])
+
+  return null
 }
 
 export function AppWrapper({ children }: { children: React.ReactNode }) {
@@ -72,6 +99,8 @@ export function AppWrapper({ children }: { children: React.ReactNode }) {
 
   return (
     <LoadingProvider>
+      <Branding />
+
       {import.meta.env.VITE_OAUTH_CLIENT_ID ? (
         <AuthProvider>{children}</AuthProvider>
       ) : (

@@ -8,21 +8,22 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty"
 import Logo from "/logo.png"
-import { appName } from "@/core/lib/utils"
+import { useBranding } from "@/core/hooks/useBranding"
 import { useTranslation } from "react-i18next"
 
 export default function Overview() {
   const { t } = useTranslation()
+  const { appName, logo } = useBranding()
 
   return (
     <Empty>
       <EmptyHeader>
         <EmptyMedia variant="icon">
-          <img src={Logo} alt="Logo" className="h-5 w-auto shrink-0" />
+          <img src={logo || Logo} alt={appName} className="h-5 w-auto shrink-0" />
         </EmptyMedia>
         <EmptyTitle>
           {t("Welcome to")}{" "}
-          <span className="text-base font-semibold capitalize">{appName()}</span>
+          <span className="text-base font-semibold capitalize">{appName}</span>
         </EmptyTitle>
         <EmptyDescription>
           {t(

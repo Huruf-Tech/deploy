@@ -1,1 +1,1 @@
-export {};
+import "./_dnt.polyfills.js";

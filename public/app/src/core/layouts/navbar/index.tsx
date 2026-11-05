@@ -58,6 +58,7 @@ import {
   transformImage,
 } from "@/core/lib/utils"
 import { features } from "@/core/lib/features"
+import { useBranding } from "@/core/hooks/useBranding"
 import { useLogout } from "@/core/protected"
 import { SubNav } from "../shared/sub-nav"
 import { ThunderSDK } from "thunder-sdk"
@@ -153,6 +154,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const isMobile = useIsMobile()
   const logout = useLogout()
   const { t, i18n } = useTranslation()
+  const { appName, logo: brandLogo } = useBranding()
 
   const isRtl = i18n.language === "ar"
   const [balanceVisible, setBalanceVisible] = React.useState(false)
@@ -218,8 +220,11 @@ export function Layout({ children }: { children: React.ReactNode }) {
               <SidebarMenuButton className="mt-4 rounded-md py-0! ring-transparent group-data-[collapsible=icon]:size-8! hover:bg-transparent! group-data-[collapsible=icon]:[&>div]:block">
                 <div className="hidden size-5 shrink-0">
                   <img
-                    src={resolvedTheme === "dark" ? LogoDark : LogoLight}
-                    alt="Logo"
+                    src={
+                      brandLogo ||
+                      (resolvedTheme === "dark" ? LogoDark : LogoLight)
+                    }
+                    alt={appName}
                     className="h-5 w-auto"
                   />
                 </div>

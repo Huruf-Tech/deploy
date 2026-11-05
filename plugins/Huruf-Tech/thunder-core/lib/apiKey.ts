@@ -10,6 +10,10 @@ export class APIKey {
 
     return await apiKeyModel.findOneAndUpdate({
       secret: this.hash(secret),
+      $or: [
+        { expiresAt: { $exists: false } },
+        { expiresAt: { $gt: new Date() } },
+      ],
     }, {
       $inc: {
         accessCount: 1,

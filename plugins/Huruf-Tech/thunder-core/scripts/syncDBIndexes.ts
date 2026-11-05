@@ -4,6 +4,7 @@ import { tenantInviteModel } from "../schemas/tenantInvite.ts";
 import { tenantMemberModel } from "../schemas/tenantMember.ts";
 import { envModel } from "../schemas/env.ts";
 import { oauthConsentModel } from "../schemas/oauthConsent.ts";
+import { jwkModel } from "../schemas/jwk.ts";
 import { apiKeyModel } from "@/schemas/apiKey.ts";
 import { walletModel } from "@/schemas/wallet.ts";
 import { walletLedgerModel } from "@/schemas/walletLedger.ts";
@@ -39,6 +40,17 @@ export const syncDBIndexes = async () => {
       createdBy: 1,
     }, {
       name: "uniqueConsentPerClient",
+      background: true,
+      unique: true,
+    }),
+    // Keeps there being exactly one signing key. NOTE: this build fails if the
+    // collection already holds duplicates from before `resolveJWKs` was made
+    // atomic — `Promise.allSettled` swallows that. Reads are deterministic
+    // regardless (oldest wins), so de-duplicate by hand and re-run.
+    jwkModel.createIndex({
+      singleton: 1,
+    }, {
+      name: "singleJwk",
       background: true,
       unique: true,
     }),

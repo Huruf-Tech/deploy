@@ -1589,8 +1589,8 @@ public/www/sdk@0.0.1/
 ├── index.ts         # ThunderSDK class wiring modules + SDK plugins
 ├── plugins/         # Copied from ./sdk-plugins
 ├── deno.json        # Deno/JSR entry (deps: axios, path-to-regexp)
-├── npm/             # npm build (ESM + CommonJS + .d.ts) made by dnt — what generate:app links to
-└── package.tgz      # `npm pack` of npm/ — the distributable for other projects
+├── npm/             # npm build (ESM + CommonJS + .d.ts) made by dnt — what generate:app links to (web)
+└── package.tgz      # `npm pack` of npm/ — the distributable; generate:app --native installs this
 ```
 
 Regeneration is incremental: only files whose content changed are rewritten,
@@ -1655,6 +1655,16 @@ Cache entries are JSON `{ value, timestamp, expired? }` stored through your
   returns a shared handle (same key → same handle):
   - `get()` — cached-or-fetch. Concurrent `get()`s within 1s share one
     in-flight request; a call after that aborts the stale one and refetches.
+  - `iterate()` — async iterator for "show cached, then fresh" UIs. Yields the
+    cached value first (even if expired), then — only if the cache was stale
+    and the refetched data actually differs — the fresh value. A fresh cache,
+    unchanged data, or a failed refresh (cache fallback) yields nothing more,
+    so the UI never re-renders for nothing; the loop ending means "up to date".
+    With nothing cached, it yields the fetched value once.
+
+    ```typescript
+    for await (const projects of handle.iterate()) setProjects(projects);
+    ```
   - `expire()` — marks the entry expired (next `get()` refetches, the old value
     remains as error fallback); `del()` removes it.
   - `forget()` — deletes the value, drops the handle's expire/invalidate
@@ -1708,7 +1718,8 @@ deno task check            # Format and lint
 deno task update:core      # Update the framework core (latest features + security patches; overwrites core/)
 deno task generate:openapi # Generate OpenAPI spec
 deno task generate:sdk     # Generate TypeScript SDK
-deno task generate:app     # Generate a dashboard app in public folder (based on the boilerplate repo: github.com/Huruf-Tech/thunder-ui)
+deno task generate:app     # Generate a dashboard app in public/app (boilerplate: github.com/Huruf-Tech/thunder-ui)
+deno task generate:app --native  # Generate a React Native (Expo) app in native-app/ (boilerplate: github.com/Huruf-Tech/thunder-native)
 
 # Plugin management
 deno task add:plugin    -n org/plugin-name [--setup[=env,...]] [--timeout=s]  # Install (optionally run setup)

@@ -1,12 +1,13 @@
 "use strict";
+var _a;
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.ThunderSDK = void 0;
 /**
  * Copyright © Huruf Tech 2026
  *
  * This is a generated file. Do not edit the contents of this file!
  */
-var _a;
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.ThunderSDK = void 0;
+require("./_dnt.polyfills.js");
 const base_js_1 = require("./base.js");
 const domains_js_1 = require("./modules/domains.js");
 const projectGroups_js_1 = require("./modules/projectGroups.js");

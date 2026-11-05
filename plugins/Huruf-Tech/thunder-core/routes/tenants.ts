@@ -97,16 +97,28 @@ export default new Router("/api", function tenants(router) {
       handler: async (req: Request) => {
         const params = $params.parse(paramsAsJson(req));
 
+        const { user } = await withAuthSession(req);
+
         const tenantId = new ObjectId(params.id);
 
         await mongodb.withSession(async (session) => {
-          await tenantModel.deleteOne({ _id: tenantId }, {
+          await tenantModel.deleteOne({
+            _id: tenantId,
+            createdBy: user._id,
+          }, {
             session,
           });
 
-          await tenantMemberModel.deleteOne({ tenant: tenantId }, {
-            session,
-          });
+          await tenantMemberModel
+            .deleteOne({
+              tenant: tenantId,
+              $or: [
+                { user: user._id },
+                { createdBy: user._id },
+              ],
+            }, {
+              session,
+            });
         });
 
         return Response.ok();

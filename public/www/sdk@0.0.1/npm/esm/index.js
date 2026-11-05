@@ -1,9 +1,10 @@
+var _a;
 /**
  * Copyright © Huruf Tech 2026
  *
  * This is a generated file. Do not edit the contents of this file!
  */
-var _a;
+import "./_dnt.polyfills.js";
 import { BaseSDK } from "./base.js";
 import { domainsModule } from "./modules/domains.js";
 import { projectGroupsModule } from "./modules/projectGroups.js";

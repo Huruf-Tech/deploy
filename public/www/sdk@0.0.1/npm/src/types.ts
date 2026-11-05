@@ -1,3 +1,4 @@
+import "./_dnt.polyfills.js";
 import type { AxiosRequestConfig, CreateAxiosDefaults } from "axios";
 
 export type TCacheSetter = (key: string, value: string) => boolean | Promise<boolean>;

@@ -18,11 +18,12 @@ import type { TRouteObject } from "@/core/router"
 import { Breadcrumb } from "@/core/layouts/shared/breadcrumb"
 import Logo from "/logo.png"
 import { Link } from "react-router"
-import { appName } from "@/core/lib/utils"
+import { useBranding } from "@/core/hooks/useBranding"
 import { allowDisplayRoute } from "@/core/lib/utils"
 
 export function Layout({ children }: { children: React.ReactNode }) {
   const { router } = useLayout()
+  const { appName } = useBranding()
 
   return (
     <SidebarProvider>
@@ -36,7 +37,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
               >
                 <img src={Logo} alt="Logo" className="h-5 w-auto shrink-0" />
                 <span className="text-base font-semibold capitalize">
-                  {appName()}
+                  {appName}
                 </span>
               </SidebarMenuButton>
             </SidebarMenuItem>

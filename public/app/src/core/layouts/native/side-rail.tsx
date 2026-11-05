@@ -13,7 +13,8 @@ import { ThunderSDK } from "thunder-sdk"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { useTheme } from "@/components/theme-provider"
 import { use } from "@/core/hooks/use"
-import { appName, getInitials, transformImage } from "@/core/lib/utils"
+import { getInitials, transformImage } from "@/core/lib/utils"
+import { useBranding } from "@/core/hooks/useBranding"
 import { SPRING_LAYOUT } from "@/core/lib/ease"
 import { cn } from "@/lib/utils"
 import { MoreSheet } from "../mobile/more-sheet"
@@ -30,6 +31,7 @@ export function SideRail({ items }: { items: TNav[] }) {
   const { t, i18n } = useTranslation()
   const { resolvedTheme, setTheme } = useTheme()
   const prefersReducedMotion = useReducedMotion()
+  const { appName, logo: brandLogo } = useBranding()
 
   const isRtl = i18n.language === "ar"
 
@@ -47,9 +49,13 @@ export function SideRail({ items }: { items: TNav[] }) {
 
   const { data: me } = use(_me)
 
-  const logoSrc = `${import.meta.env.BASE_URL}${
-    resolvedTheme === "dark" ? "logo-dark.png" : "logo-light.png"
-  }`
+  //! The backend's logo is one image for both schemes; the bundled pair is
+  //! per-scheme, so it stays the fallback rather than being replaced outright.
+  const logoSrc =
+    brandLogo ||
+    `${import.meta.env.BASE_URL}${
+      resolvedTheme === "dark" ? "logo-dark.png" : "logo-light.png"
+    }`
 
   return (
     /*
@@ -62,7 +68,7 @@ export function SideRail({ items }: { items: TNav[] }) {
         <img src={logoSrc} alt="" className="h-6 w-auto" aria-hidden />
         {/* Tightened tracking: the app name is the largest type in the rail. */}
         <span className="truncate font-heading text-[15px] font-semibold tracking-[-0.01em]">
-          {appName()}
+          {appName}
         </span>
       </div>
 
