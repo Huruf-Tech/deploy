@@ -18,6 +18,7 @@ import {
 import LogoDark from "/logo-dark.png"
 import LogoLight from "/logo-light.png"
 import { useLayout } from "@/core/layouts/layout-provider"
+import { useBranding } from "@/core/hooks/useBranding"
 import { Breadcrumb } from "@/core/layouts/shared/breadcrumb"
 import { HeaderActionsProvider } from "@/core/context/HeaderActions"
 import { NotificationPopover } from "@/core/pages/notifications/notification-popover"
@@ -207,6 +208,8 @@ function ConsoleSidebar({
 }) {
   const { t } = useTranslation()
   const { resolvedTheme } = useTheme()
+  // The branding's logo (`APP_LOGO`), else the bundled mark for the theme.
+  const { logo, appName } = useBranding()
   const { isMobile, setOpenMobile } = useSidebar()
   const location = useLocation()
   const navigate = useNavigate()
@@ -241,8 +244,8 @@ function ConsoleSidebar({
         >
           {/* The mark alone (owner's decision): the name is its text alternative. */}
           <img
-            src={resolvedTheme === "dark" ? LogoDark : LogoLight}
-            alt="Huruf Deploy"
+            src={logo || (resolvedTheme === "dark" ? LogoDark : LogoLight)}
+            alt={appName}
             className="size-6 shrink-0 object-contain"
           />
         </Link>
