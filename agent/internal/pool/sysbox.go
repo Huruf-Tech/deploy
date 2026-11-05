@@ -41,6 +41,9 @@ const (
 // Sysbox makes partitions as Sysbox system containers (PLAN §26.3).
 type Sysbox struct {
 	layers layerSizes
+	// Partition sources whose outgoing flows were cleared since the agent
+	// started, so they leave from their forwarded port (machine.go).
+	sourced sync.Map
 }
 
 // layerSizes are older partitions' container layer sizes: measuring walks

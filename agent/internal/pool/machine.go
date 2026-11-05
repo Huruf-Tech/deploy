@@ -72,6 +72,18 @@ func (d *Sysbox) Forward(ctx context.Context, forwards, added []protocol.PortFor
 	for _, f := range added {
 		_, _ = sh.Run(ctx, "conntrack", "-D", "-p", f.Protocol, "--orig-port-dst", fmt.Sprint(f.Port))
 	}
+	// Flows a partition started before its source rule (an older agent, or a
+	// new address) keep their old source port while traffic flows: cleared
+	// once per agent start, the next packet takes the rule.
+	for _, f := range forwards {
+		ip := ips[f.Partition]
+		if f.Protocol != "udp" || ip == "" {
+			continue
+		}
+		if _, done := d.sourced.LoadOrStore(fmt.Sprintf("%s:%d", ip, f.To), true); !done {
+			_, _ = sh.Run(ctx, "conntrack", "-D", "-p", "udp", "-s", ip, "--orig-port-src", fmt.Sprint(f.To))
+		}
+	}
 	return waiting, nil
 }
 
