@@ -40,6 +40,7 @@ import {
   releaseModel,
 } from "@/schemas/applications/deployment.ts";
 import { serverModel } from "@/schemas/infrastructure/server.ts";
+import { projectReach } from "@/lib/domains/reach.ts";
 
 /** Projects and their deployments (PLAN §9.3, §10, §15.6). */
 export default new Router("/api", function projects(router) {
@@ -529,6 +530,54 @@ export default new Router("/api", function projects(router) {
     startedAt: z.string().optional(),
     finishedAt: z.string().optional(),
     durationMs: z.number().optional(),
+  });
+
+  // The reachability map (PLAN §14): every way in, hop by hop, checked live.
+  router.get("/:id/reach", function reach() {
+    const $hop = z.object({
+      state: z.enum(["ok", "warning", "failed", "skipped"]),
+      detail: z.string().optional(),
+    });
+    const $return = z.object({
+      checkedAt: z.string(),
+      ingress: z.object({
+        hostname: z.string().optional(),
+        ipv4: z.array(z.string()),
+        traefik: $hop.describe("This control plane's Traefik polls its routes"),
+      }),
+      healthcheckPath: z.string().optional(),
+      publicPort: z.number().optional(),
+      domains: z.array(z.object({
+        _id: z.string(),
+        hostname: z.string(),
+        appDomain: z.boolean(),
+        status: z.string(),
+        dns: $hop,
+        certificate: $hop,
+        route: $hop.describe("Traefik routes the hostname"),
+        https: $hop.describe("https://<hostname> over the internet"),
+      })),
+      servers: z.array(z.object({
+        _id: z.string(),
+        name: z.string(),
+        online: z.boolean(),
+        publicIp: z.string().optional(),
+        route: $hop.describe("Traefik sends visitors to this server"),
+        tunnel: $hop,
+        edge: $hop.describe("The server's edge proxy (Caddy)"),
+        app: $hop,
+        publicPort: $hop.optional(),
+      })),
+    });
+
+    return {
+      shape: () => ({ params: $params, return: $return }),
+      handler: async (req) => {
+        const { id } = $params.parse(paramsAsJson(req));
+        const { tenant } = await withTenant(req);
+        return Response.json(await projectReach(tenant._id, id));
+      },
+    };
   });
 
   router.get("/:id/deployments", function deployments() {

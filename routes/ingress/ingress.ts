@@ -8,6 +8,7 @@ import {
   isIngressToken,
   syncCertificates,
   traefikConfig,
+  traefikPoll,
 } from "@/lib/domains/ingress.ts";
 import { frpDecision, syncFrps } from "@/lib/domains/tunnels.ts";
 
@@ -42,6 +43,7 @@ export default new Router("/api", function ingress(router) {
           throw Response.unauthorized("Invalid ingress token");
         }
         await Promise.all([syncCertificates(), syncFrps()]);
+        traefikPoll.at = Date.now();
         return Response.json(await traefikConfig());
       },
     };

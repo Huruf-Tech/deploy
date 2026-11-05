@@ -51,6 +51,13 @@ export const queries = {
       async ({ signal }) =>
         await ThunderSDK.projects.get({ signal, params: { id } })
     ),
+  /** Every way in to a project, hop by hop, checked live (PLAN §14). */
+  reach: (id: string) =>
+    query(
+      ["projects", id, "reach"],
+      async ({ signal }) =>
+        await ThunderSDK.projects.reach({ signal, params: { id } })
+    ),
   releases: (id: string) =>
     query(
       ["projects", id, "releases"],

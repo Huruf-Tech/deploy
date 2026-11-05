@@ -354,6 +354,75 @@ export type releases$return = {
     active: boolean;
     createdAt: string;
 }[];
+export type reach$params = {
+    id?: string;
+};
+export type reach$return = {
+    checkedAt: string;
+    ingress: {
+        hostname?: string | undefined;
+        ipv4: string[];
+        /** This control plane's Traefik polls its routes */
+        traefik: {
+            state: "ok" | "warning" | "failed" | "skipped";
+            detail?: string | undefined;
+        };
+    };
+    healthcheckPath?: string | undefined;
+    publicPort?: number | undefined;
+    domains: {
+        _id: string;
+        hostname: string;
+        appDomain: boolean;
+        status: string;
+        dns: {
+            state: "ok" | "warning" | "failed" | "skipped";
+            detail?: string | undefined;
+        };
+        certificate: {
+            state: "ok" | "warning" | "failed" | "skipped";
+            detail?: string | undefined;
+        };
+        /** Traefik routes the hostname */
+        route: {
+            state: "ok" | "warning" | "failed" | "skipped";
+            detail?: string | undefined;
+        };
+        /** https://<hostname> over the internet */
+        https: {
+            state: "ok" | "warning" | "failed" | "skipped";
+            detail?: string | undefined;
+        };
+    }[];
+    servers: {
+        _id: string;
+        name: string;
+        online: boolean;
+        publicIp?: string | undefined;
+        /** Traefik sends visitors to this server */
+        route: {
+            state: "ok" | "warning" | "failed" | "skipped";
+            detail?: string | undefined;
+        };
+        tunnel: {
+            state: "ok" | "warning" | "failed" | "skipped";
+            detail?: string | undefined;
+        };
+        /** The server's edge proxy (Caddy) */
+        edge: {
+            state: "ok" | "warning" | "failed" | "skipped";
+            detail?: string | undefined;
+        };
+        app: {
+            state: "ok" | "warning" | "failed" | "skipped";
+            detail?: string | undefined;
+        };
+        publicPort?: {
+            state: "ok" | "warning" | "failed" | "skipped";
+            detail?: string | undefined;
+        } | undefined;
+    }[];
+};
 export type deployments$params = {
     id?: string;
 };
@@ -434,6 +503,8 @@ export declare const projectsModule: (sdk: typeof BaseSDK) => {
         clearCache$params: clearCache$params;
         releases$params: releases$params;
         releases$return: releases$return;
+        reach$params: reach$params;
+        reach$return: reach$return;
         deployments$params: deployments$params;
         deployments$query: deployments$query;
         deployments$return: deployments$return;
@@ -550,6 +621,17 @@ export declare const projectsModule: (sdk: typeof BaseSDK) => {
         then: <TResult1 = releases$return, TResult2 = never>(onfulfilled?: ((value: releases$return) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
         catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<releases$return | TResult>;
         finally: (onfinally?: (() => void) | null | undefined) => Promise<releases$return>;
+    };
+    readonly reach: (data: {
+        params: reach$params;
+        query?: undefined;
+        body?: undefined;
+    } & TRequestOptions<reach$return>) => {
+        readonly raw: Promise<import("axios").AxiosResponse<reach$return, any, {}, any>>;
+        readonly data: Promise<reach$return>;
+        then: <TResult1 = reach$return, TResult2 = never>(onfulfilled?: ((value: reach$return) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+        catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<reach$return | TResult>;
+        finally: (onfinally?: (() => void) | null | undefined) => Promise<reach$return>;
     };
     readonly deployments: (data: {
         params: deployments$params;

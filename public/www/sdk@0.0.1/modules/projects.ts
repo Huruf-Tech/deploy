@@ -359,6 +359,75 @@ export type releases$return = {
     active: boolean;
     createdAt: string;
 }[];
+export type reach$params = {
+    id?: string;
+};
+export type reach$return = {
+    checkedAt: string;
+    ingress: {
+        hostname?: string | undefined;
+        ipv4: string[];
+        /** This control plane's Traefik polls its routes */
+        traefik: {
+            state: "ok" | "warning" | "failed" | "skipped";
+            detail?: string | undefined;
+        };
+    };
+    healthcheckPath?: string | undefined;
+    publicPort?: number | undefined;
+    domains: {
+        _id: string;
+        hostname: string;
+        appDomain: boolean;
+        status: string;
+        dns: {
+            state: "ok" | "warning" | "failed" | "skipped";
+            detail?: string | undefined;
+        };
+        certificate: {
+            state: "ok" | "warning" | "failed" | "skipped";
+            detail?: string | undefined;
+        };
+        /** Traefik routes the hostname */
+        route: {
+            state: "ok" | "warning" | "failed" | "skipped";
+            detail?: string | undefined;
+        };
+        /** https://<hostname> over the internet */
+        https: {
+            state: "ok" | "warning" | "failed" | "skipped";
+            detail?: string | undefined;
+        };
+    }[];
+    servers: {
+        _id: string;
+        name: string;
+        online: boolean;
+        publicIp?: string | undefined;
+        /** Traefik sends visitors to this server */
+        route: {
+            state: "ok" | "warning" | "failed" | "skipped";
+            detail?: string | undefined;
+        };
+        tunnel: {
+            state: "ok" | "warning" | "failed" | "skipped";
+            detail?: string | undefined;
+        };
+        /** The server's edge proxy (Caddy) */
+        edge: {
+            state: "ok" | "warning" | "failed" | "skipped";
+            detail?: string | undefined;
+        };
+        app: {
+            state: "ok" | "warning" | "failed" | "skipped";
+            detail?: string | undefined;
+        };
+        publicPort?: {
+            state: "ok" | "warning" | "failed" | "skipped";
+            detail?: string | undefined;
+        } | undefined;
+    }[];
+};
 export type deployments$params = {
     id?: string;
 };
@@ -440,6 +509,8 @@ export const projectsModule = (sdk: typeof BaseSDK) => {
         clearCache$params: clearCache$params,
         releases$params: releases$params,
         releases$return: releases$return,
+        reach$params: reach$params,
+        reach$return: reach$return,
         deployments$params: deployments$params,
         deployments$query: deployments$query,
         deployments$return: deployments$return,
@@ -730,6 +801,34 @@ export const projectsModule = (sdk: typeof BaseSDK) => {
             return res;
         }, data);
     },
+        reach(data: {
+        params: reach$params,
+        query?: undefined,
+        body?: undefined,
+    } & TRequestOptions<reach$return>) {
+        return sdk.resolveAxiosResponse(async () => {
+            sdk.checkPermission("projects", "reach");
+
+            const method = "get";
+            const toPath = compile("projects/api/:id/reach");
+            const requestPayload = {
+                method,
+                url: toPath(sdk.resolvePathParams(data?.params)),
+                params: data?.query,
+                data: data?.body,
+                signal: data?.signal,
+                ...(data?.axiosConfig
+                ? sdk.resolveAxiosConfig(data.axiosConfig)
+                : undefined),
+            };
+
+            sdk.log("Sending Request:", requestPayload);
+
+            const res = await sdk._axios!.request(requestPayload);
+
+            return res;
+        }, data);
+    },
         deployments(data: {
         params: deployments$params,
         query: deployments$query,
@@ -826,6 +925,7 @@ export const projectsModule = (sdk: typeof BaseSDK) => {
     (methods.rollbackProject as any).__scope = "projects";
     (methods.clearCache as any).__scope = "projects";
     (methods.releases as any).__scope = "projects";
+    (methods.reach as any).__scope = "projects";
     (methods.deployments as any).__scope = "projects";
     (methods.deployment as any).__scope = "projects";
     (methods.cancelDeployment as any).__scope = "projects";

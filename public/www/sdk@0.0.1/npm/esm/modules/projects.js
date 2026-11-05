@@ -203,6 +203,26 @@ export const projectsModule = (sdk) => {
                 return res;
             }, data);
         },
+        reach(data) {
+            return sdk.resolveAxiosResponse(async () => {
+                sdk.checkPermission("projects", "reach");
+                const method = "get";
+                const toPath = compile("projects/api/:id/reach");
+                const requestPayload = {
+                    method,
+                    url: toPath(sdk.resolvePathParams(data?.params)),
+                    params: data?.query,
+                    data: data?.body,
+                    signal: data?.signal,
+                    ...(data?.axiosConfig
+                        ? sdk.resolveAxiosConfig(data.axiosConfig)
+                        : undefined),
+                };
+                sdk.log("Sending Request:", requestPayload);
+                const res = await sdk._axios.request(requestPayload);
+                return res;
+            }, data);
+        },
         deployments(data) {
             return sdk.resolveAxiosResponse(async () => {
                 sdk.checkPermission("projects", "deployments");
@@ -274,6 +294,7 @@ export const projectsModule = (sdk) => {
     methods.rollbackProject.__scope = "projects";
     methods.clearCache.__scope = "projects";
     methods.releases.__scope = "projects";
+    methods.reach.__scope = "projects";
     methods.deployments.__scope = "projects";
     methods.deployment.__scope = "projects";
     methods.cancelDeployment.__scope = "projects";

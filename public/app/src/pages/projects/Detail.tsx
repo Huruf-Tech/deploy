@@ -68,6 +68,7 @@ import { LogsSheet } from "@/pages/servers/LogsSheet"
 import { VariableTable } from "@/pages/variables"
 import { DeploymentSheet } from "./DeploymentSheet"
 import { DomainsTab } from "./DomainsTab"
+import { Reachability } from "./Reachability"
 import { type TVolume, VolumesEditor } from "./VolumesEditor"
 import { DistributionEditor, type TDistribution } from "./DistributionEditor"
 import { LabelChips } from "@/pages/servers/ServerLabels"
@@ -1245,6 +1246,10 @@ export default function ProjectDetail() {
               />
             </Panel>
           </div>
+
+          {ThunderSDK.isPermitted("projects", "reach") && (
+            <Reachability project={project._id} />
+          )}
         </TabsContent>
 
         <TabsContent value="deployments" className="flex flex-col gap-4">

@@ -209,6 +209,10 @@ Project groups are **folders on the Projects page**, not a nav item: folder card
 
 "Who reaches whom" is a React Flow graph (`src/pages/network/ReachGraph.tsx`, lazy): servers on a circle, one edge per pair (green both ways, red dashed one way, red no link, grey dotted not in the mesh), the registry host starred. The old matrix stays in the DOM, visually hidden, for screen readers.
 
+## 9d. Reachability map
+
+The project Overview's "Reachability" panel is a React Flow graph (`src/pages/projects/ReachMap.tsx`, lazy), left to right: domains and the public port, Traefik, each server's edge proxy, its app. A line takes its worst hop's color (green and animated works, amber a warning, red stops, grey dotted not checked because an earlier hop stops it), and a red line is labelled with the hop that stops it. Below it, the failing hops with why, in words; the full list of hops stays in the DOM, visually hidden, for screen readers.
+
 ## 9a. Known gaps (core screens)
 
 axe (WCAG 2 A/AA + best practices) is clean on our pages in both themes. What remains comes from `src/core/`, which we don't edit:

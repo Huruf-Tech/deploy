@@ -61,6 +61,40 @@ export const inCidr = (ip: string, cidr: string) => {
 
 export type TCheck = { ownership: boolean; dns: boolean; detail?: string };
 
+const NO_INGRESS =
+  "The platform's ingress isn't configured yet (INGRESS_HOSTNAME or INGRESS_IPV4): ask the platform admin.";
+
+/** Whether `hostname` resolves to the ingress only, with why not. */
+export async function pointsHere(
+  hostname: string,
+): Promise<{ ok: boolean; ips: string[]; detail?: string }> {
+  const targets = await ingressTargets();
+  if (!targets.hostname && !targets.ipv4.length) {
+    return { ok: false, ips: [], detail: NO_INGRESS };
+  }
+  const [ips, ingressIps] = await Promise.all([
+    lookup(() => resolver.a(hostname)),
+    targets.hostname
+      ? lookup(() => resolver.a(targets.hostname))
+      : Promise.resolve([]),
+  ]);
+  const allowed = new Set([...targets.ipv4, ...ingressIps]);
+  if (ips.length > 0 && ips.every((ip) => allowed.has(ip))) {
+    return { ok: true, ips };
+  }
+  return {
+    ok: false,
+    ips,
+    detail: !ips.length
+      ? `${hostname} doesn't resolve yet.`
+      : ips.some((ip) => CLOUDFLARE.some((c) => inCidr(ip, c)))
+      ? `${hostname} is proxied by Cloudflare (orange cloud), which hides where it points: set its record to "DNS only" (grey cloud).`
+      : `${hostname} points to ${ips.join(", ")}, not to the platform${
+        targets.hostname ? ` (CNAME ${targets.hostname})` : ""
+      }${targets.ipv4.length ? ` (A ${targets.ipv4.join(", ")})` : ""}.`,
+  };
+}
+
 /** Both checks a domain needs before it gets a certificate. */
 export async function checkDomain(
   hostname: string,
@@ -68,27 +102,17 @@ export async function checkDomain(
 ): Promise<TCheck> {
   const targets = await ingressTargets();
   if (!targets.hostname && !targets.ipv4.length) {
-    return {
-      ownership: false,
-      dns: false,
-      detail:
-        "The platform's ingress isn't configured yet (INGRESS_HOSTNAME or INGRESS_IPV4): ask the platform admin.",
-    };
+    return { ownership: false, dns: false, detail: NO_INGRESS };
   }
 
-  const [txt, ips, ingressIps] = await Promise.all([
+  const [txt, points] = await Promise.all([
     lookup(() => resolver.txt(ownershipName(hostname))),
-    lookup(() => resolver.a(hostname)),
-    targets.hostname
-      ? lookup(() => resolver.a(targets.hostname))
-      : Promise.resolve([]),
+    pointsHere(hostname),
   ]);
 
   const ownership = txt.some((value) =>
     value.trim() === `${OWNERSHIP_PREFIX}${token}`
   );
-  const allowed = new Set([...targets.ipv4, ...ingressIps]);
-  const dns = ips.length > 0 && ips.every((ip) => allowed.has(ip));
 
   const problems: string[] = [];
   if (!ownership) {
@@ -98,24 +122,10 @@ export async function checkDomain(
       } with the value ${OWNERSHIP_PREFIX}${token}.`,
     );
   }
-  if (!dns) {
-    if (!ips.length) {
-      problems.push(`${hostname} doesn't resolve yet.`);
-    } else if (ips.some((ip) => CLOUDFLARE.some((c) => inCidr(ip, c)))) {
-      problems.push(
-        `${hostname} is proxied by Cloudflare (orange cloud), which hides where it points: set its record to "DNS only" (grey cloud).`,
-      );
-    } else {
-      problems.push(
-        `${hostname} points to ${ips.join(", ")}, not to the platform${
-          targets.hostname ? ` (CNAME ${targets.hostname})` : ""
-        }${targets.ipv4.length ? ` (A ${targets.ipv4.join(", ")})` : ""}.`,
-      );
-    }
-  }
+  if (points.detail) problems.push(points.detail);
   return {
     ownership,
-    dns,
+    dns: points.ok,
     ...(problems.length ? { detail: problems.join(" ").slice(0, 500) } : {}),
   };
 }

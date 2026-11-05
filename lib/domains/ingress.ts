@@ -220,6 +220,9 @@ async function buildConfig() {
 /** Shared by the instance's polls; each poll is a few indexed queries. */
 export const traefikConfig = cache(buildConfig, 2_000);
 
+/** When this instance's Traefik last polled its config (the reachability map). */
+export const traefikPoll = { at: undefined as number | undefined };
+
 const sha256 = async (text: string) =>
   new Uint8Array(
     await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text)),
