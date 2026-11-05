@@ -239,14 +239,12 @@ function ConsoleSidebar({
           to={getLocalPath("overview")}
           className="flex items-center gap-2 rounded-md outline-none group-data-[collapsible=icon]:justify-center focus-visible:ring-2 focus-visible:ring-ring"
         >
+          {/* The mark alone (owner's decision): the name is its text alternative. */}
           <img
             src={resolvedTheme === "dark" ? LogoDark : LogoLight}
-            alt=""
+            alt="Huruf Deploy"
             className="size-6 shrink-0 object-contain"
           />
-          <span className="truncate text-sm font-semibold tracking-tight group-data-[collapsible=icon]:hidden">
-            Huruf Deploy
-          </span>
         </Link>
       </SidebarHeader>
 

@@ -54,6 +54,7 @@ The dashboard wears Huruf's own theme, taken from the site's stylesheet. These v
 - **Chart series** use `--series-1…5`: Huruf orange first, then blue, violet, teal and pink, far apart so lines can be told apart (the orange ramp was too close). Past five, neutral grey; never the status colors. The `--chart-1…5` ramp is for single-series fills and scales.
 - **Status colors** (success green, warning amber, info blue, plus the destructive red above) are the only other hues. Warning amber is kept clearly yellower than the brand orange so the two never read as the same thing.
 - The dashboard's current darker orange (`oklch(55.3% …)`, chart 4 of the ramp) was a drift from the brand. It's only used where contrast requires it (see the primary-button note under §8).
+- **`APP_THEME` (thunder-core branding) overrides these tokens inline, in both themes**, for the dashboard and the sign-in pages alike. Set only theme-independent tokens there, with the values above: `APP_THEME="--primary=oklch(0.705 0.213 47.604)&--primary-foreground=oklch(0.145 0 0)"`. Never `--secondary`, `--background` or other tokens that differ between light and dark. The sign-in pages need it: their own primary is indigo. `APP_DISPLAY_NAME=Huruf Deploy` and `APP_LOGO=/logo.png` name and mark both apps.
 
 ### Color roles
 
@@ -114,7 +115,7 @@ Flat by default: canvas → card (hairline border) → popover (border + soft sh
 - Built in `src/layouts/console/` (`index.tsx`, `command-menu.tsx`, `shell-dock.tsx`). Sidebar 232 px / 56 px rail, **open by default**, remembered per browser (`localStorage` `console-sidebar`; core's `sidebar_state` cookie is ignored), ⌘B toggles it.
 - **Nav sections:** top-level pages and route groups with a single page sit unlabelled at the top (e.g. Overview, Projects, Wallet); only groups with two or more pages get a label.
 - **Shell dock:** a 32 px bar at the bottom of every page (with `streams.openHostTerminal` + `projects.placementInfo`). It opens a panel, you pick an online server, and get a root terminal; Ctrl/⌘ + ` toggles it, ⌘K has "Open a shell on a server". xterm loads on first open.
-- **Sidebar:** the logo on top (switch tenant from the account menu), nav grouped by route group (Applications, Infrastructure, Build, Configuration, Monitoring, Administration) with small group labels, active state as a filled pill, and counts or status dots where useful (e.g. servers offline, open alerts). Account and theme sit at the bottom.
+- **Sidebar:** the Huruf mark alone on top, no name beside it (owner's decision; "Huruf Deploy" is its alt text). Switch tenant from the account menu. Then nav grouped by route group (Applications, Infrastructure, Build, Configuration, Monitoring, Administration) with small group labels, active state as a filled pill, and counts or status dots where useful (e.g. servers offline, open alerts). Account and theme sit at the bottom.
 - **Top bar:** the breadcrumb (core's `useBreadcrumbTitle` keeps working), the **command palette** (⌘K / Ctrl K: jump to any page, project or server, and run quick actions), notifications and the theme toggle.
 - **Mobile:** the sidebar becomes a sheet, and the top bar keeps the breadcrumb's last item and the menu button. Safe-area utilities come from core.
 
