@@ -727,7 +727,6 @@
   "Your plan renews again": "ستتجدد خطتك مجددًا",
   "Your plan's GitHub connection limit is reached.": "بلغت خطتك الحد الأقصى لروابط GitHub.",
   "Your servers as one budget. Usage comes from each server when you open this page and stays in your browser.": "خوادمك كميزانية واحدة. يأتي الاستخدام من كل خادم عند فتح هذه الصفحة ويبقى في متصفحك.",
-  "Your servers connect over WireGuard, so apps reach each other across servers as <project>.internal. Servers need UDP 51820 open to each other (or to share a network); a server behind NAT still reaches servers it can dial.": "تتصل خوادمك عبر WireGuard، فتصل التطبيقات إلى بعضها عبر الخوادم باسم <project>.internal. تحتاج الخوادم إلى فتح المنفذ UDP 51820 فيما بينها (أو مشاركة شبكة واحدة)؛ والخادم خلف NAT يظل قادرًا على الوصول إلى الخوادم التي يمكنه الاتصال بها.",
   "Your servers connect to it; Huruf Deploy itself never does.": "تتصل خوادمك به؛ أما Huruf Deploy نفسه فلا يتصل به أبدًا.",
   "Yours alone. Every tenant you own uses them.": "خاصة بك وحدك. يستخدمها كل مستأجر تملكه.",
   "all at once": "دفعة واحدة",
@@ -2071,5 +2070,6 @@
   "Restart": "إعادة تشغيل",
   "restart": "إعادة تشغيل",
   "Restart to apply": "أعد التشغيل للتطبيق",
-  "Variables apply on the next deploy or restart; they override tenant and global variables.": "تُطبَّق المتغيرات عند النشر التالي أو إعادة التشغيل؛ وهي تتجاوز متغيرات المستأجر والمتغيرات العامة."
+  "Variables apply on the next deploy or restart; they override tenant and global variables.": "تُطبَّق المتغيرات عند النشر التالي أو إعادة التشغيل؛ وهي تتجاوز متغيرات المستأجر والمتغيرات العامة.",
+  "Your servers connect over WireGuard, so apps reach each other across servers as <project>.internal. Each server needs the UDP port of its endpoint open to the others (51820 on a server; a partition gets its machine's next port from 51821, shown under Endpoint), or to share a network. A server behind NAT still reaches servers it can dial.": "تتصل خوادمك عبر WireGuard، فتصل التطبيقات ببعضها عبر الخوادم باسم <project>.internal. يحتاج كل خادم أن يكون منفذ UDP لنقطة اتصاله مفتوحًا للخوادم الأخرى (51820 على الخادم؛ ويحصل القسم على المنفذ التالي لجهازه بدءًا من 51821، كما يظهر تحت نقطة الاتصال)، أو أن تتشارك الخوادم شبكة واحدة. والخادم خلف NAT يصل مع ذلك إلى الخوادم التي يستطيع الاتصال بها."
 }

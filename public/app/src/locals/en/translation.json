@@ -727,7 +727,6 @@
   "Your plan renews again": "Your plan renews again",
   "Your plan's GitHub connection limit is reached.": "Your plan's GitHub connection limit is reached.",
   "Your servers as one budget. Usage comes from each server when you open this page and stays in your browser.": "Your servers as one budget. Usage comes from each server when you open this page and stays in your browser.",
-  "Your servers connect over WireGuard, so apps reach each other across servers as <project>.internal. Servers need UDP 51820 open to each other (or to share a network); a server behind NAT still reaches servers it can dial.": "Your servers connect over WireGuard, so apps reach each other across servers as <project>.internal. Servers need UDP 51820 open to each other (or to share a network); a server behind NAT still reaches servers it can dial.",
   "Your servers connect to it; Huruf Deploy itself never does.": "Your servers connect to it; Huruf Deploy itself never does.",
   "Yours alone. Every tenant you own uses them.": "Yours alone. Every tenant you own uses them.",
   "all at once": "all at once",
@@ -2071,5 +2070,6 @@
   "Restart": "Restart",
   "restart": "restart",
   "Restart to apply": "Restart to apply",
-  "Variables apply on the next deploy or restart; they override tenant and global variables.": "Variables apply on the next deploy or restart; they override tenant and global variables."
+  "Variables apply on the next deploy or restart; they override tenant and global variables.": "Variables apply on the next deploy or restart; they override tenant and global variables.",
+  "Your servers connect over WireGuard, so apps reach each other across servers as <project>.internal. Each server needs the UDP port of its endpoint open to the others (51820 on a server; a partition gets its machine's next port from 51821, shown under Endpoint), or to share a network. A server behind NAT still reaches servers it can dial.": "Your servers connect over WireGuard, so apps reach each other across servers as <project>.internal. Each server needs the UDP port of its endpoint open to the others (51820 on a server; a partition gets its machine's next port from 51821, shown under Endpoint), or to share a network. A server behind NAT still reaches servers it can dial."
 }

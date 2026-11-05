@@ -340,7 +340,7 @@ export default function NetworkPage() {
         title={t("Private network")}
         status={state && <StatusBadge state={state} />}
         description={t(
-          "Your servers connect over WireGuard, so apps reach each other across servers as <project>.internal. Servers need UDP 51820 open to each other (or to share a network); a server behind NAT still reaches servers it can dial."
+          "Your servers connect over WireGuard, so apps reach each other across servers as <project>.internal. Each server needs the UDP port of its endpoint open to the others (51820 on a server; a partition gets its machine's next port from 51821, shown under Endpoint), or to share a network. A server behind NAT still reaches servers it can dial."
         )}
       />
 

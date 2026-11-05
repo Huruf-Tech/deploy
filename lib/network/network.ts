@@ -213,7 +213,7 @@ export async function networkWarnings(tenant: ObjectId, projectId: ObjectId) {
         warnings.push(
           `${
             byId(from)?.name ?? "A server"
-          } can't reach any server running ${target.slug}. Put them on the same server, or let them reach each other over the private network (UDP 51820 open, or the same VPC).`,
+          } can't reach any server running ${target.slug}. Put them on the same server, or let them reach each other over the private network (the UDP port of each server's endpoint open, or the same VPC).`,
         );
       }
     }
