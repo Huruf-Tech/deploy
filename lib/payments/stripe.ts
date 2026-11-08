@@ -13,6 +13,13 @@ import type {
 const TIMEOUT_MS = 8_000;
 
 /**
+ * Tags everything this app creates in the Stripe account it shares with
+ * Huruf ERP (which tags its own "huruf-erp"), so each app skips the other's
+ * webhook events.
+ */
+const APP = "huruf-deploy";
+
+/**
  * Stripe behind the `PaymentGateway` interface (PLAN §25.3). Keys are platform
  * settings, read per call through the 60 s settings cache, so the owner can set
  * or rotate them without a restart.
@@ -58,7 +65,7 @@ export class StripeGateway implements PaymentGateway {
     const customer = await (await this.client()).customers.create({
       email: opts.email,
       name: opts.name,
-      metadata: { tenant: opts.tenant.toHexString() },
+      metadata: { app: APP, tenant: opts.tenant.toHexString() },
     }, {
       // Two concurrent first visits create one customer.
       idempotencyKey: `customer:${opts.tenant.toHexString()}`,
@@ -72,7 +79,7 @@ export class StripeGateway implements PaymentGateway {
       // Saved for charges made while the cardholder is away (renewals).
       usage: "off_session",
       allowed_payment_method_types: ["card"],
-      metadata: { tenant: opts.tenant.toHexString() },
+      metadata: { app: APP, tenant: opts.tenant.toHexString() },
     });
     if (!intent.client_secret) throw new Error("Stripe sent no client secret");
     return { clientSecret: intent.client_secret, setupRef: intent.id };
@@ -151,6 +158,7 @@ export class StripeGateway implements PaymentGateway {
         off_session: opts.offSession || undefined,
         description: opts.description,
         metadata: {
+          app: APP,
           topup: opts.topup.toHexString(),
           tenant: opts.tenant.toHexString(),
         },
@@ -203,6 +211,12 @@ export class StripeGateway implements PaymentGateway {
       Stripe.createSubtleCryptoProvider(),
     );
     const base = { id: event.id, type: event.type };
+    // Another app's object on the shared account. Untagged ones (refunds,
+    // disputes, anything made before the tag) are matched against our
+    // records in `PaymentService.handleWebhook`.
+    const app = (event.data.object as { metadata?: Record<string, string> })
+      .metadata?.app;
+    if (app && app !== APP) return;
 
     switch (event.type) {
       case "payment_intent.succeeded":

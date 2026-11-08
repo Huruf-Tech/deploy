@@ -641,6 +641,12 @@ export class PaymentService {
   /**
    * A gateway webhook (PLAN §25.5). Every branch is idempotent, so a
    * redelivered event does no harm; the event id is recorded afterwards.
+   *
+   * The Stripe account is shared with Huruf ERP, and Stripe sends every
+   * event of the account to every endpoint. The gateway skips objects tagged
+   * by another app; the rest is ours only if it matches one of our records
+   * (a top-up, a billing account, a saved card). Anything else returns
+   * before it's recorded, leaving no trace.
    */
   async handleWebhook(gatewayId: TGatewayId, req: Request) {
     const gateway = this.gateway(gatewayId);
@@ -662,14 +668,14 @@ export class PaymentService {
       case "charge": {
         // Charges we didn't open (no top-up id) aren't ours to settle.
         if (!event.topup || !ObjectId.isValid(event.topup)) break;
-        topup = new ObjectId(event.topup);
         try {
           const { topup: row } = await Wallet.settleTopup({
-            topup,
+            topup: new ObjectId(event.topup),
             status: event.status,
             amount: event.status === "completed" ? event.amount : undefined,
             error: event.error,
           });
+          topup = row._id;
           tenant = row.tenant;
           await this.afterSettle(row);
         } catch (error) {
@@ -680,29 +686,39 @@ export class PaymentService {
       }
       case "card_saved": {
         if (!event.tenant || !ObjectId.isValid(event.tenant)) break;
-        tenant = new ObjectId(event.tenant);
-        const account = await this.account(tenant);
+        const account = await this.account(new ObjectId(event.tenant));
         if (!account) break;
+        tenant = account.tenant;
         await this.saveCard(account, await gateway.readCard(event.cardRef));
         break;
       }
-      case "card_removed":
+      case "card_removed": {
+        const card = await paymentCardModel.findOne(
+          { providerRef: event.cardRef },
+          { projection: { tenant: 1 } },
+        );
+        if (!card) break;
+        tenant = card.tenant;
         await this.forgetCard(event.cardRef);
         break;
+      }
       case "refund":
       case "dispute": {
         // Kept for the admin (PLAN §25.5; Admin → Payments, Phase 15d).
         const row = event.providerRef
           ? await walletTopupModel.findOne({ providerRef: event.providerRef })
           : null;
-        tenant = row?.tenant;
-        topup = row?._id;
+        if (!row) break;
+        tenant = row.tenant;
+        topup = row._id;
         Logger.warn(
           `Payment ${event.kind} for ${event.providerRef}: ${event.amount} ${event.currency}`,
         );
         break;
       }
     }
+    // Another app's event on the shared Stripe account: no trace of it here.
+    if (!tenant && !topup) return;
 
     const kept = event.kind === "refund" || event.kind === "dispute";
     await paymentEventModel.insertOne({

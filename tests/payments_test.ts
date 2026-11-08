@@ -807,3 +807,93 @@ Deno.test({
     }
   },
 });
+
+// The Stripe account is shared with Huruf ERP, and Stripe sends every event
+// of the account to every endpoint: another app's events leave no trace.
+Deno.test({
+  name: "payments: another app's webhook events leave no trace",
+  sanitizeOps: false,
+  sanitizeResources: false,
+  fn: async () => {
+    const queued: TGatewayEvent[] = [];
+    const gateway = new FakeGateway();
+    gateway.parseWebhook = () => Promise.resolve(queued.shift());
+    const payments = new PaymentService([gateway], {
+      hit: () => Promise.resolve(true),
+    });
+    const deliver = (event: TGatewayEvent) => {
+      queued.push(event);
+      return payments.handleWebhook("stripe", webhook(event));
+    };
+    const stamp = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const ids = {
+      charge: `evt_erp_charge_${stamp}`,
+      refund: `evt_erp_refund_${stamp}`,
+      card: `evt_erp_card_${stamp}`,
+      ours: `evt_our_refund_${stamp}`,
+    };
+    const tenant = new ObjectId();
+    const topups = mongodb.db().collection("walletTopups");
+    try {
+      await deliver({
+        id: ids.charge,
+        type: "payment_intent.succeeded",
+        kind: "charge",
+        status: "completed",
+        topup: new ObjectId().toHexString(),
+        providerRef: `pi_erp_${stamp}`,
+        amount: 500,
+      });
+      await deliver({
+        id: ids.refund,
+        type: "charge.refunded",
+        kind: "refund",
+        providerRef: `pi_erp_${stamp}`,
+        amount: 500,
+        currency: "usd",
+      });
+      await deliver({
+        id: ids.card,
+        type: "payment_method.detached",
+        kind: "card_removed",
+        cardRef: `pm_erp_${stamp}`,
+      });
+      assertEquals(
+        await paymentEventModel.countDocuments({
+          eventId: { $in: [ids.charge, ids.refund, ids.card] },
+        }),
+        0,
+      );
+
+      // A refund of one of our top-ups is kept for the admin.
+      const providerRef = `pi_ours_${stamp}`;
+      const { insertedId } = await topups.insertOne({
+        tenant,
+        providerRef,
+        status: "completed",
+        amount: 500,
+        currency: "usd",
+        createdAt: new Date(),
+      });
+      await deliver({
+        id: ids.ours,
+        type: "charge.refunded",
+        kind: "refund",
+        providerRef,
+        amount: 500,
+        currency: "usd",
+      });
+      const kept = await paymentEventModel.find({ eventId: ids.ours })
+        .toArray();
+      assertEquals(kept.length, 1);
+      assertEquals(kept[0].kept, true);
+      assertEquals(String(kept[0].topup), String(insertedId));
+      assertEquals(String(kept[0].tenant), String(tenant));
+    } finally {
+      await paymentEventModel.deleteMany({
+        eventId: { $in: Object.values(ids) },
+      });
+      await topups.deleteMany({ tenant });
+    }
+  },
+});
