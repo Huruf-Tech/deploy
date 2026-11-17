@@ -8,6 +8,7 @@ export const resolver = {
   txt: async (name: string) =>
     (await Deno.resolveDns(name, "TXT")).map((parts) => parts.join("")),
   a: (name: string) => Deno.resolveDns(name, "A"),
+  cname: (name: string) => Deno.resolveDns(name, "CNAME"),
 };
 
 const lookup = async <T>(fn: () => Promise<T[]>): Promise<T[]> => {
@@ -105,10 +106,16 @@ export async function pointsHere(
   };
 }
 
-/** Both checks a domain needs before it gets a certificate. */
+/**
+ * Both checks a domain needs before it gets a certificate. Ownership is the
+ * TXT record, or a CNAME to a name `owns` says the workspace already proved
+ * (e.g. a store's domain pointed at `ingress.<the workspace's domain>`): only
+ * the domain's owner can point it there.
+ */
 export async function checkDomain(
   hostname: string,
   token: string,
+  owns?: (name: string) => Promise<boolean>,
 ): Promise<TCheck> {
   const targets = await ingressTargets();
   if (!targets.hostname && !targets.ipv4.length) {
@@ -120,16 +127,18 @@ export async function checkDomain(
     pointsHere(probeName(hostname)),
   ]);
 
-  const ownership = txt.some((value) =>
-    value.trim() === `${OWNERSHIP_PREFIX}${token}`
-  );
+  const ownership =
+    txt.some((value) => value.trim() === `${OWNERSHIP_PREFIX}${token}`) ||
+    (!!owns && await cnameOwned(probeName(hostname), owns));
 
   const problems: string[] = [];
   if (!ownership) {
     problems.push(
       `Add a TXT record ${
         ownershipName(hostname)
-      } with the value ${OWNERSHIP_PREFIX}${token}.`,
+      } with the value ${OWNERSHIP_PREFIX}${token}${
+        owns ? ", or point it with a CNAME at a domain you've verified" : ""
+      }.`,
     );
   }
   if (points.detail) problems.push(points.detail);
@@ -138,4 +147,13 @@ export async function checkDomain(
     dns: points.ok,
     ...(problems.length ? { detail: problems.join(" ").slice(0, 500) } : {}),
   };
+}
+
+/** Whether `hostname`'s CNAME points at a name `owns` accepts. */
+async function cnameOwned(
+  hostname: string,
+  owns: (name: string) => Promise<boolean>,
+) {
+  const [target] = await lookup(() => resolver.cname(hostname));
+  return !!target && await owns(target.toLowerCase().replace(/\.$/, ""));
 }

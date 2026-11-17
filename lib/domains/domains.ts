@@ -8,6 +8,7 @@ import { entitlements, keyring, quotaGuard } from "@/lib/services.ts";
 import { PLATFORM_OWNER } from "@/schemas/monitoring/alert.ts";
 import { getProject } from "@/lib/deploy/projects.ts";
 import { PiggybackScheduler } from "@/lib/core/piggybackScheduler.ts";
+import { readTextSetting } from "@/lib/core/settings.ts";
 import {
   checkDomain,
   ingressTargets,
@@ -92,6 +93,36 @@ export async function normalizeHostname(input: string) {
   return hostname;
 }
 
+/**
+ * Whether the workspace proved `name`: a domain of its own, verified, that
+ * is `name`, a parent of it (the whole zone) or a wildcard over it.
+ */
+export const ownedBy = (tenant: ObjectId) => async (name: string) => {
+  const labels = name.split(".");
+  const names = labels.slice(0, -1).flatMap((_, i) => {
+    const at = labels.slice(i).join(".");
+    return i === 0 ? [at] : [at, ...(i === 1 ? [`*.${at}`] : [])];
+  });
+  return !!await domainModel.findOne(
+    { tenant, hostname: { $in: names }, verifiedAt: { $exists: true } },
+    { projection: { _id: 1 } },
+  );
+};
+
+/**
+ * The workspace's domain limit: the plan's, unless the platform admin set
+ * one for it in `DOMAIN_LIMITS` (`<tenant id>=<limit>`, comma or space
+ * separated), e.g. a storefront adding each customer's domain.
+ */
+async function domainLimit(tenant: ObjectId) {
+  const set = (await readTextSetting("DOMAIN_LIMITS", "")).split(/[\s,]+/)
+    .map((entry) => entry.split("="))
+    .find(([id]) => id === String(tenant))?.[1];
+  if (set && /^\d+$/.test(set)) return Number(set);
+  const { limits } = await entitlements.resolve(tenant);
+  return limits.domains ?? 3; // older paid periods predate the limit
+}
+
 const verifiedElsewhere = (hostname: string, tenant: ObjectId) =>
   domainModel.findOne(
     { hostname, verifiedAt: { $exists: true }, tenant: { $ne: tenant } },
@@ -121,8 +152,7 @@ export async function addDomain(
     );
   }
 
-  const { limits } = await entitlements.resolve(tenant);
-  const limit = limits.domains ?? 3; // older paid periods predate the limit
+  const limit = await domainLimit(tenant);
   if (!await quotaGuard.acquire(tenant, "domains", limit)) {
     throw Response.forbidden(`Your plan allows ${limit} domains`);
   }
@@ -150,7 +180,9 @@ export async function addDomain(
   }
   // Records already in place (e.g. re-adding a domain): verified right away.
   // Otherwise it waits for "Check now", as nothing is checked unprompted.
-  const ready = await checkDomain(hostname, token).catch(() => undefined);
+  const ready = await checkDomain(hostname, token, ownedBy(tenant)).catch(
+    () => undefined,
+  );
   if (ready?.ownership && ready.dns) await startCheck(tenant, _id);
   return _id;
 }
@@ -223,7 +255,11 @@ export async function domainRecords(
  * hands it to issuing; otherwise it waits a minute, until its window ends.
  */
 export async function checkOnce(domain: WithId<TDomain>, now = new Date()) {
-  const result = await checkDomain(domain.hostname, domain.token);
+  const result = await checkDomain(
+    domain.hostname,
+    domain.token,
+    ownedBy(domain.tenant),
+  );
   const checks = { ...result, checkedAt: now };
   const filter = { _id: domain._id, status: "checking" as const };
 

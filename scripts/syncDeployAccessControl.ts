@@ -69,10 +69,32 @@ export const syncDeployAccessControl = async () => {
   const variableApi = await ACManager.resolvePolicy("variableApi", [
     "variables.resolve",
   ]);
-  await ACManager.resolveRole("user", [deploy, finance, shell, variableApi]);
+  // Give an API key the scope ["domainApi"] to add and check a project's
+  // domains only, e.g. a storefront adding its customers' domains (PLAN §14).
+  const domainApi = await ACManager.resolvePolicy("domainApi", [
+    "domains.list",
+    "domains.create",
+    "domains.check",
+    "domains.del",
+  ]);
+  await ACManager.resolveRole("user", [
+    deploy,
+    finance,
+    shell,
+    variableApi,
+    domainApi,
+  ]);
 
   // Roles a workspace owner can invite members with.
-  const member = ["public", "developer", "iam", "media", deploy, variableApi];
+  const member = [
+    "public",
+    "developer",
+    "iam",
+    "media",
+    deploy,
+    variableApi,
+    domainApi,
+  ];
 
   await ACManager.resolveRole("operator", [...member, shell]);
   await ACManager.resolveRole("deployer", member);
