@@ -15,9 +15,11 @@ certificate, and routes it to the app.
 3. **Ask the platform admin** to raise your workspace's domain limit
    (`DOMAIN_LIMITS`, e.g. `<workspace id>=500`). Plans allow a few.
 4. **Create an API key** (Developer → API keys) with the scope `domainApi` for
-   your workspace. It can list, add, check and remove domains, nothing else.
+   your workspace. It can list, read, add, check and remove domains, nothing else.
 
-Every request sends `X-Api-Key: <secret>` and `X-Tenant-Id: <workspace id>`.
+Every request sends `X-Api-Key: <secret>` and `X-Tenant-Id: <workspace id>`
+(`Authorization: Bearer` is for OAuth tokens, not API keys). The id of a
+domain is `_id`.
 
 ## Per customer domain
 
@@ -34,7 +36,8 @@ your name. No TXT record is needed.
 | --- | --- | --- |
 | Add | `POST /domains/api` | `{ "project": "<project id>", "hostname": "shop.customer.com" }` → `{ "_id" }` |
 | Check (after the customer saved the record) | `POST /domains/api/<id>/check` | Rechecked every minute for 30 minutes |
-| Status | `GET /domains/api?project=<project id>` | Each domain's `status`, `error`, `checks.detail` |
+| Status of one | `GET /domains/api/<id>` | Its `status`, `error`, `checks.detail`, `records` |
+| Status of all | `GET /domains/api?project=<project id>` | The same for each, sorted by hostname, at most 100 |
 | Remove | `DELETE /domains/api/<id>` | Frees one place in the limit |
 
 `status`: `pending` (waiting for Check) → `checking` → `issuing` (ordering its
@@ -42,8 +45,16 @@ certificate) → `verifying` → `active`. `failed` comes with `error` saying wh
 to fix. A domain whose record is already in place when it's added skips to
 `issuing`.
 
-Errors are `400` with a message (a bad name, already added, in use by another
-account) or `403` when the limit is reached.
+Errors carry an HTTP status and, mostly, a plain-text message: `400` (a bad
+name, already added, in use by another account, already verified on Check),
+`403` (the limit is reached), `404` (an unknown id or project), `401` (a bad
+key). A body that fails validation gets `400 { "error": "…" }` as JSON.
+
+## Redirects
+
+Huruf Deploy doesn't redirect between domains. To send `customer.com` to
+`www.customer.com`, add both (each needs its certificate) and answer the other
+one with a `301` in your app.
 
 ## In your app
 

@@ -73,6 +73,7 @@ export const syncDeployAccessControl = async () => {
   // domains only, e.g. a storefront adding its customers' domains (PLAN §14).
   const domainApi = await ACManager.resolvePolicy("domainApi", [
     "domains.list",
+    "domains.get",
     "domains.create",
     "domains.check",
     "domains.del",

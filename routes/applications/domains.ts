@@ -11,12 +11,19 @@ import {
   removeDomain,
   startCheck,
 } from "@/lib/domains/domains.ts";
+import type { WithId } from "mongodb";
 import {
   $domainChecks,
   $domainStatus,
   cloudflareConnectionModel,
   domainModel,
+  type TDomain,
 } from "@/schemas/applications/domain.ts";
+
+type TDomainDoc = Omit<
+  WithId<TDomain>,
+  "tenant" | "createdBy" | "nextCheckAt"
+>;
 import { tenantOwner } from "@/lib/billing/owner.ts";
 import {
   addAppDomain,
@@ -62,6 +69,23 @@ export default new Router("/api", function domains(router) {
     createdAt: z.string(),
   });
 
+  /** What a domain shows: never its keys, internal timers or the tenant. */
+  const projection = {
+    tenant: 0,
+    createdBy: 0,
+    nextCheckAt: 0,
+    "certificate.pem": 0,
+    "certificate.keyEnc": 0,
+    issueAt: 0,
+    issueLockedUntil: 0,
+    issueFailures: 0,
+    issueOrders: 0,
+  } as const;
+  const view = async ({ token, ...d }: TDomainDoc) => ({
+    ...d,
+    records: await domainRecords({ hostname: d.hostname, token }),
+  });
+
   router.get("/", function list() {
     const $query = z.object({ project: $objectId });
     return {
@@ -72,30 +96,9 @@ export default new Router("/api", function domains(router) {
         await getProject(tenant._id, project);
         const domains = await domainModel.find(
           { tenant: tenant._id, project },
-          {
-            projection: {
-              tenant: 0,
-              createdBy: 0,
-              nextCheckAt: 0,
-              "certificate.pem": 0,
-              "certificate.keyEnc": 0,
-              issueAt: 0,
-              issueLockedUntil: 0,
-              issueFailures: 0,
-              issueOrders: 0,
-            },
-            sort: { hostname: 1 },
-            limit: 100,
-          },
+          { projection, sort: { hostname: 1 }, limit: 100 },
         ).toArray();
-        return Response.json(
-          await Promise.all(
-            domains.map(async ({ token, ...d }) => ({
-              ...d,
-              records: await domainRecords({ hostname: d.hostname, token }),
-            })),
-          ),
-        );
+        return Response.json(await Promise.all(domains.map(view)));
       },
     };
   });
@@ -285,6 +288,24 @@ export default new Router("/api", function domains(router) {
           ? await tenantOwner(req, "replace DNS records")
           : await withTenant(req);
         return Response.json(await setUpInCloudflare(tenant._id, id, replace));
+      },
+    };
+  });
+
+  // One domain, e.g. an app polling its customer's domain (PLAN §14): the
+  // list stops at 100.
+  router.get("/:id", function get() {
+    return {
+      shape: () => ({ params: $params, return: $view }),
+      handler: async (req) => {
+        const { id } = $params.parse(paramsAsJson(req));
+        const { tenant } = await withTenant(req);
+        const domain = await domainModel.findOne(
+          { _id: id, tenant: tenant._id },
+          { projection },
+        );
+        if (!domain) throw Response.notFound("Domain not found");
+        return Response.json(await view(domain as TDomainDoc));
       },
     };
   });

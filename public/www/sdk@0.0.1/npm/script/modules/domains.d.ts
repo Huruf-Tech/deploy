@@ -94,6 +94,40 @@ export type setUpCloudflare$return = {
         proxied: boolean;
     }[] | undefined;
 };
+export type get$params = {
+    id?: string;
+};
+export type get$return = {
+    _id: string;
+    project: string;
+    hostname: string;
+    status: "pending" | "checking" | "issuing" | "verifying" | "active" | "failed";
+    /** A free test domain */
+    appDomain?: boolean | undefined;
+    checks?: {
+        ownership: boolean;
+        dns: boolean;
+        checkedAt: string;
+        detail?: string | undefined;
+    } | undefined;
+    checkUntil?: string | undefined;
+    verifiedAt?: string | undefined;
+    error?: string | undefined;
+    certificate?: {
+        notAfter: string;
+        issuedAt: string;
+    } | undefined;
+    records: {
+        ownership: {
+            type: "TXT";
+            name: string;
+            value: string;
+        };
+        cname?: string | undefined;
+        ipv4?: string[] | undefined;
+    };
+    createdAt: string;
+};
 export type del$params = {
     id?: string;
 };
@@ -115,6 +149,8 @@ export declare const domainsModule: (sdk: typeof BaseSDK) => {
         setUpCloudflare$params: setUpCloudflare$params;
         setUpCloudflare$body: setUpCloudflare$body;
         setUpCloudflare$return: setUpCloudflare$return;
+        get$params: get$params;
+        get$return: get$return;
         del$params: del$params;
     };
     readonly list: (data: {
@@ -237,6 +273,17 @@ export declare const domainsModule: (sdk: typeof BaseSDK) => {
         then: <TResult1 = setUpCloudflare$return, TResult2 = never>(onfulfilled?: ((value: setUpCloudflare$return) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
         catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<setUpCloudflare$return | TResult>;
         finally: (onfinally?: (() => void) | null | undefined) => Promise<setUpCloudflare$return>;
+    };
+    readonly get: (data: {
+        params: get$params;
+        query?: undefined;
+        body?: undefined;
+    } & TRequestOptions<get$return>) => {
+        readonly raw: Promise<import("axios").AxiosResponse<get$return, any, {}, any>>;
+        readonly data: Promise<get$return>;
+        then: <TResult1 = get$return, TResult2 = never>(onfulfilled?: ((value: get$return) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+        catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<get$return | TResult>;
+        finally: (onfinally?: (() => void) | null | undefined) => Promise<get$return>;
     };
     readonly del: (data: {
         params: del$params;

@@ -96,6 +96,19 @@ Deno.test({
         assertEquals((await statusOf(customer)).status, "issuing");
       });
 
+      await t.step("one domain by id, the key's workspace only", async () => {
+        const one = await api("GET", `/domains/api/${customer}`);
+        assertEquals(one.status, 200, JSON.stringify(one.json));
+        assertEquals(one.json._id, customer);
+        assertEquals(one.json.status, "issuing");
+        assertEquals(one.json.records.cname, "ingress.platform.test");
+        assertEquals("token" in one.json || "tenant" in one.json, false);
+        assertEquals(
+          (await b.call("GET", `/domains/api/${customer}`)).status,
+          404,
+        );
+      });
+
       await t.step("added first, pointed later: Check now", async () => {
         const host = `late-${stamp}.example.test`;
         const res = await api("POST", "/domains/api", {

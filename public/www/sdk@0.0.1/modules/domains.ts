@@ -99,6 +99,40 @@ export type setUpCloudflare$return = {
         proxied: boolean;
     }[] | undefined;
 };
+export type get$params = {
+    id?: string;
+};
+export type get$return = {
+    _id: string;
+    project: string;
+    hostname: string;
+    status: "pending" | "checking" | "issuing" | "verifying" | "active" | "failed";
+    /** A free test domain */
+    appDomain?: boolean | undefined;
+    checks?: {
+        ownership: boolean;
+        dns: boolean;
+        checkedAt: string;
+        detail?: string | undefined;
+    } | undefined;
+    checkUntil?: string | undefined;
+    verifiedAt?: string | undefined;
+    error?: string | undefined;
+    certificate?: {
+        notAfter: string;
+        issuedAt: string;
+    } | undefined;
+    records: {
+        ownership: {
+            type: "TXT";
+            name: string;
+            value: string;
+        };
+        cname?: string | undefined;
+        ipv4?: string[] | undefined;
+    };
+    createdAt: string;
+};
 export type del$params = {
     id?: string;
 };
@@ -121,6 +155,8 @@ export const domainsModule = (sdk: typeof BaseSDK) => {
         setUpCloudflare$params: setUpCloudflare$params,
         setUpCloudflare$body: setUpCloudflare$body,
         setUpCloudflare$return: setUpCloudflare$return,
+        get$params: get$params,
+        get$return: get$return,
         del$params: del$params,
     };
 
@@ -434,6 +470,34 @@ export const domainsModule = (sdk: typeof BaseSDK) => {
             return res;
         }, data);
     },
+        get(data: {
+        params: get$params,
+        query?: undefined,
+        body?: undefined,
+    } & TRequestOptions<get$return>) {
+        return sdk.resolveAxiosResponse(async () => {
+            sdk.checkPermission("domains", "get");
+
+            const method = "get";
+            const toPath = compile("domains/api/:id");
+            const requestPayload = {
+                method,
+                url: toPath(sdk.resolvePathParams(data?.params)),
+                params: data?.query,
+                data: data?.body,
+                signal: data?.signal,
+                ...(data?.axiosConfig
+                ? sdk.resolveAxiosConfig(data.axiosConfig)
+                : undefined),
+            };
+
+            sdk.log("Sending Request:", requestPayload);
+
+            const res = await sdk._axios!.request(requestPayload);
+
+            return res;
+        }, data);
+    },
         del(data: {
         params: del$params,
         query?: undefined,
@@ -475,6 +539,7 @@ export const domainsModule = (sdk: typeof BaseSDK) => {
     (methods.authorizeCloudflare as any).__scope = "domains";
     (methods.cloudflareCallback as any).__scope = "domains";
     (methods.setUpCloudflare as any).__scope = "domains";
+    (methods.get as any).__scope = "domains";
     (methods.del as any).__scope = "domains";
 
     sdk["_moduleGroup"].set(methods, "Applications");

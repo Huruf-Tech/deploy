@@ -226,6 +226,26 @@ const domainsModule = (sdk) => {
                 return res;
             }, data);
         },
+        get(data) {
+            return sdk.resolveAxiosResponse(async () => {
+                sdk.checkPermission("domains", "get");
+                const method = "get";
+                const toPath = (0, path_to_regexp_1.compile)("domains/api/:id");
+                const requestPayload = {
+                    method,
+                    url: toPath(sdk.resolvePathParams(data?.params)),
+                    params: data?.query,
+                    data: data?.body,
+                    signal: data?.signal,
+                    ...(data?.axiosConfig
+                        ? sdk.resolveAxiosConfig(data.axiosConfig)
+                        : undefined),
+                };
+                sdk.log("Sending Request:", requestPayload);
+                const res = await sdk._axios.request(requestPayload);
+                return res;
+            }, data);
+        },
         del(data) {
             return sdk.resolveAxiosResponse(async () => {
                 sdk.checkPermission("domains", "del");
@@ -258,6 +278,7 @@ const domainsModule = (sdk) => {
     methods.authorizeCloudflare.__scope = "domains";
     methods.cloudflareCallback.__scope = "domains";
     methods.setUpCloudflare.__scope = "domains";
+    methods.get.__scope = "domains";
     methods.del.__scope = "domains";
     sdk["_moduleGroup"].set(methods, "Applications");
     return methods;
