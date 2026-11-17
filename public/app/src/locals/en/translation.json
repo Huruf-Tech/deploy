@@ -831,6 +831,7 @@
   "The selected servers run the latest agent (or are offline).": "The selected servers run the latest agent (or are offline).",
   "Domains": "Domains",
   "Domain": "Domain",
+  "app.example.com or *.example.com": "app.example.com or *.example.com",
   "Add domain": "Add domain",
   "Could not add the domain": "Could not add the domain",
   "No custom domains": "No custom domains",

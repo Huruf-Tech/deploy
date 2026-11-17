@@ -292,7 +292,7 @@ export async function completeOAuth(
 }
 
 /** Its access token, refreshed when it's about to expire. */
-async function tokenOf(tenant: ObjectId) {
+export async function tokenOf(tenant: ObjectId) {
   const doc = await cloudflareConnectionModel.findOne({ _id: tenant });
   if (!doc) throw Response.badRequest("Connect Cloudflare first");
   if (

@@ -11,6 +11,7 @@ import {
   domainModel,
 } from "@/schemas/applications/domain.ts";
 import { appDomain } from "@/lib/domains/appDomain.ts";
+import { isWildcard, probeName } from "@/lib/domains/dns.ts";
 import { PLATFORM_OWNER } from "@/schemas/monitoring/alert.ts";
 import { projectModel } from "@/schemas/applications/project.ts";
 import { serverModel } from "@/schemas/infrastructure/server.ts";
@@ -82,6 +83,17 @@ async function platformConfig() {
 }
 
 const ids = (list: ObjectId[]) => [...new Set(list.map(String))];
+
+/**
+ * A domain's Traefik rule: its name, or for `*.example.com` any one label
+ * under it, as its certificate covers (Traefik v3 regexp syntax).
+ */
+export const hostRule = (hostname: string) =>
+  isWildcard(hostname)
+    ? `HostRegexp(\`(?i)^[a-z0-9-]+${
+      hostname.slice(1).replaceAll(".", "\\.")
+    }$\`)`
+    : `Host(\`${hostname}\`)`;
 
 async function buildConfig() {
   const app = await appDomain();
@@ -158,7 +170,9 @@ async function buildConfig() {
     const health = project.runtime?.healthcheckPath;
     // The check carries a Host of the project's, as visitors do: apps that
     // allow known hosts only (Vite, Django, Rails…) refuse `frps:<port>`.
-    const host = domains.find((d) => d.project.equals(project._id))!.hostname;
+    const host = probeName(
+      domains.find((d) => d.project.equals(project._id))!.hostname,
+    );
     for (const { server, port } of entries) {
       services[`p-${id}-s-${server}`] = {
         loadBalancer: {
@@ -206,7 +220,10 @@ async function buildConfig() {
     const project = String(domain.project);
     if (!services[`p-${project}`]) continue;
     routers[`d-${domain._id}`] = {
-      rule: `Host(\`${domain.hostname}\`)`,
+      rule: hostRule(domain.hostname),
+      // A wildcard yields to any exact name (another project's, the
+      // platform's), whose priority is its rule's length.
+      ...(isWildcard(domain.hostname) ? { priority: 1 } : {}),
       entryPoints: ["websecure"],
       service: `p-${project}`,
       middlewares: [`p-${project}`, "huruf-retry"],

@@ -11,15 +11,22 @@ import { PiggybackScheduler } from "@/lib/core/piggybackScheduler.ts";
 import {
   checkDomain,
   ingressTargets,
+  isWildcard,
   OWNERSHIP_PREFIX,
   ownershipName,
+  probeName,
 } from "@/lib/domains/dns.ts";
 import { orderCertificate } from "@/lib/domains/acme.ts";
+import {
+  cloudflareDnsChallenge,
+  tokenOf as cloudflareToken,
+} from "@/lib/domains/cloudflare.ts";
 import { appDomain, ensureAppCertificate } from "@/lib/domains/appDomain.ts";
 import { refreshSpecs } from "@/lib/deploy/specs.ts";
 import { projectModel } from "@/schemas/applications/project.ts";
 import {
   certificateArchiveModel,
+  cloudflareConnectionModel,
   domainJobSlotModel,
   domainModel,
   platformSecretModel,
@@ -54,13 +61,16 @@ const LABEL = /^(?!-)[a-z0-9-]{1,63}(?<!-)$/;
 /** Lower-cased, without a trailing dot; throws a 400 for what can't be served. */
 export async function normalizeHostname(input: string) {
   const hostname = input.trim().toLowerCase().replace(/\.$/, "");
-  const labels = hostname.split(".");
+  // `*.example.com`: one wildcard label, leftmost, over a real name.
+  const wildcard = isWildcard(hostname);
+  const name = wildcard ? hostname.slice(2) : hostname;
+  const labels = name.split(".");
   if (
     hostname.length > 253 || labels.length < 2 ||
     !labels.every((l) => LABEL.test(l)) || /^\d+$/.test(labels.at(-1)!)
   ) {
     throw Response.badRequest(
-      "Enter a domain name like app.example.com (no wildcards, IPs or ports)",
+      "Enter a domain name like app.example.com or *.example.com (no IPs or ports)",
     );
   }
   // Custom domains only: the platform's own names are never handed out (D43).
@@ -70,7 +80,13 @@ export async function normalizeHostname(input: string) {
     // Free test domains are handed out, never added (PLAN §14).
     await appDomain(),
   ].filter((h) => h && h !== "localhost");
-  if (own.some((h) => hostname === h || hostname.endsWith(`.${h}`))) {
+  if (
+    own.some((h) =>
+      name === h || name.endsWith(`.${h}`) ||
+      // A wildcard over the platform's names would cover them.
+      (wildcard && h.endsWith(`.${name}`))
+    )
+  ) {
     throw Response.badRequest("The platform's own domain can't be used");
   }
   return hostname;
@@ -92,6 +108,17 @@ export async function addDomain(
   await getProject(tenant, projectId);
   if (await verifiedElsewhere(hostname, tenant)) {
     throw Response.badRequest(`${hostname} is in use by another account`);
+  }
+  // Its certificate is proved through DNS, which only Cloudflare lets us write.
+  if (
+    isWildcard(hostname) &&
+    !await cloudflareConnectionModel.findOne({ _id: tenant }, {
+      projection: { _id: 1 },
+    })
+  ) {
+    throw Response.badRequest(
+      "A wildcard domain needs its DNS on Cloudflare: connect Cloudflare on this page first",
+    );
   }
 
   const { limits } = await entitlements.resolve(tenant);
@@ -407,7 +434,14 @@ export async function issueOnce(id: ObjectId, now = new Date()) {
   const orders = kept ? recent : [...recent, now];
   try {
     const certificate = kept ??
-      await orderCertificate(domain.hostname, domain.tenant);
+      await orderCertificate(
+        domain.hostname,
+        domain.tenant,
+        // A wildcard is proved by a TXT record, in the workspace's Cloudflare.
+        isWildcard(domain.hostname)
+          ? cloudflareDnsChallenge(await cloudflareToken(domain.tenant))
+          : undefined,
+      );
     await domainModel.updateOne({ _id: id }, {
       $set: {
         // A first certificate is live once it answers over HTTPS.
@@ -477,7 +511,7 @@ export const liveCheck = {
 export async function verifyOnce(domain: WithId<TDomain>, now = new Date()) {
   const filter = { _id: domain._id, status: "verifying" as const };
   try {
-    await liveCheck.answers(domain.hostname);
+    await liveCheck.answers(probeName(domain.hostname));
     await domainModel.updateOne(filter, {
       $set: { status: "active", updatedAt: now },
       $unset: { nextCheckAt: "", checkUntil: "", error: "" },

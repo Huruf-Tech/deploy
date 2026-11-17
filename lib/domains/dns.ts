@@ -19,7 +19,17 @@ const lookup = async <T>(fn: () => Promise<T[]>): Promise<T[]> => {
 };
 
 export const OWNERSHIP_PREFIX = "huruf-verify=";
-export const ownershipName = (hostname: string) => `_huruf.${hostname}`;
+
+/** `*.example.com`: every name one level under it (PLAN §14). */
+export const isWildcard = (hostname: string) => hostname.startsWith("*.");
+
+/** A wildcard's ownership record is on the name it covers. */
+export const ownershipName = (hostname: string) =>
+  `_huruf.${hostname.replace(/^\*\./, "")}`;
+
+/** A name a domain serves, to look up and request: a wildcard's stand-in. */
+export const probeName = (hostname: string) =>
+  isWildcard(hostname) ? `huruf-check${hostname.slice(1)}` : hostname;
 
 /** Where users point their domains: CNAME target and A record IPs. */
 export async function ingressTargets() {
@@ -107,7 +117,7 @@ export async function checkDomain(
 
   const [txt, points] = await Promise.all([
     lookup(() => resolver.txt(ownershipName(hostname))),
-    pointsHere(hostname),
+    pointsHere(probeName(hostname)),
   ]);
 
   const ownership = txt.some((value) =>

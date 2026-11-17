@@ -831,6 +831,7 @@
   "The selected servers run the latest agent (or are offline).": "الخوادم المحددة تعمل بأحدث وكيل (أو غير متصلة).",
   "Domains": "النطاقات",
   "Domain": "النطاق",
+  "app.example.com or *.example.com": "app.example.com أو *.example.com",
   "Add domain": "إضافة نطاق",
   "Could not add the domain": "تعذرت إضافة النطاق",
   "No custom domains": "لا توجد نطاقات مخصصة",

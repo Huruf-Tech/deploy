@@ -314,7 +314,8 @@ export function DomainsTab({ project }: { project: string }) {
       header: t("Domain"),
       sortValue: (d) => d.hostname,
       cell: (d) =>
-        d.status === "active" ? (
+        // A wildcard isn't an address to open.
+        d.status === "active" && !d.hostname.startsWith("*.") ? (
           <span className="inline-flex flex-wrap items-center gap-2">
             <a
               href={`https://${d.hostname}`}
@@ -377,7 +378,7 @@ export function DomainsTab({ project }: { project: string }) {
         <Input
           value={hostname}
           onChange={(e) => setHostname(e.target.value)}
-          placeholder="app.example.com"
+          placeholder={t("app.example.com or *.example.com")}
           aria-label={t("Domain")}
           className="h-8 max-w-sm min-w-0 flex-1 font-mono text-[13px]"
           dir="ltr"

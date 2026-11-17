@@ -4,7 +4,7 @@ import { readTextSetting } from "@/lib/core/settings.ts";
 import { isPublicAddress } from "@/lib/agents/addresses.ts";
 import { getProject } from "@/lib/deploy/projects.ts";
 import { appDomain } from "@/lib/domains/appDomain.ts";
-import { ingressTargets, pointsHere } from "@/lib/domains/dns.ts";
+import { ingressTargets, pointsHere, probeName } from "@/lib/domains/dns.ts";
 import {
   PROJECT_HEADER,
   traefikConfig,
@@ -179,7 +179,8 @@ async function reachOf(tenantId: string, projectId: string) {
     routers: Record<string, unknown>;
     services: Record<string, unknown>;
   };
-  const host = domains.find((d) => d.status === "active")?.hostname;
+  const active = domains.find((d) => d.status === "active")?.hostname;
+  const host = active && probeName(active);
 
   const polledAgo = traefikPoll.at && Date.now() - traefikPoll.at;
   const traefik: THop = polledAgo === undefined
@@ -292,7 +293,9 @@ async function reachOf(tenantId: string, projectId: string) {
           ? `Test domains are served only under ${app || "APP_DOMAIN"}.`
           : "Traefik doesn't route it yet.",
       );
-    const points = await pointsHere(d.hostname);
+    // A wildcard: one name it serves stands in for all.
+    const name = probeName(d.hostname);
+    const points = await pointsHere(name);
     const dns: THop = points.ok
       ? ok(points.ips.join(", "))
       : failed(points.detail ?? "It doesn't point to the platform.");
@@ -300,17 +303,17 @@ async function reachOf(tenantId: string, projectId: string) {
     let https: THop = SKIPPED;
     if (points.ok && routed) {
       try {
-        const res = await reachProbe.fetch(`https://${d.hostname}/`, {
+        const res = await reachProbe.fetch(`https://${name}/`, {
           timeoutMs: 10_000,
         });
         await res.body?.cancel();
         https = res.status === 503 || res.status === 502
           ? failed(
-            `https://${d.hostname} answered ${res.status}: see the server hops.`,
+            `https://${name} answered ${res.status}: see the server hops.`,
           )
           : ok(`Answered ${res.status}.`);
       } catch (error) {
-        https = failed(`https://${d.hostname} doesn't answer: ${why(error)}`);
+        https = failed(`https://${name} doesn't answer: ${why(error)}`);
       }
     }
     return {
