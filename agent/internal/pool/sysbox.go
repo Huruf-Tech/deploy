@@ -195,6 +195,7 @@ const sysboxVersion = "v0.7.1"
 // Docker uses already, which changes nothing. Then it only reloads Docker.
 func ensureSysbox(ctx context.Context, notes *[]string) error {
 	allowSysboxFuse(ctx, notes)
+	keepSysboxRunning(notes)
 	if _, err := exec.LookPath("sysbox-runc"); err != nil {
 		if err := pinNetworkDefaults(ctx); err != nil {
 			return err
@@ -551,6 +552,7 @@ func (d *Sysbox) Usage(ctx context.Context, names []string, exact bool) (map[str
 		return map[string]Usage{}, nil
 	}
 	healLxcfs(ctx)
+	healSysbox(ctx)
 	containers := make([]string, len(names))
 	for i, name := range names {
 		containers[i] = container(name)
