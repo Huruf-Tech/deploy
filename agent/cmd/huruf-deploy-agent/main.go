@@ -102,7 +102,8 @@ func main() {
 
 	history := &metrics.Recorder{}
 	go history.Run(ctx)
-	builder := &build.Builder{Dir: filepath.Join(*stateDir, "builds")}
+	builder := &build.Builder{Dir: filepath.Join(*stateDir, "builds"), Log: log}
+	go builder.WatchDisk(ctx)
 	streamManager := &streams.Manager{History: history, Builds: builder}
 
 	network := &mesh.Mesh{Dir: *stateDir, Log: log}

@@ -182,6 +182,10 @@ func meminfo() map[string]int64 {
 	return values
 }
 
+// Disk is the size and free space of the filesystem holding path (its
+// quota, inside a partition).
+func Disk(path string) (total, free int64) { return disk(path) }
+
 func disk(path string) (total, free int64) {
 	var st syscall.Statfs_t
 	if syscall.Statfs(path, &st) != nil {

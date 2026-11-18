@@ -266,7 +266,8 @@ func (r *Reconciler) pass(ctx context.Context, spec protocol.DesiredSpec) error 
 		}
 	}
 
-	if time.Since(r.lastGC) > time.Hour {
+	// Right after a rollout (its old release's image may now go), else hourly.
+	if len(gone) > 0 || time.Since(r.lastGC) > time.Hour {
 		r.lastGC = time.Now()
 		if err := r.Runtime.RemoveUnusedImages(ctx, spec.KeepImages); err != nil {
 			r.Log.Warn("image cleanup failed", "error", err)

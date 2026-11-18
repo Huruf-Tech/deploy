@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -26,9 +27,11 @@ const keepLogs = 50
 
 type Builder struct {
 	Dir string // <state dir>/builds
+	Log *slog.Logger
 
-	mu      sync.Mutex // one build at a time: builds are CPU and disk heavy
-	running sync.Map   // deployment → struct{}
+	mu        sync.Mutex // one build at a time: builds are CPU and disk heavy
+	running   sync.Map   // deployment → struct{}
+	cleanedAt time.Time  // the last disk cleanup; under mu
 }
 
 // LogPath is where a deployment's build log lives on this server.
@@ -69,6 +72,10 @@ func (b *Builder) Run(ctx context.Context, p protocol.BuildRunPayload) (map[stri
 	defer cancel()
 	started := time.Now()
 
+	if err := b.roomToBuild(ctx, logf); err != nil {
+		logf("Failed: %v", err)
+		return nil, err
+	}
 	result, err := b.run(ctx, p, logFile, logf)
 	if err != nil {
 		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
