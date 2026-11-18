@@ -165,7 +165,9 @@ func (b *Builder) run(ctx context.Context, p protocol.BuildRunPayload, log io.Wr
 			return nil, fmt.Errorf("push: %w", err)
 		}
 		result["pushed"] = p.Push.Image
+		docker.Built(p.Push.Image)
 	}
+	docker.Built(p.Image)
 	return result, nil
 }
 

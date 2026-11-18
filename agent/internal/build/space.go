@@ -4,11 +4,13 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/Huruf-Tech/huruf-deploy/agent/internal/docker"
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/host"
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/sh"
 )
@@ -92,7 +94,7 @@ var lastResort = step{"older rollback images", func(ctx context.Context, _ int64
 	images := strings.Fields(sh.Output(ctx, "docker", "images", "--filter", "label="+ourLabel,
 		"--format", "{{.Repository}}:{{.Tag}}"))
 	used := strings.Fields(sh.Output(ctx, "docker", "ps", "-a", "--format", "{{.Image}}"))
-	old := olderImages(images, used)
+	old := slices.DeleteFunc(olderImages(images, used), docker.JustBuilt)
 	if len(old) == 0 {
 		return nil
 	}

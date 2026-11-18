@@ -367,6 +367,28 @@ func (d *Docker) tail(ctx context.Context, id string) string {
 	return out
 }
 
+// built: images this agent just built, by when. The control plane names a
+// new image in the kept list only with its rollout's spec, seconds after the
+// build; a cleanup in between, on the previous list, removed it (a cached
+// rebuild shares the live image's id, so only its tag went, 2026-11-18).
+var built sync.Map
+
+// builtGrace outlasts any build's rollout.
+const builtGrace = 6 * time.Hour
+
+// Built protects an image this agent just built from cleanup for a while.
+func Built(image string) { built.Store(image, time.Now()) }
+
+// JustBuilt says whether cleanup must leave the image alone.
+func JustBuilt(image string) bool {
+	at, ok := built.Load(image)
+	if ok && time.Since(at.(time.Time)) >= builtGrace {
+		built.Delete(image)
+		return false
+	}
+	return ok
+}
+
 // Every image we build carries this label, including copies pulled from a
 // registry, so both the local tag and the registry tag are cleaned up.
 func (d *Docker) RemoveUnusedImages(ctx context.Context, keep []string) error {
@@ -375,7 +397,7 @@ func (d *Docker) RemoveUnusedImages(ctx context.Context, keep []string) error {
 		return err
 	}
 	for _, image := range strings.Fields(out) {
-		if !slices.Contains(keep, image) {
+		if !slices.Contains(keep, image) && !JustBuilt(image) {
 			// Fails harmlessly for images a container still uses.
 			_, _ = run(ctx, nil, "docker", "rmi", image)
 		}
