@@ -1118,7 +1118,7 @@ export default function ProjectDetail() {
   ]
 
   const link =
-    "inline-flex items-center gap-1 font-mono text-xs text-brand-text underline-offset-4 hover:underline"
+    "inline-flex max-w-full min-w-0 items-center gap-1 font-mono text-xs text-brand-text underline-offset-4 hover:underline"
 
   return (
     <Page className="flex flex-col gap-4 py-5">
@@ -1242,16 +1242,29 @@ export default function ProjectDetail() {
                   ...(domains ?? []).map((d) => ({
                     label: d.appDomain ? t("Test domain") : t("Domain"),
                     value:
-                      d.status === "active" ? (
+                      // A wildcard isn't an address to open.
+                      d.status === "active" && d.hostname.startsWith("*.") ? (
+                        <span
+                          dir="ltr"
+                          title={d.hostname}
+                          className="block truncate font-mono text-xs"
+                        >
+                          {d.hostname}
+                        </span>
+                      ) : d.status === "active" ? (
                         <a
                           href={`https://${d.hostname}`}
                           target="_blank"
                           rel="noreferrer"
                           dir="ltr"
+                          title={`https://${d.hostname}`}
                           className={link}
                         >
-                          https://{d.hostname}
-                          <IconExternalLink className="size-3" aria-hidden />
+                          <span className="truncate">https://{d.hostname}</span>
+                          <IconExternalLink
+                            className="size-3 shrink-0"
+                            aria-hidden
+                          />
                         </a>
                       ) : (
                         <span className="flex min-w-0 flex-wrap items-center gap-2">
@@ -1280,10 +1293,14 @@ export default function ProjectDetail() {
                         target="_blank"
                         rel="noreferrer"
                         dir="ltr"
+                        title={url}
                         className={link}
                       >
-                        {url}
-                        <IconExternalLink className="size-3" aria-hidden />
+                        <span className="truncate">{url}</span>
+                        <IconExternalLink
+                          className="size-3 shrink-0"
+                          aria-hidden
+                        />
                       </a>
                     ),
                   })),

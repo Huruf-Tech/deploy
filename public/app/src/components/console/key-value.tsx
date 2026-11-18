@@ -21,7 +21,7 @@ export function KeyValue({
       {items.map((item, i) => (
         <div
           key={i}
-          className="grid grid-cols-[minmax(7rem,40%)_1fr] gap-x-4 border-b py-2 last:border-0"
+          className="grid grid-cols-[minmax(7rem,40%)_minmax(0,1fr)] gap-x-4 border-b py-2 last:border-0"
         >
           <dt className="text-muted-foreground">{item.label}</dt>
           <dd className="flex min-w-0 items-center gap-1">
