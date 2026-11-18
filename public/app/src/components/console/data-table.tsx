@@ -28,7 +28,14 @@ export type TColumn<T> = {
   sortValue?: (row: T) => string | number | undefined
   align?: "start" | "end"
   className?: string
+  /** Stays at the end while the table scrolls sideways (row actions). */
+  sticky?: boolean
 }
+
+// Opaque, so scrolled cells pass under it; it takes the row's hover and
+// selection tint over the card itself.
+const stickyEnd =
+  "sticky end-0 z-[1] bg-card [tr:hover>&]:bg-[color-mix(in_oklab,var(--muted)_50%,var(--card))] [tr:has([aria-expanded=true])>&]:bg-[color-mix(in_oklab,var(--muted)_50%,var(--card))] [tr[data-state=selected]>&]:bg-muted"
 
 /**
  * The default list (DESIGN §5): real table markup, 36 px rows,
@@ -119,6 +126,7 @@ export function DataTable<T>({
                   className={cn(
                     "h-9 px-3 text-xs font-medium text-muted-foreground",
                     col.align === "end" && "text-end",
+                    col.sticky && "sticky end-0 z-[1] bg-card",
                     col.className
                   )}
                 >
@@ -203,6 +211,7 @@ export function DataTable<T>({
                     className={cn(
                       "h-9 px-3 py-1.5",
                       col.align === "end" && "text-end tabular-nums",
+                      col.sticky && stickyEnd,
                       col.className
                     )}
                   >

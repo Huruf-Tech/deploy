@@ -238,6 +238,7 @@ export default function ProjectsPage() {
       header: <span className="sr-only">{t("Actions")}</span>,
       align: "end",
       className: "w-10",
+      sticky: true,
       cell: (p) => (
         <MoveMenu
           ids={[p._id]}
