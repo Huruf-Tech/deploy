@@ -91,6 +91,7 @@ type Reconciler struct {
 	scaled   map[string]int     // workload name → replicas chosen by the autoscaler
 	again    bool               // a pass was asked for while one was running
 	lastGC   time.Time
+	lastKept []string // KeepImages at the last image cleanup
 }
 
 type routing struct {
@@ -266,9 +267,13 @@ func (r *Reconciler) pass(ctx context.Context, spec protocol.DesiredSpec) error 
 		}
 	}
 
-	// Right after a rollout (its old release's image may now go), else hourly.
-	if len(gone) > 0 || time.Since(r.lastGC) > time.Hour {
+	// When the kept images change (every release: the oldest may now go),
+	// when a workload left, else hourly. An image a container still uses stays
+	// and goes on a later pass.
+	if len(gone) > 0 || !slices.Equal(spec.KeepImages, r.lastKept) ||
+		time.Since(r.lastGC) > time.Hour {
 		r.lastGC = time.Now()
+		r.lastKept = spec.KeepImages
 		if err := r.Runtime.RemoveUnusedImages(ctx, spec.KeepImages); err != nil {
 			r.Log.Warn("image cleanup failed", "error", err)
 		}

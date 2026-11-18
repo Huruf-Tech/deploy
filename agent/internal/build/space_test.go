@@ -55,18 +55,21 @@ func TestCleanStopsOnceThereIsRoom(t *testing.T) {
 	}
 }
 
-func TestRollbackImagesOnlyWhenCritical(t *testing.T) {
-	// Low but not critical, and nothing frees much: rollbacks stay.
-	ran := fakeDisk(t, 20*gb, 3*gb, nil)
+func TestRollbackImagesOnlyWhenTheCacheWasntEnough(t *testing.T) {
+	// The cache frees enough: rollbacks stay.
+	ran := fakeDisk(t, 25*gb, 2*gb, map[string]int64{"cache share": 4 * gb})
 	(&Builder{}).clean(context.Background())
 	if slices.Contains(*ran, "rollbacks") {
-		t.Fatalf("rollback images removed at 3 GB free: %v", *ran)
+		t.Fatalf("rollback images removed though the cache freed enough: %v", *ran)
 	}
-	// Critical: they go after everything else.
-	ran = fakeDisk(t, 20*gb, gb, nil)
-	(&Builder{}).clean(context.Background())
+	// The partition from 2026-11-18: 1.7 GB free of 25, the cache frees 0.9 GB.
+	ran = fakeDisk(t, 25*gb, 17*gb/10, map[string]int64{"cache share": 9 * gb / 10, "rollbacks": 14 * gb})
+	note := (&Builder{}).clean(context.Background())
 	if !slices.Equal(*ran, []string{"leftovers", "old cache", "cache share", "rollbacks"}) {
 		t.Fatalf("ran %v", *ran)
+	}
+	if !strings.Contains(note, "16.6 GB free now") {
+		t.Fatalf("note = %q", note)
 	}
 }
 

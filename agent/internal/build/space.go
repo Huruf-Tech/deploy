@@ -23,8 +23,6 @@ const (
 	// Cleaning starts below this much free: 20% of the disk, at least 5 GB.
 	lowShare = 0.20
 	lowMin   = 5 * gb
-	// Below this, older rollback images go too.
-	critical = 2 * gb
 	// A build doesn't start with less than this free after cleaning.
 	buildMin = 1 * gb
 	// The build cache kept when trimming it: 10% of the disk, at least 1 GB.
@@ -85,9 +83,11 @@ var steps = []step{
 	}},
 }
 
-// lastResort removes rollback images: each project keeps the ones its
-// containers use and its newest other one. A rollback to a removed release
-// then needs a deploy (or a pull, when it was pushed to a registry).
+// lastResort removes rollback images, when trimming the cache wasn't enough:
+// each project keeps the ones its containers use and its newest other one.
+// Plans keep up to 20 releases for rollbacks, which a small disk can't hold
+// (25 GB filled by 1 GB images, found on 2026-11-18). A rollback to a removed
+// release then needs a deploy (or a pull, when it was pushed to a registry).
 var lastResort = step{"older rollback images", func(ctx context.Context, _ int64) error {
 	images := strings.Fields(sh.Output(ctx, "docker", "images", "--filter", "label="+ourLabel,
 		"--format", "{{.Repository}}:{{.Tag}}"))
@@ -149,7 +149,7 @@ func (b *Builder) clean(ctx context.Context) string {
 	var done []string
 	for _, s := range append(steps, lastResort) {
 		_, free := space()
-		if !low(total, free) || (s.name == lastResort.name && free >= critical) {
+		if !low(total, free) {
 			break
 		}
 		if err := s.run(ctx, total); err != nil && b.Log != nil {

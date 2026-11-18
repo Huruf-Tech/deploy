@@ -20,6 +20,7 @@ type fakeRuntime struct {
 	broken     map[string]bool // images that never become healthy
 	nextIP     int
 	log        []string // start/remove order
+	cleanups   [][]string
 }
 
 func newFake() *fakeRuntime {
@@ -67,7 +68,12 @@ func (f *fakeRuntime) WaitHealthy(_ context.Context, _ Container, rel protocol.W
 	return nil
 }
 
-func (f *fakeRuntime) RemoveUnusedImages(context.Context, []string) error { return nil }
+func (f *fakeRuntime) RemoveUnusedImages(_ context.Context, keep []string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.cleanups = append(f.cleanups, keep)
+	return nil
+}
 
 func (f *fakeRuntime) running(workload string) (releases []int64) {
 	f.mu.Lock()
@@ -330,5 +336,24 @@ func TestIngressWorkloadsAreRoutedByProject(t *testing.T) {
 	got := h.router.last()
 	if len(got) != 1 || got[0].Port != 0 || got[0].Project != "p1" || len(got[0].Upstreams) != 2 || got[0].HealthPath != "/" {
 		t.Fatalf("routes = %+v", got)
+	}
+}
+
+// A release changes the kept images: the oldest goes now, not within the hour.
+func TestImagesGoWhenTheKeptOnesChange(t *testing.T) {
+	h := newHarness()
+	apply := func(version int64, keep ...string) {
+		h.r.Apply(context.Background(), protocol.DesiredSpec{
+			Version: version, Network: "huruf-internal", KeepImages: keep,
+		})
+		h.r.Wait()
+	}
+	apply(1, "app:1", "app:2")
+	apply(2, "app:1", "app:2") // same: nothing to do until the hour
+	apply(3, "app:2", "app:3")
+	h.runtime.mu.Lock()
+	defer h.runtime.mu.Unlock()
+	if len(h.runtime.cleanups) != 2 || !slices.Equal(h.runtime.cleanups[1], []string{"app:2", "app:3"}) {
+		t.Fatalf("cleanups = %v", h.runtime.cleanups)
 	}
 }
