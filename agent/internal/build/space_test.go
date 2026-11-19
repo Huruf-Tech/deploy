@@ -28,24 +28,28 @@ func TestOlderImages(t *testing.T) {
 func fakeDisk(t *testing.T, total, free int64, frees map[string]int64) *[]string {
 	t.Helper()
 	ran := &[]string{}
-	oldSpace, oldSteps := space, steps
-	t.Cleanup(func() { space, steps = oldSpace, oldSteps })
+	oldSpace, oldSteps, oldLast := space, steps, lastResort
+	t.Cleanup(func() { space, steps, lastResort = oldSpace, oldSteps, oldLast })
 	space = func() (int64, int64) { return total, free }
-	steps = nil
-	for _, name := range []string{"leftovers", "old cache", "cache share", "rollbacks", "unused images", "all cache"} {
-		steps = append(steps, step{name, func(context.Context, int64) error {
+	fake := func(name string) step {
+		return step{name, func(context.Context, int64) error {
 			*ran = append(*ran, name)
 			free += frees[name]
 			return nil
-		}})
+		}}
 	}
+	steps = nil
+	for _, name := range []string{"leftovers", "old cache", "cache share", "rollbacks", "unused images"} {
+		steps = append(steps, fake(name))
+	}
+	lastResort = fake("all cache")
 	return ran
 }
 
 func TestCleanStopsOnceThereIsRoom(t *testing.T) {
 	// 20 GB disk, 3 GB free: low (under 5 GB).
 	ran := fakeDisk(t, 20*gb, 3*gb, map[string]int64{"leftovers": gb, "old cache": 2 * gb})
-	note := (&Builder{}).clean(context.Background(), lowMark)
+	note := (&Builder{}).clean(context.Background(), lowMark, steps)
 	if !slices.Equal(*ran, []string{"leftovers", "old cache"}) {
 		t.Fatalf("ran %v", *ran)
 	}
@@ -54,26 +58,26 @@ func TestCleanStopsOnceThereIsRoom(t *testing.T) {
 	}
 }
 
-func TestRollbackImagesOnlyWhenTheCacheWasntEnough(t *testing.T) {
-	// The cache frees enough: rollbacks stay.
-	ran := fakeDisk(t, 25*gb, 2*gb, map[string]int64{"cache share": 4 * gb})
-	(&Builder{}).clean(context.Background(), lowMark)
-	if slices.Contains(*ran, "rollbacks") {
-		t.Fatalf("rollback images removed though the cache freed enough: %v", *ran)
+// 2026-11-20: Dokploy's caches kept the pool machine low, so every pass freed
+// nothing and went all the way down. Between builds: cheap steps only.
+func TestBetweenBuildsTheCacheAndImagesStay(t *testing.T) {
+	ran := fakeDisk(t, 96*gb, 12*gb, nil)
+	b := &Builder{}
+	b.settle(context.Background())
+	if !slices.Equal(*ran, []string{"leftovers", "old cache", "cache share"}) {
+		t.Fatalf("settle ran %v", *ran)
 	}
-	// The partition from 2026-11-18: 1.7 GB free of 25, the cache frees 0.9 GB.
-	ran = fakeDisk(t, 25*gb, 17*gb/10, map[string]int64{"cache share": 9 * gb / 10, "rollbacks": 14 * gb})
-	note := (&Builder{}).clean(context.Background(), lowMark)
-	if !slices.Equal(*ran, []string{"leftovers", "old cache", "cache share", "rollbacks"}) {
-		t.Fatalf("ran %v", *ran)
-	}
-	if !strings.Contains(note, "16.6 GB free now") {
-		t.Fatalf("note = %q", note)
+	// Above the low mark, nothing runs.
+	ran = fakeDisk(t, 25*gb, 11*gb/2, nil)
+	b.settle(context.Background())
+	if len(*ran) > 0 {
+		t.Fatalf("settle cleaned above the low mark: %v", *ran)
 	}
 }
 
 // 2026-11-20: 5.5 GB free of 25 passed the low mark, and the Next.js build
-// filled the rest. A build gets 8 GB first, going as deep as it takes.
+// filled the rest. A build gets 8 GB first, images included; the whole cache
+// stays while the build can run.
 func TestABuildGetsRoomFirst(t *testing.T) {
 	ran := fakeDisk(t, 25*gb, 11*gb/2, map[string]int64{"rollbacks": gb, "unused images": 3 * gb})
 	if err := (&Builder{}).roomToBuild(context.Background(), t.Logf); err != nil {
@@ -83,11 +87,15 @@ func TestABuildGetsRoomFirst(t *testing.T) {
 	if !slices.Equal(*ran, want) {
 		t.Fatalf("ran %v, want %v", *ran, want)
 	}
-	// Between builds the same disk is fine: nothing runs.
-	ran = fakeDisk(t, 25*gb, 11*gb/2, nil)
-	(&Builder{}).settle(context.Background())
-	if len(*ran) > 0 {
-		t.Fatalf("settle cleaned above the low mark: %v", *ran)
+	// Short of 8 GB but above 3: the build runs with its cache.
+	ran = fakeDisk(t, 25*gb, 4*gb, nil)
+	if err := (&Builder{}).roomToBuild(context.Background(), t.Logf); err != nil || slices.Contains(*ran, "all cache") {
+		t.Fatalf("err %v, ran %v", err, *ran)
+	}
+	// Under 3 GB: the whole cache goes, and the build runs.
+	ran = fakeDisk(t, 25*gb, 2*gb, map[string]int64{"all cache": 4 * gb})
+	if err := (&Builder{}).roomToBuild(context.Background(), t.Logf); err != nil || !slices.Contains(*ran, "all cache") {
+		t.Fatalf("err %v, ran %v", err, *ran)
 	}
 }
 
@@ -122,5 +130,17 @@ func TestUnusedImages(t *testing.T) {
 	)
 	if !slices.Equal(got, []string{"app:2", "blog:1"}) {
 		t.Fatalf("unusedImages = %v", got)
+	}
+}
+
+func TestLeftBuilders(t *testing.T) {
+	got := leftBuilders([]string{
+		"buildx_buildkit_railpack-medicloud-webapp-bqdsoi-khvrcl0_state",
+		"triggers-redis-5qgkpb_redis-data", // an app's data: never
+		"buildx_buildkit_notes",            // not a builder's state
+		"my_buildx_buildkit_x_state",
+	})
+	if !slices.Equal(got, []string{"buildx_buildkit_railpack-medicloud-webapp-bqdsoi-khvrcl0_state"}) {
+		t.Fatalf("leftBuilders = %v", got)
 	}
 }

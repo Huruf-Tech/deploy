@@ -553,6 +553,7 @@ func (d *Sysbox) Usage(ctx context.Context, names []string, exact bool) (map[str
 	}
 	healLxcfs(ctx)
 	healSysbox(ctx)
+	trimVolume()
 	containers := make([]string, len(names))
 	for i, name := range names {
 		containers[i] = container(name)

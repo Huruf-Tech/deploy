@@ -1067,17 +1067,19 @@ export async function clearBuildCache(
 }
 
 /**
- * "Clear all build caches" for a workspace (PLAN §9.2): every server it
- * builds on drops its whole build cache and dangling images, to free disk;
- * the next builds start cold. Returns how many servers were asked.
+ * "Clear all build caches" for a workspace (PLAN §9.2): every server drops
+ * its whole build cache, dangling images and the BuildKit volumes other
+ * tools left behind, to free disk; the next builds start cold. Machines
+ * too: they build nothing of ours, but other tools on them do (Dokploy's
+ * caches filled the pool machine, 2026-11-20). Returns how many servers
+ * were asked.
  */
 export async function clearAllBuildCaches(tenant: ObjectId, user?: ObjectId) {
-  // Machines build nothing: their partitions do.
-  const servers = await serverModel.find({
-    tenant,
-    status: "active",
-    "provider.kind": { $ne: "machine" },
-  }, { projection: { _id: 1 }, limit: 1_000 }).toArray();
+  const servers = await serverModel.find({ tenant, status: "active" }, {
+    projection: { _id: 1 },
+    limit: 1_000,
+  }).toArray();
+  let asked = 0;
   for (const { _id } of servers) {
     await issueCommand({
       server: _id,
@@ -1085,9 +1087,9 @@ export async function clearAllBuildCaches(tenant: ObjectId, user?: ObjectId) {
       type: "cache.clear",
       payload: { all: true },
       createdBy: user,
-    }).catch((e) => log.warn(`cache.clear on ${_id}: ${e}`));
+    }).then(() => asked++, (e) => log.warn(`cache.clear on ${_id}: ${e}`));
   }
-  return servers.length;
+  return asked;
 }
 
 /** GitHub `push` webhook: deploy every auto-deploy project on that branch (PLAN §16 6c). */

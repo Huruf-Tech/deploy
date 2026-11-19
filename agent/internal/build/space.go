@@ -19,6 +19,12 @@ import (
 // behind, so a small disk fills after a few deploys, builds fail midway and
 // running apps can break. Nothing is done while there's room; below it, the
 // cheapest things go first until there's room again.
+//
+// The build cache is what makes the next build fast, so it's never cleared
+// for a disk someone else fills (2026-11-20: Dokploy's caches on the pool
+// machine kept it low, and every 10-minute pass cleared ours). Between builds
+// only the cheap steps run; images go only when a build lacks room, and the
+// whole cache only when a build couldn't run otherwise.
 
 const (
 	gb = int64(1) << 30
@@ -110,11 +116,17 @@ var steps = []step{
 	{"every unused image", func(ctx context.Context, _ int64) error {
 		return removeImages(ctx, unusedImages)
 	}},
-	{"the whole build cache", func(ctx context.Context, _ int64) error {
-		_, err := sh.Run(ctx, "docker", "builder", "prune", "-af")
-		return err
-	}},
 }
+
+// cheap is how many of the steps run between builds: they keep the recent
+// build cache and every image.
+const cheap = 3
+
+// lastResort runs only when a build couldn't run otherwise.
+var lastResort = step{"the whole build cache", func(ctx context.Context, _ int64) error {
+	_, err := sh.Run(ctx, "docker", "builder", "prune", "-af")
+	return err
+}}
 
 // removeImages removes our images `pick` chooses, never one just built.
 func removeImages(ctx context.Context, pick func(images, used []string) []string) error {
@@ -179,16 +191,16 @@ func release(image string) int {
 	return n
 }
 
-// clean frees space until `mark` of it is free, cheapest first, and says
-// what it freed. The caller holds the build lock.
-func (b *Builder) clean(ctx context.Context, mark func(total int64) int64) string {
+// clean runs `run` in order until `mark` of the disk is free, and says what
+// it freed. The caller holds the build lock.
+func (b *Builder) clean(ctx context.Context, mark func(total int64) int64, run []step) string {
 	total, start := space()
 	if total == 0 || start >= mark(total) {
 		return ""
 	}
 	b.cleanedAt = time.Now()
 	var done []string
-	for _, s := range steps {
+	for _, s := range run {
 		_, free := space()
 		if free >= mark(total) {
 			break
@@ -210,25 +222,33 @@ func (b *Builder) clean(ctx context.Context, mark func(total int64) int64) strin
 // roomToBuild cleans before a build when needed; with too little left, the
 // build fails now with why, not midway.
 func (b *Builder) roomToBuild(ctx context.Context, logf func(string, ...any)) error {
-	if note := b.clean(ctx, buildMark); note != "" {
-		logf("%s", note)
+	for _, c := range []struct {
+		mark func(int64) int64
+		run  []step
+	}{{buildMark, steps}, {minFree, []step{lastResort}}} {
+		if note := b.clean(ctx, c.mark, c.run); note != "" {
+			logf("%s", note)
+		}
 	}
 	total, free := space()
-	if total > 0 && free < min(buildMin, total/4) {
+	if total > 0 && free < minFree(total) {
 		return fmt.Errorf("the server's disk is too small for its apps: %s free of %s after removing every image and build cache not in use. Give it a bigger disk, or move an app to another server",
 			size(free), size(total))
 	}
 	return nil
 }
 
+// minFree is the least a build starts with: 3 GB, or a quarter of a small disk.
+func minFree(total int64) int64 { return min(buildMin, total/4) }
+
 // settle cleans after a build, back down to the low mark, so the next one
-// doesn't start from a disk the last one filled.
+// doesn't start from a disk the last one filled. Cheap steps only.
 func (b *Builder) settle(ctx context.Context) {
-	b.clean(ctx, lowMark)
+	b.clean(ctx, lowMark, steps[:cheap])
 }
 
 // WatchDisk cleans when the disk runs low between builds: a look a minute,
-// a cleanup at most every 10 minutes, never during a build.
+// a cleanup at most every 10 minutes, never during a build, cheap steps only.
 func (b *Builder) WatchDisk(ctx context.Context) {
 	ticker := time.NewTicker(watchEvery)
 	defer ticker.Stop()
@@ -242,7 +262,7 @@ func (b *Builder) WatchDisk(ctx context.Context) {
 			continue
 		}
 		if time.Since(b.cleanedAt) >= cleanEvery {
-			b.clean(ctx, lowMark)
+			b.clean(ctx, lowMark, steps[:cheap])
 		}
 		b.mu.Unlock()
 	}

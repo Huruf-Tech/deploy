@@ -226,11 +226,26 @@ func exports(env map[string]string) string {
 	return b.String()
 }
 
+// leftBuilders are the cache volumes of BuildKit builders that are gone
+// (`buildx_buildkit_<builder>_state`), from the volumes no container uses:
+// other tools' builders leave them behind, Dokploy's Railpack one per app
+// (13 GB on the pool machine, 2026-11-20). Nothing but build cache is in one.
+func leftBuilders(dangling []string) []string {
+	var out []string
+	for _, v := range dangling {
+		if strings.HasPrefix(v, "buildx_buildkit_") && strings.HasSuffix(v, "_state") {
+			out = append(out, v)
+		}
+	}
+	return out
+}
+
 // ClearCache drops a project's BuildKit cache mounts (`cache.clear`, PLAN
 // §9.2): templates name them `<project>-<epoch>`, and BuildKit records that id
 // in each mount's description. Its layer cache ages out by BuildKit's GC.
-// With `all`, the whole build cache goes, and dangling images (untagged
-// build leftovers); tagged images stay, as rollbacks may need them.
+// With `all`, the whole build cache goes, dangling images (untagged build
+// leftovers) and gone builders' cache volumes; tagged images stay, as
+// rollbacks may need them.
 func (b *Builder) ClearCache(ctx context.Context, p protocol.CacheClearPayload) (map[string]any, error) {
 	if p.All {
 		// Not while a build runs: it would lose its cache midway.
@@ -244,9 +259,17 @@ func (b *Builder) ClearCache(ctx context.Context, p protocol.CacheClearPayload) 
 		if err != nil {
 			return nil, err
 		}
+		volumes := leftBuilders(strings.Fields(sh.Output(ctx, "docker", "volume", "ls", "-q",
+			"--filter", "dangling=true", "--filter", "name=buildx_buildkit_")))
+		if len(volumes) > 0 {
+			if _, err := sh.Run(ctx, "docker", append([]string{"volume", "rm"}, volumes...)...); err != nil {
+				return nil, err
+			}
+		}
 		return map[string]any{
-			"cache":  sh.Tail(strings.TrimSpace(cache), 200),
-			"images": sh.Tail(strings.TrimSpace(images), 200),
+			"cache":   sh.Tail(strings.TrimSpace(cache), 200),
+			"images":  sh.Tail(strings.TrimSpace(images), 200),
+			"volumes": volumes,
 		}, nil
 	}
 	if !isProjectID(p.Project) {
