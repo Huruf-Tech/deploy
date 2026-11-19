@@ -4,7 +4,7 @@
     "version": {
       "major": 0,
       "minor": 6,
-      "patch": 38
+      "patch": 39
     },
     "dockerOrganization": "oridune",
     "dockerImage": "huruf-deploy",
