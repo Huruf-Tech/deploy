@@ -21,7 +21,7 @@ import {
 import { useTheme } from "@/components/theme-provider"
 import { StatusDot } from "@/components/console/status"
 import { cn } from "@/lib/utils"
-import { worst, type THop, type TReach } from "./reach"
+import { why, worst, type THop, type TReach } from "./reach"
 
 const ICONS = {
   domain: IconWorld,
@@ -37,6 +37,8 @@ type THopNode = Node<
     title: string
     subtitle?: string
     state: THop["state"]
+    /** What stops it, from its failed hop. */
+    why?: string
   },
   "hop"
 >
@@ -57,6 +59,7 @@ function HopNode({ data }: NodeProps<THopNode>) {
         "flex w-56 items-center gap-2 rounded-lg border bg-card px-3 py-2 text-[13px] shadow-sm",
         data.state === "failed" && "border-destructive"
       )}
+      title={data.why}
     >
       <Handle
         type="target"
@@ -84,6 +87,18 @@ function HopNode({ data }: NodeProps<THopNode>) {
             className="truncate font-mono text-[11px] text-muted-foreground"
           >
             {data.subtitle}
+          </div>
+        )}
+        {data.why && data.state !== "ok" && (
+          <div
+            className={cn(
+              "line-clamp-2 text-[11px] leading-snug",
+              data.state === "failed"
+                ? "text-destructive-foreground"
+                : "text-warning-foreground"
+            )}
+          >
+            {data.why}
           </div>
         )}
       </div>
@@ -122,14 +137,21 @@ export default function ReachMap({ reach }: { reach: TReach }) {
       hops: [string, THop][]
     ) => {
       const state = worst(hops.map(([, h]) => h))
-      const stop = hops.find(([, h]) => h.state === "failed")?.[0]
+      const failing = hops.find(([, h]) => h.state === "failed")
+      // The hop, and why in short: the node and the list below say it all.
+      const reason = failing?.[1].detail
+      const label = failing
+        ? reason
+          ? `${failing[0]}: ${reason.length > 30 ? `${reason.slice(0, 29)}…` : reason}`
+          : failing[0]
+        : undefined
       edges.push({
         id,
         source,
         target,
         type: "smoothstep",
         animated: state === "ok",
-        label: stop,
+        label,
         labelStyle: { fontSize: 11, fill: "var(--foreground)" },
         labelBgStyle: { fill: "var(--card)" },
         style: {
@@ -152,8 +174,9 @@ export default function ReachMap({ reach }: { reach: TReach }) {
         data: {
           kind: "domain",
           title: d.hostname,
-          subtitle: d.appDomain ? t("Test domain") : d.dns.detail,
-          state: worst([d.dns, d.certificate]),
+          subtitle: d.appDomain ? t("Test domain") : undefined,
+          state: worst([d.dns, d.certificate, d.route, d.https]),
+          why: why([d.dns, d.certificate, d.route, d.https]),
         },
       })
       edge(`d-${d._id}-traefik`, `d-${d._id}`, "traefik", [
@@ -188,6 +211,7 @@ export default function ReachMap({ reach }: { reach: TReach }) {
             .filter(Boolean)
             .join(" · "),
           state: reach.ingress.traefik.state,
+          why: reach.ingress.traefik.detail,
         },
       })
     }
@@ -201,7 +225,8 @@ export default function ReachMap({ reach }: { reach: TReach }) {
           kind: "server",
           title: s.name,
           subtitle: t("Edge proxy (Caddy)"),
-          state: s.online ? s.edge.state : "failed",
+          state: worst([s.route, s.tunnel, s.edge]),
+          why: why([s.route, s.tunnel, s.edge]),
         },
       })
       nodes.push({
@@ -213,6 +238,7 @@ export default function ReachMap({ reach }: { reach: TReach }) {
           title: t("App"),
           subtitle: reach.healthcheckPath,
           state: s.app.state,
+          why: s.app.detail,
         },
       })
       if (reach.domains.length) {
