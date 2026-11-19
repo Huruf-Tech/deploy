@@ -86,6 +86,8 @@ func (b *Builder) Run(ctx context.Context, p protocol.BuildRunPayload) (map[stri
 	}
 	result["durationMs"] = time.Since(started).Milliseconds()
 	logf("Done in %s", time.Since(started).Round(time.Second))
+	// Still holding the build lock; the new image is protected as just built.
+	b.settle(context.WithoutCancel(ctx))
 	return result, nil
 }
 

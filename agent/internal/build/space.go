@@ -22,11 +22,19 @@ import (
 
 const (
 	gb = int64(1) << 30
-	// Cleaning starts below this much free: 20% of the disk, at least 5 GB.
+	// Between builds, cleaning starts below this much free: 20% of the disk,
+	// at least 5 GB.
 	lowShare = 0.20
 	lowMin   = 5 * gb
-	// A build doesn't start with less than this free after cleaning.
-	buildMin = 1 * gb
+	// Before a build, room for it: a Next.js build extracts its base image,
+	// installs node_modules and writes the new image, several GB at once, so
+	// a disk just above the low mark filled midway (2026-11-20). 25% of the
+	// disk, at least 8 GB, but never more than half a small disk.
+	buildShare = 0.25
+	buildRoom  = 8 * gb
+	// A build doesn't start with less than this free after cleaning (or a
+	// quarter of a small disk).
+	buildMin = 3 * gb
 	// The build cache kept when trimming it: 10% of the disk, at least 1 GB.
 	cacheShare = 0.10
 	cacheMin   = 1 * gb
@@ -55,9 +63,15 @@ var space = func() (total, free int64) {
 	return total, free
 }
 
-func low(total, free int64) bool {
-	return free < max(int64(float64(total)*lowShare), lowMin)
+// lowMark is the free space kept between builds.
+func lowMark(total int64) int64 { return max(int64(float64(total)*lowShare), lowMin) }
+
+// buildMark is the free space a build gets before it starts.
+func buildMark(total int64) int64 {
+	return min(max(int64(float64(total)*buildShare), buildRoom), total/2)
 }
+
+func low(total, free int64) bool { return free < lowMark(total) }
 
 // step is one level of cleaning: what it does, then whether it helped.
 type step struct {
@@ -83,25 +97,50 @@ var steps = []step{
 		_, err := sh.Run(ctx, "docker", "builder", "prune", "-f", "--keep-storage", keep)
 		return err
 	}},
+	// Rollback images: each project keeps the ones its containers use and its
+	// newest other one. Plans keep up to 20 releases for rollbacks, which a
+	// small disk can't hold (25 GB filled by 1 GB images, 2026-11-18). A
+	// rollback to a removed release then needs a deploy (or a pull, when it
+	// was pushed to a registry).
+	{"older rollback images", func(ctx context.Context, _ int64) error {
+		return removeImages(ctx, olderImages)
+	}},
+	// Then every image no container uses: a partition running several apps
+	// can't keep a spare of each and still build (2026-11-20).
+	{"every unused image", func(ctx context.Context, _ int64) error {
+		return removeImages(ctx, unusedImages)
+	}},
+	{"the whole build cache", func(ctx context.Context, _ int64) error {
+		_, err := sh.Run(ctx, "docker", "builder", "prune", "-af")
+		return err
+	}},
 }
 
-// lastResort removes rollback images, when trimming the cache wasn't enough:
-// each project keeps the ones its containers use and its newest other one.
-// Plans keep up to 20 releases for rollbacks, which a small disk can't hold
-// (25 GB filled by 1 GB images, found on 2026-11-18). A rollback to a removed
-// release then needs a deploy (or a pull, when it was pushed to a registry).
-var lastResort = step{"older rollback images", func(ctx context.Context, _ int64) error {
+// removeImages removes our images `pick` chooses, never one just built.
+func removeImages(ctx context.Context, pick func(images, used []string) []string) error {
 	images := strings.Fields(sh.Output(ctx, "docker", "images", "--filter", "label="+ourLabel,
 		"--format", "{{.Repository}}:{{.Tag}}"))
 	used := strings.Fields(sh.Output(ctx, "docker", "ps", "-a", "--format", "{{.Image}}"))
-	old := slices.DeleteFunc(olderImages(images, used), docker.JustBuilt)
+	old := slices.DeleteFunc(pick(images, used), docker.JustBuilt)
 	if len(old) == 0 {
 		return nil
 	}
 	// One that a container still uses fails harmlessly.
 	_, err := sh.Run(ctx, "docker", append([]string{"rmi"}, old...)...)
 	return err
-}}
+}
+
+// unusedImages are our tagged images no container uses.
+func unusedImages(images, used []string) []string {
+	var old []string
+	for _, image := range images {
+		if !strings.HasSuffix(image, ":<none>") && !slices.Contains(used, image) {
+			old = append(old, image)
+		}
+	}
+	sort.Strings(old)
+	return old
+}
 
 // olderImages are the images to drop under critical pressure: per repository,
 // all but those in use and the newest unused one (tags are `<release>-<commit>`).
@@ -140,18 +179,18 @@ func release(image string) int {
 	return n
 }
 
-// clean frees space while it's low, cheapest first, and says what it freed.
-// The caller holds the build lock.
-func (b *Builder) clean(ctx context.Context) string {
+// clean frees space until `mark` of it is free, cheapest first, and says
+// what it freed. The caller holds the build lock.
+func (b *Builder) clean(ctx context.Context, mark func(total int64) int64) string {
 	total, start := space()
-	if total == 0 || !low(total, start) {
+	if total == 0 || start >= mark(total) {
 		return ""
 	}
 	b.cleanedAt = time.Now()
 	var done []string
-	for _, s := range append(steps, lastResort) {
+	for _, s := range steps {
 		_, free := space()
-		if !low(total, free) {
+		if free >= mark(total) {
 			break
 		}
 		if err := s.run(ctx, total); err != nil && b.Log != nil {
@@ -171,15 +210,21 @@ func (b *Builder) clean(ctx context.Context) string {
 // roomToBuild cleans before a build when needed; with too little left, the
 // build fails now with why, not midway.
 func (b *Builder) roomToBuild(ctx context.Context, logf func(string, ...any)) error {
-	if note := b.clean(ctx); note != "" {
+	if note := b.clean(ctx, buildMark); note != "" {
 		logf("%s", note)
 	}
 	total, free := space()
-	if total > 0 && free < buildMin {
-		return fmt.Errorf("the server's disk is full: %s free of %s. Free space on it (old volumes, files) or give it a bigger disk",
+	if total > 0 && free < min(buildMin, total/4) {
+		return fmt.Errorf("the server's disk is too small for its apps: %s free of %s after removing every image and build cache not in use. Give it a bigger disk, or move an app to another server",
 			size(free), size(total))
 	}
 	return nil
+}
+
+// settle cleans after a build, back down to the low mark, so the next one
+// doesn't start from a disk the last one filled.
+func (b *Builder) settle(ctx context.Context) {
+	b.clean(ctx, lowMark)
 }
 
 // WatchDisk cleans when the disk runs low between builds: a look a minute,
@@ -197,7 +242,7 @@ func (b *Builder) WatchDisk(ctx context.Context) {
 			continue
 		}
 		if time.Since(b.cleanedAt) >= cleanEvery {
-			b.clean(ctx)
+			b.clean(ctx, lowMark)
 		}
 		b.mu.Unlock()
 	}
