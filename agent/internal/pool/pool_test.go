@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -13,10 +14,11 @@ import (
 )
 
 type fake struct {
-	sizes   map[string]protocol.PartitionSize
-	weights map[string]int
-	used    map[string]Usage
-	scripts []string
+	lifecycle []string // stop/start, in order
+	sizes     map[string]protocol.PartitionSize
+	weights   map[string]int
+	used      map[string]Usage
+	scripts   []string
 	// Partitions that aren't running: no address to forward to.
 	down map[string]bool
 
@@ -41,8 +43,14 @@ func (f *fake) Resize(_ context.Context, name string, size protocol.PartitionSiz
 	f.sizes[name], f.weights[name] = size, weight
 	return nil
 }
-func (f *fake) Stop(context.Context, string) error  { return nil }
-func (f *fake) Start(context.Context, string) error { return nil }
+func (f *fake) Stop(_ context.Context, name string) error {
+	f.lifecycle = append(f.lifecycle, "stop "+name)
+	return nil
+}
+func (f *fake) Start(_ context.Context, name string) error {
+	f.lifecycle = append(f.lifecycle, "start "+name)
+	return nil
+}
 func (f *fake) Remove(_ context.Context, name string) error {
 	delete(f.sizes, name)
 	return nil
@@ -450,5 +458,23 @@ func TestParsesQuotaAndCounters(t *testing.T) {
 	counters := parseCounters(`{"nftables":[{"metainfo":{}},{"table":{"name":"huruf_pool"}},{"counter":{"name":"out_p1","bytes":7}},{"counter":{"name":"in_p1","bytes":5}},{"rule":{"expr":[{"counter":"out_p1"}]}}]}`)
 	if counters["out_p1"] != 7 || counters["in_p1"] != 5 {
 		t.Fatalf("counters = %v", counters)
+	}
+}
+
+// Restarting a partition stops and starts it, then forwards to its address
+// again (it may have changed); an unknown one is refused.
+func TestRestartPartition(t *testing.T) {
+	m, f := setup(t)
+	ctx := context.Background()
+	create(t, m, "p1", protocol.PartitionSize{Cpus: 1, MemMb: 1024, DiskGb: 10}, false)
+	calls := f.forwardCalls
+	if _, err := m.Restart(ctx, protocol.PartitionNamePayload{Name: "p1"}); err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(f.lifecycle, []string{"stop p1", "start p1"}) || f.forwardCalls != calls+1 {
+		t.Fatalf("lifecycle %v, forwards %d -> %d", f.lifecycle, calls, f.forwardCalls)
+	}
+	if _, err := m.Restart(ctx, protocol.PartitionNamePayload{Name: "p2"}); err == nil {
+		t.Fatal("restarted a partition that doesn't exist")
 	}
 }

@@ -672,11 +672,13 @@
                   "agent.update",
                   "registry.delete",
                   "host.cleanup",
+                  "host.reboot",
                   "pool.ensure",
                   "partition.create",
                   "partition.resize",
                   "partition.stop",
                   "partition.start",
+                  "partition.restart",
                   "partition.remove",
                   "partition.send",
                   "partition.receive"

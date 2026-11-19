@@ -2,6 +2,7 @@ import { moveRelay } from "@/lib/domains/tunnels.ts";
 import { encodeBase64 } from "@std/encoding/base64";
 import {
   LIVE_RENTAL,
+  RUNNING_RENTAL,
   subscriptionModel,
 } from "@/schemas/billing/subscription.ts";
 import { ObjectId } from "mongodb";
@@ -178,7 +179,11 @@ export async function createPartition(opts: {
 }
 
 const partitionCommand = (
-  type: "partition.stop" | "partition.start" | "partition.remove",
+  type:
+    | "partition.stop"
+    | "partition.start"
+    | "partition.restart"
+    | "partition.remove",
 ) =>
 async (host: ObjectId, name: string, createdBy?: ObjectId) => {
   const doc = await machine(host, true);
@@ -196,6 +201,54 @@ export const stopPartition = partitionCommand("partition.stop");
 export const startPartition = partitionCommand("partition.start");
 /** Deletes a partition and its data. */
 export const removePartition = partitionCommand("partition.remove");
+
+/**
+ * Reboots a server: a partition is restarted by its machine (stopped and
+ * started, data kept), as rebooting from inside isn't reliable under Sysbox;
+ * anything else reboots its own host, a machine with all its partitions. A
+ * rented partition only while its rental runs, so a suspended one stays
+ * stopped, and not while it moves.
+ */
+export async function rebootServer(
+  tenant: ObjectId,
+  id: ObjectId,
+  user: ObjectId,
+) {
+  const server = await serverModel.findOne(
+    { _id: id, tenant, status: "active" },
+    { projection: { provider: 1 } },
+  );
+  if (!server) throw Response.notFound("Server not found");
+  const p = server.provider;
+  if (p?.kind !== "partition" && p?.kind !== "rented") {
+    return await issueCommand({
+      server: id,
+      tenant,
+      type: "host.reboot",
+      createdBy: user,
+    });
+  }
+  if (!p.host || !p.partition) {
+    throw Response.badRequest("This partition isn't placed on a machine yet");
+  }
+  if (
+    p.kind === "rented" &&
+    !await subscriptionModel.countDocuments({
+      _id: p.subscription,
+      status: { $in: [...RUNNING_RENTAL] },
+      "rental.move": { $exists: false },
+    }, { limit: 1 })
+  ) {
+    throw Response.badRequest(
+      "This rental isn't running (suspended, ended or moving): it can't be restarted now",
+    );
+  }
+  return await partitionCommand("partition.restart")(
+    p.host,
+    p.partition,
+    user,
+  );
+}
 
 /** Resizes a partition live. */
 export async function resizePartition(

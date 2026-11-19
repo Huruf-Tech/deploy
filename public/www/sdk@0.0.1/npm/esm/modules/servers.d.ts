@@ -296,6 +296,12 @@ export type agentRelease$return = {
 export type updateAgent$params = {
     id?: string;
 };
+export type reboot$params = {
+    id?: string;
+};
+export type reboot$return = {
+    command: string;
+};
 export type accept$params = {
     id?: string;
 };
@@ -396,6 +402,8 @@ export declare const serversModule: (sdk: typeof BaseSDK) => {
         removePartition$return: removePartition$return;
         agentRelease$return: agentRelease$return;
         updateAgent$params: updateAgent$params;
+        reboot$params: reboot$params;
+        reboot$return: reboot$return;
         accept$params: accept$params;
         accept$body: accept$body;
         reject$params: reject$params;
@@ -546,6 +554,17 @@ export declare const serversModule: (sdk: typeof BaseSDK) => {
         then: <TResult1 = unknown, TResult2 = never>(onfulfilled?: ((value: unknown) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
         catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<unknown>;
         finally: (onfinally?: (() => void) | null | undefined) => Promise<unknown>;
+    };
+    readonly reboot: (data: {
+        params: reboot$params;
+        query?: undefined;
+        body?: undefined;
+    } & TRequestOptions<reboot$return>) => {
+        readonly raw: Promise<import("axios").AxiosResponse<reboot$return, any, {}, any>>;
+        readonly data: Promise<reboot$return>;
+        then: <TResult1 = reboot$return, TResult2 = never>(onfulfilled?: ((value: reboot$return) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+        catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<reboot$return | TResult>;
+        finally: (onfinally?: (() => void) | null | undefined) => Promise<reboot$return>;
     };
     readonly accept: (data: {
         params: accept$params;

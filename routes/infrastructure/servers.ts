@@ -32,6 +32,8 @@ import {
 } from "@/schemas/billing/subscription.ts";
 import type { ObjectId } from "mongodb";
 import { latestAgent, requestAgentUpdate } from "@/lib/agents/updates.ts";
+import { tenantOwner } from "@/lib/billing/owner.ts";
+import { rebootServer } from "@/lib/pool/pool.ts";
 import {
   agentEndpoints,
   bootstrapStatus,
@@ -296,6 +298,21 @@ export default new Router("/api", function servers(router) {
           user: user._id,
         });
         return Response.json({ ok: true });
+      },
+    };
+  });
+
+  // Every app on it stops for a minute or two: the owner's call.
+  router.post("/:id/reboot", function reboot() {
+    const $return = z.object({ command: z.string() });
+
+    return {
+      shape: () => ({ params: $params, return: $return }),
+      handler: async (req) => {
+        const { id } = $params.parse(paramsAsJson(req));
+        const { tenant, user } = await tenantOwner(req, "reboot servers");
+        const { command } = await rebootServer(tenant._id, id, user._id);
+        return Response.json({ command: command.toString() });
       },
     };
   });

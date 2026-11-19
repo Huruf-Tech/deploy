@@ -416,6 +416,20 @@ func (m *Manager) Start(ctx context.Context, p protocol.PartitionNamePayload) (m
 	})
 }
 
+// Restart reboots a partition (`partition.restart`): stopped and started
+// again, everything in it restarts; data and size are kept.
+func (m *Manager) Restart(ctx context.Context, p protocol.PartitionNamePayload) (map[string]any, error) {
+	return m.simple(ctx, p.Name, func(ctx context.Context, name string) error {
+		if err := m.Driver.Stop(ctx, name); err != nil {
+			return err
+		}
+		if err := m.Driver.Start(ctx, name); err != nil {
+			return err
+		}
+		return m.forward(ctx, m.state.Forwards, nil)
+	})
+}
+
 func (m *Manager) simple(ctx context.Context, name string, fn func(context.Context, string) error) (map[string]any, error) {
 	if err := checkName(name); err != nil {
 		return nil, err

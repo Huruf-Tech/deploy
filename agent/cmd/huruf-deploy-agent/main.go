@@ -179,6 +179,7 @@ func main() {
 	a.Commands["partition.resize"] = commands.Handle(pools.Resize)
 	a.Commands["partition.stop"] = commands.Handle(pools.Stop)
 	a.Commands["partition.start"] = commands.Handle(pools.Start)
+	a.Commands["partition.restart"] = commands.Handle(pools.Restart)
 	a.Commands["partition.remove"] = commands.Handle(pools.Remove)
 	a.Commands["partition.send"] = commands.Sealed(id.Open, pools.Send)
 	a.Commands["partition.receive"] = commands.Sealed(id.Open, pools.Receive)

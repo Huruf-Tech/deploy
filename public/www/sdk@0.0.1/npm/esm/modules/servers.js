@@ -243,6 +243,26 @@ export const serversModule = (sdk) => {
                 return res;
             }, data);
         },
+        reboot(data) {
+            return sdk.resolveAxiosResponse(async () => {
+                sdk.checkPermission("servers", "reboot");
+                const method = "post";
+                const toPath = compile("servers/api/:id/reboot");
+                const requestPayload = {
+                    method,
+                    url: toPath(sdk.resolvePathParams(data?.params)),
+                    params: data?.query,
+                    data: data?.body,
+                    signal: data?.signal,
+                    ...(data?.axiosConfig
+                        ? sdk.resolveAxiosConfig(data.axiosConfig)
+                        : undefined),
+                };
+                sdk.log("Sending Request:", requestPayload);
+                const res = await sdk._axios.request(requestPayload);
+                return res;
+            }, data);
+        },
         accept(data) {
             return sdk.resolveAxiosResponse(async () => {
                 sdk.checkPermission("servers", "accept");
@@ -456,6 +476,7 @@ export const serversModule = (sdk) => {
     methods.removePartition.__scope = "servers";
     methods.agentRelease.__scope = "servers";
     methods.updateAgent.__scope = "servers";
+    methods.reboot.__scope = "servers";
     methods.accept.__scope = "servers";
     methods.reject.__scope = "servers";
     methods.prepare.__scope = "servers";

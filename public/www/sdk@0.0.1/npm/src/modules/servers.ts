@@ -303,6 +303,12 @@ export type agentRelease$return = {
 export type updateAgent$params = {
     id?: string;
 };
+export type reboot$params = {
+    id?: string;
+};
+export type reboot$return = {
+    command: string;
+};
 export type accept$params = {
     id?: string;
 };
@@ -404,6 +410,8 @@ export const serversModule = (sdk: typeof BaseSDK) => {
         removePartition$return: removePartition$return,
         agentRelease$return: agentRelease$return,
         updateAgent$params: updateAgent$params,
+        reboot$params: reboot$params,
+        reboot$return: reboot$return,
         accept$params: accept$params,
         accept$body: accept$body,
         reject$params: reject$params,
@@ -762,6 +770,34 @@ export const serversModule = (sdk: typeof BaseSDK) => {
             return res;
         }, data);
     },
+        reboot(data: {
+        params: reboot$params,
+        query?: undefined,
+        body?: undefined,
+    } & TRequestOptions<reboot$return>) {
+        return sdk.resolveAxiosResponse(async () => {
+            sdk.checkPermission("servers", "reboot");
+
+            const method = "post";
+            const toPath = compile("servers/api/:id/reboot");
+            const requestPayload = {
+                method,
+                url: toPath(sdk.resolvePathParams(data?.params)),
+                params: data?.query,
+                data: data?.body,
+                signal: data?.signal,
+                ...(data?.axiosConfig
+                ? sdk.resolveAxiosConfig(data.axiosConfig)
+                : undefined),
+            };
+
+            sdk.log("Sending Request:", requestPayload);
+
+            const res = await sdk._axios!.request(requestPayload);
+
+            return res;
+        }, data);
+    },
         accept(data: {
         params: accept$params,
         query?: undefined,
@@ -1056,6 +1092,7 @@ export const serversModule = (sdk: typeof BaseSDK) => {
     (methods.removePartition as any).__scope = "servers";
     (methods.agentRelease as any).__scope = "servers";
     (methods.updateAgent as any).__scope = "servers";
+    (methods.reboot as any).__scope = "servers";
     (methods.accept as any).__scope = "servers";
     (methods.reject as any).__scope = "servers";
     (methods.prepare as any).__scope = "servers";

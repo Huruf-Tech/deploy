@@ -6,12 +6,15 @@ package commands
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/build"
+	"github.com/Huruf-Tech/huruf-deploy/agent/internal/cgroup"
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/dockerhost"
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/protocol"
+	"github.com/Huruf-Tech/huruf-deploy/agent/internal/sh"
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/streams"
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/update"
 )
@@ -82,6 +85,20 @@ func Default(ctx context.Context, s *streams.Manager, builder *build.Builder, op
 		}),
 		"build.run":   Sealed(open, builder.Run),
 		"cache.clear": Handle(builder.ClearCache),
+		// Reboots the machine this agent runs on, a few seconds after its
+		// result is sent. Not inside a partition: its machine restarts it
+		// (`partition.restart`), as rebooting from inside isn't reliable there.
+		"host.reboot": func(context.Context, map[string]any) (map[string]any, error) {
+			if cgroup.MemoryMax() > 0 || cgroup.CPUs() > 0 {
+				return nil, errors.New("this is a partition: its machine restarts it")
+			}
+			time.AfterFunc(3*time.Second, func() {
+				if _, err := sh.Run(context.Background(), "systemctl", "reboot"); err != nil {
+					_, _ = sh.Run(context.Background(), "reboot")
+				}
+			})
+			return map[string]any{"rebooting": true}, nil
+		},
 		"agent.update": Handle(func(ctx context.Context, p protocol.AgentUpdatePayload) (map[string]any, error) {
 			result, err := update.Apply(ctx, p)
 			if err == nil && result["restarting"] == true {

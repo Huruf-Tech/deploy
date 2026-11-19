@@ -8,6 +8,7 @@ import {
   IconFileText,
   IconTerminal2,
   IconPlugConnectedX,
+  IconRefresh,
   IconTrash,
 } from "@tabler/icons-react"
 
@@ -37,6 +38,7 @@ import { StatusPill } from "./StatusPill"
 import { ServerLabels, ServerName } from "./ServerLabels"
 import { HostSetup } from "./HostSetup"
 import { RemoveServerDialog } from "./RemoveServerDialog"
+import { useIsOwner } from "@/pages/rentals/rental"
 import { RentalPanel } from "@/pages/rentals/Rentals"
 import { HostingPanel, OwnerRequests } from "@/pages/rentals/HostingPanel"
 import { PageHeader } from "@/components/console/page-header"
@@ -361,6 +363,68 @@ function AgentUpdate({
   )
 }
 
+/**
+ * Reboot (owner only): a partition is restarted by its machine, so it works
+ * even when the partition itself hangs; anything else reboots its host and
+ * needs its agent online.
+ */
+function RebootServer({
+  server,
+  online,
+}: {
+  server: { _id: string; name: string; provider?: { kind?: string } | null }
+  online: boolean
+}) {
+  const { t } = useTranslation()
+  const owner = useIsOwner()
+  const [open, setOpen] = React.useState(false)
+  const kind = server.provider?.kind
+  const partition = kind === "partition" || kind === "rented"
+  if (!owner || (!partition && !online)) return null
+
+  const reboot = async () => {
+    try {
+      await ThunderSDK.servers.reboot({ params: { id: server._id } })
+      toast.success(
+        partition
+          ? t("Restarting: it's back in about a minute.")
+          : t("Rebooting: it's back in a few minutes.")
+      )
+      setOpen(false)
+    } catch (e) {
+      toast.error(errorMessage(e) ?? t("Could not reboot it"))
+    }
+  }
+
+  return (
+    <>
+      <Button size="sm" variant="outline" onClick={() => setOpen(true)}>
+        <IconRefresh aria-hidden /> {t("Reboot")}
+      </Button>
+      <ConfirmDialog
+        open={open}
+        onOpenChange={setOpen}
+        title={t("Reboot {{name}}", { name: server.name })}
+        description={
+          kind === "machine"
+            ? t(
+                "The machine restarts, and every partition on it with it, rented ones included. Their apps are down until it's back, usually a few minutes."
+              )
+            : partition
+              ? t(
+                  "Its machine restarts this partition: every app and shell in it stops and starts again, usually within a minute. Data and size are kept."
+                )
+              : t(
+                  "The server restarts. Its apps are down until it's back, usually a few minutes; they start again on their own."
+                )
+        }
+        confirmLabel={t("Reboot")}
+        onConfirm={reboot}
+      />
+    </>
+  )
+}
+
 export default function ServerDetail() {
   const { t } = useTranslation()
   const { id = "" } = useParams<{ id: string }>()
@@ -429,6 +493,7 @@ export default function ServerDetail() {
         actions={
           <>
             {state === "online" && <AgentUpdate server={server} />}
+            <RebootServer server={server} online={state === "online"} />
             {state === "online" &&
               ThunderSDK.isPermitted("streams", "openHostTerminal") && (
                 <Button

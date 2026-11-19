@@ -1349,6 +1349,7 @@ Owner's decisions recorded (§25.10). 15a–15d built; the owner tested the paym
     - `pool.ensure` (the `pool` mode, removed in Phase 18) installs Sysbox, mounts the XFS volume (a device formatted only when empty, or a loop file), moves Docker onto it (overlay2, Sysbox runtime), runs the usual `docker.ensure` inside, builds the partition image and applies the network rules. It refuses a machine running anything but our own containers.
     - `partition.create` is sealed, since it carries a join token minted by the same `createJoinToken` the SSH wizard now uses. It creates the partition and installs our agent inside, which joins its tenant.
     - `partition.resize` (live), `partition.stop`, `partition.start`, `partition.remove`.
+    - **Reboot (2026-11-19, owner only, server page):** a server or machine gets `host.reboot` (its agent answers, then `systemctl reboot` after 3 s; refused inside a partition), a machine taking every partition with it. A partition, own or rented, gets `partition.restart` on its machine (stopped and started, forwards re-applied), so it works when the partition itself hangs. A rented one only while its rental runs and isn't moving: a suspended one stays stopped.
   - **Network:**
     - The nftables table `huruf_pool` is written to `/etc/huruf-pool.nft` and included by `nftables.service`, so isolation is back at boot before Docker restarts partitions.
     - Per-partition traffic counters are restored by the agent at start, and start at 0 again after a reboot (16d treats a smaller value as a reset).

@@ -179,11 +179,13 @@ export const $commandType = z.enum([
   "agent.update",
   "registry.delete",
   "host.cleanup",
+  "host.reboot",
   "pool.ensure",
   "partition.create",
   "partition.resize",
   "partition.stop",
   "partition.start",
+  "partition.restart",
   "partition.remove",
   "partition.send",
   "partition.receive",
@@ -340,7 +342,7 @@ export const $partitionResizePayload = z.object({
   size: $partitionSize,
 });
 
-/** `partition.stop`, `partition.start`, `partition.remove`. */
+/** `partition.stop`, `partition.start`, `partition.restart`, `partition.remove`. */
 export const $partitionNamePayload = z.object({ name: $partitionName });
 
 /** The TCP port a machine serves a moving partition on, for the move only. */
