@@ -5,6 +5,9 @@ import { Terminal } from "@xterm/xterm"
 import { FitAddon } from "@xterm/addon-fit"
 import "@xterm/xterm/css/xterm.css"
 
+import { IconRefresh } from "@tabler/icons-react"
+
+import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import {
@@ -30,16 +33,38 @@ const usableSize = (terminal: Terminal) => ({
 })
 
 /**
+ * A terminal that can be reconnected: a session that ended (closed by the
+ * server, the shell exited, the browser froze the tab) opens a new shell in
+ * place, with the same size.
+ */
+export function TerminalView(props: {
+  server: string
+  container: string | null
+}) {
+  const [attempt, setAttempt] = React.useState(0)
+  return (
+    <TerminalSession
+      key={attempt}
+      {...props}
+      onReconnect={() => setAttempt((n) => n + 1)}
+    />
+  )
+}
+
+/**
  * An interactive shell over polling (PLAN §3.6): keystrokes are batched every
- * 50 ms; output is read every 300 ms while the server polls at terminal pace.
+ * 50 ms; output is read every 300 ms while the server polls at terminal pace,
+ * and on while the tab is hidden so the shell isn't closed as idle.
  * Nothing typed or printed is stored beyond ~2 minutes.
  */
-export function TerminalView({
+function TerminalSession({
   server,
   container,
+  onReconnect,
 }: {
   server: string
   container: string | null
+  onReconnect: () => void
 }) {
   const { t } = useTranslation()
   const host = React.useRef<HTMLDivElement>(null)
@@ -104,7 +129,7 @@ export function TerminalView({
     if (chunk.data) term.current?.write(chunk.data)
   }, [])
 
-  const { status, error } = useStream(open, onChunk, READ_EVERY_MS, false)
+  const { status, error } = useStream(open, onChunk, READ_EVERY_MS, false, true)
 
   // Batch keystrokes: one request per 50 ms at most, in order.
   React.useEffect(() => {
@@ -146,9 +171,20 @@ export function TerminalView({
         {(status === "done" || status === "error") && (
           <div
             role="status"
-            className="absolute inset-x-0 bottom-0 bg-black/70 px-3 py-2 text-xs text-white"
+            className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-3 bg-black/70 px-3 py-2 text-xs text-white"
           >
-            {status === "error" ? error : t("Session ended.")}
+            <span className="min-w-0">
+              {status === "error" ? error : t("Session ended.")}
+            </span>
+            <Button
+              size="xs"
+              variant="secondary"
+              className="shrink-0"
+              onClick={onReconnect}
+              autoFocus
+            >
+              <IconRefresh aria-hidden /> {t("Reconnect")}
+            </Button>
           </div>
         )}
       </div>

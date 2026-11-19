@@ -24,7 +24,14 @@ export function useStream(
   /** How often to read new output; terminals use ~300 ms. */
   intervalMs = 1_000,
   /** Open a new session when the server closed this one (e.g. idle while hidden). */
-  reopen = true
+  reopen = true,
+  /**
+   * Keep reading while the tab is hidden, so the server doesn't close the
+   * session as idle (30 s): a terminal's shell would be lost. Each read is
+   * held up to 15 s and the next starts when it returns, without a timer,
+   * which hidden tabs throttle.
+   */
+  background = false
 ) {
   const [status, setStatus] = React.useState<
     "idle" | "open" | "done" | "error"
@@ -84,7 +91,7 @@ export function useStream(
           again =
             !closed &&
             (chunks.length > 0 || Date.now() - started > 1_000) &&
-            document.visibilityState === "visible"
+            (background || document.visibilityState === "visible")
           let ended = false
           for (const chunk of chunks) {
             after.current = chunk.seq
@@ -109,8 +116,10 @@ export function useStream(
         .catch(() => {})
         .finally(() => {
           reading.current = false
-          if (again && session.current === id)
-            setTimeout(() => readRef.current())
+          if (again && session.current === id) {
+            if (background) readRef.current()
+            else setTimeout(() => readRef.current())
+          }
         })
     }
   })
