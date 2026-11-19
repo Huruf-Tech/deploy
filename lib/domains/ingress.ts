@@ -185,6 +185,11 @@ async function buildConfig() {
                 hostname: host,
                 interval: "10s",
                 timeout: "3s",
+                // A redirect (to a login, to https) means the app answered.
+                // Followed, it leads to the public address, which answers
+                // "no available server" while this check fails: an app
+                // redirecting `/` never came up (2026-11-19).
+                followRedirects: false,
                 headers: { [PROJECT_HEADER]: id },
               },
             }
