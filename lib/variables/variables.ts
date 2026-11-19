@@ -263,6 +263,8 @@ export type TImportedVariable = {
   key: string;
   value: string;
   isSecret: boolean;
+  /** Runtime when omitted; a replaced variable keeps its own then. */
+  stage?: "build" | "runtime" | "both";
 };
 
 /**
@@ -288,7 +290,7 @@ export async function importVariables(opts: {
     updated: [] as string[],
     skipped: [] as string[],
   };
-  for (const { key, value, isSecret } of opts.items) {
+  for (const { key, value, isSecret, stage } of opts.items) {
     const current = existing.get(key);
     if (current && !opts.overwrite) {
       result.skipped.push(key);
@@ -298,7 +300,10 @@ export async function importVariables(opts: {
         ...opts,
         id: current._id,
         value,
-        settings: { isSecret: current.isSecret || isSecret },
+        settings: {
+          isSecret: current.isSecret || isSecret,
+          ...(stage ? { stage } : {}),
+        },
       });
       result.updated.push(key);
     } else {
@@ -306,7 +311,7 @@ export async function importVariables(opts: {
         ...opts,
         key,
         value,
-        settings: { isSecret, kind: "env", stage: "runtime" },
+        settings: { isSecret, kind: "env", stage: stage ?? "runtime" },
       });
       existing.set(key, { _id: created, isSecret });
       result.created.push(key);

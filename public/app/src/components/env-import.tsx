@@ -9,11 +9,66 @@ import {
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
-import { looksSecret, parseEnv } from "@/lib/dotenv"
+import { looksSecret, parseEnv, stageFor, type TStage } from "@/lib/dotenv"
 import { cn } from "@/lib/utils"
 
-export type TEnvVariable = { key: string; value: string; isSecret: boolean }
+export type TEnvVariable = {
+  key: string
+  value: string
+  isSecret: boolean
+  /** When it's available: while building, when running, or both. */
+  stage: TStage
+}
+
+/** A compact picker for when a variable is available. */
+function StagePicker({
+  value,
+  onChange,
+  label,
+  className,
+}: {
+  value: TStage | undefined
+  onChange: (stage: TStage) => void
+  label: string
+  className?: string
+}) {
+  const { t } = useTranslation()
+  const stages = [
+    { value: "runtime", label: t("Runtime") },
+    { value: "build", label: t("Build") },
+    { value: "both", label: t("Build and runtime") },
+  ]
+  return (
+    <Select
+      items={stages}
+      value={value ?? null}
+      onValueChange={(v) => v && onChange(v as TStage)}
+    >
+      <SelectTrigger
+        size="sm"
+        aria-label={label}
+        className={cn("shrink-0 text-xs data-[size=sm]:h-7", className)}
+      >
+        <SelectValue placeholder={t("Mixed")} />
+      </SelectTrigger>
+      <SelectContent>
+        {stages.map((s) => (
+          <SelectItem key={s.value} value={s.value}>
+            {s.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  )
+}
 
 /** .env files are small; anything bigger is almost surely the wrong file. */
 const MAX_FILE = 256 * 1024
@@ -48,6 +103,7 @@ export function EnvEditor({
         key,
         value: v,
         isSecret: merged.get(key)?.isSecret ?? looksSecret(key),
+        stage: merged.get(key)?.stage ?? stageFor(key),
       })
     }
     onChange([...merged.values()])
@@ -154,6 +210,24 @@ export function EnvEditor({
       )}
 
       {!!value.length && (
+        <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+          <span>
+            {t(
+              "Build: only while the image builds. Runtime: only in the running app. Names like NEXT_PUBLIC_ start as both."
+            )}
+          </span>
+          <StagePicker
+            label={t("Set all variables to")}
+            value={
+              value.every((v) => v.stage === value[0].stage)
+                ? value[0].stage
+                : undefined
+            }
+            onChange={(stage) => onChange(value.map((x) => ({ ...x, stage })))}
+          />
+        </div>
+      )}
+      {!!value.length && (
         <ul
           className="flex min-w-0 flex-col divide-y rounded-lg border text-[13px]"
           aria-label={t("Variables to add")}
@@ -179,6 +253,16 @@ export function EnvEditor({
                   {v.isSecret ? "••••••••" : v.value || t("(empty)")}
                 </span>
               </span>
+              <StagePicker
+                label={t("When {{key}} is available", { key: v.key })}
+                value={v.stage}
+                onChange={(stage) =>
+                  onChange(
+                    value.map((x) => (x.key === v.key ? { ...x, stage } : x))
+                  )
+                }
+                className="max-sm:max-w-28"
+              />
               <Button
                 type="button"
                 variant="ghost"

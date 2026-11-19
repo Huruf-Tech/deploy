@@ -19,6 +19,7 @@ import {
 import { projectIn } from "@/lib/deploy/projects.ts";
 import { tenantOwner } from "@/lib/billing/owner.ts";
 import {
+  $stage,
   $variableKey,
   $variableScope,
   $variableSettings,
@@ -120,6 +121,9 @@ export default new Router("/api", function variables(router) {
         key: $variableKey,
         value: $variableValue,
         isSecret: z.boolean().default(false),
+        stage: $stage.optional().describe(
+          "When it's available: runtime when omitted; kept when replacing",
+        ),
       })).min(1).max(200),
       overwrite: z.boolean().default(false).describe(
         "Replace the values of keys that already exist",

@@ -75,3 +75,16 @@ export const looksSecret = (key: string) =>
   /SECRET|PASSWORD|PASSWD|PASS$|TOKEN|PRIVATE|CREDENTIAL|API_?KEY|ACCESS_KEY|_KEY$|DSN$|(DATABASE|MONGO|REDIS|POSTGRES|MYSQL)_?URL|CONNECTION_STRING/i.test(
     key
   )
+
+export type TStage = "runtime" | "build" | "both"
+
+/**
+ * Names frameworks bake into the build (Next.js, Vite, CRA, Nuxt, Expo,
+ * Gatsby, SvelteKit, Astro): needed while building, so they start as both.
+ */
+export const stageFor = (key: string): TStage =>
+  /^(NEXT_PUBLIC_|VITE_|REACT_APP_|NUXT_PUBLIC_|EXPO_PUBLIC_|GATSBY_|PUBLIC_)/.test(
+    key
+  )
+    ? "both"
+    : "runtime"

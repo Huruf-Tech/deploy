@@ -86,6 +86,37 @@ Deno.test({
             variables: [{ key: "1BAD", value: "x" }],
           });
           assertEquals(bad.status, 400, "keys are validated");
+
+          // When each is available: given, runtime when not, kept when
+          // replaced without one.
+          const staged = (variables: unknown[]) =>
+            call("POST", "/variables/api/import", {
+              scope: "tenant",
+              overwrite: true,
+              variables,
+            });
+          await staged([
+            { key: "NEXT_PUBLIC_SITE", value: "x", stage: "both" },
+            { key: "BUILD_ONLY", value: "y", stage: "build" },
+            { key: "PLAIN", value: "z" },
+          ]);
+          await staged([{ key: "BUILD_ONLY", value: "y2" }]);
+          const { json: stages } = await call(
+            "GET",
+            "/variables/api?scope=tenant",
+          );
+          const stageOf = (key: string) =>
+            stages.find((v: { key: string }) => v.key === key)?.stage;
+          assertEquals(
+            ["NEXT_PUBLIC_SITE", "BUILD_ONLY", "PLAIN"].map(stageOf),
+            ["both", "build", "runtime"],
+          );
+          const wrong = await staged([{
+            key: "X",
+            value: "1",
+            stage: "deploy",
+          }]);
+          assertEquals(wrong.status, 400, "stages are validated");
         },
       );
 

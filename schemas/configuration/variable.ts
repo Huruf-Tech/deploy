@@ -7,7 +7,7 @@ export const $variableScope = z.enum(["global", "tenant", "project"]);
 const $isSecret = z.boolean();
 /** `file` is mounted read-only at /run/secrets/<KEY>. */
 const $kind = z.enum(["env", "file"]);
-const $stage = z.enum(["build", "runtime", "both"]);
+export const $stage = z.enum(["build", "runtime", "both"]);
 const $description = z.string().max(500);
 
 /** What a user may set on a variable; the value itself is only ever stored encrypted. */

@@ -1,6 +1,7 @@
 import z from "zod";
 import { mongodb } from "@/database.ts";
 import { $objectId } from "@/core/utils/createCRUD.ts";
+import { $stage } from "@/schemas/configuration/variable.ts";
 
 /** Where the code (or image) comes from (PLAN D20). */
 export const $projectSource = z.discriminatedUnion("type", [
@@ -182,6 +183,7 @@ export const $projectInput = z.object({
     key: z.string().min(1).max(128).regex(/^[A-Za-z_][A-Za-z0-9_]*$/),
     value: z.string().max(65_536),
     isSecret: z.boolean().default(false),
+    stage: $stage.optional(),
   })).max(200).default([]).describe(
     "Project variables to create with it (e.g. a pasted .env)",
   ),
