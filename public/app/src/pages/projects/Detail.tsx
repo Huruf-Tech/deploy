@@ -459,6 +459,12 @@ function Settings({
   const [memLimit, setMemLimit] = React.useState(
     project.runtime.memLimitMb ? String(project.runtime.memLimitMb) : ""
   )
+  const [port, setPort] = React.useState(
+    project.runtime.port ? String(project.runtime.port) : ""
+  )
+  const [healthPath, setHealthPath] = React.useState(
+    project.runtime.healthcheckPath ?? ""
+  )
   const [compose, setCompose] = React.useState(project.compose ?? "")
   const [needsNetwork, setNeedsNetwork] = React.useState(
     !!project.needsPrivateNetwork
@@ -519,6 +525,13 @@ function Settings({
             memReserveMb: Number(memReserve),
             ...(cpuLimit ? { cpuLimit: Number(cpuLimit) } : {}),
             ...(memLimit ? { memLimitMb: Number(memLimit) } : {}),
+            ...(port && Number(port) !== project.runtime.port
+              ? { port: Number(port) }
+              : {}),
+            // Empty clears it: the edge then only checks the port answers.
+            ...(healthPath.trim() !== (project.runtime.healthcheckPath ?? "")
+              ? { healthcheckPath: healthPath.trim() }
+              : {}),
           },
         },
       })
@@ -823,6 +836,45 @@ function Settings({
               />
             </Field>
           </div>
+
+          {project.source.type !== "compose" && (
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field>
+                <FieldLabel htmlFor="s-port-in">{t("Port")}</FieldLabel>
+                <Input
+                  id="s-port-in"
+                  type="number"
+                  min={1}
+                  max={65535}
+                  value={port}
+                  onChange={(e) => setPort(e.target.value)}
+                />
+                <FieldDescription>
+                  {t(
+                    "Where the app listens inside its container. Applies on the next deploy."
+                  )}
+                </FieldDescription>
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="s-health">
+                  {t("Health check path")}
+                </FieldLabel>
+                <Input
+                  id="s-health"
+                  dir="ltr"
+                  value={healthPath}
+                  onChange={(e) => setHealthPath(e.target.value)}
+                  placeholder={t("None")}
+                  className="font-mono"
+                />
+                <FieldDescription>
+                  {t(
+                    'A path answering 200 to a request without a login, e.g. /. A path that answers 404 or redirects keeps visitors out ("no available server"). Empty: only the port is checked.'
+                  )}
+                </FieldDescription>
+              </Field>
+            </div>
+          )}
 
           {project.build.mode !== "compose" && (
             <VolumesEditor

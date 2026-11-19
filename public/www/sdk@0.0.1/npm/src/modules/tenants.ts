@@ -214,7 +214,7 @@ export const tenantsModule = (sdk: typeof BaseSDK) => {
 
     sdk["_moduleGroup"].set(methods, "IAM");
 
-    sdk["_moduleMetadata"].set(methods, {"crud":{"schema":{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","properties":{"name":{"type":"string"},"logo":{"type":"string","format":"uri"},"createdBy":{"tsType":"string"},"createdAt":{"default":"2026-11-17T16:12:59.113Z","type":"string","format":"date-time"}},"required":["name","createdBy","createdAt"],"additionalProperties":false},"insertSchema":{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","properties":{"name":{"type":"string"},"logo":{"type":"string","format":"uri"}},"required":["name"]}}});
+    sdk["_moduleMetadata"].set(methods, {"crud":{"schema":{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","properties":{"name":{"type":"string"},"logo":{"type":"string","format":"uri"},"createdBy":{"tsType":"string"},"createdAt":{"default":"2026-11-19T12:34:51.738Z","type":"string","format":"date-time"}},"required":["name","createdBy","createdAt"],"additionalProperties":false},"insertSchema":{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","properties":{"name":{"type":"string"},"logo":{"type":"string","format":"uri"}},"required":["name"]}}});
 
     return methods;
 };

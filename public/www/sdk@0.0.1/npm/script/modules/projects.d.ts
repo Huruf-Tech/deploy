@@ -82,6 +82,7 @@ export type create$body = {
         key: string;
         value: string;
         isSecret?: boolean;
+        stage?: ("build" | "runtime" | "both") | undefined;
     }[];
     runtime?: {
         port?: (number | undefined) | undefined;

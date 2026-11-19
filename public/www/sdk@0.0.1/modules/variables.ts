@@ -43,6 +43,8 @@ export type importEnv$body = {
         key: string;
         value: string;
         isSecret?: boolean;
+        /** When it's available: runtime when omitted; kept when replacing */
+        stage?: ("build" | "runtime" | "both") | undefined;
     }[];
     /** Replace the values of keys that already exist */
     overwrite?: boolean;
