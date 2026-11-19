@@ -38,6 +38,9 @@ services:
     command:
       - --entrypoints.web.address=:80
       - --entrypoints.websecure.address=:443
+      # Failed health checks are warnings: shown, so "no available server"
+      # says why in `docker logs`.
+      - --log.level=WARN
       # Only local proxies may say who the visitor is; others are ignored.
       - --entrypoints.web.proxyProtocol.trustedIPs=127.0.0.1/32,172.16.0.0/12
       - --entrypoints.websecure.proxyProtocol.trustedIPs=127.0.0.1/32,172.16.0.0/12

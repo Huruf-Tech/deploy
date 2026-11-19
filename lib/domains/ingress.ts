@@ -85,6 +85,21 @@ async function platformConfig() {
 const ids = (list: ObjectId[]) => [...new Set(list.map(String))];
 
 /**
+ * The Host a project's health check sends: a name the app serves as itself.
+ * Its test domain first, then an exact domain, a wildcard's stand-in last: a
+ * multi-tenant app takes `huruf-check.<domain>` for an unknown tenant and
+ * answers 404, which took a storefront out (2026-11-19). The reachability
+ * map's probe uses the same, so the two can't disagree.
+ */
+export const healthHost = (
+  domains: { hostname: string; appDomain?: boolean }[],
+) => {
+  const pick = domains.find((d) => d.appDomain) ??
+    domains.find((d) => !isWildcard(d.hostname)) ?? domains[0];
+  return pick && probeName(pick.hostname);
+};
+
+/**
  * A domain's Traefik rule: its name, or for `*.example.com` any one label
  * under it, as its certificate covers (Traefik v3 regexp syntax).
  */
@@ -170,9 +185,9 @@ async function buildConfig() {
     const health = project.runtime?.healthcheckPath;
     // The check carries a Host of the project's, as visitors do: apps that
     // allow known hosts only (Vite, Django, Rails…) refuse `frps:<port>`.
-    const host = probeName(
-      domains.find((d) => d.project.equals(project._id))!.hostname,
-    );
+    const host = healthHost(
+      domains.filter((d) => d.project.equals(project._id)),
+    )!;
     for (const { server, port } of entries) {
       services[`p-${id}-s-${server}`] = {
         loadBalancer: {

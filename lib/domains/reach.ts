@@ -6,6 +6,7 @@ import { getProject } from "@/lib/deploy/projects.ts";
 import { appDomain } from "@/lib/domains/appDomain.ts";
 import { ingressTargets, pointsHere, probeName } from "@/lib/domains/dns.ts";
 import {
+  healthHost,
   PROJECT_HEADER,
   traefikConfig,
   traefikPoll,
@@ -179,8 +180,10 @@ async function reachOf(tenantId: string, projectId: string) {
     routers: Record<string, unknown>;
     services: Record<string, unknown>;
   };
-  const active = domains.find((d) => d.status === "active")?.hostname;
-  const host = active && probeName(active);
+  // The Host Traefik's health check sends, from the domains it serves.
+  const host = healthHost(
+    domains.filter((d) => d.status === "active" || d.status === "verifying"),
+  );
 
   const polledAgo = traefikPoll.at && Date.now() - traefikPoll.at;
   const traefik: THop = polledAgo === undefined

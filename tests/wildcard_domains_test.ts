@@ -6,7 +6,7 @@ import { Env } from "@/core/utils/env.ts";
 import { mongodb } from "@/database.ts";
 import { ownershipName, probeName, resolver } from "@/lib/domains/dns.ts";
 import { checkDue } from "@/lib/domains/domains.ts";
-import { hostRule } from "@/lib/domains/ingress.ts";
+import { healthHost, hostRule } from "@/lib/domains/ingress.ts";
 import {
   cloudflareConnectionModel,
   domainModel,
@@ -56,6 +56,15 @@ Deno.test({
           "HostRegexp(`(?i)^[a-z0-9-]+\\.elvorro\\.com$`)",
         );
         assertEquals(hostRule("elvorro.com"), "Host(`elvorro.com`)");
+        // A storefront answers 404 for an unknown store (huruf-check): the
+        // health check prefers its test domain, then an exact one.
+        const wild = { hostname: "*.shintro.site" };
+        const exact = { hostname: "editor.shintro.com" };
+        const test = { hostname: "shop-1a2b3c.apps.test", appDomain: true };
+        assertEquals(healthHost([wild, exact, test]), "shop-1a2b3c.apps.test");
+        assertEquals(healthHost([wild, exact]), "editor.shintro.com");
+        assertEquals(healthHost([wild]), "huruf-check.shintro.site");
+        assertEquals(healthHost([]), undefined);
       });
 
       await t.step("without Cloudflare: refused, saying why", async () => {
