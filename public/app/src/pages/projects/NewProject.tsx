@@ -389,6 +389,8 @@ export default function NewProject() {
   const [healthPath, setHealthPath] = React.useState("")
   const [error, setError] = React.useState<string | null>(null)
   const [busy, setBusy] = React.useState(false)
+  // Off: created only, deployed later from its page (variables to add first).
+  const [deployNow, setDeployNow] = React.useState(true)
 
   const templates = useCached(queries.templates())
   const placement = useCached(queries.placement())
@@ -550,12 +552,16 @@ export default function NewProject() {
             ...(distribution.registry
               ? { registry: distribution.registry }
               : {}),
-            deployNow: true,
+            deployNow,
           },
         })
       if (deployError) toast.error(deployError)
       else if (!deployKeyPublic) {
-        toast.success(t("Project created; the first deploy has started"))
+        toast.success(
+          deployNow
+            ? t("Project created; the first deploy has started")
+            : t("Project created; deploy it when it's ready")
+        )
       }
       navigate(`../${_id}`, { relative: "path", state: { deployKeyPublic } })
     } catch (e) {
@@ -597,7 +603,11 @@ export default function NewProject() {
     <Page className="flex max-w-[720px] flex-col gap-4 py-5">
       <PageHeader
         title={t("New project")}
-        description={t("Deploys start as soon as it's created.")}
+        description={
+          deployNow
+            ? t("Deploys start as soon as it's created.")
+            : t("It's created without deploying; deploy it from its page.")
+        }
       />
 
       <form onSubmit={submit} className="flex flex-col gap-4">
@@ -1125,9 +1135,20 @@ export default function NewProject() {
             </p>
           )}
           {error && <FieldError>{error}</FieldError>}
-          <div className="flex justify-end">
+          <div className="flex flex-wrap items-center justify-end gap-x-4 gap-y-2">
+            <label className="flex cursor-pointer items-center gap-2 text-[13px]">
+              <Checkbox
+                checked={deployNow}
+                onCheckedChange={(on) => setDeployNow(on === true)}
+              />
+              {t("Deploy immediately")}
+            </label>
             <Button type="submit" disabled={!ready || busy}>
-              {busy ? t("Creating…") : t("Create and deploy")}
+              {busy
+                ? t("Creating…")
+                : deployNow
+                  ? t("Create and deploy")
+                  : t("Create project")}
             </Button>
           </div>
         </Section>
