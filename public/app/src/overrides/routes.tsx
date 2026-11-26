@@ -198,6 +198,8 @@ export const routes: TRoutesOverride = {
   walletTopups: { merge: true, display: false },
 
   servers: { merge: true, name: "Servers", priority: 0 },
+  // Groups are folders on the Servers page, not a page of their own.
+  serverGroups: { merge: true, display: false },
 
   // A custom page: the backend router is not a createCRUD, so nothing is generated.
   variables: {
