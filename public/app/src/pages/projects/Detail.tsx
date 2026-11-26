@@ -1087,9 +1087,21 @@ export default function ProjectDetail() {
     reload()
     history.reload()
   }
+  // One more look once the last deployment finishes: it's marked Live a moment
+  // before the project points at its release, so the poll that saw it finish
+  // may hold the project from before (0 servers, nothing running).
+  const wasLive = React.useRef(false)
   usePolling(() => {
-    if (deployments?.some((d) => isLive(d.status) || d.status === "queued"))
-      refresh()
+    const live = !!deployments?.some(
+      (d) => isLive(d.status) || d.status === "queued"
+    )
+    if (live || wasLive.current) refresh()
+    if (wasLive.current && !live)
+      queries
+        .reach(id)
+        .invalidate()
+        .catch(() => {})
+    wasLive.current = live
   }, 3_000)
 
   if (!project) {

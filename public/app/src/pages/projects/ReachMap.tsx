@@ -116,8 +116,9 @@ const STROKE = {
 }
 
 /**
- * The way in as a graph (PLAN §14): domains and the public port on the left,
- * through Traefik and each server's tunnel and edge proxy to the app. A red
+ * The way in as a graph (PLAN §14): domains on the left, through Traefik and
+ * each server's tunnel and edge proxy to the app. The public port sits beside
+ * Traefik, not behind it: it reaches each server's edge proxy directly. A red
  * line is where it stops, labelled with the hop. Visual only: the list beside
  * it is the screen-reader version.
  */
@@ -162,15 +163,18 @@ export default function ReachMap({ reach }: { reach: TReach }) {
       })
     }
 
-    const entries = reach.domains.length + (reach.publicPort ? 1 : 0)
-    const tall = Math.max(entries, reach.servers.length, 1) * ROW
+    // The middle column: Traefik (for domains), then the public port, which
+    // bypasses it straight to the servers.
+    const middle = (reach.domains.length ? 1 : 0) + (reach.publicPort ? 1 : 0)
+    const tall =
+      Math.max(reach.domains.length, middle, reach.servers.length, 1) * ROW
     const top = (count: number) => (tall - count * ROW) / 2
 
     reach.domains.forEach((d, i) => {
       nodes.push({
         id: `d-${d._id}`,
         type: "hop",
-        position: { x: COL[0], y: top(entries) + i * ROW },
+        position: { x: COL[0], y: top(reach.domains.length) + i * ROW },
         data: {
           kind: "domain",
           title: d.hostname,
@@ -190,7 +194,10 @@ export default function ReachMap({ reach }: { reach: TReach }) {
       nodes.push({
         id: "port",
         type: "hop",
-        position: { x: COL[0], y: top(entries) + reach.domains.length * ROW },
+        position: {
+          x: COL[1],
+          y: top(middle) + (reach.domains.length ? ROW : 0),
+        },
         data: {
           kind: "port",
           title: t("Public port {{port}}", { port: reach.publicPort }),
@@ -203,7 +210,7 @@ export default function ReachMap({ reach }: { reach: TReach }) {
       nodes.push({
         id: "traefik",
         type: "hop",
-        position: { x: COL[1], y: tall / 2 - ROW / 2 },
+        position: { x: COL[1], y: top(middle) },
         data: {
           kind: "traefik",
           title: t("Traefik · control plane"),
@@ -261,7 +268,8 @@ export default function ReachMap({ reach }: { reach: TReach }) {
   }, [reach, t])
 
   const rows = Math.max(
-    reach.domains.length + (reach.publicPort ? 1 : 0),
+    reach.domains.length,
+    (reach.domains.length ? 1 : 0) + (reach.publicPort ? 1 : 0),
     reach.servers.length,
     1
   )

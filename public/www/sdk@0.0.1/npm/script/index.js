@@ -32,6 +32,7 @@ const index_js_1 = require("./modules/index.js");
 const agents_js_1 = require("./modules/agents.js");
 const networks_js_1 = require("./modules/networks.js");
 const registries_js_1 = require("./modules/registries.js");
+const serverGroups_js_1 = require("./modules/serverGroups.js");
 const servers_js_1 = require("./modules/servers.js");
 const storages_js_1 = require("./modules/storages.js");
 const streams_js_1 = require("./modules/streams.js");
@@ -157,6 +158,7 @@ Object.defineProperty(ThunderSDK, "_moduleNames", {
         "agents",
         "networks",
         "registries",
+        "serverGroups",
         "servers",
         "storages",
         "streams",
@@ -321,6 +323,12 @@ Object.defineProperty(ThunderSDK, "registries", {
     configurable: true,
     writable: true,
     value: (0, registries_js_1.registriesModule)(_a)
+});
+Object.defineProperty(ThunderSDK, "serverGroups", {
+    enumerable: true,
+    configurable: true,
+    writable: true,
+    value: (0, serverGroups_js_1.serverGroupsModule)(_a)
 });
 Object.defineProperty(ThunderSDK, "servers", {
     enumerable: true,

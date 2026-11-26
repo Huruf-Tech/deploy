@@ -38,12 +38,12 @@ import { errorMessage } from "@/lib/utils"
 import { isLive, type TProjectSummary } from "./shared"
 
 /**
- * Project groups shown as folders on the Projects page: related projects
- * (an API, its database, its cache) kept together.
+ * Folders on the Projects page (project groups: an API, its database, its
+ * cache kept together) and on the Servers page (server groups), the same UI.
  */
-export type TFolder = Awaited<
-  ReturnType<typeof ThunderSDK.projectGroups.get>
->["results"][number]
+export type TFolderKind = "projects" | "servers"
+
+export type TFolder = { _id: string; name: string; description?: string }
 
 /** Moves projects in or out of a folder (`null`: out of any folder). */
 export async function moveProjects(ids: string[], folder: string | null) {
@@ -55,13 +55,46 @@ export async function moveProjects(ids: string[], folder: string | null) {
   return results.filter((r) => r.status === "rejected").length
 }
 
+/** Moves servers in or out of a folder, in one request; how many failed. */
+export async function moveServers(ids: string[], folder: string | null) {
+  try {
+    await ThunderSDK.servers.moveToFolder({
+      body: { servers: ids, group: folder },
+    })
+    return 0
+  } catch {
+    return ids.length
+  }
+}
+
+const MOVE = { projects: moveProjects, servers: moveServers }
+const GROUPS = { projects: "projectGroups", servers: "serverGroups" } as const
+
+/** Creates or renames a folder of either kind; its id. */
+async function saveFolder(
+  kind: TFolderKind,
+  folder: TFolder | undefined,
+  body: { name: string; description: string }
+) {
+  if (kind === "servers") {
+    if (!folder) return (await ThunderSDK.serverGroups.create({ body }))._id
+    await ThunderSDK.serverGroups.update({ params: { id: folder._id }, body })
+    return folder._id
+  }
+  if (!folder) return (await ThunderSDK.projectGroups.create({ body }))._id
+  await ThunderSDK.projectGroups.update({ params: { id: folder._id }, body })
+  return folder._id
+}
+
 /** Creates or renames a folder. */
 export function FolderDialog({
+  kind = "projects",
   folder,
   open,
   onOpenChange,
   onSaved,
 }: {
+  kind?: TFolderKind
   folder?: TFolder
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -83,13 +116,7 @@ export function FolderDialog({
     setBusy(true)
     try {
       const body = { name: name.trim(), description: description.trim() }
-      const id = folder
-        ? (await ThunderSDK.projectGroups.update({
-            params: { id: folder._id },
-            body,
-          }),
-          folder._id)
-        : (await ThunderSDK.projectGroups.create({ body }))._id
+      const id = await saveFolder(kind, folder, body)
       onSaved(id)
       onOpenChange(false)
     } catch (err) {
@@ -108,9 +135,13 @@ export function FolderDialog({
               {folder ? t("Rename folder") : t("New folder")}
             </DialogTitle>
             <DialogDescription>
-              {t(
-                "Keep related projects together, like an API with its database and cache."
-              )}
+              {kind === "servers"
+                ? t(
+                    "Keep related servers together, like production, staging or one client's machines."
+                  )
+                : t(
+                    "Keep related projects together, like an API with its database and cache."
+                  )}
             </DialogDescription>
           </DialogHeader>
           <Field>
@@ -170,7 +201,50 @@ export function FolderCard({
     (p) => p.lastDeployment?.status === "failed"
   ).length
   const live = projects.filter((p) => isLive(p.lastDeployment?.status)).length
+  return (
+    <FolderTile
+      folder={folder}
+      count={
+        projects.length === 1
+          ? t("1 project")
+          : t("{{count}} projects", { count: projects.length })
+      }
+      onOpen={onOpen}
+      badges={
+        <>
+          {!!failed && (
+            <StatusBadge
+              state="failed"
+              label={t("{{n}} failed", { n: failed })}
+            />
+          )}
+          {!!live && (
+            <StatusBadge
+              state="building"
+              label={t("{{n}} building", { n: live })}
+            />
+          )}
+        </>
+      }
+      hasBadges={!!failed || !!live}
+    />
+  )
+}
 
+/** A folder card of either page: name, how many, and what needs a look. */
+export function FolderTile({
+  folder,
+  count,
+  badges,
+  hasBadges,
+  onOpen,
+}: {
+  folder: TFolder
+  count: string
+  badges?: React.ReactNode
+  hasBadges?: boolean
+  onOpen: () => void
+}) {
   return (
     <li className="relative flex min-w-0 items-start gap-3 rounded-[10px] border bg-card p-3 transition-colors hover:bg-accent/50 has-[button:focus-visible]:ring-2 has-[button:focus-visible]:ring-ring">
       <IconFolder
@@ -187,26 +261,11 @@ export function FolderCard({
           {folder.name}
         </button>
         <p className="truncate text-xs text-muted-foreground">
-          {projects.length === 1
-            ? t("1 project")
-            : t("{{count}} projects", { count: projects.length })}
+          {count}
           {folder.description && ` · ${folder.description}`}
         </p>
-        {(!!failed || !!live) && (
-          <div className="mt-1.5 flex flex-wrap gap-1">
-            {!!failed && (
-              <StatusBadge
-                state="failed"
-                label={t("{{n}} failed", { n: failed })}
-              />
-            )}
-            {!!live && (
-              <StatusBadge
-                state="building"
-                label={t("{{n}} building", { n: live })}
-              />
-            )}
-          </div>
+        {hasBadges && (
+          <div className="mt-1.5 flex flex-wrap gap-1">{badges}</div>
         )}
       </div>
     </li>
@@ -215,6 +274,7 @@ export function FolderCard({
 
 /** "Move to folder" for one project or a selection. */
 export function MoveMenu({
+  kind = "projects",
   ids,
   folders,
   current,
@@ -222,6 +282,7 @@ export function MoveMenu({
   onNewFolder,
   trigger,
 }: {
+  kind?: TFolderKind
   ids: string[]
   folders: TFolder[]
   /** Creates a folder and moves these into it. */
@@ -232,16 +293,25 @@ export function MoveMenu({
   trigger?: React.ReactElement
 }) {
   const { t } = useTranslation()
-  if (!ThunderSDK.isPermitted("projects", "update")) return null
+  const canMove =
+    kind === "servers"
+      ? ThunderSDK.isPermitted("servers", "moveToFolder")
+      : ThunderSDK.isPermitted("projects", "update")
+  if (!canMove) return null
 
   const move = async (folder: string | null) => {
-    const failed = await moveProjects(ids, folder)
+    const failed = await MOVE[kind](ids, folder)
     if (failed)
       toast.error(
-        t("Failed to move {{count}} of {{total}} project(s).", {
-          count: failed,
-          total: ids.length,
-        })
+        kind === "servers"
+          ? t("Failed to move {{count}} of {{total}} server(s).", {
+              count: failed,
+              total: ids.length,
+            })
+          : t("Failed to move {{count}} of {{total}} project(s).", {
+              count: failed,
+              total: ids.length,
+            })
       )
     else
       toast.success(
@@ -285,7 +355,7 @@ export function MoveMenu({
               {f._id === current && <IconCheck />}
             </DropdownMenuItem>
           ))}
-          {onNewFolder && ThunderSDK.isPermitted("projectGroups", "create") && (
+          {onNewFolder && ThunderSDK.isPermitted(GROUPS[kind], "create") && (
             <DropdownMenuItem onClick={() => onNewFolder(ids)}>
               <IconFolderPlus />
               {t("New folder…")}
@@ -306,21 +376,24 @@ export function MoveMenu({
   )
 }
 
-/** Rename and delete for an open folder. Deleting keeps its projects. */
+/** Rename and delete for an open folder. Deleting keeps what's in it. */
 export function FolderActions({
+  kind = "projects",
   folder,
-  projects,
+  ids,
   onRename,
   onDeleted,
 }: {
+  kind?: TFolderKind
   folder: TFolder
-  projects: TProjectSummary[]
+  /** What's in it. */
+  ids: string[]
   onRename: () => void
   onDeleted: () => void
 }) {
   const { t } = useTranslation()
-  const canUpdate = ThunderSDK.isPermitted("projectGroups", "update")
-  const canDelete = ThunderSDK.isPermitted("projectGroups", "del")
+  const canUpdate = ThunderSDK.isPermitted(GROUPS[kind], "update")
+  const canDelete = ThunderSDK.isPermitted(GROUPS[kind], "del")
   if (!canUpdate && !canDelete) return null
 
   return (
@@ -333,10 +406,17 @@ export function FolderActions({
       {canDelete && (
         <ConfirmationDialog
           title={t("Delete {{name}}?", { name: folder.name })}
-          description={t(
-            "The folder goes; its {{count}} projects stay, outside any folder.",
-            { count: projects.length }
-          )}
+          description={
+            kind === "servers"
+              ? t(
+                  "The folder goes; its {{count}} servers stay, outside any folder.",
+                  { count: ids.length }
+                )
+              : t(
+                  "The folder goes; its {{count}} projects stay, outside any folder.",
+                  { count: ids.length }
+                )
+          }
           confirmText={t("Delete folder")}
           trigger={
             <Button
@@ -349,14 +429,18 @@ export function FolderActions({
           }
           onConfirm={async (dismiss) => {
             try {
-              // Projects first: none may point at a folder that's gone.
-              await moveProjects(
-                projects.map((p) => p._id),
-                null
-              )
-              await ThunderSDK.projectGroups.del({
-                params: { id: folder._id },
-              })
+              if (kind === "servers") {
+                // The server takes its servers out of the folder.
+                await ThunderSDK.serverGroups.del({
+                  params: { id: folder._id },
+                })
+              } else {
+                // Projects first: none may point at a folder that's gone.
+                await moveProjects(ids, null)
+                await ThunderSDK.projectGroups.del({
+                  params: { id: folder._id },
+                })
+              }
               toast.success(t("Folder deleted"))
               dismiss()
               onDeleted()

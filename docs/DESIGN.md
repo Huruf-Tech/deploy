@@ -202,9 +202,11 @@ Each phase ends with screenshots (light, dark, phone, Arabic), the app's checks 
 
 ---
 
-## 9b. Projects and folders
+## 9b. Projects, servers and folders
 
 Project groups are **folders on the Projects page**, not a nav item: folder cards above the projects that are in none; opening one (`?folder=<id>` in the URL) lists its projects with Rename, Delete (its projects move out first) and New project (created inside it). Every project row has "Move to folder", and a selection can be moved at once.
+
+**Server groups work the same on the Servers page** (one set of components, `pages/projects/folders.tsx`, with `kind: "servers"`): "New folder" beside "Add server", folder cards (counts, offline and pending badges) above the servers in none, the open folder with "All servers", Rename and Delete (the API takes its servers out), a sticky "Move to folder" column and a bulk move. The folder is a server-side filter of the paginated list (`group`, `null` for none); a label filter looks in every folder. Partitions follow their own folder, not their machine's.
 
 ## 9c. Private network
 

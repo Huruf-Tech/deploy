@@ -278,6 +278,11 @@ function ManualInstall() {
       ) : (
         <div className="h-11 rounded-lg border bg-muted/50" aria-hidden />
       )}
+      <p className="text-xs text-muted-foreground">
+        {t(
+          "To run apps directly on this machine instead of in partitions, tick that when you accept it."
+        )}
+      </p>
     </div>
   )
 }

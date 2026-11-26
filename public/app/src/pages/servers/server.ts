@@ -25,6 +25,8 @@ export const serverSchema = z.object({
    * PLAN §27: a `machine` hosts partitions, where projects run (`partition`,
    * or `rented` on one of Huruf's machines, §26).
    */
+  /** Its folder on the Servers page. */
+  group: z.string().nullish(),
   provider: z
     .object({
       kind: z.enum(["machine", "partition", "rented", "direct"]),

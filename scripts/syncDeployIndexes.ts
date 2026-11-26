@@ -22,7 +22,10 @@ import { subscriptionPeriodModel } from "@/schemas/billing/subscriptionPeriod.ts
 import { keyringModel } from "@/schemas/crypto/keyring.ts";
 import { rateCounterModel } from "@/schemas/limits/rateCounter.ts";
 import { tenantUsageModel } from "@/schemas/limits/tenantUsage.ts";
-import { serverModel } from "@/schemas/infrastructure/server.ts";
+import {
+  serverGroupModel,
+  serverModel,
+} from "@/schemas/infrastructure/server.ts";
 import { serverLeaseModel } from "@/schemas/infrastructure/serverLease.ts";
 import {
   agentCommandModel,
@@ -349,6 +352,7 @@ export const syncDeployIndexes = async () => {
       },
     ),
     projectGroupModel.createIndex({ tenant: 1 }, { name: "tenant" }),
+    serverGroupModel.createIndex({ tenant: 1 }, { name: "tenant" }),
     releaseModel.createIndex(
       { project: 1, number: -1 },
       { name: "uniqueNumber", unique: true },

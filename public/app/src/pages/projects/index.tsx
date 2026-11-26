@@ -278,7 +278,7 @@ export default function ProjectsPage() {
               <>
                 <FolderActions
                   folder={open}
-                  projects={inFolder(open._id)}
+                  ids={inFolder(open._id).map((p) => p._id)}
                   onRename={() => setEditing(open)}
                   onDeleted={() => {
                     openFolder(null)

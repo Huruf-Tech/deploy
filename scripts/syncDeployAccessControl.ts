@@ -42,6 +42,7 @@ export const syncDeployAccessControl = async () => {
     "streams.openCapacity",
     "projects",
     "projectGroups",
+    "serverGroups",
     "registries",
     "domains",
     "storages",

@@ -86,6 +86,32 @@ export const queries = {
           ).results
         : []
     ),
+  /** Folders on the Servers page. */
+  serverFolders: () =>
+    query(["serverGroups"], async ({ signal }) =>
+      can("serverGroups", "get")
+        ? (
+            await ThunderSDK.serverGroups.get({
+              signal,
+              params: {},
+              query: { limit: 500 },
+            })
+          ).results
+        : []
+    ),
+  /** Which folder each server is in, for the folder cards' counts. */
+  serverGroupsOf: () =>
+    query(["servers", "groups"], async ({ signal }) =>
+      can("servers", "get")
+        ? (
+            await ThunderSDK.servers.get({
+              signal,
+              params: {},
+              query: { limit: 2_000, project: { group: 1, status: 1 } },
+            })
+          ).results
+        : []
+    ),
   domains: (project: string) =>
     query(["domains", project], async ({ signal }) =>
       can("domains", "list")

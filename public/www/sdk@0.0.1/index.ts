@@ -29,6 +29,7 @@ import { indexModule } from "./modules/index.ts";
 import { agentsModule } from "./modules/agents.ts";
 import { networksModule } from "./modules/networks.ts";
 import { registriesModule } from "./modules/registries.ts";
+import { serverGroupsModule } from "./modules/serverGroups.ts";
 import { serversModule } from "./modules/servers.ts";
 import { storagesModule } from "./modules/storages.ts";
 import { streamsModule } from "./modules/streams.ts";
@@ -83,6 +84,7 @@ export class ThunderSDK extends BaseSDK {
         "agents",
         "networks",
         "registries",
+        "serverGroups",
         "servers",
         "storages",
         "streams",
@@ -133,6 +135,7 @@ export class ThunderSDK extends BaseSDK {
     static agents: ReturnType<typeof agentsModule> = agentsModule(this);
     static networks: ReturnType<typeof networksModule> = networksModule(this);
     static registries: ReturnType<typeof registriesModule> = registriesModule(this);
+    static serverGroups: ReturnType<typeof serverGroupsModule> = serverGroupsModule(this);
     static servers: ReturnType<typeof serversModule> = serversModule(this);
     static storages: ReturnType<typeof storagesModule> = storagesModule(this);
     static streams: ReturnType<typeof streamsModule> = streamsModule(this);

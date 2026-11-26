@@ -1,5 +1,12 @@
 import type { TRequestOptions, TFilters, TPagination } from "../types.js";
 import type { BaseSDK } from "../base.js";
+export type moveToFolder$body = {
+    servers: string[];
+    group?: string | null;
+};
+export type moveToFolder$return = {
+    moved: number;
+};
 export type clearCaches$return = {
     servers: number;
 };
@@ -24,6 +31,7 @@ export type get$return = {
             [K in string]: string;
         };
         tenant: string;
+        group?: string | undefined;
         status: "pending" | "active" | "rejected";
         identity: {
             signPublicKey: string;
@@ -384,6 +392,8 @@ export type liveness$return = {
 }[];
 export declare const serversModule: (sdk: typeof BaseSDK) => {
     readonly type: {
+        moveToFolder$body: moveToFolder$body;
+        moveToFolder$return: moveToFolder$return;
         clearCaches$return: clearCaches$return;
         count$query: count$query;
         count$return: count$return;
@@ -426,6 +436,17 @@ export declare const serversModule: (sdk: typeof BaseSDK) => {
         bootstrapProgress$return: bootstrapProgress$return;
         installCommand$return: installCommand$return;
         liveness$return: liveness$return;
+    };
+    readonly moveToFolder: (data: {
+        params?: undefined;
+        query?: undefined;
+        body: moveToFolder$body;
+    } & TRequestOptions<moveToFolder$return>) => {
+        readonly raw: Promise<import("axios").AxiosResponse<moveToFolder$return, any, {}, any>>;
+        readonly data: Promise<moveToFolder$return>;
+        then: <TResult1 = moveToFolder$return, TResult2 = never>(onfulfilled?: ((value: moveToFolder$return) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+        catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<moveToFolder$return | TResult>;
+        finally: (onfinally?: (() => void) | null | undefined) => Promise<moveToFolder$return>;
     };
     readonly clearCaches: (data?: {
         params?: undefined;

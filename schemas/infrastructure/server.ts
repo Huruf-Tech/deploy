@@ -32,6 +32,8 @@ export const $serverUpdate = z.object({
 
 export const $server = $serverUpdate.extend({
   tenant: $objectId.meta({ ref: "tenants" }),
+  /** Its folder on the Servers page (`POST /servers/api/moveToFolder`). */
+  group: $objectId.meta({ ref: "serverGroups", canFilter: true }).optional(),
   status: z.enum(["pending", "active", "rejected"]).meta({ canFilter: true }),
   identity: z.object({
     signPublicKey: z.string(),
@@ -141,3 +143,14 @@ export const takesSlot = (kind?: string) =>
   kind === "partition" || kind === "direct";
 
 export const serverModel = mongodb.db().collection<TServer>("servers");
+
+/** Folders on the Servers page, as projects have (PLAN §5). */
+export const $serverGroup = z.object({
+  tenant: $objectId.meta({ ref: "tenants" }),
+  name: z.string().min(1).max(80).meta({ canFilter: true }),
+  description: z.string().max(500).optional().meta({ canFilter: true }),
+});
+
+export const serverGroupModel = mongodb.db().collection<
+  z.output<typeof $serverGroup>
+>("serverGroups");

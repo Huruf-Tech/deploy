@@ -42,6 +42,7 @@ import {
 import {
   $server,
   $serverUpdate,
+  serverGroupModel,
   serverModel,
 } from "@/schemas/infrastructure/server.ts";
 
@@ -74,6 +75,37 @@ async function assertRemovable(id: ObjectId, tenant: ObjectId) {
 
 export default new Router("/api", function servers(router) {
   const $params = z.object({ id: $objectId });
+
+  // Into a folder of the tenant's, or out of any (`group: null`).
+  router.post("/moveToFolder", function moveToFolder() {
+    const $body = z.object({
+      servers: z.array($objectId).min(1).max(500),
+      group: $objectId.nullable(),
+    });
+    const $return = z.object({ moved: z.number() });
+
+    return {
+      shape: () => ({ body: $body, return: $return }),
+      handler: async (req) => {
+        const { servers, group } = $body.parse(await bodyAsJson(req));
+        const { tenant } = await withTenant(req);
+        if (
+          group &&
+          !await serverGroupModel.countDocuments({
+            _id: group,
+            tenant: tenant._id,
+          })
+        ) {
+          throw Response.notFound("Folder not found");
+        }
+        const { modifiedCount } = await serverModel.updateMany(
+          { _id: { $in: servers }, tenant: tenant._id },
+          group ? { $set: { group } } : { $unset: { group: "" } },
+        );
+        return Response.json({ moved: modifiedCount });
+      },
+    };
+  });
 
   // Every server drops its build cache and dangling images (PLAN §9.2).
   router.post("/clearCaches", function clearCaches() {

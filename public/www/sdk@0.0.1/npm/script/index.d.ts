@@ -28,6 +28,7 @@ import { indexModule } from "./modules/index.js";
 import { agentsModule } from "./modules/agents.js";
 import { networksModule } from "./modules/networks.js";
 import { registriesModule } from "./modules/registries.js";
+import { serverGroupsModule } from "./modules/serverGroups.js";
 import { serversModule } from "./modules/servers.js";
 import { storagesModule } from "./modules/storages.js";
 import { streamsModule } from "./modules/streams.js";
@@ -80,6 +81,7 @@ export declare class ThunderSDK extends BaseSDK {
     static agents: ReturnType<typeof agentsModule>;
     static networks: ReturnType<typeof networksModule>;
     static registries: ReturnType<typeof registriesModule>;
+    static serverGroups: ReturnType<typeof serverGroupsModule>;
     static servers: ReturnType<typeof serversModule>;
     static storages: ReturnType<typeof storagesModule>;
     static streams: ReturnType<typeof streamsModule>;

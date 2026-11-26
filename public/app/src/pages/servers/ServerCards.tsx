@@ -1,11 +1,13 @@
 import * as React from "react"
 import { useTranslation } from "react-i18next"
-import { Link } from "react-router"
+import { Link, useSearchParams } from "react-router"
 import { ThunderSDK } from "thunder-sdk"
 import { toast } from "sonner"
 import {
   IconActivityHeartbeat,
   IconAlertTriangle,
+  IconArrowLeft,
+  IconFolderSymlink,
   IconBrandDocker,
   IconCloudDownload,
   IconLoader2,
@@ -24,6 +26,7 @@ import { zodToMongoProjection } from "@/core/lib/zodToMongoProjection"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { EmptyState } from "@/components/console/empty-state"
+import { StatusBadge } from "@/components/console/status"
 import { DataTable, type TColumn } from "@/components/console/data-table"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Meter } from "@/components/console/meter"
@@ -50,6 +53,14 @@ import {
 } from "./server"
 import { useCached } from "@/hooks/use-cached"
 import { queries } from "@/lib/queries"
+import {
+  FolderActions,
+  FolderDialog,
+  FolderTile,
+  MoveMenu,
+  moveServers,
+  type TFolder,
+} from "@/pages/projects/folders"
 
 function Chip({
   icon: Icon,
@@ -234,10 +245,13 @@ function ServerCard({
   onLabel,
   selected,
   onSelect,
+  move,
 }: {
   server: TServer
   /** Listed above it: this is one of its partitions. */
   machine?: string
+  /** "Move to folder". */
+  move?: React.ReactNode
   live?: TLiveness
   onAccept: () => void
   onReject: () => void
@@ -284,6 +298,7 @@ function ServerCard({
           )}
         </div>
         <StatusPill state={state} />
+        {move}
         <Checkbox
           aria-label={t("Select {{name}}", { name: server.name })}
           checked={selected}
@@ -387,6 +402,7 @@ function ServerTable({
   onPing,
   onPrepare,
   onLabel,
+  move,
 }: {
   servers: TServer[]
   liveness: Map<string, TLiveness>
@@ -397,6 +413,8 @@ function ServerTable({
   onPing: (s: TServer) => void
   onPrepare: (s: TServer) => void
   onLabel: (key: string, value: string) => void
+  /** "Move to folder" for one server. */
+  move: (s: TServer) => React.ReactNode
 }) {
   const { t } = useTranslation()
   const state = (s: TServer) => stateOf(s, liveness.get(s._id))
@@ -575,6 +593,14 @@ function ServerTable({
           />
         ),
     },
+    {
+      id: "move",
+      header: <span className="sr-only">{t("Move to folder")}</span>,
+      align: "end",
+      className: "w-10",
+      sticky: true,
+      cell: (s) => move(s),
+    },
   ]
 
   return (
@@ -691,13 +717,42 @@ export default function ServerCards({
   toggleSelect,
 }: TCardProps) {
   const { t } = useTranslation()
-  // Clicking a label chip shows only the servers that carry it.
+  // Clicking a label chip shows only the servers that carry it, in any folder.
   const [label, setLabel] = React.useState<[string, string] | null>(null)
-  const filterByLabel = (next: [string, string] | null) => {
-    setLabel(next)
-    setPage(0)
-    setFilters(next ? { [`labels.${next[0]}`]: { $eq: next[1] } } : undefined)
+  const filterByLabel = (next: [string, string] | null) => setLabel(next)
+  // Folders, as on the Projects page; the open one lives in the URL, so
+  // back/forward and links work.
+  const foldersQuery = useCached(queries.serverFolders())
+  const folders: TFolder[] = foldersQuery.data ?? []
+  const groupsQuery = useCached(queries.serverGroupsOf())
+  const all = groupsQuery.data ?? []
+  const [params, setParams] = useSearchParams()
+  const open = folders.find((f) => f._id === params.get("folder"))
+  const openFolder = (id: string | null) => setParams(id ? { folder: id } : {})
+  const [editing, setEditing] = React.useState<TFolder | "new" | null>(null)
+  // Servers to move into the folder being created from a "Move" menu.
+  const [toMove, setToMove] = React.useState<string[]>([])
+  const newFolderFor = (ids: string[]) => {
+    setToMove(ids)
+    setEditing("new")
   }
+  const hasFolders = folders.length > 0
+  // The open folder's servers; otherwise those in none, unless a label looks
+  // everywhere.
+  React.useEffect(() => {
+    const filters = {
+      ...(label ? { [`labels.${label[0]}`]: { $eq: label[1] } } : {}),
+      ...(open
+        ? { group: { $eq: { type: "objectId" as const, value: open._id } } }
+        : hasFolders && !label
+          ? { group: { $eq: { type: "null" as const, value: "" } } }
+          : {}),
+    }
+    setPage(0)
+    setFilters(Object.keys(filters).length ? filters : undefined)
+    // setPage and setFilters come from the list page and may change identity.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [label, open?._id, hasFolders])
   const [liveness, setLiveness] = React.useState<Map<string, TLiveness>>(
     new Map()
   )
@@ -711,6 +766,26 @@ export default function ServerCards({
   React.useEffect(() => {
     refetch()
   }, [refetch])
+
+  const refreshFolders = () => {
+    refetch()
+    foldersQuery.reload()
+    groupsQuery.reload()
+  }
+  const moveMenu = (s: TServer) => (
+    <MoveMenu
+      kind="servers"
+      ids={[s._id]}
+      folders={folders}
+      current={
+        folders.some((f) => f._id === s.group)
+          ? (s.group ?? undefined)
+          : undefined
+      }
+      onMoved={refreshFolders}
+      onNewFolder={newFolderFor}
+    />
+  )
 
   // The toolbar's "Add server" lives outside this component.
   React.useEffect(() => onServersChanged(refetch), [refetch])
@@ -792,13 +867,132 @@ export default function ServerCards({
       )}
       <RentalRequests />
       <OwnerRequests />
+      {open && (
+        <div className="flex flex-col gap-1">
+          <Button
+            size="sm"
+            variant="ghost"
+            className="self-start text-muted-foreground"
+            onClick={() => openFolder(null)}
+          >
+            <IconArrowLeft className="icon-flip-rtl" aria-hidden />
+            {t("All servers")}
+          </Button>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0">
+              <h2 className="flex items-baseline gap-2 text-lg font-semibold">
+                <span className="truncate">{open.name}</span>
+                <span className="text-xs font-normal text-muted-foreground tabular-nums">
+                  {servers.length === 1
+                    ? t("1 server")
+                    : t("{{count}} servers", { count: servers.length })}
+                </span>
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                {open.description || t("A folder of servers.")}
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <FolderActions
+                kind="servers"
+                folder={open}
+                ids={all.filter((s) => s.group === open._id).map((s) => s._id)}
+                onRename={() => setEditing(open)}
+                onDeleted={() => {
+                  openFolder(null)
+                  refreshFolders()
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+      {selectedIds.length > 0 && (
+        <div className="flex justify-end">
+          <MoveMenu
+            kind="servers"
+            ids={selectedIds}
+            folders={folders}
+            current={open?._id}
+            onMoved={refreshFolders}
+            onNewFolder={newFolderFor}
+            trigger={
+              <Button size="sm" variant="outline">
+                <IconFolderSymlink aria-hidden />
+                {t("Move {{n}} to folder", { n: selectedIds.length })}
+              </Button>
+            }
+          />
+        </div>
+      )}
       <BulkAgentUpdate
         servers={servers}
         selectedIds={selectedIds}
         liveness={liveness}
       />
+      {!label && !open && hasFolders && (
+        <>
+          <section
+            aria-labelledby="server-folders-title"
+            className="flex flex-col gap-2"
+          >
+            <h2 id="server-folders-title" className="text-sm font-semibold">
+              {t("Folders")}
+            </h2>
+            <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {folders.map((f) => {
+                const inside = all.filter((s) => s.group === f._id)
+                const pending = inside.filter(
+                  (s) => s.status === "pending"
+                ).length
+                const offline = inside.filter(
+                  (s) => s.status === "active" && !liveness.get(s._id)?.online
+                ).length
+                return (
+                  <FolderTile
+                    key={f._id}
+                    folder={f}
+                    count={
+                      inside.length === 1
+                        ? t("1 server")
+                        : t("{{count}} servers", { count: inside.length })
+                    }
+                    hasBadges={!!offline || !!pending}
+                    badges={
+                      <>
+                        {!!offline && (
+                          <StatusBadge
+                            state="failed"
+                            label={t("{{n}} offline", { n: offline })}
+                          />
+                        )}
+                        {!!pending && (
+                          <StatusBadge
+                            state="building"
+                            label={t("{{n}} pending", { n: pending })}
+                          />
+                        )}
+                      </>
+                    }
+                    onOpen={() => openFolder(f._id)}
+                  />
+                )
+              })}
+            </ul>
+          </section>
+          <h2 className="-mb-1 text-sm font-semibold">
+            {t("Not in a folder")}
+          </h2>
+        </>
+      )}
       {isLoading ? (
         <Skeleton className="h-40 rounded-[10px]" />
+      ) : !servers.length && !label && (open || (hasFolders && all.length)) ? (
+        <p className="rounded-[10px] border border-dashed px-4 py-8 text-center text-sm text-muted-foreground">
+          {open
+            ? t("This folder is empty. Move servers here from their menu.")
+            : t("Every server is in a folder.")}
+        </p>
       ) : !servers.length && !label ? (
         <AddServerHint />
       ) : (
@@ -815,6 +1009,7 @@ export default function ServerCards({
               onPing={ping}
               onPrepare={prepare}
               onLabel={(key, value) => filterByLabel([key, value])}
+              move={moveMenu}
             />
           </div>
           <div
@@ -834,6 +1029,7 @@ export default function ServerCards({
                 onLabel={(key, value) => filterByLabel([key, value])}
                 selected={selectedIds.includes(server._id)}
                 onSelect={() => toggleSelect(server._id)}
+                move={moveMenu(server)}
               />
             ))}
           </div>
@@ -848,6 +1044,23 @@ export default function ServerCards({
           onAccepted={refetch}
         />
       )}
+
+      <FolderDialog
+        kind="servers"
+        open={!!editing}
+        folder={editing === "new" ? undefined : (editing ?? undefined)}
+        onOpenChange={(o) => {
+          if (o) return
+          setEditing(null)
+          setToMove([])
+        }}
+        onSaved={async (id) => {
+          if (toMove.length && (await moveServers(toMove, id)))
+            toast.error(t("Could not move the servers into the folder"))
+          refreshFolders()
+          if (editing === "new") openFolder(id)
+        }}
+      />
     </Container>
   )
 }
