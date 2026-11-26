@@ -481,6 +481,8 @@ type DesiredSpec struct {
 
 	Alerts []AlertSpec `json:"alerts"`
 
+	Schedules []ScheduleSpec `json:"schedules,omitempty"`
+
 	// A machine's forwards into its partitions: public ports and each partition's mesh port
 	Forwards []PortForward `json:"forwards"`
 
@@ -660,6 +662,34 @@ type AlertSpec struct {
 	ForSec int64 `json:"forSec"`
 }
 
+type ScheduleSpec struct {
+	// Stable across specs; the result carries it
+	Id string `json:"id"`
+
+	// minute hour day-of-month month day-of-week, or @hourly, @daily, @weekly, @monthly
+	Cron string `json:"cron"`
+
+	// IANA name; UTC when absent
+	Timezone string `json:"timezone,omitempty"`
+
+	// Recreate the workload's replicas one at a time, each healthy before the next
+	Restart *ScheduleSpecRestart `json:"restart,omitempty"`
+
+	// Run a host command. Written by the control plane, never by a user
+	Exec *ScheduleSpecExec `json:"exec,omitempty"`
+}
+
+type ScheduleSpecRestart struct {
+	Workload string `json:"workload"`
+}
+
+type ScheduleSpecExec struct {
+	// Program and arguments, run without a shell
+	Command []string `json:"command"`
+
+	TimeoutSec int64 `json:"timeoutSec"`
+}
+
 type PortForward struct {
 	// One of: tcp, udp
 	Protocol string `json:"protocol"`
@@ -787,6 +817,28 @@ type AutoscaleEventData struct {
 	To int64 `json:"to"`
 
 	Reason string `json:"reason"`
+}
+
+type ScheduleRanEvent struct {
+	Id string `json:"id"`
+
+	// Always "schedule.ran"
+	Type string `json:"type"`
+
+	Data ScheduleRanEventData `json:"data"`
+}
+
+type ScheduleRanEventData struct {
+	Job string `json:"job"`
+
+	// Unix ms
+	StartedAt int64 `json:"startedAt"`
+
+	// One of: ok, failed, skipped
+	Status string `json:"status"`
+
+	// Why it failed or was skipped, or the end of a command's output
+	Message string `json:"message,omitempty"`
 }
 
 type CapacityReport struct {

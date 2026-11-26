@@ -16,6 +16,7 @@ import { projectModel } from "@/schemas/applications/project.ts";
 import type {
   $alertEvent as $agentAlertEvent,
   $autoscaleEvent,
+  $scheduleRanEvent,
 } from "@/schemas/protocol/agent.ts";
 
 const MAX_ATTEMPTS = 8;
@@ -210,6 +211,30 @@ export async function onAutoscale(
         replicas: data.to,
         reason: data.reason,
         at: new Date(),
+      },
+    },
+  });
+}
+
+/**
+ * `schedule.ran` (PLAN §10.1): a scheduled restart's result, the latest per
+ * server, shown on the project. Only for a project the server runs.
+ */
+export async function onScheduleRan(
+  server: ObjectId,
+  data: z.output<typeof $scheduleRanEvent>["data"],
+) {
+  const [kind, project] = data.job.split(":");
+  if (kind !== "restart" || !isId(project)) return;
+  const filter = { _id: new ObjectId(project), placedOn: server };
+  await projectModel.updateOne(filter, { $pull: { restarts: { server } } });
+  await projectModel.updateOne(filter, {
+    $push: {
+      restarts: {
+        server,
+        at: new Date(data.startedAt),
+        status: data.status,
+        ...(data.message ? { message: data.message.slice(0, 500) } : {}),
       },
     },
   });

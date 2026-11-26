@@ -237,6 +237,18 @@ export type get$return = {
     deployStrategy: "rolling" | "allAtOnce" | "stopFirst";
     autoDeploy: boolean;
     cancelRunningBuild?: boolean | undefined;
+    restartSchedule?: {
+        cron: string;
+        timezone: string;
+        servers: string[];
+    } | undefined;
+    /** The latest scheduled restart per server */
+    restarts?: {
+        server: string;
+        at: string;
+        status: "ok" | "failed" | "skipped";
+        message?: string | undefined;
+    }[] | undefined;
     distribution: string;
     registry?: string | undefined;
     deployKeyPublic?: string | undefined;
@@ -295,6 +307,12 @@ export type update$body = {
     deployStrategy?: ("rolling" | "allAtOnce" | "stopFirst") | undefined;
     autoDeploy?: boolean | undefined;
     cancelRunningBuild?: boolean | undefined;
+    restartSchedule?: ({
+        cron: string;
+        timezone: string;
+        /** Only on these of the project's servers; all when empty */
+        servers?: string[];
+    } | null) | undefined;
     needsPrivateNetwork?: boolean | undefined;
     distribution?: ("auto" | "perServer" | "registry") | undefined;
     registry?: (string | null) | undefined;

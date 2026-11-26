@@ -578,7 +578,34 @@ export const $meshSpec = z.object({
   })),
 });
 
-/** Everything this server should run (PLAN §4.4). Precomputed and sealed when it changes. */
+/**
+ * A job on the agent's timer (PLAN §10.1): a cron expression in a time zone,
+ * and one action. An agent skips actions it doesn't know (a newer control
+ * plane), so new ones can be added; `exec` needs no agent change at all.
+ */
+export const $scheduleSpec = z.object({
+  id: z.string().min(1).max(200).describe(
+    "Stable across specs; the result carries it",
+  ),
+  cron: z.string().min(1).max(100).describe(
+    "minute hour day-of-month month day-of-week, or @hourly, @daily, @weekly, @monthly",
+  ),
+  timezone: z.string().max(64).optional().describe(
+    "IANA name; UTC when absent",
+  ),
+  restart: z.object({ workload: z.string() }).optional().describe(
+    "Recreate the workload's replicas one at a time, each healthy before the next",
+  ),
+  exec: z.object({
+    command: z.array(z.string()).min(1).max(64).describe(
+      "Program and arguments, run without a shell",
+    ),
+    timeoutSec: z.number().int().min(1).max(3_600),
+  }).optional().describe(
+    "Run a host command. Written by the control plane, never by a user",
+  ),
+});
+
 /** A machine's port forwarded to one of its partitions (PLAN §27.3). */
 export const $portForward = z.object({
   protocol: z.enum(["tcp", "udp"]),
@@ -587,6 +614,7 @@ export const $portForward = z.object({
   to: z.number().int().min(1).max(65_535).describe("In the partition"),
 });
 
+/** Everything this server should run (PLAN §4.4). Precomputed and sealed when it changes. */
 export const $desiredSpec = z.object({
   version: z.number().int().min(1),
   network: z.string(),
@@ -601,6 +629,7 @@ export const $desiredSpec = z.object({
     "The private network (PLAN §8.2); absent means this server isn't in it",
   ),
   alerts: z.array($alertSpec).default([]),
+  schedules: z.array($scheduleSpec).max(1_000).optional(),
   forwards: z.array($portForward).max(1_000).default([]).describe(
     "A machine's forwards into its partitions: public ports and each partition's mesh port",
   ),
@@ -750,6 +779,20 @@ export const $autoscaleEvent = z.object({
   }),
 });
 
+/** A job on the agent's timer ran (PLAN §10.1). */
+export const $scheduleRanEvent = z.object({
+  id: z.string().min(1).max(64),
+  type: z.literal("schedule.ran"),
+  data: z.object({
+    job: z.string().max(200),
+    startedAt: z.number().int().describe("Unix ms"),
+    status: z.enum(["ok", "failed", "skipped"]),
+    message: z.string().max(2_000).optional().describe(
+      "Why it failed or was skipped, or the end of a command's output",
+    ),
+  }),
+});
+
 export const $agentEvent = z.discriminatedUnion("type", [
   $commandResultEvent,
   $streamChunkEvent,
@@ -757,6 +800,7 @@ export const $agentEvent = z.discriminatedUnion("type", [
   $meshStatusEvent,
   $alertEvent,
   $autoscaleEvent,
+  $scheduleRanEvent,
 ]);
 
 /** Usage rollup of one workload's replicas (PLAN §7.1); cores and bytes per replica. */
@@ -821,6 +865,7 @@ export type TDesiredSpec = z.output<typeof $desiredSpec>;
 export type TWorkload = z.output<typeof $workload>;
 export type TWorkloadRelease = z.output<typeof $workloadRelease>;
 export type TAlertSpec = z.output<typeof $alertSpec>;
+export type TScheduleSpec = z.output<typeof $scheduleSpec>;
 export type TPortForward = z.output<typeof $portForward>;
 export type TPartitionSize = z.output<typeof $partitionSize>;
 export type TPartitionUsage = z.output<typeof $partitionUsage>;

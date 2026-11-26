@@ -29,6 +29,7 @@ import type {
   TAlertSpec,
   TDesiredSpec,
   TPortForward,
+  TScheduleSpec,
   TWorkload,
   TWorkloadRelease,
 } from "@/schemas/protocol/agent.ts";
@@ -99,6 +100,10 @@ function entriesFor(
       return [{ release: next, routed: true }];
   }
 }
+
+/** A scheduled restart's job id; its results name the project by it. */
+export const restartJobId = (project: ObjectId, workload: string) =>
+  `restart:${project}:${workload}`;
 
 /** Everything one server should run, without its version (PLAN §4.4). */
 export async function computeSpec(
@@ -194,6 +199,7 @@ export async function computeSpec(
     : undefined;
 
   const workloads: TWorkload[] = [];
+  const schedules: TScheduleSpec[] = [];
   for (const project of projects) {
     const deployment = deployments.find((d) => d.project.equals(project._id));
     const active = has(project.placedOn, server)
@@ -209,11 +215,24 @@ export async function computeSpec(
 
     const services = specs.get(entries.at(-1)!.release._id.toHexString())!;
     const primary = services.find((s) => s.port) ?? services[0];
+    // Scheduled restarts (PLAN §10.1) on the servers it runs on, or the chosen ones.
+    const restart = project.restartSchedule;
+    const restarts = !!active && !!restart &&
+      (!restart.servers.length || has(restart.servers, server));
     for (const service of services) {
       const single = services.length === 1;
+      const name = workloadName(project.slug, services.length, service.name);
+      if (restarts) {
+        schedules.push({
+          id: restartJobId(project._id, name),
+          cron: restart.cron,
+          timezone: restart.timezone,
+          restart: { workload: name },
+        });
+      }
       workloads.push({
         project: project._id.toHexString(),
-        name: workloadName(project.slug, services.length, service.name),
+        name,
         dnsNames: [
           single
             ? `${project.slug}.internal`
@@ -328,6 +347,8 @@ export async function computeSpec(
       ])
       : [],
     forwards: serverDoc ? await forwardsFor(serverDoc._id) : [],
+    // Only when there are any: other servers' specs stay as they were.
+    ...(schedules.length ? { schedules } : {}),
     ...(serverDoc ? await meshSpecFor(serverDoc) : {}),
     ...(serverDoc ? await ingressSpecFor(serverDoc) : {}),
   };

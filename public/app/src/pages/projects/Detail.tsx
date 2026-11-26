@@ -72,6 +72,7 @@ import { DomainsTab } from "./DomainsTab"
 import { Reachability } from "./Reachability"
 import { type TVolume, VolumesEditor } from "./VolumesEditor"
 import { DistributionEditor, type TDistribution } from "./DistributionEditor"
+import { MaintenanceEditor, type TRestartSchedule } from "./MaintenanceEditor"
 import { LabelChips } from "@/pages/servers/ServerLabels"
 import { ago } from "@/lib/format"
 import {
@@ -447,6 +448,9 @@ function Settings({
   const [cancelRunning, setCancelRunning] = React.useState(
     !!project.cancelRunningBuild
   )
+  const [restart, setRestart] = React.useState<TRestartSchedule | null>(
+    project.restartSchedule ?? null
+  )
   const [branch, setBranch] = React.useState(
     "branch" in project.source ? project.source.branch : ""
   )
@@ -509,6 +513,7 @@ function Settings({
           acknowledgeVolumeRisk: strategy !== project.deployStrategy,
           autoDeploy,
           cancelRunningBuild: cancelRunning,
+          restartSchedule: restart,
           needsPrivateNetwork: needsNetwork,
           ...(JSON.stringify(distribution) !==
           JSON.stringify(initialDistribution)
@@ -790,6 +795,13 @@ function Settings({
             </FieldDescription>
           )}
         </Panel>
+
+        <MaintenanceEditor
+          value={restart}
+          onChange={setRestart}
+          servers={project.servers}
+          results={project.restarts}
+        />
 
         <Panel title={t("Resources")} bodyClassName="flex flex-col gap-4">
           <div className="grid gap-4 sm:grid-cols-4">

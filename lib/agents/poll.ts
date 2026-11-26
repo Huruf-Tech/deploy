@@ -29,6 +29,7 @@ import {
   deliverInBackground,
   onAgentAlert,
   onAutoscale,
+  onScheduleRan,
   onServerBack,
 } from "@/lib/monitoring/alerts.ts";
 import { refreshSpecs } from "@/lib/deploy/specs.ts";
@@ -405,6 +406,7 @@ export const ingestEvents = async (
     { type: "alert.fired" | "alert.resolved" }
   > => e.type === "alert.fired" || e.type === "alert.resolved");
   const scaled = events.filter((e) => e.type === "autoscale.changed");
+  const ran = events.filter((e) => e.type === "schedule.ran");
 
   const [applied, streams] = await Promise.all([
     results.length ? ingestCommandResults(identity, results) : 0,
@@ -418,11 +420,12 @@ export const ingestEvents = async (
   if (mesh.length) await recordMeshStatus(identity.server, mesh.at(-1)!.data);
   for (const alert of alerts) await onAgentAlert(identity.server, alert);
   for (const event of scaled) await onAutoscale(identity.server, event.data);
+  for (const event of ran) await onScheduleRan(identity.server, event.data);
   // Event ingestion carries the alert outbox too (PLAN §3.4), never polls.
   deliverInBackground();
   return {
     applied: applied + streams.applied + statuses.length + mesh.length +
-      alerts.length + scaled.length,
+      alerts.length + scaled.length + ran.length,
     close: streams.close,
   };
 };

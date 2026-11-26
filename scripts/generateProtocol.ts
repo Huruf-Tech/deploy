@@ -45,6 +45,7 @@ const MESSAGES: Array<[string, z.ZodType, "input" | "output"]> = [
   ["MeshStatusEvent", protocol.$meshStatusEvent, "input"],
   ["AlertEvent", protocol.$alertEvent, "input"],
   ["AutoscaleEvent", protocol.$autoscaleEvent, "input"],
+  ["ScheduleRanEvent", protocol.$scheduleRanEvent, "input"],
   ["CapacityReport", protocol.$capacityReport, "input"],
   ["AgentUpdatePayload", protocol.$agentUpdatePayload, "output"],
   ["RegistryDeletePayload", protocol.$registryDeletePayload, "output"],
@@ -85,6 +86,7 @@ const SHARED: Array<[string, z.ZodType]> = [
   ["MeshSpec", protocol.$meshSpec],
   ["Autoscale", protocol.$autoscale],
   ["AlertSpec", protocol.$alertSpec],
+  ["ScheduleSpec", protocol.$scheduleSpec],
   ["Footprint", protocol.$footprint],
 ];
 const shape = (schema: TJsonSchema) =>

@@ -2107,5 +2107,22 @@
   "restart": "restart",
   "Restart to apply": "Restart to apply",
   "Variables apply on the next deploy or restart; they override tenant and global variables.": "Variables apply on the next deploy or restart; they override tenant and global variables.",
-  "Your servers connect over WireGuard, so apps reach each other across servers as <project>.internal. Each server needs the UDP port of its endpoint open to the others (51820 on a server; a partition gets its machine's next port from 51821, shown under Endpoint), or to share a network. A server behind NAT still reaches servers it can dial.": "Your servers connect over WireGuard, so apps reach each other across servers as <project>.internal. Each server needs the UDP port of its endpoint open to the others (51820 on a server; a partition gets its machine's next port from 51821, shown under Endpoint), or to share a network. A server behind NAT still reaches servers it can dial."
+  "Your servers connect over WireGuard, so apps reach each other across servers as <project>.internal. Each server needs the UDP port of its endpoint open to the others (51820 on a server; a partition gets its machine's next port from 51821, shown under Endpoint), or to share a network. A server behind NAT still reaches servers it can dial.": "Your servers connect over WireGuard, so apps reach each other across servers as <project>.internal. Each server needs the UDP port of its endpoint open to the others (51820 on a server; a partition gets its machine's next port from 51821, shown under Endpoint), or to share a network. A server behind NAT still reaches servers it can dial.",
+  "Maintenance": "Maintenance",
+  "Restart on a schedule": "Restart on a schedule",
+  "Restart on a schedule, e.g. every night for an app that slowly leaks memory. Each server's agent recreates the containers one replica at a time, each healthy before the next, from the same image and variables: nothing is built. Skipped while a deploy runs. Needs the latest agent on each server.": "Restart on a schedule, e.g. every night for an app that slowly leaks memory. Each server's agent recreates the containers one replica at a time, each healthy before the next, from the same image and variables: nothing is built. Skipped while a deploy runs. Needs the latest agent on each server.",
+  "Repeat": "Repeat",
+  "Every day": "Every day",
+  "Every week": "Every week",
+  "Cron expression": "Cron expression",
+  "minute hour day month weekday, e.g. 0 */6 * * * for every 6 hours, or @daily.": "minute hour day month weekday, e.g. 0 */6 * * * for every 6 hours, or @daily.",
+  "At": "At",
+  "Time zone": "Time zone",
+  "No time zone found.": "No time zone found.",
+  "On servers": "On servers",
+  "Each server restarts on its own, so the project keeps serving from the others.": "Each server restarts on its own, so the project keeps serving from the others.",
+  "Last restarts": "Last restarts",
+  "Restarted": "Restarted",
+  "Skipped": "Skipped",
+  "Removed server": "Removed server"
 }

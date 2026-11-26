@@ -11,6 +11,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/Huruf-Tech/huruf-deploy/agent/internal/cron"
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/protocol"
 )
 
@@ -355,5 +356,78 @@ func TestImagesGoWhenTheKeptOnesChange(t *testing.T) {
 	defer h.runtime.mu.Unlock()
 	if len(h.runtime.cleanups) != 2 || !slices.Equal(h.runtime.cleanups[1], []string{"app:2", "app:3"}) {
 		t.Fatalf("cleanups = %v", h.runtime.cleanups)
+	}
+}
+
+func TestScheduledRestartKeepsServing(t *testing.T) {
+	h := newHarness()
+	h.apply(1, []protocol.WorkloadRelease{release(1, true, "app:1")}, "rolling")
+	h.router.history, h.runtime.log = nil, nil
+
+	if err := h.r.Restart(context.Background(), "shop"); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{
+		"start huruf-shop-1-2", // the extra replica first
+		"remove huruf-shop-1-0", "start huruf-shop-1-0",
+		"remove huruf-shop-1-1", "start huruf-shop-1-1",
+		"remove huruf-shop-1-2",
+	}
+	if !slices.Equal(h.runtime.log, want) {
+		t.Fatalf("steps = %v", h.runtime.log)
+	}
+	for i, routes := range h.router.history {
+		if len(routes) != 1 || len(routes[0].Upstreams) < 2 {
+			t.Fatalf("step %d: %+v serves fewer than 2 replicas", i, routes)
+		}
+	}
+	if got := h.runtime.running("shop"); !slices.Equal(got, []int64{1, 1}) {
+		t.Fatalf("running = %v", got)
+	}
+}
+
+func TestScheduledRestartStopFirstReplacesInPlace(t *testing.T) {
+	h := newHarness()
+	h.apply(1, []protocol.WorkloadRelease{release(1, true, "app:1")}, "stopFirst")
+	h.runtime.log = nil
+
+	if err := h.r.Restart(context.Background(), "shop"); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{
+		"remove huruf-shop-1-0", "start huruf-shop-1-0",
+		"remove huruf-shop-1-1", "start huruf-shop-1-1",
+	}
+	if !slices.Equal(h.runtime.log, want) {
+		t.Fatalf("steps = %v", h.runtime.log)
+	}
+}
+
+func TestScheduledRestartOfAnUnhealthyImageLeavesTheOldServing(t *testing.T) {
+	h := newHarness()
+	h.apply(1, []protocol.WorkloadRelease{release(1, true, "app:1")}, "rolling")
+	h.runtime.broken["app:1"] = true
+
+	if err := h.r.Restart(context.Background(), "shop"); err == nil {
+		t.Fatal("restart succeeded")
+	}
+	if got := upstreams(h.router.last()); strings.Count(got, ",") != 1 {
+		t.Fatalf("upstreams = %q, want both old replicas", got)
+	}
+	if got := h.runtime.running("shop"); !slices.Equal(got, []int64{1, 1}) {
+		t.Fatalf("running = %v", got)
+	}
+}
+
+func TestScheduledRestartSkipsWhatIsNotSettled(t *testing.T) {
+	h := newHarness()
+	var skipped cron.Skipped
+	if err := h.r.Restart(context.Background(), "shop"); !errors.As(err, &skipped) {
+		t.Fatalf("no spec: %v", err)
+	}
+	h.runtime.broken["app:2"] = true // the rollout never finishes
+	h.apply(1, []protocol.WorkloadRelease{release(1, true, "app:1"), release(2, false, "app:2")}, "allAtOnce")
+	if err := h.r.Restart(context.Background(), "shop"); !errors.As(err, &skipped) {
+		t.Fatalf("mid-rollout: %v", err)
 	}
 }

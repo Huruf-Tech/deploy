@@ -2107,5 +2107,22 @@
   "restart": "إعادة تشغيل",
   "Restart to apply": "أعد التشغيل للتطبيق",
   "Variables apply on the next deploy or restart; they override tenant and global variables.": "تُطبَّق المتغيرات عند النشر التالي أو إعادة التشغيل؛ وهي تتجاوز متغيرات المستأجر والمتغيرات العامة.",
-  "Your servers connect over WireGuard, so apps reach each other across servers as <project>.internal. Each server needs the UDP port of its endpoint open to the others (51820 on a server; a partition gets its machine's next port from 51821, shown under Endpoint), or to share a network. A server behind NAT still reaches servers it can dial.": "تتصل خوادمك عبر WireGuard، فتصل التطبيقات ببعضها عبر الخوادم باسم <project>.internal. يحتاج كل خادم أن يكون منفذ UDP لنقطة اتصاله مفتوحًا للخوادم الأخرى (51820 على الخادم؛ ويحصل القسم على المنفذ التالي لجهازه بدءًا من 51821، كما يظهر تحت نقطة الاتصال)، أو أن تتشارك الخوادم شبكة واحدة. والخادم خلف NAT يصل مع ذلك إلى الخوادم التي يستطيع الاتصال بها."
+  "Your servers connect over WireGuard, so apps reach each other across servers as <project>.internal. Each server needs the UDP port of its endpoint open to the others (51820 on a server; a partition gets its machine's next port from 51821, shown under Endpoint), or to share a network. A server behind NAT still reaches servers it can dial.": "تتصل خوادمك عبر WireGuard، فتصل التطبيقات ببعضها عبر الخوادم باسم <project>.internal. يحتاج كل خادم أن يكون منفذ UDP لنقطة اتصاله مفتوحًا للخوادم الأخرى (51820 على الخادم؛ ويحصل القسم على المنفذ التالي لجهازه بدءًا من 51821، كما يظهر تحت نقطة الاتصال)، أو أن تتشارك الخوادم شبكة واحدة. والخادم خلف NAT يصل مع ذلك إلى الخوادم التي يستطيع الاتصال بها.",
+  "Maintenance": "الصيانة",
+  "Restart on a schedule": "إعادة التشغيل وفق جدول",
+  "Restart on a schedule, e.g. every night for an app that slowly leaks memory. Each server's agent recreates the containers one replica at a time, each healthy before the next, from the same image and variables: nothing is built. Skipped while a deploy runs. Needs the latest agent on each server.": "إعادة التشغيل وفق جدول، مثلاً كل ليلة لتطبيق يسرّب الذاكرة ببطء. يعيد وكيل كل خادم إنشاء الحاويات نسخةً تلو الأخرى، وكل نسخة سليمة قبل التالية، من نفس الصورة والمتغيرات: لا يُبنى شيء. تُتخطّى أثناء أي نشر جارٍ. تحتاج أحدث وكيل على كل خادم.",
+  "Repeat": "التكرار",
+  "Every day": "كل يوم",
+  "Every week": "كل أسبوع",
+  "Cron expression": "تعبير Cron",
+  "minute hour day month weekday, e.g. 0 */6 * * * for every 6 hours, or @daily.": "الدقيقة الساعة اليوم الشهر يوم الأسبوع، مثلاً 0 */6 * * * لكل 6 ساعات، أو @daily.",
+  "At": "في",
+  "Time zone": "المنطقة الزمنية",
+  "No time zone found.": "لم يُعثر على منطقة زمنية.",
+  "On servers": "على الخوادم",
+  "Each server restarts on its own, so the project keeps serving from the others.": "يعيد كل خادم التشغيل وحده، فيبقى المشروع يخدم من الخوادم الأخرى.",
+  "Last restarts": "آخر عمليات إعادة التشغيل",
+  "Restarted": "أُعيد التشغيل",
+  "Skipped": "تم التخطي",
+  "Removed server": "خادم محذوف"
 }

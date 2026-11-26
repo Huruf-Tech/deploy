@@ -2,6 +2,7 @@ import z from "zod";
 import { mongodb } from "@/database.ts";
 import { $objectId } from "@/core/utils/createCRUD.ts";
 import { $stage } from "@/schemas/configuration/variable.ts";
+import { $restartSchedule } from "@/schemas/applications/schedule.ts";
 
 /** Where the code (or image) comes from (PLAN D20). */
 export const $projectSource = z.discriminatedUnion("type", [
@@ -129,6 +130,15 @@ export const $project = z.object({
   autoDeploy: z.boolean().default(true),
   /** A new deploy cancels the build still running, instead of waiting for it. */
   cancelRunningBuild: z.boolean().optional(),
+  /** Restarts its containers on a schedule, by each server's agent (PLAN §10.1). */
+  restartSchedule: $restartSchedule.optional(),
+  /** The latest scheduled restart per server, as reported by its agent. */
+  restarts: z.array(z.object({
+    server: $objectId.meta({ ref: "servers" }),
+    at: z.date(),
+    status: z.enum(["ok", "failed", "skipped"]),
+    message: z.string().optional(),
+  })).optional(),
   /** Reaches projects on other servers: warn when the mesh can't connect them (PLAN §8.2). */
   needsPrivateNetwork: z.boolean().default(false),
   distribution: z.enum(["auto", "perServer", "registry"]).default("auto"),
@@ -219,6 +229,7 @@ export const $projectUpdate = z.object({
   deployStrategy: $deployStrategy,
   autoDeploy: z.boolean(),
   cancelRunningBuild: z.boolean(),
+  restartSchedule: $restartSchedule.nullable(),
   needsPrivateNetwork: z.boolean(),
   distribution: $project.shape.distribution,
   registry: $objectId.nullable(),

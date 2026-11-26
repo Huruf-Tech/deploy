@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Huruf-Tech/huruf-deploy/agent/internal/cron"
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/protocol"
 )
 
@@ -92,6 +93,15 @@ type Reconciler struct {
 	again    bool               // a pass was asked for while one was running
 	lastGC   time.Time
 	lastKept []string // KeepImages at the last image cleanup
+	// Scheduled restarts running now (workload name → its run), and one lock
+	// per workload: a pass and a restart never touch its containers together.
+	restarts map[string]*restartRun
+	locks    map[string]chan struct{}
+}
+
+type restartRun struct {
+	release int64
+	cancel  context.CancelFunc
 }
 
 type routing struct {
@@ -112,6 +122,16 @@ func (r *Reconciler) Apply(ctx context.Context, spec protocol.DesiredSpec) {
 	for name := range r.scaled {
 		if !slices.ContainsFunc(spec.Workloads, func(w protocol.Workload) bool { return w.Name == name && w.Autoscale != nil }) {
 			delete(r.scaled, name)
+		}
+	}
+	for name, run := range r.restarts {
+		if _, ok := find(spec, name); !ok {
+			run.cancel() // the workload is leaving this server
+		}
+	}
+	for name := range r.locks {
+		if _, ok := find(spec, name); !ok {
+			delete(r.locks, name) // bounded: a holder keeps its own channel
 		}
 	}
 	r.mu.Unlock()
@@ -285,6 +305,30 @@ func (r *Reconciler) pass(ctx context.Context, spec protocol.DesiredSpec) error 
 // containers running, it replaces them with the workload's strategy;
 // otherwise (first deploy, all-at-once phases, scaling) it converges directly.
 func (r *Reconciler) workload(ctx context.Context, spec protocol.DesiredSpec, w protocol.Workload, existing []Container) {
+	// A scheduled restart converges it itself; a new release cancels the restart.
+	r.mu.Lock()
+	run := r.restarts[w.Name]
+	r.mu.Unlock()
+	if run != nil {
+		if len(w.Releases) == 1 && w.Releases[0].Release == run.release {
+			return
+		}
+		run.cancel()
+	}
+	unlock, waited := r.lock(ctx, w.Name)
+	if unlock == nil {
+		return
+	}
+	defer unlock()
+	if waited || run != nil {
+		// A restart changed the containers meanwhile: list them again.
+		containers, err := r.Runtime.List(ctx)
+		if err != nil {
+			return
+		}
+		existing = slices.DeleteFunc(containers, func(c Container) bool { return c.Workload != w.Name })
+	}
+
 	// Autoscaling changes the count of a settled workload; rollouts keep the spec's.
 	if w.Autoscale != nil && len(w.Releases) == 1 {
 		rel := w.Releases[0]
@@ -489,6 +533,171 @@ func (r *Reconciler) replace(ctx context.Context, spec protocol.DesiredSpec, w p
 	if ctx.Err() == nil {
 		r.report(spec, w, rel, "healthy", nil)
 	}
+}
+
+// Restart recreates a workload's running replicas one at a time, each healthy
+// before the next: scheduled restarts, e.g. of an app that leaks memory. The
+// image, variables and release stay. Rolling and all-at-once start one extra
+// replica first, so serving never drops below the replica count; stop-first
+// (a local volume) replaces each in place, briefly down. A workload mid-rollout
+// or not running is skipped: a deploy refreshes it anyway. A new release, or
+// the workload leaving this server, cancels the restart.
+func (r *Reconciler) Restart(ctx context.Context, workload string) error {
+	r.mu.Lock()
+	var w protocol.Workload
+	ok := r.spec != nil
+	if ok {
+		w, ok = find(*r.spec, workload)
+	}
+	switch {
+	case !ok:
+		r.mu.Unlock()
+		return cron.Skipped{Reason: "not on this server"}
+	case len(w.Releases) != 1 || !w.Releases[0].Routed:
+		r.mu.Unlock()
+		return cron.Skipped{Reason: "a deploy is running"}
+	case r.restarts[workload] != nil:
+		r.mu.Unlock()
+		return cron.Skipped{Reason: "already restarting"}
+	}
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	run := &restartRun{release: w.Releases[0].Release, cancel: cancel}
+	if r.restarts == nil {
+		r.restarts = map[string]*restartRun{}
+	}
+	r.restarts[workload] = run
+	r.mu.Unlock()
+	defer func() {
+		r.mu.Lock()
+		if r.restarts[workload] == run {
+			delete(r.restarts, workload)
+		}
+		r.mu.Unlock()
+	}()
+
+	unlock, _ := r.lock(ctx, workload)
+	if unlock == nil {
+		return cron.Skipped{Reason: "a deploy started"}
+	}
+	defer unlock()
+	// The spec now, which a pass may have applied while we waited.
+	r.mu.Lock()
+	spec := *r.spec
+	r.mu.Unlock()
+	if w, ok = find(spec, workload); !ok || len(w.Releases) != 1 || w.Releases[0].Release != run.release {
+		return cron.Skipped{Reason: "a deploy started"}
+	}
+	rel := w.Releases[0]
+	replicas := r.Replicas(w)
+
+	containers, err := r.Runtime.List(ctx)
+	if err != nil {
+		return err
+	}
+	var originals []Container
+	for _, c := range containers {
+		if c.Workload == workload && c.Release == rel.Release && c.Running && c.Replica < replicas {
+			originals = append(originals, c)
+		}
+	}
+	if len(originals) == 0 {
+		return cron.Skipped{Reason: "nothing is running"}
+	}
+	sort.Slice(originals, func(i, j int) bool { return originals[i].Replica < originals[j].Replica })
+
+	serving := slices.Clone(originals)
+	route := func() {
+		r.setRouting(w.Name, &routing{
+			publicPort: w.PublicPort, ingress: ingressOf(w), port: rel.Port, healthPath: rel.Healthcheck.Path,
+			dnsNames: w.DnsNames, ips: ips(serving),
+		})
+		if err := r.publish(ctx); err != nil {
+			r.Log.Warn("routing failed", "workload", w.Name, "error", err)
+		}
+	}
+	retire := func(c Container) {
+		serving = slices.DeleteFunc(serving, func(s Container) bool { return s.ID == c.ID })
+		route()
+		sleep(ctx, time.Duration(spec.DrainMs)*time.Millisecond)
+		if err := r.Runtime.Remove(ctx, c); err != nil {
+			r.Log.Warn("removing container failed", "container", c.Name, "error", err)
+		}
+	}
+	start := func(replica int) (Container, error) {
+		c, err := r.Runtime.Start(ctx, r.containerSpec(spec, w, rel, replica))
+		if err == nil {
+			if err = r.Runtime.WaitHealthy(ctx, c, rel); err != nil {
+				_ = r.Runtime.Remove(ctx, c)
+			}
+		}
+		return c, err
+	}
+
+	// The extra replica's index is above the count: a pass that finds it
+	// left over (a cancelled restart) removes it as surplus.
+	var extra *Container
+	if w.Strategy != "stopFirst" {
+		c, err := start(replicas)
+		if err != nil {
+			return fmt.Errorf("a fresh replica never became healthy, nothing was restarted: %w", err)
+		}
+		extra = &c
+		serving = append(serving, c)
+		route()
+	}
+	for _, old := range originals {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		retire(old)
+		c, err := start(old.Replica)
+		if err != nil {
+			return fmt.Errorf("replica %d never became healthy after its restart: %w", old.Replica, err)
+		}
+		serving = append(serving, c)
+		route()
+	}
+	if extra != nil {
+		retire(*extra)
+	}
+	r.Log.Info("workload restarted", "workload", workload, "replicas", len(originals))
+	return ctx.Err()
+}
+
+// lock takes the workload's lock, or returns nil once ctx ends; `waited` when
+// someone else held it.
+func (r *Reconciler) lock(ctx context.Context, workload string) (unlock func(), waited bool) {
+	r.mu.Lock()
+	if r.locks == nil {
+		r.locks = map[string]chan struct{}{}
+	}
+	l, ok := r.locks[workload]
+	if !ok {
+		l = make(chan struct{}, 1)
+		r.locks[workload] = l
+	}
+	r.mu.Unlock()
+	select {
+	case l <- struct{}{}:
+		return func() { <-l }, false
+	default:
+	}
+	select {
+	case l <- struct{}{}:
+		return func() { <-l }, true
+	case <-ctx.Done():
+		return nil, true
+	}
+}
+
+func find(spec protocol.DesiredSpec, workload string) (protocol.Workload, bool) {
+	for _, w := range spec.Workloads {
+		if w.Name == workload {
+			return w, true
+		}
+	}
+	return protocol.Workload{}, false
 }
 
 func (r *Reconciler) containerSpec(spec protocol.DesiredSpec, w protocol.Workload, rel protocol.WorkloadRelease, replica int) ContainerSpec {

@@ -572,6 +572,17 @@ export async function updateProject(opts: {
   if (patch.cancelRunningBuild !== undefined) {
     $set.cancelRunningBuild = patch.cancelRunningBuild;
   }
+  if (patch.restartSchedule === null) {
+    $unset.restartSchedule = $unset.restarts = "";
+  } else if (patch.restartSchedule) {
+    const chosen = patch.restartSchedule.servers;
+    if (chosen.some((s) => !servers.some((p) => p.equals(s)))) {
+      throw Response.badRequest(
+        "Restarts can only be scheduled on the project's servers",
+      );
+    }
+    $set.restartSchedule = patch.restartSchedule;
+  }
   if (patch.needsPrivateNetwork !== undefined) {
     $set.needsPrivateNetwork = patch.needsPrivateNetwork;
   }

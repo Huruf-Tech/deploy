@@ -258,6 +258,17 @@ export type events$body = {
             to: number;
             reason: string;
         };
+    } | {
+        id: string;
+        type: "schedule.ran";
+        data: {
+            job: string;
+            /** Unix ms */
+            startedAt: number;
+            status: "ok" | "failed" | "skipped";
+            /** Why it failed or was skipped, or the end of a command's output */
+            message?: string | undefined;
+        };
     })[];
 };
 export type events$return = {

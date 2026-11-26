@@ -208,6 +208,8 @@ Project groups are **folders on the Projects page**, not a nav item: folder card
 
 **Server groups work the same on the Servers page** (one set of components, `pages/projects/folders.tsx`, with `kind: "servers"`): "New folder" beside "Add server", folder cards (counts, offline and pending badges) above the servers in none, the open folder with "All servers", Rename and Delete (the API takes its servers out), a sticky "Move to folder" column and a bulk move. The folder is a server-side filter of the paginated list (`group`, `null` for none); a label filter looks in every folder. Partitions follow their own folder, not their machine's.
 
+**Maintenance** (project Settings, `pages/projects/MaintenanceEditor.tsx`): a panel with its switch in the header, like Autoscale. "Restart on a schedule" picks Every day / Every week (a native time input, weekday names from `Intl`) or a cron expression, a time zone (a searchable combobox, the browser's zone by default) and, on projects with several servers, which ones (all checked means all; the last one can't be unchecked). Below, the last restart per server with its result. It saves with the form's Save. Later scheduled jobs go in this panel.
+
 ## 9c. Private network
 
 "Who reaches whom" is a React Flow graph (`src/pages/network/ReachGraph.tsx`, lazy): servers on a circle, one edge per pair (green both ways, red dashed one way, red no link, grey dotted not in the mesh), the registry host starred. The old matrix stays in the DOM, visually hidden, for screen readers.

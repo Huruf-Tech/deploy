@@ -246,6 +246,17 @@ export default new Router("/api", function projects(router) {
       deployStrategy: $deployStrategy,
       autoDeploy: z.boolean(),
       cancelRunningBuild: z.boolean().optional(),
+      restartSchedule: z.object({
+        cron: z.string(),
+        timezone: z.string(),
+        servers: z.array(z.string()),
+      }).optional(),
+      restarts: z.array(z.object({
+        server: z.string(),
+        at: z.string(),
+        status: z.enum(["ok", "failed", "skipped"]),
+        message: z.string().optional(),
+      })).optional().describe("The latest scheduled restart per server"),
       distribution: z.string(),
       registry: z.string().optional(),
       deployKeyPublic: z.string().optional(),

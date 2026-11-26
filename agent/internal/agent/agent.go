@@ -70,7 +70,9 @@ type Agent struct {
 	Benchmark func() *protocol.ResourceSummaryBenchmark
 	// Applies a machine's forwards into its partitions (PLAN §27.3); may be nil.
 	Forwards func(ctx context.Context, forwards []protocol.PortForward) error
-	Log      *slog.Logger
+	// Sets the timer's jobs from the spec (PLAN §10.1); may be nil.
+	Schedules func(spec protocol.DesiredSpec)
+	Log       *slog.Logger
 
 	config        *protocol.AgentConfig
 	configVersion string
@@ -356,6 +358,9 @@ func (a *Agent) applyDesired(ctx context.Context, version int64, sealed string) 
 	}
 	if a.Reconciler != nil {
 		a.Reconciler.Apply(ctx, spec)
+	}
+	if a.Schedules != nil {
+		a.Schedules(spec)
 	}
 	return nil
 }

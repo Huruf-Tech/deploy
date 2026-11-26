@@ -25,6 +25,7 @@ import (
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/build"
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/cleanup"
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/commands"
+	"github.com/Huruf-Tech/huruf-deploy/agent/internal/cron"
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/dns"
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/docker"
 	"github.com/Huruf-Tech/huruf-deploy/agent/internal/edge"
@@ -225,6 +226,14 @@ func main() {
 		a.Enqueue(event)
 		a.Wake() // rollouts advance on these: send now
 	}
+	// The timer (PLAN §10.1): jobs come with the desired state.
+	timer := &cron.Scheduler{Log: log, Concurrency: 2,
+		Done: func(job cron.Job, started time.Time, output string, err error) {
+			a.Enqueue(scheduleRan(job, started, output, err))
+		},
+	}
+	a.Schedules = func(spec protocol.DesiredSpec) { timer.Set(scheduledJobs(spec, reconciler)) }
+	go timer.Run(ctx)
 	streamManager.Emit = func(event protocol.StreamChunkEvent, urgent bool) {
 		a.Enqueue(event)
 		if urgent {
