@@ -6,6 +6,7 @@ import {
 } from "@/lib/agents/agentAuth.ts";
 import { registerAgent } from "@/lib/agents/servers.ts";
 import { ingestEvents, pollAgent } from "@/lib/agents/poll.ts";
+import { followAddress } from "@/lib/agents/address.ts";
 import { getAgentConfig } from "@/lib/agents/config.ts";
 import { HELD_HEADER } from "@/lib/agents/wakeups.ts";
 import { installerScript } from "@/lib/agents/bootstrap.ts";
@@ -54,6 +55,10 @@ export default new Router("/api", function agents(router) {
         const { identity, fingerprint, body } = await authenticateAgent(
           req,
           $pollRequest,
+        );
+        // A server without a fixed IP: its new address within a poll.
+        await followAddress(identity.server, clientIp(req)).catch((e) =>
+          console.warn("[network] address:", e)
         );
         const result = await pollAgent(identity, fingerprint, body);
         return Response.json(result.body, {

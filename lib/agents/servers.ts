@@ -15,7 +15,8 @@ import { serverModel, takesSlot } from "@/schemas/infrastructure/server.ts";
 import { serverLeaseModel } from "@/schemas/infrastructure/serverLease.ts";
 import { bootstrapSessionModel } from "@/schemas/infrastructure/bootstrapSession.ts";
 import { subscriptionModel } from "@/schemas/billing/subscription.ts";
-import { isPublicAddress } from "@/lib/agents/addresses.ts";
+import { hostPort, isPublicAddress } from "@/lib/agents/addresses.ts";
+import { addressChanged } from "@/lib/agents/address.ts";
 import { createHash, SupportedHashAlg } from "@/core/utils/hash.ts";
 import { tenantModel } from "@/plugins/Huruf-Tech/thunder-core/schemas/tenant.ts";
 import type { THelloResponse, TInventory } from "@/schemas/protocol/agent.ts";
@@ -64,6 +65,7 @@ export const registerAgent = async (
         pairingExpiresAt: 1,
         "setup.status": 1,
         "inventory.agentSha256": 1,
+        "inventory.publicIp": 1,
         "provider.kind": 1,
         "pool.status": 1,
       },
@@ -82,6 +84,18 @@ export const registerAgent = async (
           $set: { server: existing._id },
         });
       }
+    }
+    // Restarted at a new address (no fixed IP): its partitions and peers
+    // follow, as a poll from it would have done (PLAN §8.2).
+    if (
+      existing.status === "active" && inventory.publicIp &&
+      existing.inventory?.publicIp !== inventory.publicIp
+    ) {
+      await addressChanged(
+        existing,
+        inventory.publicIp,
+        existing.inventory?.publicIp,
+      ).catch((e) => console.warn("[network] address change:", e));
     }
     const isMachine = existing.provider?.kind === "machine";
     // A new agent binary (an update): host setup brings its dependencies up to date.
@@ -338,7 +352,7 @@ export const meshPlacement = async (host: ObjectId) => {
   const meshPort = Math.max(MESH_PORT, last?.provider?.meshPort ?? MESH_PORT) +
     1;
   const ip = machine?.inventory?.publicIp || machine?.inventory?.privateIp;
-  return { meshPort, endpoint: ip ? `${ip}:${meshPort}` : undefined };
+  return { meshPort, endpoint: ip ? hostPort(ip, meshPort) : undefined };
 };
 
 /** Gate for every way of adding a server (PLAN §20.3 safety limits). */

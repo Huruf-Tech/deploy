@@ -21,6 +21,10 @@ const IPV4_BLOCKED: Array<[string, number]> = [
  * False for loopback, private, link-local, CGNAT, multicast and reserved
  * ranges: the wizard must not let users probe our own network (SSRF).
  */
+/** `ip:port`, bracketed for IPv6 (`[2001:db8::1]:51820`), as WireGuard reads it. */
+export const hostPort = (ip: string, port: number) =>
+  ip.includes(":") ? `[${ip}]:${port}` : `${ip}:${port}`;
+
 export const isPublicAddress = (ip: string): boolean => {
   const mapped = ip.toLowerCase().match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
   if (mapped) return isPublicAddress(mapped[1]);

@@ -475,6 +475,7 @@ The pool is shown as one combined compute budget. The user also gets guidance ba
 - **Reachability:** the mesh needs UDP 51820 reachable between servers (public IP or same LAN/VPC).
   - The agent probes each peer and reports `mesh.reachable` per pair.
   - NAT'd servers simply aren't mesh-reachable and keep working for everything else.
+- **Servers without a fixed IP (2026-11-27, `lib/agents/address.ts`).** A server is known by its agent's key; its public address is the one its agent connects from. Each poll compares it with the last one seen on that instance (memory, no read); a new public address is stored, a machine's partitions get their endpoints (its address and their forwarded port, unless one was set by hand), and every private-network peer of those tenants gets a fresh spec. An agent restarting at a new address does the same at its hello. The dashboard's public-port links and the reachability check follow. Endpoints are `ip:port`, bracketed for IPv6. Partition forwards match any address of the machine (`fib daddr type local`), so they survive the change. Two servers both behind NAT still can't reach each other on the private network (no relay).
 - **Projects that need it:** a project can be marked `needsPrivateNetwork`, or that is inferred from references to other projects' `.internal` names or variables. If its servers can't reach the servers of its dependencies, the UI warns clearly with fix instructions (open UDP 51820, same VPC). **Fixing it is the user's responsibility.** We don't build relays in the MVP.
 
 ### 8.3 Service discovery

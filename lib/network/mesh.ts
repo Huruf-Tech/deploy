@@ -1,6 +1,7 @@
 import type { ObjectId, WithId } from "mongodb";
 import { keyring } from "@/lib/services.ts";
 import { readTextSetting } from "@/lib/core/settings.ts";
+import { hostPort } from "@/lib/agents/addresses.ts";
 import { serverModel, type TServer } from "@/schemas/infrastructure/server.ts";
 import {
   MAX_MESH_INDEX,
@@ -53,7 +54,7 @@ export async function ensureMeshIndex(server: ObjectId, tenant: ObjectId) {
 export const endpointOf = (server: Pick<TServerDoc, "mesh" | "inventory">) => {
   if (server.mesh?.endpoint) return server.mesh.endpoint;
   const ip = server.inventory.publicIp || server.inventory.privateIp;
-  return ip ? `${ip}:${MESH_PORT}` : undefined;
+  return ip ? hostPort(ip, MESH_PORT) : undefined;
 };
 
 export const inMesh = (server: Pick<TServerDoc, "mesh">) =>
