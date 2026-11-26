@@ -28,6 +28,8 @@ export const $bootstrapSession = z.object({
     /** The machine's `partition.create`: its result says how creating went. */
     command: $objectId.meta({ ref: "agentCommands" }).optional(),
   }).optional(),
+  /** The machine runs projects itself, never partitions (PLAN §27.6). */
+  direct: z.boolean().optional(),
   rental: z.object({
     host: $objectId.meta({ ref: "servers" }),
     subscription: $objectId.meta({ ref: "subscriptions" }),

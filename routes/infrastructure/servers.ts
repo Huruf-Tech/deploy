@@ -318,13 +318,18 @@ export default new Router("/api", function servers(router) {
   });
 
   router.post("/:id/accept", function accept() {
-    const $body = z.object({ pairingCode: z.string().min(6).max(6) });
+    const $body = z.object({
+      pairingCode: z.string().min(6).max(6),
+      direct: z.boolean().optional().describe(
+        "Run apps on this machine itself, never partitions (PLAN §27.6)",
+      ),
+    });
 
     return {
       shape: () => ({ params: $params, body: $body }),
       handler: async (req) => {
         const { id } = $params.parse(paramsAsJson(req));
-        const { pairingCode } = $body.parse(await bodyAsJson(req));
+        const { pairingCode, direct } = $body.parse(await bodyAsJson(req));
         const { tenant, user } = await withTenant(req);
         // A saved card first, Free included (PLAN §25.10, 4).
         await payments.requireCard(tenant._id);
@@ -334,6 +339,7 @@ export default new Router("/api", function servers(router) {
           tenant: tenant._id,
           user,
           pairingCode,
+          direct,
         });
         return Response.json({
           ok: true,
@@ -453,6 +459,9 @@ export default new Router("/api", function servers(router) {
       password: z.string().max(1_000).optional(),
       privateKey: z.string().max(20_000).optional(),
       passphrase: z.string().max(1_000).optional(),
+      direct: z.boolean().optional().describe(
+        "Run apps on this machine itself, never partitions (PLAN §27.6)",
+      ),
     }).refine((b) => !!b.password !== !!b.privateKey, {
       message: "Provide either a password or a private key",
     });
@@ -475,6 +484,7 @@ export default new Router("/api", function servers(router) {
           credentials: body.password
             ? { password: body.password }
             : { privateKey: body.privateKey!, passphrase: body.passphrase },
+          direct: body.direct,
         });
         return Response.json({ session: session.toString() });
       },

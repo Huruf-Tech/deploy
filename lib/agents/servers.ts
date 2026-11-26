@@ -11,7 +11,7 @@ import { prepareHost, resumeHostSetup } from "@/lib/agents/commands.ts";
 import { setUpMachine } from "@/lib/pool/pool.ts";
 import { refreshSpecs } from "@/lib/deploy/specs.ts";
 import { agentCommandModel } from "@/schemas/infrastructure/agentCommand.ts";
-import { serverModel } from "@/schemas/infrastructure/server.ts";
+import { serverModel, takesSlot } from "@/schemas/infrastructure/server.ts";
 import { serverLeaseModel } from "@/schemas/infrastructure/serverLease.ts";
 import { bootstrapSessionModel } from "@/schemas/infrastructure/bootstrapSession.ts";
 import { subscriptionModel } from "@/schemas/billing/subscription.ts";
@@ -204,7 +204,7 @@ const claimJoinToken = async (token: string, tenant: ObjectId) =>
       $set: { status: "registered" },
       $push: { steps: { at: new Date(), message: "Agent registered" } },
     },
-    { projection: { createdBy: 1, rental: 1, partition: 1 } },
+    { projection: { createdBy: 1, rental: 1, partition: 1, direct: 1 } },
   );
 
 const registerJoinedAgent = async (
@@ -216,6 +216,7 @@ const registerJoinedAgent = async (
     createdBy: ObjectId;
     partition?: { host: ObjectId; name: string; label?: string };
     rental?: { host: ObjectId; subscription: ObjectId; name: string };
+    direct?: boolean;
   },
 ): Promise<THelloResponse> => {
   const failSession = (error: string) =>
@@ -225,10 +226,17 @@ const registerJoinedAgent = async (
 
   // PLAN §27: an agent installed on a machine is its host and takes no plan
   // slot; a partition's agent is a server, and a slot unless it's rented
-  // (approved by an admin, PLAN §26).
+  // (approved by an admin, PLAN §26). A direct machine runs projects itself
+  // and takes a slot like a partition (§27.6).
   const { rental, partition } = session;
-  const kind = rental ? "rented" : partition ? "partition" : "machine";
-  if (kind === "partition" && !await acquireServerSlot(tenant)) {
+  const kind = rental
+    ? "rented"
+    : partition
+    ? "partition"
+    : session.direct
+    ? "direct"
+    : "machine";
+  if (takesSlot(kind) && !await acquireServerSlot(tenant)) {
     await failSession("Your plan's server limit is reached");
     throw Response.forbidden("Your plan's server limit is reached");
   }
@@ -270,7 +278,7 @@ const registerJoinedAgent = async (
       }
       // The same agent saying hello twice at once: the other one registered
       // it; this one gives its slot back and retries as the existing server.
-      if (kind === "partition") await quotaGuard.release(tenant, "servers");
+      if (takesSlot(kind)) await quotaGuard.release(tenant, "servers");
       throw error;
     }
   }
@@ -292,6 +300,8 @@ const registerJoinedAgent = async (
     }
     await prepareHost(insertedId, tenant, session.createdBy);
     await refreshSpecs([host]);
+  } else if (kind === "direct") {
+    await prepareHost(insertedId, tenant, session.createdBy);
   } else {
     await setUpMachine(insertedId, session.createdBy);
   }
@@ -370,6 +380,8 @@ export const acceptServer = async (opts: {
   tenant: ObjectId;
   user: { _id: ObjectId; emailVerified?: boolean };
   pairingCode: string;
+  /** Runs projects itself, never partitions (PLAN §27.6). */
+  direct?: boolean;
 }) => {
   await assertCanAddServers(opts.user);
 
@@ -420,21 +432,32 @@ export const acceptServer = async (opts: {
     throw Response.badRequest("The pairing code does not match");
   }
 
+  // A direct machine takes a plan slot like a partition (PLAN §27.6).
+  if (opts.direct && !await acquireServerSlot(opts.tenant)) {
+    throw Response.forbidden("Your plan's server limit is reached");
+  }
   const now = new Date();
   const { modifiedCount } = await serverModel.updateOne(
     { _id: opts.server, status: "pending", pairingCode: server.pairingCode },
     {
-      $set: { status: "active", acceptedBy: opts.user._id, acceptedAt: now },
+      $set: {
+        status: "active",
+        acceptedBy: opts.user._id,
+        acceptedAt: now,
+        ...(opts.direct ? { "provider.kind": "direct" as const } : {}),
+      },
       $unset: { pairingCode: "", pairingExpiresAt: "" },
     },
   );
 
   if (!modifiedCount) {
+    if (opts.direct) await quotaGuard.release(opts.tenant, "servers");
     throw Response.badRequest("The server was accepted or removed meanwhile");
   }
 
   await openLease(opts.server, opts.tenant);
-  await setUpMachine(opts.server, opts.user._id);
+  if (opts.direct) await prepareHost(opts.server, opts.tenant, opts.user._id);
+  else await setUpMachine(opts.server, opts.user._id);
 
   // Earlier registrations of this machine (installed again since) can never
   // be accepted: their agents are gone. Reject them so they stop showing.
@@ -481,8 +504,9 @@ export const releaseServer = async (
   );
   if (doc?.status !== "active") return;
 
-  // Partitions take a slot; machines and rentals don't (PLAN §26.6 D, §27.2).
-  if (doc.provider?.kind === "partition") {
+  // Partitions and direct machines take a slot; machines and rentals don't
+  // (PLAN §26.6 D, §27.2, §27.6).
+  if (takesSlot(doc.provider?.kind)) {
     await quotaGuard.release(tenant, "servers", session);
   }
   await serverLeaseModel.deleteOne({ _id: server }, { session });

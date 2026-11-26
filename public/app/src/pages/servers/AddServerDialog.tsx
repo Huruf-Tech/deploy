@@ -21,6 +21,7 @@ import { usePolling } from "@/hooks/use-polling"
 import { CodeBlock } from "@/components/console/code-block"
 import { Timeline } from "@/components/console/timeline"
 import { errorMessage } from "@/lib/utils"
+import { DirectChoice } from "./DirectChoice"
 
 type TProgress = Awaited<
   ReturnType<typeof ThunderSDK.servers.bootstrapProgress>
@@ -29,6 +30,7 @@ type TProgress = Awaited<
 function SshForm({ onStarted }: { onStarted: (session: string) => void }) {
   const { t } = useTranslation()
   const [auth, setAuth] = React.useState<"password" | "key">("password")
+  const [direct, setDirect] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
   const [busy, setBusy] = React.useState(false)
 
@@ -51,6 +53,7 @@ function SshForm({ onStarted }: { onStarted: (session: string) => void }) {
                 privateKey: String(form.get("privateKey") ?? ""),
                 passphrase: String(form.get("passphrase") ?? "") || undefined,
               }),
+          ...(direct ? { direct: true } : {}),
         },
       })
       onStarted(session)
@@ -140,6 +143,8 @@ function SshForm({ onStarted }: { onStarted: (session: string) => void }) {
           </Field>
         </TabsContent>
       </Tabs>
+
+      <DirectChoice checked={direct} onCheckedChange={setDirect} />
 
       <p className="flex gap-2 rounded-lg border bg-muted/50 p-3 text-xs text-muted-foreground">
         <IconLock className="size-4 shrink-0 text-foreground" aria-hidden />

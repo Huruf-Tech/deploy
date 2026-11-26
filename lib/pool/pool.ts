@@ -53,7 +53,15 @@ async function machine(server: ObjectId, prepared: boolean) {
     },
   );
   if (!doc) throw Response.notFound("No active server with this id");
-  if (doc.provider?.kind === "partition" || doc.provider?.kind === "rented") {
+  // Only a machine hosts partitions: never one that runs projects itself.
+  // Servers from before `provider` existed are machines (its default).
+  const kind = doc.provider?.kind ?? "machine";
+  if (kind === "direct") {
+    throw Response.badRequest(
+      "This server runs apps directly: it can't host partitions",
+    );
+  }
+  if (kind !== "machine") {
     throw Response.badRequest("This server is a partition, not a machine");
   }
   if (prepared && doc.pool?.status !== "ready") {

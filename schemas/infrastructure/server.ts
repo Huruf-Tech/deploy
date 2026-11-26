@@ -47,10 +47,12 @@ export const $server = $serverUpdate.extend({
    * PLAN §27: `machine`: where our agent runs as a host, with no projects of
    * its own. `partition`: one of a machine's partitions (`host`), where
    * projects run. `rented`: a partition on one of the platform's machines,
-   * paid by `subscription` (§26, §28).
+   * paid by `subscription` (§26, §28). `direct`: a machine that runs projects
+   * itself, without Sysbox, and never hosts partitions; chosen at install
+   * (§27.6).
    */
   provider: z.object({
-    kind: z.enum(["machine", "partition", "rented"]),
+    kind: z.enum(["machine", "partition", "rented", "direct"]),
     host: $objectId.meta({ ref: "servers", canFilter: true }).optional(),
     /** The partition's name on its machine (`p` + 11 hex). */
     partition: z.string().optional(),
@@ -125,10 +127,17 @@ export const $server = $serverUpdate.extend({
 
 export type TServer = z.output<typeof $server>;
 
-/** The servers that take a plan slot (PLAN §27.2): partitions; machines and rentals don't. */
+/**
+ * The servers that take a plan slot (PLAN §27.2, §27.6): partitions and
+ * direct servers, where projects run; machines and rentals don't.
+ */
 export const SLOT_SERVERS = {
   status: "active",
-  "provider.kind": "partition",
+  "provider.kind": { $in: ["partition", "direct"] },
 } as const;
+
+/** Whether a server of this kind takes a plan slot. */
+export const takesSlot = (kind?: string) =>
+  kind === "partition" || kind === "direct";
 
 export const serverModel = mongodb.db().collection<TServer>("servers");

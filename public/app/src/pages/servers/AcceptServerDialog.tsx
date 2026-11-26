@@ -15,6 +15,7 @@ import {
 import { Field, FieldError, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { errorMessage } from "@/lib/utils"
+import { DirectChoice } from "./DirectChoice"
 
 export function AcceptServerDialog({
   server,
@@ -29,6 +30,7 @@ export function AcceptServerDialog({
 }) {
   const { t } = useTranslation()
   const [code, setCode] = React.useState("")
+  const [direct, setDirect] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
   const [busy, setBusy] = React.useState(false)
 
@@ -40,7 +42,7 @@ export function AcceptServerDialog({
     try {
       const accepted = (await ThunderSDK.servers.accept({
         params: { id: server._id },
-        body: { pairingCode: code },
+        body: { pairingCode: code, ...(direct ? { direct: true } : {}) },
       })) as { server?: string; superseded?: number }
       // The code may belong to a newer registration of the same machine (it
       // was installed again): that one is accepted, the old entries go.
@@ -97,6 +99,8 @@ export function AcceptServerDialog({
             />
             {error && <FieldError>{error}</FieldError>}
           </Field>
+
+          <DirectChoice checked={direct} onCheckedChange={setDirect} />
 
           <DialogFooter>
             <Button type="submit" disabled={code.length !== 6 || busy}>

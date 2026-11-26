@@ -39,6 +39,7 @@ import { StatusPill } from "./StatusPill"
 import { LabelChips } from "./ServerLabels"
 import {
   grouped,
+  isDirect,
   isMachine,
   isPartition,
   machineOf,
@@ -334,6 +335,7 @@ function ServerCard({
           </Chip>
           <Chip>{bytes(inventory.memory)}</Chip>
           {isPartition(server) && <Chip>{t("Partition")}</Chip>}
+          {isDirect(server) && <Chip>{t("Runs apps directly")}</Chip>}
           {server.status === "active" && <SetupChips server={server} />}
         </div>
         <LabelChips labels={server.labels} onPick={onLabel} />

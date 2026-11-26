@@ -34,7 +34,7 @@ export type get$return = {
         pairingExpiresAt?: Date | undefined;
         installMethod: "manual" | "ssh";
         provider: {
-            kind: "machine" | "partition" | "rented";
+            kind: "machine" | "partition" | "rented" | "direct";
             host?: string | undefined;
             partition?: string | undefined;
             meshPort?: number | undefined;
@@ -307,6 +307,8 @@ export type accept$params = {
 };
 export type accept$body = {
     pairingCode: string;
+    /** Run apps on this machine itself, never partitions (PLAN §27.6) */
+    direct?: boolean | undefined;
 };
 export type reject$params = {
     id?: string;
@@ -353,6 +355,8 @@ export type bootstrap$body = {
     password?: string | undefined;
     privateKey?: string | undefined;
     passphrase?: string | undefined;
+    /** Run apps on this machine itself, never partitions (PLAN §27.6) */
+    direct?: boolean | undefined;
 };
 export type bootstrap$return = {
     session: string;

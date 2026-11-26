@@ -27,7 +27,7 @@ export const serverSchema = z.object({
    */
   provider: z
     .object({
-      kind: z.enum(["machine", "partition", "rented"]),
+      kind: z.enum(["machine", "partition", "rented", "direct"]),
       host: z.string().nullish(),
       partition: z.string().nullish(),
       subscription: z.string().nullish(),
@@ -104,6 +104,10 @@ export const stateOf = (server: TServer, live?: TLiveness): TServerState =>
 /** Hosts partitions, runs no projects itself (PLAN §27.2). */
 export const isMachine = (server: Pick<TServer, "provider">) =>
   server.provider?.kind === "machine"
+
+/** A machine chosen at install to run projects itself (PLAN §27.6). */
+export const isDirect = (server: Pick<TServer, "provider">) =>
+  server.provider?.kind === "direct"
 
 /** A partition: its own (on the tenant's machine) or rented in the market. */
 export const isPartition = (server: Pick<TServer, "provider">) =>

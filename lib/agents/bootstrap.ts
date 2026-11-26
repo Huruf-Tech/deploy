@@ -124,6 +124,7 @@ export const createJoinToken = async (opts: {
     size?: TPartitionSize;
   };
   rental?: { host: ObjectId; subscription: ObjectId; name: string };
+  direct?: boolean;
 }) => {
   const token = encodeBase64Url(crypto.getRandomValues(new Uint8Array(32)));
   const now = new Date();
@@ -150,6 +151,8 @@ export const startBootstrap = async (opts: {
   port: number;
   username: string;
   credentials: TSshCredentials;
+  /** Runs projects itself, never partitions (PLAN §27.6). */
+  direct?: boolean;
 }) => {
   await assertCanAddServers(opts.user);
 
@@ -167,6 +170,7 @@ export const startBootstrap = async (opts: {
     host: opts.host,
     port: opts.port,
     username: opts.username,
+    ...(opts.direct ? { direct: true } : {}),
   });
 
   const step = (message: string) =>
