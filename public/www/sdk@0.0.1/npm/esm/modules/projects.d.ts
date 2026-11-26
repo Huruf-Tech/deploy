@@ -236,6 +236,7 @@ export type get$return = {
     }[];
     deployStrategy: "rolling" | "allAtOnce" | "stopFirst";
     autoDeploy: boolean;
+    cancelRunningBuild?: boolean | undefined;
     distribution: string;
     registry?: string | undefined;
     deployKeyPublic?: string | undefined;
@@ -293,6 +294,7 @@ export type update$body = {
     publicPort?: (number | null) | undefined;
     deployStrategy?: ("rolling" | "allAtOnce" | "stopFirst") | undefined;
     autoDeploy?: boolean | undefined;
+    cancelRunningBuild?: boolean | undefined;
     needsPrivateNetwork?: boolean | undefined;
     distribution?: ("auto" | "perServer" | "registry") | undefined;
     registry?: (string | null) | undefined;

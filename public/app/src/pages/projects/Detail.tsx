@@ -444,6 +444,9 @@ function Settings({
     project.deployStrategy
   )
   const [autoDeploy, setAutoDeploy] = React.useState(project.autoDeploy)
+  const [cancelRunning, setCancelRunning] = React.useState(
+    !!project.cancelRunningBuild
+  )
   const [branch, setBranch] = React.useState(
     "branch" in project.source ? project.source.branch : ""
   )
@@ -505,6 +508,7 @@ function Settings({
           deployStrategy: strategy,
           acknowledgeVolumeRisk: strategy !== project.deployStrategy,
           autoDeploy,
+          cancelRunningBuild: cancelRunning,
           needsPrivateNetwork: needsNetwork,
           ...(JSON.stringify(distribution) !==
           JSON.stringify(initialDistribution)
@@ -892,6 +896,21 @@ function Settings({
               onChange={setDistribution}
               note={t("Changes apply on the next deploy.")}
             />
+            <Field orientation="horizontal">
+              <FieldLabel htmlFor="s-cancel-running">
+                {t("A new deploy cancels the running build")}
+              </FieldLabel>
+              <Switch
+                id="s-cancel-running"
+                checked={cancelRunning}
+                onCheckedChange={setCancelRunning}
+              />
+            </Field>
+            <FieldDescription className="-mt-2">
+              {t(
+                "A push or a manual deploy while a build runs stops it and starts the new one, instead of waiting for it to finish."
+              )}
+            </FieldDescription>
           </Panel>
         )}
 

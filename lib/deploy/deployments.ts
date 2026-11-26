@@ -135,6 +135,17 @@ export async function deploy(opts: {
       },
     },
   );
+  // The project's switch: its running build is cancelled rather than waited
+  // for (its servers stop it, `build.cancel`), and this one starts after it.
+  if (project.cancelRunningBuild) {
+    const running = await deploymentModel.findOne(
+      { project: project._id, status: "building" },
+      { projection: { _id: 1 } },
+    );
+    if (running) {
+      await fail(running._id, "Cancelled for a newer deployment", "cancelled");
+    }
+  }
   await startNext(project._id);
   return _id;
 }
@@ -910,6 +921,16 @@ export async function fail(
   if (status === "failed") {
     log.warn(`Deployment ${id} failed: ${error}`);
     await onDeployFailed(deployment, error);
+  }
+  // Builds still running would hold their servers' build lock for nothing.
+  for (const build of deployment.builds ?? []) {
+    if (build.status !== "running") continue;
+    await issueCommand({
+      server: build.server,
+      tenant: deployment.tenant,
+      type: "build.cancel",
+      payload: { deployment: String(id) },
+    }).catch((e) => log.warn(`build.cancel on ${build.server}: ${e}`));
   }
 
   if (deployment.rollout) await refreshSpecs(deployment.servers);

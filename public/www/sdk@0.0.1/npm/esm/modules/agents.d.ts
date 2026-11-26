@@ -140,7 +140,7 @@ export type poll$return = {
     configVersion: string;
     commands: {
         seq: number;
-        type: "ping" | "docker.ensure" | "stream.open" | "stream.close" | "build.run" | "cache.clear" | "agent.update" | "registry.delete" | "host.cleanup" | "host.reboot" | "pool.ensure" | "partition.create" | "partition.resize" | "partition.stop" | "partition.start" | "partition.restart" | "partition.remove" | "partition.send" | "partition.receive";
+        type: "ping" | "docker.ensure" | "stream.open" | "stream.close" | "build.run" | "build.cancel" | "cache.clear" | "agent.update" | "registry.delete" | "host.cleanup" | "host.reboot" | "pool.ensure" | "partition.create" | "partition.resize" | "partition.stop" | "partition.start" | "partition.restart" | "partition.remove" | "partition.send" | "partition.receive";
         payload: {
             [K in string]: unknown;
         };

@@ -569,6 +569,9 @@ export async function updateProject(opts: {
   else $unset.autoscale = $unset.autoscaled = "";
   if (patch.volumes) $set.volumes = patch.volumes;
   if (patch.autoDeploy !== undefined) $set.autoDeploy = patch.autoDeploy;
+  if (patch.cancelRunningBuild !== undefined) {
+    $set.cancelRunningBuild = patch.cancelRunningBuild;
+  }
   if (patch.needsPrivateNetwork !== undefined) {
     $set.needsPrivateNetwork = patch.needsPrivateNetwork;
   }

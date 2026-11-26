@@ -295,6 +295,48 @@ Deno.test({
       );
 
       await t.step(
+        "cancel running build: a new deploy stops the one still building",
+        async () => {
+          await call("PATCH", `/projects/api/${project}`, {
+            cancelRunningBuild: true,
+          });
+          const { json: first } = await call(
+            "POST",
+            `/projects/api/${project}/deploy`,
+            {},
+          );
+          assertEquals((await deployment(first.deployment)).status, "building");
+          const { json: second } = await call(
+            "POST",
+            `/projects/api/${project}/deploy`,
+            {},
+          );
+          const old = await deployment(first.deployment);
+          assertEquals(old.status, "cancelled");
+          assertEquals(old.errorSummary, "Cancelled for a newer deployment");
+          assertEquals(
+            (await deployment(second.deployment)).status,
+            "building",
+          );
+          // Its servers stop its build, freeing their build lock.
+          assert(
+            await mongodb.db().collection("agentCommands").countDocuments({
+              type: "build.cancel",
+              "payload.deployment": first.deployment,
+            }) > 0,
+          );
+          await call("PATCH", `/projects/api/${project}`, {
+            cancelRunningBuild: false,
+          });
+          await pollAll(4);
+          assertEquals(
+            (await deployment(second.deployment)).status,
+            "healthy",
+          );
+        },
+      );
+
+      await t.step(
         "clear build cache: a new cache id and no layer cache next time",
         async () => {
           await call("POST", `/projects/api/${project}/clearCache`, {});

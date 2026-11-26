@@ -127,6 +127,8 @@ export const $project = z.object({
   volumes: z.array($projectVolume).max(10).default([]),
   deployStrategy: $deployStrategy,
   autoDeploy: z.boolean().default(true),
+  /** A new deploy cancels the build still running, instead of waiting for it. */
+  cancelRunningBuild: z.boolean().optional(),
   /** Reaches projects on other servers: warn when the mesh can't connect them (PLAN §8.2). */
   needsPrivateNetwork: z.boolean().default(false),
   distribution: z.enum(["auto", "perServer", "registry"]).default("auto"),
@@ -216,6 +218,7 @@ export const $projectUpdate = z.object({
   publicPort: z.number().int().min(1).max(65_535).nullable(),
   deployStrategy: $deployStrategy,
   autoDeploy: z.boolean(),
+  cancelRunningBuild: z.boolean(),
   needsPrivateNetwork: z.boolean(),
   distribution: $project.shape.distribution,
   registry: $objectId.nullable(),

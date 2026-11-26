@@ -287,6 +287,8 @@
   "Deploy from your repositories, including private ones.": "Deploy from your repositories, including private ones.",
   "Deploy key": "Deploy key",
   "Deploy on push": "Deploy on push",
+  "A new deploy cancels the running build": "A new deploy cancels the running build",
+  "A push or a manual deploy while a build runs stops it and starts the new one, instead of waiting for it to finish.": "A push or a manual deploy while a build runs stops it and starts the new one, instead of waiting for it to finish.",
   "Deploy strategy": "Deploy strategy",
   "Deploy without build cache": "Deploy without build cache",
   "Deploy your first project": "Deploy your first project",

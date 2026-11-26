@@ -30,13 +30,28 @@ type Builder struct {
 	Log *slog.Logger
 
 	mu        sync.Mutex // one build at a time: builds are CPU and disk heavy
-	running   sync.Map   // deployment → struct{}
+	running   sync.Map   // deployment → its context.CancelFunc
+	cancelled sync.Map   // deployments cancelled before their build arrived
 	cleanedAt time.Time  // the last disk cleanup; under mu
 }
 
 // LogPath is where a deployment's build log lives on this server.
 func (b *Builder) LogPath(deployment string) string {
 	return filepath.Join(b.Dir, safe(deployment)+".log")
+}
+
+var errCancelled = errors.New("build cancelled")
+
+// Cancel stops a deployment's build (`build.cancel`): its deployment was
+// cancelled or failed elsewhere. One that hasn't arrived yet won't start.
+func (b *Builder) Cancel(_ context.Context, p protocol.BuildCancelPayload) (map[string]any, error) {
+	if stop, ok := b.running.Load(p.Deployment); ok {
+		stop.(context.CancelFunc)()
+		return map[string]any{"cancelled": true}, nil
+	}
+	// ponytail: an entry stays for a build that never arrives; tiny, add expiry if it matters.
+	b.cancelled.Store(p.Deployment, struct{}{})
+	return map[string]any{"cancelled": false}, nil
 }
 
 // Running reports whether the deployment's build is still writing its log.
@@ -46,8 +61,13 @@ func (b *Builder) Running(deployment string) bool {
 }
 
 func (b *Builder) Run(ctx context.Context, p protocol.BuildRunPayload) (map[string]any, error) {
-	b.running.Store(p.Deployment, struct{}{})
+	ctx, stop := context.WithCancel(ctx)
+	defer stop()
+	b.running.Store(p.Deployment, stop)
 	defer b.running.Delete(p.Deployment)
+	if _, ok := b.cancelled.LoadAndDelete(p.Deployment); ok {
+		stop()
+	}
 
 	if err := os.MkdirAll(b.Dir, 0o700); err != nil {
 		return nil, err
@@ -67,6 +87,10 @@ func (b *Builder) Run(ctx context.Context, p protocol.BuildRunPayload) (map[stri
 	}
 	defer b.mu.Unlock()
 	defer b.pruneLogs()
+	if ctx.Err() != nil {
+		logf("Cancelled")
+		return nil, errCancelled
+	}
 
 	ctx, cancel := context.WithTimeout(ctx, time.Duration(p.TimeoutSec)*time.Second)
 	defer cancel()
@@ -80,6 +104,8 @@ func (b *Builder) Run(ctx context.Context, p protocol.BuildRunPayload) (map[stri
 	if err != nil {
 		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 			err = fmt.Errorf("build timed out after %ds", p.TimeoutSec)
+		} else if errors.Is(ctx.Err(), context.Canceled) {
+			err = errCancelled
 		}
 		logf("Failed: %v", err)
 		return nil, err

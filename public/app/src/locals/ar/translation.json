@@ -287,6 +287,8 @@
   "Deploy from your repositories, including private ones.": "انشر من مستودعاتك، بما فيها الخاصة.",
   "Deploy key": "مفتاح النشر",
   "Deploy on push": "النشر عند الدفع",
+  "A new deploy cancels the running build": "النشر الجديد يلغي البناء الجاري",
+  "A push or a manual deploy while a build runs stops it and starts the new one, instead of waiting for it to finish.": "الدفع أو النشر اليدوي أثناء بناء جارٍ يوقفه ويبدأ الجديد، بدلاً من انتظار انتهائه.",
   "Deploy strategy": "استراتيجية النشر",
   "Deploy without build cache": "النشر دون ذاكرة التخزين المؤقت للبناء",
   "Deploy your first project": "انشر مشروعك الأول",

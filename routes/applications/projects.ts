@@ -245,6 +245,7 @@ export default new Router("/api", function projects(router) {
       volumes: z.array($projectVolume),
       deployStrategy: $deployStrategy,
       autoDeploy: z.boolean(),
+      cancelRunningBuild: z.boolean().optional(),
       distribution: z.string(),
       registry: z.string().optional(),
       deployKeyPublic: z.string().optional(),

@@ -249,7 +249,7 @@ type PollResponse struct {
 type Command struct {
 	Seq int64 `json:"seq"`
 
-	// One of: ping, docker.ensure, stream.open, stream.close, build.run, cache.clear, agent.update, registry.delete, host.cleanup, host.reboot, pool.ensure, partition.create, partition.resize, partition.stop, partition.start, partition.restart, partition.remove, partition.send, partition.receive
+	// One of: ping, docker.ensure, stream.open, stream.close, build.run, build.cancel, cache.clear, agent.update, registry.delete, host.cleanup, host.reboot, pool.ensure, partition.create, partition.resize, partition.stop, partition.start, partition.restart, partition.remove, partition.send, partition.receive
 	Type string `json:"type"`
 
 	Payload map[string]any `json:"payload"`
@@ -451,6 +451,10 @@ type BuildRunPayloadPush struct {
 	Username string `json:"username"`
 
 	Password string `json:"password"`
+}
+
+type BuildCancelPayload struct {
+	Deployment string `json:"deployment"`
 }
 
 type CacheClearPayload struct {

@@ -83,8 +83,9 @@ func Default(ctx context.Context, s *streams.Manager, builder *build.Builder, op
 			s.Close(p.Session)
 			return map[string]any{"closed": true}, nil
 		}),
-		"build.run":   Sealed(open, builder.Run),
-		"cache.clear": Handle(builder.ClearCache),
+		"build.run":    Sealed(open, builder.Run),
+		"build.cancel": Handle(builder.Cancel),
+		"cache.clear":  Handle(builder.ClearCache),
 		// Reboots the machine this agent runs on, a few seconds after its
 		// result is sent. Not inside a partition: its machine restarts it
 		// (`partition.restart`), as rebooting from inside isn't reliable there.

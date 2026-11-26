@@ -668,6 +668,7 @@
                   "stream.open",
                   "stream.close",
                   "build.run",
+                  "build.cancel",
                   "cache.clear",
                   "agent.update",
                   "registry.delete",
@@ -1518,6 +1519,20 @@
         "noCache",
         "timeoutSec",
         "gitImage"
+      ],
+      "additionalProperties": false
+    },
+    "BuildCancelPayload": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "deployment": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{24}$"
+        }
+      },
+      "required": [
+        "deployment"
       ],
       "additionalProperties": false
     },

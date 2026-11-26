@@ -572,6 +572,7 @@ sequenceDiagram
 
 Rules:
 - One active deployment per project. A newer push supersedes a queued one.
+- **Cancel the running build** (project Settings → Build, `cancelRunningBuild`, off by default): a new deploy of any trigger cancels the deployment still `building` instead of waiting for it, and starts at once. A deployment that is cancelled, fails or passes its deadline sends `build.cancel` to its servers still building, so they stop and free their build lock; one that arrives after the cancel never starts (2026-11-26).
 - Image tags: `huruf/<project-slug>-<6 hex of the project id>:<release>-<shortsha>`. The id part keeps a project deleted and created again with the same slug from sharing names (and registry cleanup) with the old one. The images of the last N releases are kept on the servers/registry; older ones are garbage-collected.
 - Image-only sources skip the build.
 - Private GitHub repos use an installation token (1 h) minted by the control plane and sealed to the builder(s). Generic Git uses a per-project deploy key.

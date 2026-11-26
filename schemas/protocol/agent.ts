@@ -175,6 +175,7 @@ export const $commandType = z.enum([
   "stream.open",
   "stream.close",
   "build.run",
+  "build.cancel",
   "cache.clear",
   "agent.update",
   "registry.delete",
@@ -190,6 +191,14 @@ export const $commandType = z.enum([
   "partition.send",
   "partition.receive",
 ]);
+
+/**
+ * `build.cancel`: stop this deployment's build (its deployment was cancelled
+ * or failed elsewhere), freeing the server's build lock for the next one.
+ */
+export const $buildCancelPayload = z.object({
+  deployment: z.string().regex(/^[a-f0-9]{24}$/),
+});
 
 /**
  * `cache.clear` ("Clear build cache", PLAN §9.2): a project's BuildKit cache
