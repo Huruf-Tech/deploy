@@ -212,7 +212,9 @@ Project groups are **folders on the Projects page**, not a nav item: folder card
 
 **Watched paths** (project Settings → Source and network, GitHub projects with Deploy on push): a monospace textarea, one path per line, under the Deploy on push switch; hidden while it's off. A push deploy that was refused shows in Deployments as failed with its reason, like any failed deploy.
 
-**Domains per server and logins** (`pages/projects/DomainAccess.tsx`): with more than one server, the Add domain row gets a "Served from" select (All servers / Only <server>) and the table a Served from column that saves on change. Each domain row has a lock button: open (dimmed) for no login, closed for one. Its dialog asks for a user name, then shows the generated password once in a code block with copy; "New password" replaces it and "Remove the login" turns it off. The reachability map says "Only <server>" and "Login" under a domain's name. Reach it lists each server's `.srv.internal` name when the project runs on several; Edit server has the Internal name field.
+**Domains per server and logins** (`pages/projects/DomainAccess.tsx`): with more than one server, the Add domain row gets a "Served from" select (All servers / Only <server>) and the table a Served from column that saves on change. Each domain row has a lock button: open (dimmed) for no login, closed for one. Its dialog asks for a user name, then shows the generated password once in a code block with copy; "New password" replaces it and "Remove the login" turns it off. The reachability map says "Only <server>" and "Login" under a domain's name. Edit server has the Internal name field.
+
+**Reach it, by server** (`pages/projects/ServerAddresses.tsx`): with several servers, the facts list keeps the project-wide addresses (internal name, domains) and a "By server" list follows: each server's name, then its own `.srv.internal` name (full, wrapping at its dots, with copy), its public-port URL and its autoscaled replicas. No repeated "Public port" or per-server labels, and the part of a name that differs is never cut off. One server: the plain facts list as before.
 
 ## 9c. Private network
 

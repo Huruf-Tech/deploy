@@ -2150,8 +2150,9 @@
   "Servers for {{name}}": "خوادم {{name}}",
   "Served from": "يُخدم من",
   "Serve it from": "خدمته من",
-  "Internal, {{server}} only": "داخلي، {{server}} فقط",
   "Internal name": "الاسم الداخلي",
   "Given on its first deploy": "يُعطى عند أول نشر",
-  "Its projects are also <project>.{{name}}.srv.internal: this server's copy only, from any server in the private network. Changing it changes those names at once.": "مشاريعه متاحة أيضاً باسم <project>.{{name}}.srv.internal: نسخة هذا الخادم فقط، من أي خادم في الشبكة الخاصة. تغييره يغيّر هذه الأسماء فوراً."
+  "Its projects are also <project>.{{name}}.srv.internal: this server's copy only, from any server in the private network. Changing it changes those names at once.": "مشاريعه متاحة أيضاً باسم <project>.{{name}}.srv.internal: نسخة هذا الخادم فقط، من أي خادم في الشبكة الخاصة. تغييره يغيّر هذه الأسماء فوراً.",
+  "By server": "حسب الخادم",
+  "{{n}} replicas now": "{{n}} نسخ الآن"
 }

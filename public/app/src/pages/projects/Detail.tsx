@@ -73,6 +73,7 @@ import { Reachability } from "./Reachability"
 import { type TVolume, VolumesEditor } from "./VolumesEditor"
 import { DistributionEditor, type TDistribution } from "./DistributionEditor"
 import { MaintenanceEditor, type TRestartSchedule } from "./MaintenanceEditor"
+import { ServerAddresses } from "./ServerAddresses"
 import { LabelChips } from "@/pages/servers/ServerLabels"
 import { ago } from "@/lib/format"
 import {
@@ -1182,18 +1183,33 @@ export default function ProjectDetail() {
             ? t("Compose file")
             : t("One-click service")
   const internal = `${project.slug}.internal${project.runtime.port ? `:${project.runtime.port}` : ""}`
-  // One server's replicas (PLAN §8.3): only where it runs now.
+  // With several servers, Reach it groups each one's own addresses
+  // (PLAN §8.3, §14): its internal name (only where it runs now), its
+  // public port and its replicas.
   const port = project.runtime.port ? `:${project.runtime.port}` : ""
-  const perServer = project.servers.flatMap((s) =>
-    s.dnsName && project.placedOn.includes(s._id)
-      ? [
-          {
-            server: s.name,
-            name: `${project.slug}.${s.dnsName}.srv.internal${port}`,
-          },
-        ]
-      : []
-  )
+  const byServer =
+    project.servers.length > 1
+      ? project.servers.map((s) => {
+          const scaled = project.autoscale
+            ? project.autoscaled?.findLast((a) => a.server === s._id)
+            : undefined
+          return {
+            _id: s._id,
+            name: s.name,
+            ...(s.dnsName && project.placedOn.includes(s._id)
+              ? {
+                  internal: `${project.slug}.${s.dnsName}.srv.internal${port}`,
+                }
+              : {}),
+            ...(project.publicPort && s.publicIp
+              ? { url: `http://${s.publicIp}:${project.publicPort}` }
+              : {}),
+            ...(scaled
+              ? { scaled: { replicas: scaled.replicas, reason: scaled.reason } }
+              : {}),
+          }
+        })
+      : undefined
   const activeDomains = (domains ?? []).filter((d) => d.status === "active")
   const strategyLabel = {
     rolling: t("rolling"),
@@ -1380,16 +1396,6 @@ export default function ProjectDetail() {
                     value: internal,
                     copy: internal,
                   },
-                  // With several servers: each one's own copy.
-                  ...(perServer.length > 1
-                    ? perServer.map((p) => ({
-                        label: t("Internal, {{server}} only", {
-                          server: p.server,
-                        }),
-                        value: p.name,
-                        copy: p.name,
-                      }))
-                    : []),
                   ...(domains ?? []).map((d) => ({
                     label: d.appDomain ? t("Test domain") : t("Domain"),
                     value:
@@ -1436,7 +1442,7 @@ export default function ProjectDetail() {
                         </span>
                       ),
                   })),
-                  ...urls.map((url) => ({
+                  ...(byServer ? [] : urls).map((url) => ({
                     label: t("Public port"),
                     value: (
                       <a
@@ -1455,7 +1461,7 @@ export default function ProjectDetail() {
                       </a>
                     ),
                   })),
-                  ...(project.publicPort && !urls.length
+                  ...(project.publicPort && !urls.length && !byServer
                     ? [
                         {
                           label: t("Public port"),
@@ -1468,7 +1474,7 @@ export default function ProjectDetail() {
                   ...(!project.publicPort && !activeDomains.length
                     ? [{ label: t("Public"), value: t("Not public") }]
                     : []),
-                  ...(project.autoscale
+                  ...(project.autoscale && !byServer
                     ? (project.autoscaled ?? []).map((a) => ({
                         label: t("Autoscale"),
                         value: (
@@ -1486,6 +1492,7 @@ export default function ProjectDetail() {
                     : []),
                 ]}
               />
+              {byServer && <ServerAddresses servers={byServer} />}
             </Panel>
           </div>
 

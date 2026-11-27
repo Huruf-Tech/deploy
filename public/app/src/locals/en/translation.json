@@ -2150,8 +2150,9 @@
   "Servers for {{name}}": "Servers for {{name}}",
   "Served from": "Served from",
   "Serve it from": "Serve it from",
-  "Internal, {{server}} only": "Internal, {{server}} only",
   "Internal name": "Internal name",
   "Given on its first deploy": "Given on its first deploy",
-  "Its projects are also <project>.{{name}}.srv.internal: this server's copy only, from any server in the private network. Changing it changes those names at once.": "Its projects are also <project>.{{name}}.srv.internal: this server's copy only, from any server in the private network. Changing it changes those names at once."
+  "Its projects are also <project>.{{name}}.srv.internal: this server's copy only, from any server in the private network. Changing it changes those names at once.": "Its projects are also <project>.{{name}}.srv.internal: this server's copy only, from any server in the private network. Changing it changes those names at once.",
+  "By server": "By server",
+  "{{n}} replicas now": "{{n}} replicas now"
 }
