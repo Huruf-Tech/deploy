@@ -471,13 +471,8 @@ const webhookKey = async (id: ObjectId) => {
 const fromHex = (hex: string) =>
   Uint8Array.from(hex.match(/../g) ?? [], (b) => parseInt(b, 16));
 
-export type TPushEvent = {
-  ref?: string;
-  after?: string;
-  deleted?: boolean;
-  repository?: { full_name?: string };
-  head_commit?: { message?: string; author?: { name?: string } } | null;
-};
+export type { TPushEvent } from "@/lib/github/push.ts";
+import type { TPushEvent } from "@/lib/github/push.ts";
 
 /**
  * GitHub webhook (PLAN §17): HMAC-SHA256 verified with this integration's own

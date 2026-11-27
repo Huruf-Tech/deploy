@@ -2124,5 +2124,7 @@
   "Last restarts": "Last restarts",
   "Restarted": "Restarted",
   "Skipped": "Skipped",
-  "Removed server": "Removed server"
+  "Removed server": "Removed server",
+  "Deploy only when these paths change": "Deploy only when these paths change",
+  "For a repository with several projects: one folder, file or glob per line, from the repository root. A push that changes none of them doesn't deploy this project. Empty: every push deploys. A force push or a new branch always deploys, and so does Deploy.": "For a repository with several projects: one folder, file or glob per line, from the repository root. A push that changes none of them doesn't deploy this project. Empty: every push deploys. A force push or a new branch always deploys, and so does Deploy."
 }

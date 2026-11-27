@@ -6,6 +6,7 @@ import { platformTenantId } from "@/lib/billing/platform.ts";
 import { Response } from "@/core/http/response.ts";
 import { Logger } from "@/core/utils/logger.ts";
 import { readNumberSetting } from "@/lib/core/settings.ts";
+import { errorText } from "@/lib/core/errors.ts";
 import {
   addInterval,
   type BillingService,
@@ -72,17 +73,6 @@ const log = (text: string) => Logger.warn(`[rentals] ${text}`);
 
 /** A rented server's name in the customer's workspace: its size. */
 const rentedName = (plan?: string) => `Rented · ${plan ?? "server"}`;
-
-/** A refusal's message, from its JSON `{ error }` or plain text. */
-const errorText = async (res: Response) => {
-  const text = await res.clone().text();
-  try {
-    const body = JSON.parse(text);
-    return String(body?.error?.message ?? body?.error ?? body?.message ?? text);
-  } catch {
-    return text || `HTTP ${res.status}`;
-  }
-};
 
 export type { TResources };
 

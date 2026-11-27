@@ -2124,5 +2124,7 @@
   "Last restarts": "آخر عمليات إعادة التشغيل",
   "Restarted": "أُعيد التشغيل",
   "Skipped": "تم التخطي",
-  "Removed server": "خادم محذوف"
+  "Removed server": "خادم محذوف",
+  "Deploy only when these paths change": "النشر فقط عند تغيّر هذه المسارات",
+  "For a repository with several projects: one folder, file or glob per line, from the repository root. A push that changes none of them doesn't deploy this project. Empty: every push deploys. A force push or a new branch always deploys, and so does Deploy.": "لمستودع فيه عدة مشاريع: مجلد أو ملف أو نمط واحد في كل سطر، من جذر المستودع. الدفع الذي لا يغيّر أياً منها لا ينشر هذا المشروع. فارغ: كل دفع ينشر. الدفع القسري أو الفرع الجديد ينشر دائماً، وكذلك زر النشر."
 }

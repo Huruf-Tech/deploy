@@ -245,6 +245,7 @@ export default new Router("/api", function projects(router) {
       volumes: z.array($projectVolume),
       deployStrategy: $deployStrategy,
       autoDeploy: z.boolean(),
+      watchPaths: z.array(z.string()).optional(),
       cancelRunningBuild: z.boolean().optional(),
       restartSchedule: z.object({
         cron: z.string(),

@@ -445,6 +445,9 @@ function Settings({
     project.deployStrategy
   )
   const [autoDeploy, setAutoDeploy] = React.useState(project.autoDeploy)
+  const [watchPaths, setWatchPaths] = React.useState(
+    (project.watchPaths ?? []).join("\n")
+  )
   const [cancelRunning, setCancelRunning] = React.useState(
     !!project.cancelRunningBuild
   )
@@ -512,6 +515,14 @@ function Settings({
           deployStrategy: strategy,
           acknowledgeVolumeRisk: strategy !== project.deployStrategy,
           autoDeploy,
+          ...(project.source.type === "github"
+            ? {
+                watchPaths: watchPaths
+                  .split("\n")
+                  .map((p) => p.trim())
+                  .filter(Boolean),
+              }
+            : {}),
           cancelRunningBuild: cancelRunning,
           restartSchedule: restart,
           needsPrivateNetwork: needsNetwork,
@@ -986,6 +997,29 @@ function Settings({
                 </Field>
               )}
             </div>
+          )}
+
+          {project.source.type === "github" && autoDeploy && (
+            <Field>
+              <FieldLabel htmlFor="s-watch">
+                {t("Deploy only when these paths change")}
+              </FieldLabel>
+              <Textarea
+                id="s-watch"
+                value={watchPaths}
+                onChange={(e) => setWatchPaths(e.target.value)}
+                rows={3}
+                spellCheck={false}
+                dir="ltr"
+                className="font-mono text-xs"
+                placeholder={"apps/web\npackages/**"}
+              />
+              <FieldDescription>
+                {t(
+                  "For a repository with several projects: one folder, file or glob per line, from the repository root. A push that changes none of them doesn't deploy this project. Empty: every push deploys. A force push or a new branch always deploys, and so does Deploy."
+                )}
+              </FieldDescription>
+            </Field>
           )}
         </Panel>
 

@@ -569,6 +569,8 @@ export async function updateProject(opts: {
   else $unset.autoscale = $unset.autoscaled = "";
   if (patch.volumes) $set.volumes = patch.volumes;
   if (patch.autoDeploy !== undefined) $set.autoDeploy = patch.autoDeploy;
+  if (patch.watchPaths?.length) $set.watchPaths = patch.watchPaths;
+  else if (patch.watchPaths) $unset.watchPaths = "";
   if (patch.cancelRunningBuild !== undefined) {
     $set.cancelRunningBuild = patch.cancelRunningBuild;
   }

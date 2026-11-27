@@ -1,4 +1,6 @@
 import { tenantCreator } from "@/lib/core/tenants.ts";
+import { errorText } from "@/lib/core/errors.ts";
+import { changedFiles, touches, type TPushEvent } from "@/lib/github/push.ts";
 import { ObjectId, type WithId } from "mongodb";
 import { Response } from "@/core/http/response.ts";
 import { isDuplicateKeyError } from "@/database.ts";
@@ -1117,13 +1119,7 @@ export async function clearAllBuildCaches(tenant: ObjectId, user?: ObjectId) {
 export async function deployOnPush(
   integration: ObjectId,
   tenant: ObjectId,
-  push: {
-    ref?: string;
-    after?: string;
-    deleted?: boolean;
-    repository?: { full_name?: string };
-    head_commit?: { message?: string; author?: { name?: string } } | null;
-  },
+  push: TPushEvent,
 ) {
   const branch = push.ref?.startsWith("refs/heads/")
     ? push.ref.slice("refs/heads/".length)
@@ -1139,25 +1135,81 @@ export async function deployOnPush(
     "source.repo": push.repository.full_name,
     "source.branch": branch,
     autoDeploy: true,
-  }, { projection: { _id: 1 }, limit: 50 }).toArray();
+  }, {
+    projection: { _id: 1, servers: 1, deployStrategy: 1, watchPaths: 1 },
+    limit: 50,
+  }).toArray();
 
+  const commit: TCommit = {
+    sha: push.after,
+    ...(push.head_commit?.message
+      ? { message: push.head_commit.message.split("\n")[0].slice(0, 300) }
+      : {}),
+    ...(push.head_commit?.author?.name
+      ? { author: push.head_commit.author.name }
+      : {}),
+  };
+  // A monorepo's projects deploy only when their own paths changed; when
+  // GitHub's file list may be incomplete, every project deploys.
+  const files = changedFiles(push);
+  let started = 0;
   for (const project of projects) {
-    await deploy({
-      tenant,
-      project: project._id,
-      trigger: "push",
-      commit: {
-        sha: push.after,
-        ...(push.head_commit?.message
-          ? { message: push.head_commit.message.split("\n")[0].slice(0, 300) }
-          : {}),
-        ...(push.head_commit?.author?.name
-          ? { author: push.head_commit.author.name }
-          : {}),
-      },
-    }).catch((error) =>
-      log.warn(`Push deploy of ${project._id} refused: ${message(error)}`)
-    );
+    if (
+      project.watchPaths?.length && files &&
+      !touches(files, project.watchPaths)
+    ) {
+      log.info(
+        `Push ${
+          push.after.slice(0, 7)
+        } skips ${project._id}: none of its watched paths changed`,
+      );
+      continue;
+    }
+    try {
+      await deploy({ tenant, project: project._id, trigger: "push", commit });
+      started++;
+    } catch (error) {
+      await refusedPush(tenant, project, commit, error);
+    }
   }
-  return projects.length;
+  return started;
+}
+
+/**
+ * A push deploy that was refused (the plan's deploys per hour, a server over
+ * the server limit…) shows on the project as a failed deployment with why,
+ * and fires "Deploy failed", instead of only reaching the log.
+ */
+async function refusedPush(
+  tenant: ObjectId,
+  project: Pick<TProjectDoc, "_id" | "servers" | "deployStrategy">,
+  commit: TCommit,
+  error: unknown,
+) {
+  const why =
+    (error instanceof Response
+      ? await errorText(error).catch(() => `HTTP ${error.status}`)
+      : message(error)).slice(0, 480);
+  log.warn(`Push deploy of ${project._id} refused: ${why}`);
+  const at = now();
+  const deployment: TDeployment = {
+    tenant,
+    project: project._id,
+    trigger: "push",
+    strategy: project.deployStrategy,
+    status: "failed",
+    servers: project.servers,
+    builds: [],
+    commit,
+    noCache: false,
+    createdAt: at,
+    finishedAt: at,
+    errorSummary: why,
+  };
+  try {
+    await deploymentModel.insertOne(deployment);
+    await onDeployFailed(deployment, why);
+  } catch (e) {
+    log.warn(`Recording the refused push deploy of ${project._id}: ${e}`);
+  }
 }

@@ -241,6 +241,7 @@ export type get$return = {
     }[];
     deployStrategy: "rolling" | "allAtOnce" | "stopFirst";
     autoDeploy: boolean;
+    watchPaths?: string[] | undefined;
     cancelRunningBuild?: boolean | undefined;
     restartSchedule?: {
         cron: string;
@@ -311,6 +312,7 @@ export type update$body = {
     publicPort?: (number | null) | undefined;
     deployStrategy?: ("rolling" | "allAtOnce" | "stopFirst") | undefined;
     autoDeploy?: boolean | undefined;
+    watchPaths?: string[] | undefined;
     cancelRunningBuild?: boolean | undefined;
     restartSchedule?: ({
         cron: string;

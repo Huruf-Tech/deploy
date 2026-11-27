@@ -1,5 +1,6 @@
 import { assert, assertEquals, assertMatch } from "@std/assert";
 import { createVerify, generateKeyPairSync } from "node:crypto";
+import { ObjectId } from "mongodb";
 import handler from "@/serve.base.ts";
 import { mongodb } from "@/database.ts";
 import { githubApi } from "@/lib/services.ts";
@@ -295,6 +296,135 @@ Deno.test({
           await mongodb.db().collection(name).deleteMany({ tenant: tenantId });
         }
       });
+
+      await t.step(
+        "one push, several projects of the repo: watched paths, refusals recorded",
+        async () => {
+          const join = async (name: string) => {
+            const agent = new SimAgent(await createState(name), {
+              baseUrl: "http://localhost",
+              tenant,
+              send: (req) => Promise.resolve(handler(req)),
+            });
+            return (await joinAsPartition(agent, tenantId, user)).json
+              .server as string;
+          };
+          const [ok, limited] = [
+            await join("github-a"),
+            await join("github-b"),
+          ];
+          const { json: templates } = await call("GET", "/templates/api");
+          const template = templates.find((x: { slug: string }) =>
+            x.slug === "thunder"
+          )._id;
+          const project = async (
+            slug: string,
+            server: string,
+            watchPaths?: string[],
+          ) => {
+            const created = await call("POST", "/projects/api", {
+              name: slug,
+              slug,
+              source: {
+                type: "github",
+                gitIntegration: integration,
+                installation: 42,
+                repo: "acme/shop",
+                branch: "main",
+              },
+              template: { template },
+              servers: [server],
+            });
+            assertEquals(created.status, 200, JSON.stringify(created.json));
+            if (watchPaths) {
+              const saved = await call(
+                "PATCH",
+                `/projects/api/${created.json._id}`,
+                { watchPaths },
+              );
+              assertEquals(saved.status, 200, JSON.stringify(saved.json));
+            }
+            return created.json._id as string;
+          };
+          const web = await project("web", ok, ["apps/web", "packages/**"]);
+          const api = await project("api", ok, ["apps/api/**"]);
+          // On a server over the plan's server limit: its deploy is refused.
+          const docs = await project("docs", limited);
+          await mongodb.db().collection("serverLeases").updateOne(
+            { _id: new ObjectId(limited) },
+            { $set: { throttled: true } },
+          );
+          const bad = await call("PATCH", `/projects/api/${api}`, {
+            watchPaths: ["/"],
+          });
+          assertEquals(bad.status, 400, "a path that names nothing");
+
+          const pushed = async (extra: Record<string, unknown>) => {
+            const body = JSON.stringify({
+              ref: "refs/heads/main",
+              after: "b".repeat(40),
+              repository: { full_name: "acme/shop" },
+              head_commit: { message: "Web only", author: { name: "Ada" } },
+              ...extra,
+            });
+            const res = await handlerPost(
+              `/githubHooks/api/webhook/${integration}`,
+              body,
+              {
+                "x-github-event": "push",
+                "x-hub-signature-256": await sign(APP.webhook_secret, body),
+              },
+            );
+            assertEquals(res.status, 204);
+          };
+          const deployments = async (id: string) =>
+            (await call("GET", `/projects/api/${id}/deployments`)).json as {
+              status: string;
+              trigger: string;
+              errorSummary?: string;
+            }[];
+
+          await pushed({
+            commits: [{
+              added: [],
+              modified: ["apps/web/index.ts"],
+              removed: [],
+            }],
+          });
+          assertEquals((await deployments(web)).length, 1, "web changed");
+          assertEquals((await deployments(api)).length, 0, "api didn't");
+          const refused = await deployments(docs);
+          assertEquals(refused.length, 1, "the refusal is on the project");
+          assertEquals(refused[0].status, "failed");
+          assertEquals(refused[0].trigger, "push");
+          assertMatch(refused[0].errorSummary!, /server limit/);
+
+          // A force push's file list may not be everything: all deploy.
+          await pushed({
+            forced: true,
+            commits: [{ added: [], modified: ["README.md"], removed: [] }],
+          });
+          assertEquals(
+            (await deployments(api)).length,
+            1,
+            "api on a force push",
+          );
+
+          const db = mongodb.db();
+          await db.collection("serverLeases").deleteMany({ tenant: tenantId });
+          for (
+            const name of [
+              "projects",
+              "releases",
+              "deployments",
+              "servers",
+              "agentCommands",
+            ]
+          ) {
+            await db.collection(name).deleteMany({ tenant: tenantId });
+          }
+        },
+      );
 
       await t.step("no plaintext credentials in MongoDB", async () => {
         const stored = JSON.stringify(

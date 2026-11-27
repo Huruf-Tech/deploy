@@ -21,3 +21,14 @@ export function asBadRequest<T>(fn: () => T, ...kinds: TErrorClass[]): T {
     return map(error);
   }
 }
+
+/** A refusal's message, from its JSON `{ error }` or plain text. */
+export const errorText = async (res: Response) => {
+  const text = await res.clone().text();
+  try {
+    const body = JSON.parse(text);
+    return String(body?.error?.message ?? body?.error ?? body?.message ?? text);
+  } catch {
+    return text || `HTTP ${res.status}`;
+  }
+};

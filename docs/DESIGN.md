@@ -210,6 +210,8 @@ Project groups are **folders on the Projects page**, not a nav item: folder card
 
 **Maintenance** (project Settings, `pages/projects/MaintenanceEditor.tsx`): a panel with its switch in the header, like Autoscale. "Restart on a schedule" picks Every day / Every week (a native time input, weekday names from `Intl`) or a cron expression, a time zone (a searchable combobox, the browser's zone by default) and, on projects with several servers, which ones (all checked means all; the last one can't be unchecked). Below, the last restart per server with its result. It saves with the form's Save. Later scheduled jobs go in this panel.
 
+**Watched paths** (project Settings → Source and network, GitHub projects with Deploy on push): a monospace textarea, one path per line, under the Deploy on push switch; hidden while it's off. A push deploy that was refused shows in Deployments as failed with its reason, like any failed deploy.
+
 ## 9c. Private network
 
 "Who reaches whom" is a React Flow graph (`src/pages/network/ReachGraph.tsx`, lazy): servers on a circle, one edge per pair (green both ways, red dashed one way, red no link, grey dotted not in the mesh), the registry host starred. The old matrix stays in the DOM, visually hidden, for screen readers.

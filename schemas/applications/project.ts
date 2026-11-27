@@ -76,6 +76,12 @@ export const $projectVolume = z.object({
 export const hasLocalVolumes = (volumes: { storage?: unknown }[]) =>
   volumes.some((v) => !v.storage);
 
+/** A path from the repository root: a glob, or a folder or file (PLAN §17). */
+export const $watchPath = z.string().trim().min(1).max(200).refine(
+  (p) => p.replace(/^(\.\/|\/)+/, "").replace(/\/+$/, "") !== "",
+  "A path in the repository, e.g. apps/web/**",
+);
+
 export const $deployStrategy = z.enum(["rolling", "allAtOnce", "stopFirst"]);
 
 /** Agent-local autoscaling (PLAN §10): replicas per server within min..max. */
@@ -128,6 +134,8 @@ export const $project = z.object({
   volumes: z.array($projectVolume).max(10).default([]),
   deployStrategy: $deployStrategy,
   autoDeploy: z.boolean().default(true),
+  /** GitHub pushes deploy it only when one of these changed (monorepos); all pushes when absent. */
+  watchPaths: z.array($watchPath).max(20).optional(),
   /** A new deploy cancels the build still running, instead of waiting for it. */
   cancelRunningBuild: z.boolean().optional(),
   /** Restarts its containers on a schedule, by each server's agent (PLAN §10.1). */
@@ -228,6 +236,7 @@ export const $projectUpdate = z.object({
   publicPort: z.number().int().min(1).max(65_535).nullable(),
   deployStrategy: $deployStrategy,
   autoDeploy: z.boolean(),
+  watchPaths: z.array($watchPath).max(20),
   cancelRunningBuild: z.boolean(),
   restartSchedule: $restartSchedule.nullable(),
   needsPrivateNetwork: z.boolean(),
