@@ -10,6 +10,7 @@ import {
   renderContent,
   resolveInputs,
   TemplateError,
+  toEnvKey,
 } from "@/lib/build/render.ts";
 import {
   ComposeError,
@@ -84,13 +85,14 @@ export const openCompose = (
 const sealCompose = (tenant: ObjectId, id: ObjectId, text: string) =>
   keyring.encrypt(composeOwner(tenant), text, `compose:${id}`);
 
-/** camelCase input keys become UPPER_SNAKE variable keys: rootPassword → ROOT_PASSWORD. */
-export const toEnvKey = (key: string) =>
-  key.replace(/([a-z0-9])([A-Z])/g, "$1_$2").toUpperCase();
+export { toEnvKey };
 
 /** Secret inputs live in project variables, never in the project document. */
 export const isSecretInput = (input: TTemplateInput) =>
   input.type === "secret" || !!input.generate;
+
+/** File inputs become file variables, edited with the project's variables. */
+export const isFileInput = (input: TTemplateInput) => input.type === "file";
 
 /** Template and compose errors are the user's: a 400 with their message. */
 const userInput = <T>(fn: () => T) =>
@@ -288,6 +290,7 @@ export async function createProject(opts: {
   let template: TProject["template"];
   const templateInputs: TProject["templateInputs"] = {};
   const secrets: Record<string, string> = {};
+  const fileInputs: Record<string, string> = {};
   let kind: TProject["kind"] = "app";
   let runtime = { ...input.runtime };
   let composeVolumes = false;
@@ -316,6 +319,8 @@ export async function createProject(opts: {
     for (const field of content.inputs) {
       if (isSecretInput(field)) {
         secrets[toEnvKey(field.key)] = String(values[field.key]);
+      } else if (isFileInput(field)) {
+        fileInputs[toEnvKey(field.key)] = String(values[field.key]);
       } else templateInputs[field.key] = values[field.key];
     }
     const { files } = await userInput(() =>
@@ -489,6 +494,24 @@ export async function createProject(opts: {
       settings: {
         isSecret: true,
         kind: "env",
+        stage: "runtime",
+        description: "Template input",
+      },
+      by: user,
+    });
+  }
+
+  // File template inputs: a config file the service reads (PLAN §9.1).
+  for (const [key, value] of Object.entries(fileInputs)) {
+    if (given.has(key) || !value) continue;
+    await createVariable({
+      viewer,
+      owner,
+      key,
+      value,
+      settings: {
+        isSecret: false,
+        kind: "file",
         stage: "runtime",
         description: "Template input",
       },

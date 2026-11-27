@@ -35,7 +35,7 @@ export type create$body = {
             key: string;
             label: string;
             description?: string | undefined;
-            type: "string" | "number" | "boolean" | "select" | "secret";
+            type: "string" | "number" | "boolean" | "select" | "secret" | "file";
             default?: (string | number | boolean) | undefined;
             required?: boolean;
             options?: string[] | undefined;
@@ -87,7 +87,7 @@ export type get$return = {
             key: string;
             label: string;
             description?: string | undefined;
-            type: "string" | "number" | "boolean" | "select" | "secret";
+            type: "string" | "number" | "boolean" | "select" | "secret" | "file";
             default?: (string | number | boolean) | undefined;
             required: boolean;
             options?: string[] | undefined;
@@ -136,7 +136,7 @@ export type saveTemplateVersion$body = {
         key: string;
         label: string;
         description?: string | undefined;
-        type: "string" | "number" | "boolean" | "select" | "secret";
+        type: "string" | "number" | "boolean" | "select" | "secret" | "file";
         default?: (string | number | boolean) | undefined;
         required?: boolean;
         options?: string[] | undefined;

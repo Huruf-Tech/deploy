@@ -32,7 +32,7 @@ export type draft$return = {
             key: string;
             label: string;
             description?: string | undefined;
-            type: "string" | "number" | "boolean" | "select" | "secret";
+            type: "string" | "number" | "boolean" | "select" | "secret" | "file";
             default?: (string | number | boolean) | undefined;
             required: boolean;
             options?: string[] | undefined;
@@ -52,7 +52,7 @@ export type draft$return = {
                 key: string;
                 label: string;
                 description?: string | undefined;
-                type: "string" | "number" | "boolean" | "select" | "secret";
+                type: "string" | "number" | "boolean" | "select" | "secret" | "file";
                 default?: (string | number | boolean) | undefined;
                 required: boolean;
                 options?: string[] | undefined;
@@ -87,7 +87,7 @@ export type fix$return = {
             key: string;
             label: string;
             description?: string | undefined;
-            type: "string" | "number" | "boolean" | "select" | "secret";
+            type: "string" | "number" | "boolean" | "select" | "secret" | "file";
             default?: (string | number | boolean) | undefined;
             required: boolean;
             options?: string[] | undefined;
@@ -114,7 +114,7 @@ export type applyAiFix$body = {
             key: string;
             label: string;
             description?: string | undefined;
-            type: "string" | "number" | "boolean" | "select" | "secret";
+            type: "string" | "number" | "boolean" | "select" | "secret" | "file";
             default?: (string | number | boolean) | undefined;
             required?: boolean;
             options?: string[] | undefined;

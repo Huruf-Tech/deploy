@@ -476,4 +476,77 @@ volumes:
 `,
     },
   },
+  {
+    meta: {
+      slug: "prometheus",
+      name: "Prometheus",
+      kind: "service",
+      icon: "chart-line",
+      description:
+        "Prometheus with its scrape config as a project file variable and a persistent volume.",
+    },
+    content: {
+      inputs: [
+        {
+          key: "version",
+          label: "Version",
+          description:
+            "A prom/prometheus tag; pin a version for repeatable deploys.",
+          type: "string",
+          default: "v3.5.0",
+          required: true,
+        },
+        {
+          key: "retention",
+          label: "Keep data for",
+          type: "select",
+          options: ["7d", "15d", "30d", "90d", "180d"],
+          default: "15d",
+          required: true,
+        },
+        {
+          key: "prometheusYml",
+          label: "prometheus.yml",
+          description:
+            "Saved as the PROMETHEUS_YML file variable: edit it there, then Restart. A project's replicas on every server: dns_sd_configs with <project>.internal, type A.",
+          type: "file",
+          default: `global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  # Every replica of a project, on every server in the private network:
+  # - job_name: my-app
+  #   dns_sd_configs:
+  #     - names: ["my-app.internal"]
+  #       type: A
+  #       port: 3000
+`,
+          required: true,
+        },
+      ],
+      defaults: { port: 9090 },
+      compose: `services:
+  prometheus:
+    image: prom/prometheus:{{inputs.version}}
+    expose: ["9090"]
+    command:
+      - "--config.file={{inputs.prometheusYml}}"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time={{inputs.retention}}"
+    volumes:
+      - data:/prometheus
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:9090/-/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+volumes:
+  data:
+`,
+    },
+  },
 ];

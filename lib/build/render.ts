@@ -24,6 +24,13 @@ export function assertValidSource(source: string) {
   }
 }
 
+/** camelCase input keys become UPPER_SNAKE variable keys: rootPassword → ROOT_PASSWORD. */
+export const toEnvKey = (key: string) =>
+  key.replace(/([a-z0-9])([A-Z])/g, "$1_$2").toUpperCase();
+
+/** Where a `file` input's variable is mounted: what `{{inputs.<key>}}` renders to. */
+export const fileInputPath = (key: string) => `/run/secrets/${toEnvKey(key)}`;
+
 const generatePassword = () =>
   encodeBase64Url(crypto.getRandomValues(new Uint8Array(24)));
 
@@ -100,7 +107,12 @@ export function renderContent(
     );
   }
 
-  const { values, generated } = resolveInputs(content.inputs, given);
+  // A file input's text lives in its variable: templates get its path.
+  const withPaths = { ...given };
+  for (const input of content.inputs) {
+    if (input.type === "file") withPaths[input.key] = fileInputPath(input.key);
+  }
+  const { values, generated } = resolveInputs(content.inputs, withPaths);
   try {
     const output = engine.compile(source, { noEscape: true, strict: true })({
       inputs: values,

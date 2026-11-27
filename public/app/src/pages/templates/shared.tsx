@@ -9,6 +9,7 @@ import {
   IconBrandNodejs,
   IconBrandReact,
   IconBucket,
+  IconChartLine,
   IconDatabase,
   IconLeaf,
   IconStack2,
@@ -52,6 +53,7 @@ const ICONS: Record<string, Icon> = {
   leaf: IconLeaf,
   "stack-2": IconStack2,
   bucket: IconBucket,
+  "chart-line": IconChartLine,
 }
 
 export function TemplateIcon({

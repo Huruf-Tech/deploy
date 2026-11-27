@@ -533,10 +533,11 @@ Decided per deployment, in this order:
 - **Kinds:**
   - `app`: Handlebars Dockerfile plus inputs.
   - `service`: Handlebars compose plus inputs, for one-click services. Generated passwords become project secret variables.
+  - **`file` inputs (2026-11-27):** multi-line text created as a project **file** variable named after the key (`prometheusYml` → `PROMETHEUS_YML`), mounted read-only at `/run/secrets/<KEY>`. In the template, `{{inputs.<key>}}` renders as that path, never the text, so a config file lives in one place and is edited with the project's variables (then Restart).
 - **Versioning:** every save creates an immutable version. Projects pin a version, and the UI offers "upgrade to vN" with a diff.
 - **Rendering** happens on the control plane with the built-in `handlebarsRender`. The agent receives final files only.
 - **Compose sources** are parsed on the control plane (`lib/deploy/compose.ts`, `@std/yaml`) into the same runtime spec, so they get the same reconciler, health checks, rollouts and DNS. Unsupported keys are reported when the template is rendered, before anything reaches a server.
-- **Seed system templates** (data, not code): Thunder, React/Vite (static), Next.js, Node, Deno, plus one-click Postgres, MongoDB, Redis, MySQL, MinIO.
+- **Seed system templates** (data, not code): Thunder, React/Vite (static), Next.js, Node, Deno, plus one-click Postgres, MongoDB, Redis, MySQL, MinIO and Prometheus (2026-11-27: `prom/prometheus` with a pinned tag, retention, a `data` volume, a `wget /-/ready` health check, and its `prometheus.yml` as a `file` input whose default scrapes itself and shows `dns_sd_configs` on `<project>.internal` for every replica).
 - **AI assistant:** drafts a template from a repo or a prompt (Phase 12).
 - `cachePaths` is stored on template versions but not used by builds yet.
 

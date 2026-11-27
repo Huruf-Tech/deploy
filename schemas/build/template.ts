@@ -12,8 +12,14 @@ export const $templateInput = z.object({
   key: $identifier,
   label: z.string().min(1).max(100),
   description: z.string().max(300).optional(),
-  type: z.enum(["string", "number", "boolean", "select", "secret"]),
-  default: z.union([z.string().max(1_000), z.number(), z.boolean()])
+  /**
+   * `file`: multi-line text created as a project file variable named after
+   * the key (`scrapeConfig` → SCRAPE_CONFIG), mounted read-only at
+   * `/run/secrets/<KEY>`, e.g. a config file the service reads. Edited
+   * later in the project's variables, like any variable.
+   */
+  type: z.enum(["string", "number", "boolean", "select", "secret", "file"]),
+  default: z.union([z.string().max(10_000), z.number(), z.boolean()])
     .optional(),
   required: z.boolean().default(false),
   options: z.array(z.string().max(100)).max(50).optional(),

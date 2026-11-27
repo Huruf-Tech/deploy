@@ -196,6 +196,30 @@ export function InputField({
     )
   }
 
+  // A config file: saved as a file variable, edited there later.
+  if (input.type === "file") {
+    return (
+      <Field className="sm:col-span-2">
+        <FieldLabel htmlFor={id}>
+          {input.label}
+          {input.required && <span className="text-destructive">*</span>}
+        </FieldLabel>
+        <Textarea
+          id={id}
+          value={String(value ?? "")}
+          onChange={(e) => onChange(e.target.value)}
+          rows={12}
+          spellCheck={false}
+          dir="ltr"
+          className="font-mono text-xs"
+        />
+        {input.description && (
+          <FieldDescription>{input.description}</FieldDescription>
+        )}
+      </Field>
+    )
+  }
+
   return (
     <Field>
       <FieldLabel htmlFor={id}>
