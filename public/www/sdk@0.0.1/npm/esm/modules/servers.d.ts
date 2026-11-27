@@ -31,6 +31,7 @@ export type get$return = {
             [K in string]: string;
         };
         tenant: string;
+        dnsName?: string | undefined;
         group?: string | undefined;
         status: "pending" | "active" | "rejected";
         identity: {
@@ -203,6 +204,12 @@ export type update$body = {
 };
 export type del$params = {
     id: string;
+};
+export type setDnsName$params = {
+    id?: string;
+};
+export type setDnsName$body = {
+    dnsName: string;
 };
 export type profile$params = {
     id?: string;
@@ -403,6 +410,8 @@ export declare const serversModule: (sdk: typeof BaseSDK) => {
         update$params: update$params;
         update$body: update$body;
         del$params: del$params;
+        setDnsName$params: setDnsName$params;
+        setDnsName$body: setDnsName$body;
         profile$params: profile$params;
         profile$return: profile$return;
         partitions$params: partitions$params;
@@ -496,6 +505,17 @@ export declare const serversModule: (sdk: typeof BaseSDK) => {
         params: del$params;
         query?: undefined;
         body?: undefined;
+    } & TRequestOptions<unknown>) => {
+        readonly raw: Promise<import("axios").AxiosResponse<unknown, any, {}, any>>;
+        readonly data: Promise<unknown>;
+        then: <TResult1 = unknown, TResult2 = never>(onfulfilled?: ((value: unknown) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+        catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<unknown>;
+        finally: (onfinally?: (() => void) | null | undefined) => Promise<unknown>;
+    };
+    readonly setDnsName: (data: {
+        params: setDnsName$params;
+        query?: undefined;
+        body: setDnsName$body;
     } & TRequestOptions<unknown>) => {
         readonly raw: Promise<import("axios").AxiosResponse<unknown, any, {}, any>>;
         readonly data: Promise<unknown>;

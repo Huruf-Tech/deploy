@@ -22,6 +22,12 @@ export const $rentPrices = z.object({
   trafficGb: z.number().int().min(0).max(1_000).default(0),
 });
 
+/** A DNS label: lowercase letters, digits and inner hyphens. */
+export const $dnsLabel = z.string().regex(
+  /^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?$/,
+  "Lowercase letters, digits and hyphens, up to 40",
+);
+
 /** Cold server document (PLAN §6): agent polls never write it. */
 export const $serverUpdate = z.object({
   name: z.string().min(1).max(60).meta({ canFilter: true }),
@@ -32,6 +38,12 @@ export const $serverUpdate = z.object({
 
 export const $server = $serverUpdate.extend({
   tenant: $objectId.meta({ ref: "tenants" }),
+  /**
+   * Unique in the workspace: its projects are also `<project>.<dnsName>.srv.internal`
+   * (PLAN §8.3). Given from its name the first time its spec is made; set
+   * with `PUT /servers/api/:id/dnsName`.
+   */
+  dnsName: $dnsLabel.optional(),
   /** Its folder on the Servers page (`POST /servers/api/moveToFolder`). */
   group: $objectId.meta({ ref: "serverGroups", canFilter: true }).optional(),
   status: z.enum(["pending", "active", "rejected"]).meta({ canFilter: true }),

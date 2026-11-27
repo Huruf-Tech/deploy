@@ -231,6 +231,9 @@ export default new Router("/api", function projects(router) {
         _id: z.string(),
         name: z.string(),
         publicIp: z.string().optional(),
+        dnsName: z.string().optional().describe(
+          "<project>.<dnsName>.srv.internal reaches this server's replicas",
+        ),
       })),
       placedOn: z.array(z.string()),
       replicasPerServer: z.number(),
@@ -295,7 +298,7 @@ export default new Router("/api", function projects(router) {
           : null;
         const serverDocs = await serverModel.find(
           { _id: { $in: [...project.servers, ...project.placedOn] } },
-          { projection: { name: 1, "inventory.publicIp": 1 } },
+          { projection: { name: 1, dnsName: 1, "inventory.publicIp": 1 } },
         ).toArray();
         const serverNames = new Map(
           serverDocs.map((s) => [s._id.toHexString(), s.name]),
@@ -341,6 +344,7 @@ export default new Router("/api", function projects(router) {
             return {
               _id: s,
               name: doc?.name ?? "Removed server",
+              ...(doc?.dnsName ? { dnsName: doc.dnsName } : {}),
               ...(doc?.inventory.publicIp
                 ? { publicIp: doc.inventory.publicIp }
                 : {}),
@@ -585,6 +589,8 @@ export default new Router("/api", function projects(router) {
         hostname: z.string(),
         appDomain: z.boolean(),
         status: z.string(),
+        server: z.string().optional().describe("Served from this server only"),
+        login: z.boolean().optional().describe("Asks for a login"),
         dns: $hop,
         certificate: $hop,
         route: $hop.describe("Traefik routes the hostname"),

@@ -155,6 +155,8 @@ async function reachOf(tenantId: string, projectId: string) {
           status: 1,
           appDomain: 1,
           error: 1,
+          server: 1,
+          "basicAuth.username": 1,
           "certificate.notAfter": 1,
         },
         limit: 20,
@@ -285,10 +287,19 @@ async function reachOf(tenantId: string, projectId: string) {
             : "It has no certificate yet: it gets one once its DNS checks pass."),
       );
     const routed = !!http.routers[`d-${d._id}`];
+    // Served from one server: only that one's route counts.
+    const pinned = d.server &&
+      serverHops.find((s) => s._id === String(d.server));
     const route: THop = routed
       ? ok()
       : certificate.state !== "ok"
       ? SKIPPED
+      : d.server
+      ? failed(
+        pinned
+          ? `It's served from ${pinned.name} only, which Traefik doesn't route to: it's offline or runs no replicas.`
+          : "It's served from a server that no longer runs this project: choose another in Domains.",
+      )
       : !anyServer
       ? failed("Traefik has no server to send it to.")
       : failed(
@@ -314,6 +325,8 @@ async function reachOf(tenantId: string, projectId: string) {
           ? failed(
             `https://${name} answered ${res.status}: see the server hops.`,
           )
+          : res.status === 401 && d.basicAuth
+          ? ok("Answered 401: it asks for its login.")
           : ok(`Answered ${res.status}.`);
       } catch (error) {
         https = failed(`https://${name} doesn't answer: ${why(error)}`);
@@ -324,6 +337,8 @@ async function reachOf(tenantId: string, projectId: string) {
       hostname: d.hostname,
       appDomain: !!d.appDomain,
       status: d.status,
+      ...(d.server ? { server: String(d.server) } : {}),
+      ...(d.basicAuth ? { login: true } : {}),
       dns,
       certificate,
       route,

@@ -25,6 +25,7 @@ import {
   serverSpecModel,
 } from "@/schemas/infrastructure/serverSpec.ts";
 import { serverWakeups } from "@/lib/agents/wakeups.ts";
+import { ensureDnsName } from "@/lib/agents/serverNames.ts";
 import type {
   TAlertSpec,
   TDesiredSpec,
@@ -200,6 +201,9 @@ export async function computeSpec(
 
   const workloads: TWorkload[] = [];
   const schedules: TScheduleSpec[] = [];
+  // This server's own names for its replicas (PLAN §8.3): only it answers
+  // them, and peers ask it, so they reach this server's copy from anywhere.
+  const dnsName = serverDoc ? await ensureDnsName(serverDoc) : undefined;
   for (const project of projects) {
     const deployment = deployments.find((d) => d.project.equals(project._id));
     const active = has(project.placedOn, server)
@@ -237,6 +241,13 @@ export async function computeSpec(
           single
             ? `${project.slug}.internal`
             : `${service.name}.${project.slug}.internal`,
+          ...(dnsName
+            ? [
+              single
+                ? `${project.slug}.${dnsName}.srv.internal`
+                : `${service.name}.${project.slug}.${dnsName}.srv.internal`,
+            ]
+            : []),
         ],
         strategy: deployment?.strategy ?? project.deployStrategy,
         ...(project.publicPort && service === primary

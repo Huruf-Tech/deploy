@@ -63,12 +63,26 @@ export const $domain = z.object({
    * once, served with the platform's wildcard certificate, one per project.
    */
   appDomain: z.boolean().optional(),
+  /** Served only from this server's replicas (PLAN §14); every server when absent. */
+  server: $objectId.meta({ ref: "servers" }).optional(),
+  /**
+   * A login in front of it (Traefik basic auth). The password is generated
+   * (192 bits), so its unsalted SHA-1, which Traefik checks in microseconds,
+   * can't be reversed; it's shown once and never stored.
+   */
+  basicAuth: z.object({ username: z.string(), sha1: z.string() }).optional(),
   createdBy: $objectId.meta({ ref: "users" }),
   createdAt: z.date(),
   updatedAt: z.date(),
 });
 
 export type TDomain = z.output<typeof $domain>;
+
+/** A login's user name: no `:` (it separates the password in Traefik's list). */
+export const $loginUsername = z.string().min(1).max(64).regex(
+  /^[A-Za-z0-9._@-]+$/,
+  "Letters, digits and . _ @ - only",
+);
 
 export const domainModel = mongodb.db().collection<TDomain>("domains");
 

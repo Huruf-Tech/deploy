@@ -10,6 +10,12 @@ export type list$return = {
     status: "pending" | "checking" | "issuing" | "verifying" | "active" | "failed";
     /** A free test domain */
     appDomain?: boolean | undefined;
+    /** Served only from this server; every server when absent */
+    server?: string | undefined;
+    /** A login in front of it */
+    basicAuth?: {
+        username: string;
+    } | undefined;
     checks?: {
         ownership: boolean;
         dns: boolean;
@@ -37,6 +43,8 @@ export type list$return = {
 export type create$body = {
     project?: string;
     hostname: string;
+    /** Serve it from this server of the project's only */
+    server?: string | undefined;
 };
 export type create$return = {
     _id: string;
@@ -55,6 +63,67 @@ export type addTestDomain$return = {
     _id: string;
 };
 export type check$params = {
+    id?: string;
+};
+export type update$params = {
+    id?: string;
+};
+export type update$body = {
+    server?: string | null;
+};
+export type get$params = {
+    id?: string;
+};
+export type get$return = {
+    _id: string;
+    project: string;
+    hostname: string;
+    status: "pending" | "checking" | "issuing" | "verifying" | "active" | "failed";
+    /** A free test domain */
+    appDomain?: boolean | undefined;
+    /** Served only from this server; every server when absent */
+    server?: string | undefined;
+    /** A login in front of it */
+    basicAuth?: {
+        username: string;
+    } | undefined;
+    checks?: {
+        ownership: boolean;
+        dns: boolean;
+        checkedAt: string;
+        detail?: string | undefined;
+    } | undefined;
+    checkUntil?: string | undefined;
+    verifiedAt?: string | undefined;
+    error?: string | undefined;
+    certificate?: {
+        notAfter: string;
+        issuedAt: string;
+    } | undefined;
+    records: {
+        ownership: {
+            type: "TXT";
+            name: string;
+            value: string;
+        };
+        cname?: string | undefined;
+        ipv4?: string[] | undefined;
+    };
+    createdAt: string;
+};
+export type del$params = {
+    id?: string;
+};
+export type setLogin$params = {
+    id?: string;
+};
+export type setLogin$body = {
+    username: string;
+};
+export type setLogin$return = {
+    password: string;
+};
+export type removeLogin$params = {
     id?: string;
 };
 export type cloudflareConnection$return = {
@@ -94,43 +163,6 @@ export type setUpCloudflare$return = {
         proxied: boolean;
     }[] | undefined;
 };
-export type get$params = {
-    id?: string;
-};
-export type get$return = {
-    _id: string;
-    project: string;
-    hostname: string;
-    status: "pending" | "checking" | "issuing" | "verifying" | "active" | "failed";
-    /** A free test domain */
-    appDomain?: boolean | undefined;
-    checks?: {
-        ownership: boolean;
-        dns: boolean;
-        checkedAt: string;
-        detail?: string | undefined;
-    } | undefined;
-    checkUntil?: string | undefined;
-    verifiedAt?: string | undefined;
-    error?: string | undefined;
-    certificate?: {
-        notAfter: string;
-        issuedAt: string;
-    } | undefined;
-    records: {
-        ownership: {
-            type: "TXT";
-            name: string;
-            value: string;
-        };
-        cname?: string | undefined;
-        ipv4?: string[] | undefined;
-    };
-    createdAt: string;
-};
-export type del$params = {
-    id?: string;
-};
 export declare const domainsModule: (sdk: typeof BaseSDK) => {
     readonly type: {
         list$query: list$query;
@@ -141,6 +173,15 @@ export declare const domainsModule: (sdk: typeof BaseSDK) => {
         addTestDomain$body: addTestDomain$body;
         addTestDomain$return: addTestDomain$return;
         check$params: check$params;
+        update$params: update$params;
+        update$body: update$body;
+        get$params: get$params;
+        get$return: get$return;
+        del$params: del$params;
+        setLogin$params: setLogin$params;
+        setLogin$body: setLogin$body;
+        setLogin$return: setLogin$return;
+        removeLogin$params: removeLogin$params;
         cloudflareConnection$return: cloudflareConnection$return;
         connectCloudflareToken$body: connectCloudflareToken$body;
         connectCloudflareToken$return: connectCloudflareToken$return;
@@ -149,9 +190,6 @@ export declare const domainsModule: (sdk: typeof BaseSDK) => {
         setUpCloudflare$params: setUpCloudflare$params;
         setUpCloudflare$body: setUpCloudflare$body;
         setUpCloudflare$return: setUpCloudflare$return;
-        get$params: get$params;
-        get$return: get$return;
-        del$params: del$params;
     };
     readonly list: (data: {
         params?: undefined;
@@ -199,6 +237,61 @@ export declare const domainsModule: (sdk: typeof BaseSDK) => {
     };
     readonly check: (data: {
         params: check$params;
+        query?: undefined;
+        body?: undefined;
+    } & TRequestOptions<unknown>) => {
+        readonly raw: Promise<import("axios").AxiosResponse<unknown, any, {}, any>>;
+        readonly data: Promise<unknown>;
+        then: <TResult1 = unknown, TResult2 = never>(onfulfilled?: ((value: unknown) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+        catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<unknown>;
+        finally: (onfinally?: (() => void) | null | undefined) => Promise<unknown>;
+    };
+    readonly update: (data: {
+        params: update$params;
+        query?: undefined;
+        body: update$body;
+    } & TRequestOptions<unknown>) => {
+        readonly raw: Promise<import("axios").AxiosResponse<unknown, any, {}, any>>;
+        readonly data: Promise<unknown>;
+        then: <TResult1 = unknown, TResult2 = never>(onfulfilled?: ((value: unknown) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+        catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<unknown>;
+        finally: (onfinally?: (() => void) | null | undefined) => Promise<unknown>;
+    };
+    readonly get: (data: {
+        params: get$params;
+        query?: undefined;
+        body?: undefined;
+    } & TRequestOptions<get$return>) => {
+        readonly raw: Promise<import("axios").AxiosResponse<get$return, any, {}, any>>;
+        readonly data: Promise<get$return>;
+        then: <TResult1 = get$return, TResult2 = never>(onfulfilled?: ((value: get$return) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+        catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<get$return | TResult>;
+        finally: (onfinally?: (() => void) | null | undefined) => Promise<get$return>;
+    };
+    readonly del: (data: {
+        params: del$params;
+        query?: undefined;
+        body?: undefined;
+    } & TRequestOptions<unknown>) => {
+        readonly raw: Promise<import("axios").AxiosResponse<unknown, any, {}, any>>;
+        readonly data: Promise<unknown>;
+        then: <TResult1 = unknown, TResult2 = never>(onfulfilled?: ((value: unknown) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+        catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<unknown>;
+        finally: (onfinally?: (() => void) | null | undefined) => Promise<unknown>;
+    };
+    readonly setLogin: (data: {
+        params: setLogin$params;
+        query?: undefined;
+        body: setLogin$body;
+    } & TRequestOptions<setLogin$return>) => {
+        readonly raw: Promise<import("axios").AxiosResponse<setLogin$return, any, {}, any>>;
+        readonly data: Promise<setLogin$return>;
+        then: <TResult1 = setLogin$return, TResult2 = never>(onfulfilled?: ((value: setLogin$return) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
+        catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<setLogin$return | TResult>;
+        finally: (onfinally?: (() => void) | null | undefined) => Promise<setLogin$return>;
+    };
+    readonly removeLogin: (data: {
+        params: removeLogin$params;
         query?: undefined;
         body?: undefined;
     } & TRequestOptions<unknown>) => {
@@ -273,28 +366,6 @@ export declare const domainsModule: (sdk: typeof BaseSDK) => {
         then: <TResult1 = setUpCloudflare$return, TResult2 = never>(onfulfilled?: ((value: setUpCloudflare$return) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
         catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<setUpCloudflare$return | TResult>;
         finally: (onfinally?: (() => void) | null | undefined) => Promise<setUpCloudflare$return>;
-    };
-    readonly get: (data: {
-        params: get$params;
-        query?: undefined;
-        body?: undefined;
-    } & TRequestOptions<get$return>) => {
-        readonly raw: Promise<import("axios").AxiosResponse<get$return, any, {}, any>>;
-        readonly data: Promise<get$return>;
-        then: <TResult1 = get$return, TResult2 = never>(onfulfilled?: ((value: get$return) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
-        catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<get$return | TResult>;
-        finally: (onfinally?: (() => void) | null | undefined) => Promise<get$return>;
-    };
-    readonly del: (data: {
-        params: del$params;
-        query?: undefined;
-        body?: undefined;
-    } & TRequestOptions<unknown>) => {
-        readonly raw: Promise<import("axios").AxiosResponse<unknown, any, {}, any>>;
-        readonly data: Promise<unknown>;
-        then: <TResult1 = unknown, TResult2 = never>(onfulfilled?: ((value: unknown) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>;
-        catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<unknown>;
-        finally: (onfinally?: (() => void) | null | undefined) => Promise<unknown>;
     };
 };
 //# sourceMappingURL=domains.d.ts.map

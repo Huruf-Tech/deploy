@@ -26,6 +26,7 @@ import { useCached } from "@/hooks/use-cached"
 import { queries } from "@/lib/queries"
 import { day } from "@/lib/format"
 import { CloudflareConnection, CloudflareSetUp } from "./Cloudflare"
+import { DomainLogin, ServedFrom, type TProjectServer } from "./DomainAccess"
 
 type TDomain = Awaited<ReturnType<typeof ThunderSDK.domains.list>>[number]
 
@@ -52,7 +53,7 @@ function DomainStatus({ status }: { status: TDomain["status"] }) {
   return <StatusBadge state={STATE[status]} label={label} />
 }
 
-/** Check now and remove, with their own busy state. */
+/** Login, Check now and remove, with their own busy state. */
 function DomainActions({
   domain,
   onChanged,
@@ -84,6 +85,12 @@ function DomainActions({
 
   return (
     <span className="inline-flex items-center gap-1">
+      <DomainLogin
+        domain={domain._id}
+        hostname={domain.hostname}
+        username={domain.basicAuth?.username}
+        onChanged={onChanged}
+      />
       {canCheck && (
         <Button
           size="xs"
@@ -253,10 +260,54 @@ function DomainSetup({
   )
 }
 
+/** A domain's servers, saved as it changes. */
+function DomainServer({
+  domain,
+  servers,
+  onChanged,
+}: {
+  domain: TDomain
+  servers: TProjectServer[]
+  onChanged: () => void
+}) {
+  const { t } = useTranslation()
+  const [busy, setBusy] = React.useState(false)
+  const change = async (server: string | null) => {
+    setBusy(true)
+    try {
+      await ThunderSDK.domains.update({
+        params: { id: domain._id },
+        body: { server },
+      })
+      onChanged()
+    } catch (e) {
+      toast.error(errorMessage(e) ?? t("Could not change its servers"))
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <ServedFrom
+      servers={servers}
+      value={domain.server}
+      onChange={change}
+      disabled={busy}
+      label={t("Servers for {{name}}", { name: domain.hostname })}
+    />
+  )
+}
+
 /** A project's custom domains (PLAN §14). */
-export function DomainsTab({ project }: { project: string }) {
+export function DomainsTab({
+  project,
+  servers,
+}: {
+  project: string
+  servers: TProjectServer[]
+}) {
   const { t } = useTranslation()
   const [hostname, setHostname] = React.useState("")
+  const [server, setServer] = React.useState<string | null>(null)
   const [adding, setAdding] = React.useState(false)
   const { data, isLoading, reload } = useCached(queries.domains(project))
   const appInfo = useCached(queries.appDomain()).data
@@ -297,8 +348,11 @@ export function DomainsTab({ project }: { project: string }) {
     e.preventDefault()
     setAdding(true)
     try {
-      await ThunderSDK.domains.create({ body: { project, hostname } })
+      await ThunderSDK.domains.create({
+        body: { project, hostname, ...(server ? { server } : {}) },
+      })
       setHostname("")
+      setServer(null)
       reload()
     } catch (err) {
       toast.error(errorMessage(err) ?? t("Could not add the domain"))
@@ -308,6 +362,8 @@ export function DomainsTab({ project }: { project: string }) {
   }
 
   const onChanged = reload
+  // One server: nothing to choose, unless a domain was pinned before.
+  const choose = servers.length > 1 || !!data?.some((d) => d.server)
   const columns: TColumn<TDomain>[] = [
     {
       id: "hostname",
@@ -343,6 +399,22 @@ export function DomainsTab({ project }: { project: string }) {
       sortValue: (d) => d.status,
       cell: (d) => <DomainStatus status={d.status} />,
     },
+    ...(choose
+      ? [
+          {
+            id: "servers",
+            header: t("Served from"),
+            className: "max-sm:hidden",
+            cell: (d: TDomain) => (
+              <DomainServer
+                domain={d}
+                servers={servers}
+                onChanged={onChanged}
+              />
+            ),
+          },
+        ]
+      : []),
     {
       id: "certificate",
       header: t("Certificate"),
@@ -383,6 +455,14 @@ export function DomainsTab({ project }: { project: string }) {
           className="h-8 max-w-sm min-w-0 flex-1 font-mono text-[13px]"
           dir="ltr"
         />
+        {servers.length > 1 && (
+          <ServedFrom
+            servers={servers}
+            value={server ?? undefined}
+            onChange={setServer}
+            label={t("Serve it from")}
+          />
+        )}
         <Button size="sm" type="submit" disabled={adding || !hostname.trim()}>
           {adding ? (
             <IconLoader2 className="animate-spin" aria-hidden />

@@ -27,6 +27,8 @@ export const serverSchema = z.object({
    */
   /** Its folder on the Servers page. */
   group: z.string().nullish(),
+  /** `<project>.<dnsName>.srv.internal` reaches this server's replicas. */
+  dnsName: z.string().nullish(),
   provider: z
     .object({
       kind: z.enum(["machine", "partition", "rented", "direct"]),

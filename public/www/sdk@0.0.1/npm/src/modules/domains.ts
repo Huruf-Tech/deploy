@@ -15,6 +15,12 @@ export type list$return = {
     status: "pending" | "checking" | "issuing" | "verifying" | "active" | "failed";
     /** A free test domain */
     appDomain?: boolean | undefined;
+    /** Served only from this server; every server when absent */
+    server?: string | undefined;
+    /** A login in front of it */
+    basicAuth?: {
+        username: string;
+    } | undefined;
     checks?: {
         ownership: boolean;
         dns: boolean;
@@ -42,6 +48,8 @@ export type list$return = {
 export type create$body = {
     project?: string;
     hostname: string;
+    /** Serve it from this server of the project's only */
+    server?: string | undefined;
 };
 export type create$return = {
     _id: string;
@@ -60,6 +68,67 @@ export type addTestDomain$return = {
     _id: string;
 };
 export type check$params = {
+    id?: string;
+};
+export type update$params = {
+    id?: string;
+};
+export type update$body = {
+    server?: string | null;
+};
+export type get$params = {
+    id?: string;
+};
+export type get$return = {
+    _id: string;
+    project: string;
+    hostname: string;
+    status: "pending" | "checking" | "issuing" | "verifying" | "active" | "failed";
+    /** A free test domain */
+    appDomain?: boolean | undefined;
+    /** Served only from this server; every server when absent */
+    server?: string | undefined;
+    /** A login in front of it */
+    basicAuth?: {
+        username: string;
+    } | undefined;
+    checks?: {
+        ownership: boolean;
+        dns: boolean;
+        checkedAt: string;
+        detail?: string | undefined;
+    } | undefined;
+    checkUntil?: string | undefined;
+    verifiedAt?: string | undefined;
+    error?: string | undefined;
+    certificate?: {
+        notAfter: string;
+        issuedAt: string;
+    } | undefined;
+    records: {
+        ownership: {
+            type: "TXT";
+            name: string;
+            value: string;
+        };
+        cname?: string | undefined;
+        ipv4?: string[] | undefined;
+    };
+    createdAt: string;
+};
+export type del$params = {
+    id?: string;
+};
+export type setLogin$params = {
+    id?: string;
+};
+export type setLogin$body = {
+    username: string;
+};
+export type setLogin$return = {
+    password: string;
+};
+export type removeLogin$params = {
     id?: string;
 };
 export type cloudflareConnection$return = {
@@ -99,43 +168,6 @@ export type setUpCloudflare$return = {
         proxied: boolean;
     }[] | undefined;
 };
-export type get$params = {
-    id?: string;
-};
-export type get$return = {
-    _id: string;
-    project: string;
-    hostname: string;
-    status: "pending" | "checking" | "issuing" | "verifying" | "active" | "failed";
-    /** A free test domain */
-    appDomain?: boolean | undefined;
-    checks?: {
-        ownership: boolean;
-        dns: boolean;
-        checkedAt: string;
-        detail?: string | undefined;
-    } | undefined;
-    checkUntil?: string | undefined;
-    verifiedAt?: string | undefined;
-    error?: string | undefined;
-    certificate?: {
-        notAfter: string;
-        issuedAt: string;
-    } | undefined;
-    records: {
-        ownership: {
-            type: "TXT";
-            name: string;
-            value: string;
-        };
-        cname?: string | undefined;
-        ipv4?: string[] | undefined;
-    };
-    createdAt: string;
-};
-export type del$params = {
-    id?: string;
-};
 
 export const domainsModule = (sdk: typeof BaseSDK) => {
     const type = {} as unknown as {
@@ -147,6 +179,15 @@ export const domainsModule = (sdk: typeof BaseSDK) => {
         addTestDomain$body: addTestDomain$body,
         addTestDomain$return: addTestDomain$return,
         check$params: check$params,
+        update$params: update$params,
+        update$body: update$body,
+        get$params: get$params,
+        get$return: get$return,
+        del$params: del$params,
+        setLogin$params: setLogin$params,
+        setLogin$body: setLogin$body,
+        setLogin$return: setLogin$return,
+        removeLogin$params: removeLogin$params,
         cloudflareConnection$return: cloudflareConnection$return,
         connectCloudflareToken$body: connectCloudflareToken$body,
         connectCloudflareToken$return: connectCloudflareToken$return,
@@ -155,9 +196,6 @@ export const domainsModule = (sdk: typeof BaseSDK) => {
         setUpCloudflare$params: setUpCloudflare$params,
         setUpCloudflare$body: setUpCloudflare$body,
         setUpCloudflare$return: setUpCloudflare$return,
-        get$params: get$params,
-        get$return: get$return,
-        del$params: del$params,
     };
 
     const methods = {
@@ -284,6 +322,146 @@ export const domainsModule = (sdk: typeof BaseSDK) => {
 
             const method = "post";
             const toPath = compile("domains/api/:id/check");
+            const requestPayload = {
+                method,
+                url: toPath(sdk.resolvePathParams(data?.params)),
+                params: data?.query,
+                data: data?.body,
+                signal: data?.signal,
+                ...(data?.axiosConfig
+                ? sdk.resolveAxiosConfig(data.axiosConfig)
+                : undefined),
+            };
+
+            sdk.log("Sending Request:", requestPayload);
+
+            const res = await sdk._axios!.request(requestPayload);
+
+            return res;
+        }, data);
+    },
+        update(data: {
+        params: update$params,
+        query?: undefined,
+        body: update$body,
+    } & TRequestOptions<unknown>) {
+        return sdk.resolveAxiosResponse(async () => {
+            sdk.checkPermission("domains", "update");
+
+            const method = "patch";
+            const toPath = compile("domains/api/:id");
+            const requestPayload = {
+                method,
+                url: toPath(sdk.resolvePathParams(data?.params)),
+                params: data?.query,
+                data: data?.body,
+                signal: data?.signal,
+                ...(data?.axiosConfig
+                ? sdk.resolveAxiosConfig(data.axiosConfig)
+                : undefined),
+            };
+
+            sdk.log("Sending Request:", requestPayload);
+
+            const res = await sdk._axios!.request(requestPayload);
+
+            return res;
+        }, data);
+    },
+        get(data: {
+        params: get$params,
+        query?: undefined,
+        body?: undefined,
+    } & TRequestOptions<get$return>) {
+        return sdk.resolveAxiosResponse(async () => {
+            sdk.checkPermission("domains", "get");
+
+            const method = "get";
+            const toPath = compile("domains/api/:id");
+            const requestPayload = {
+                method,
+                url: toPath(sdk.resolvePathParams(data?.params)),
+                params: data?.query,
+                data: data?.body,
+                signal: data?.signal,
+                ...(data?.axiosConfig
+                ? sdk.resolveAxiosConfig(data.axiosConfig)
+                : undefined),
+            };
+
+            sdk.log("Sending Request:", requestPayload);
+
+            const res = await sdk._axios!.request(requestPayload);
+
+            return res;
+        }, data);
+    },
+        del(data: {
+        params: del$params,
+        query?: undefined,
+        body?: undefined,
+    } & TRequestOptions<unknown>) {
+        return sdk.resolveAxiosResponse(async () => {
+            sdk.checkPermission("domains", "del");
+
+            const method = "delete";
+            const toPath = compile("domains/api/:id");
+            const requestPayload = {
+                method,
+                url: toPath(sdk.resolvePathParams(data?.params)),
+                params: data?.query,
+                data: data?.body,
+                signal: data?.signal,
+                ...(data?.axiosConfig
+                ? sdk.resolveAxiosConfig(data.axiosConfig)
+                : undefined),
+            };
+
+            sdk.log("Sending Request:", requestPayload);
+
+            const res = await sdk._axios!.request(requestPayload);
+
+            return res;
+        }, data);
+    },
+        setLogin(data: {
+        params: setLogin$params,
+        query?: undefined,
+        body: setLogin$body,
+    } & TRequestOptions<setLogin$return>) {
+        return sdk.resolveAxiosResponse(async () => {
+            sdk.checkPermission("domains", "setLogin");
+
+            const method = "put";
+            const toPath = compile("domains/api/:id/login");
+            const requestPayload = {
+                method,
+                url: toPath(sdk.resolvePathParams(data?.params)),
+                params: data?.query,
+                data: data?.body,
+                signal: data?.signal,
+                ...(data?.axiosConfig
+                ? sdk.resolveAxiosConfig(data.axiosConfig)
+                : undefined),
+            };
+
+            sdk.log("Sending Request:", requestPayload);
+
+            const res = await sdk._axios!.request(requestPayload);
+
+            return res;
+        }, data);
+    },
+        removeLogin(data: {
+        params: removeLogin$params,
+        query?: undefined,
+        body?: undefined,
+    } & TRequestOptions<unknown>) {
+        return sdk.resolveAxiosResponse(async () => {
+            sdk.checkPermission("domains", "removeLogin");
+
+            const method = "delete";
+            const toPath = compile("domains/api/:id/login");
             const requestPayload = {
                 method,
                 url: toPath(sdk.resolvePathParams(data?.params)),
@@ -470,62 +648,6 @@ export const domainsModule = (sdk: typeof BaseSDK) => {
             return res;
         }, data);
     },
-        get(data: {
-        params: get$params,
-        query?: undefined,
-        body?: undefined,
-    } & TRequestOptions<get$return>) {
-        return sdk.resolveAxiosResponse(async () => {
-            sdk.checkPermission("domains", "get");
-
-            const method = "get";
-            const toPath = compile("domains/api/:id");
-            const requestPayload = {
-                method,
-                url: toPath(sdk.resolvePathParams(data?.params)),
-                params: data?.query,
-                data: data?.body,
-                signal: data?.signal,
-                ...(data?.axiosConfig
-                ? sdk.resolveAxiosConfig(data.axiosConfig)
-                : undefined),
-            };
-
-            sdk.log("Sending Request:", requestPayload);
-
-            const res = await sdk._axios!.request(requestPayload);
-
-            return res;
-        }, data);
-    },
-        del(data: {
-        params: del$params,
-        query?: undefined,
-        body?: undefined,
-    } & TRequestOptions<unknown>) {
-        return sdk.resolveAxiosResponse(async () => {
-            sdk.checkPermission("domains", "del");
-
-            const method = "delete";
-            const toPath = compile("domains/api/:id");
-            const requestPayload = {
-                method,
-                url: toPath(sdk.resolvePathParams(data?.params)),
-                params: data?.query,
-                data: data?.body,
-                signal: data?.signal,
-                ...(data?.axiosConfig
-                ? sdk.resolveAxiosConfig(data.axiosConfig)
-                : undefined),
-            };
-
-            sdk.log("Sending Request:", requestPayload);
-
-            const res = await sdk._axios!.request(requestPayload);
-
-            return res;
-        }, data);
-    },
     } as const;
 
     (methods.list as any).__scope = "domains";
@@ -533,14 +655,17 @@ export const domainsModule = (sdk: typeof BaseSDK) => {
     (methods.appDomainInfo as any).__scope = "domains";
     (methods.addTestDomain as any).__scope = "domains";
     (methods.check as any).__scope = "domains";
+    (methods.update as any).__scope = "domains";
+    (methods.get as any).__scope = "domains";
+    (methods.del as any).__scope = "domains";
+    (methods.setLogin as any).__scope = "domains";
+    (methods.removeLogin as any).__scope = "domains";
     (methods.cloudflareConnection as any).__scope = "domains";
     (methods.connectCloudflareToken as any).__scope = "domains";
     (methods.disconnectCloudflare as any).__scope = "domains";
     (methods.authorizeCloudflare as any).__scope = "domains";
     (methods.cloudflareCallback as any).__scope = "domains";
     (methods.setUpCloudflare as any).__scope = "domains";
-    (methods.get as any).__scope = "domains";
-    (methods.del as any).__scope = "domains";
 
     sdk["_moduleGroup"].set(methods, "Applications");
 

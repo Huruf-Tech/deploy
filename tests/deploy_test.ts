@@ -402,7 +402,11 @@ Deno.test({
             w.name === "db"
           )!;
           assertEquals(workload.strategy, "stopFirst");
-          assertEquals(workload.dnsNames, ["db.internal"]);
+          assertEquals(workload.dnsNames, [
+            "db.internal",
+            // This server's copy only (PLAN §8.3).
+            "db.deploy-a.srv.internal",
+          ]);
           const [release] = workload.releases;
           assertEquals(release.image, "postgres:17-alpine");
           assertMatch(release.env.POSTGRES_PASSWORD, /^[\w-]{32}$/);
@@ -481,7 +485,10 @@ Deno.test({
             "--requirepass",
             "p4ss",
           ]);
-          assertEquals(cache.dnsNames, ["cache.stack.internal"]);
+          assertEquals(cache.dnsNames, [
+            "cache.stack.internal",
+            "cache.stack.deploy-a.srv.internal",
+          ]);
           assertEquals(
             agents[0].spec!.workloads.find((w) => w.name === "stack-web")!
               .releases[0].port,

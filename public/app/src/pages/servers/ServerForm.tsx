@@ -27,6 +27,7 @@ export default function ServerForm() {
   const navigate = useNavigate()
   const { id = "" } = useParams<{ id: string }>()
   const [name, setName] = React.useState<string>()
+  const [dnsName, setDnsName] = React.useState<string>()
   const [busy, setBusy] = React.useState(false)
 
   const { data, isLoading, reload } = useCached(queries.server(id))
@@ -39,12 +40,18 @@ export default function ServerForm() {
     event.preventDefault()
     if (!server) return
     const next = (name ?? server.name).trim()
+    const nextDns = (dnsName ?? server.dnsName ?? "").trim()
     setBusy(true)
     try {
       if (next !== server.name)
         await ThunderSDK.servers.update({
           params: { id },
           body: { name: next },
+        })
+      if (nextDns && nextDns !== server.dnsName)
+        await ThunderSDK.servers.setDnsName({
+          params: { id },
+          body: { dnsName: nextDns },
         })
       reload()
       toast.success(t("Server saved"))
@@ -84,6 +91,25 @@ export default function ServerForm() {
               required
               onChange={(e) => setName(e.target.value)}
             />
+          </div>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="server-dns">{t("Internal name")}</Label>
+            <Input
+              id="server-dns"
+              dir="ltr"
+              className="font-mono"
+              value={dnsName ?? server.dnsName ?? ""}
+              maxLength={40}
+              pattern="[a-z0-9]([a-z0-9\-]*[a-z0-9])?"
+              placeholder={t("Given on its first deploy")}
+              onChange={(e) => setDnsName(e.target.value.toLowerCase())}
+            />
+            <p className="text-xs text-muted-foreground">
+              {t(
+                "Its projects are also <project>.{{name}}.srv.internal: this server's copy only, from any server in the private network. Changing it changes those names at once.",
+                { name: (dnsName ?? server.dnsName) || "<name>" }
+              )}
+            </p>
           </div>
           <div className="flex flex-col gap-2">
             <Label>{t("Labels")}</Label>

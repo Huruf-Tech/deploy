@@ -3,6 +3,8 @@ import { isDuplicateKeyError } from "@/database.ts";
 import { Response } from "@/core/http/response.ts";
 import { Env } from "@/core/utils/env.ts";
 import { encodeHex } from "@std/encoding/hex";
+import { encodeBase64 } from "@std/encoding/base64";
+import { encodeBase64Url } from "@std/encoding/base64url";
 import { cache } from "@/core/utils/cache.ts";
 import { entitlements, keyring, quotaGuard } from "@/lib/services.ts";
 import { PLATFORM_OWNER } from "@/schemas/monitoring/alert.ts";
@@ -134,9 +136,11 @@ export async function addDomain(
   user: ObjectId,
   projectId: ObjectId,
   input: string,
+  server?: ObjectId,
 ) {
   const hostname = await normalizeHostname(input);
-  await getProject(tenant, projectId);
+  const project = await getProject(tenant, projectId);
+  if (server) assertRunsOn(project, server);
   if (await verifiedElsewhere(hostname, tenant)) {
     throw Response.badRequest(`${hostname} is in use by another account`);
   }
@@ -167,6 +171,7 @@ export async function addDomain(
       hostname,
       token,
       status: "pending",
+      ...(server ? { server } : {}),
       createdBy: user,
       createdAt: now,
       updatedAt: now,
@@ -185,6 +190,70 @@ export async function addDomain(
   );
   if (ready?.ownership && ready.dns) await startCheck(tenant, _id);
   return _id;
+}
+
+/** A domain served from one server only: one the project is on (PLAN §14). */
+function assertRunsOn(
+  project: { servers: ObjectId[]; placedOn: ObjectId[] },
+  server: ObjectId,
+) {
+  if (
+    ![...project.servers, ...project.placedOn].some((s) => s.equals(server))
+  ) {
+    throw Response.badRequest("That server doesn't run this project");
+  }
+}
+
+async function domainOf(tenant: ObjectId, id: ObjectId) {
+  const domain = await domainModel.findOne({ _id: id, tenant }, {
+    projection: { project: 1 },
+  });
+  if (!domain) throw Response.notFound("Domain not found");
+  return domain;
+}
+
+/** Serve the domain from one server's replicas, or (null) from all of them. */
+export async function setDomainServer(
+  tenant: ObjectId,
+  id: ObjectId,
+  server: ObjectId | null,
+) {
+  const domain = await domainOf(tenant, id);
+  if (server) assertRunsOn(await getProject(tenant, domain.project), server);
+  await domainModel.updateOne(
+    { _id: id, tenant },
+    server
+      ? { $set: { server, updatedAt: new Date() } }
+      : { $set: { updatedAt: new Date() }, $unset: { server: "" } },
+  );
+}
+
+/**
+ * Puts a login in front of the domain, or replaces its password: a new
+ * random one, returned once. Traefik checks it within seconds.
+ */
+export async function setDomainLogin(
+  tenant: ObjectId,
+  id: ObjectId,
+  username: string,
+) {
+  await domainOf(tenant, id);
+  const password = encodeBase64Url(crypto.getRandomValues(new Uint8Array(24)));
+  const sha1 = encodeBase64(
+    await crypto.subtle.digest("SHA-1", new TextEncoder().encode(password)),
+  );
+  await domainModel.updateOne({ _id: id, tenant }, {
+    $set: { basicAuth: { username, sha1 }, updatedAt: new Date() },
+  });
+  return password;
+}
+
+export async function removeDomainLogin(tenant: ObjectId, id: ObjectId) {
+  await domainOf(tenant, id);
+  await domainModel.updateOne({ _id: id, tenant }, {
+    $set: { updatedAt: new Date() },
+    $unset: { basicAuth: "" },
+  });
 }
 
 const PLATFORM = { kind: "tenant" as const, ref: PLATFORM_OWNER };

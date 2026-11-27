@@ -1182,6 +1182,18 @@ export default function ProjectDetail() {
             ? t("Compose file")
             : t("One-click service")
   const internal = `${project.slug}.internal${project.runtime.port ? `:${project.runtime.port}` : ""}`
+  // One server's replicas (PLAN §8.3): only where it runs now.
+  const port = project.runtime.port ? `:${project.runtime.port}` : ""
+  const perServer = project.servers.flatMap((s) =>
+    s.dnsName && project.placedOn.includes(s._id)
+      ? [
+          {
+            server: s.name,
+            name: `${project.slug}.${s.dnsName}.srv.internal${port}`,
+          },
+        ]
+      : []
+  )
   const activeDomains = (domains ?? []).filter((d) => d.status === "active")
   const strategyLabel = {
     rolling: t("rolling"),
@@ -1368,6 +1380,16 @@ export default function ProjectDetail() {
                     value: internal,
                     copy: internal,
                   },
+                  // With several servers: each one's own copy.
+                  ...(perServer.length > 1
+                    ? perServer.map((p) => ({
+                        label: t("Internal, {{server}} only", {
+                          server: p.server,
+                        }),
+                        value: p.name,
+                        copy: p.name,
+                      }))
+                    : []),
                   ...(domains ?? []).map((d) => ({
                     label: d.appDomain ? t("Test domain") : t("Domain"),
                     value:
@@ -1502,7 +1524,7 @@ export default function ProjectDetail() {
 
         {canDomains && (
           <TabsContent value="domains">
-            <DomainsTab project={project._id} />
+            <DomainsTab project={project._id} servers={project.servers} />
           </TabsContent>
         )}
 

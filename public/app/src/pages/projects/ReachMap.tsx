@@ -178,7 +178,20 @@ export default function ReachMap({ reach }: { reach: TReach }) {
         data: {
           kind: "domain",
           title: d.hostname,
-          subtitle: d.appDomain ? t("Test domain") : undefined,
+          // Served from one server, or behind a login: said under its name.
+          subtitle:
+            [
+              d.appDomain && t("Test domain"),
+              d.server &&
+                t("Only {{server}}", {
+                  server:
+                    reach.servers.find((s) => s._id === d.server)?.name ??
+                    t("a removed server"),
+                }),
+              d.login && t("Login"),
+            ]
+              .filter(Boolean)
+              .join(" · ") || undefined,
           state: worst([d.dns, d.certificate, d.route, d.https]),
           why: why([d.dns, d.certificate, d.route, d.https]),
         },

@@ -226,6 +226,12 @@ export const syncDeployIndexes = async () => {
       { name: "uniqueFingerprint", unique: true },
     ),
     serverModel.createIndex({ tenant: 1, status: 1 }, { name: "tenantStatus" }),
+    // `<project>.<dnsName>.srv.internal` names one server (PLAN §8.3).
+    serverModel.createIndex({ tenant: 1, dnsName: 1 }, {
+      name: "uniqueDnsName",
+      unique: true,
+      partialFilterExpression: { dnsName: { $exists: true } },
+    }),
     // A machine's partitions; each has its own private-network port on it.
     serverModel.createIndex(
       { "provider.host": 1, "provider.meshPort": -1 },

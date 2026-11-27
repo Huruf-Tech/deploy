@@ -1,4 +1,6 @@
 import { profilesOf } from "@/lib/agents/profile.ts";
+import { assertDnsNameFree } from "@/lib/agents/serverNames.ts";
+import { refreshSpecs } from "@/lib/deploy/specs.ts";
 import { clearAllBuildCaches } from "@/lib/deploy/deployments.ts";
 import z from "zod";
 import { Router } from "@/core/http/router.ts";
@@ -39,7 +41,9 @@ import {
   bootstrapStatus,
   startBootstrap,
 } from "@/lib/agents/bootstrap.ts";
+import { isDuplicateKeyError } from "@/database.ts";
 import {
+  $dnsLabel,
   $server,
   $serverUpdate,
   serverGroupModel,
@@ -148,6 +152,34 @@ export default new Router("/api", function servers(router) {
         await releaseServer(_id, tenant, session);
       },
     },
+  });
+
+  // Its `.internal` name (PLAN §8.3): unique in the workspace; its spec has
+  // the new names at once, the old ones stop answering.
+  router.put("/:id/dnsName", function setDnsName() {
+    const $params = z.object({ id: $objectId });
+    const $body = z.object({ dnsName: $dnsLabel });
+    return {
+      shape: () => ({ params: $params, body: $body }),
+      handler: async (req) => {
+        const { id } = $params.parse(paramsAsJson(req));
+        const { dnsName } = $body.parse(await bodyAsJson(req));
+        const tenant = (await withTenant(req)).tenant._id;
+        await assertDnsNameFree(tenant, id, dnsName);
+        const { matchedCount } = await serverModel.updateOne(
+          { _id: id, tenant },
+          { $set: { dnsName, updatedAt: new Date() } },
+        ).catch((error) => {
+          if (isDuplicateKeyError(error)) {
+            throw Response.badRequest(`Another server has the name ${dnsName}`);
+          }
+          throw error;
+        });
+        if (!matchedCount) throw Response.notFound("Server not found");
+        await refreshSpecs([id]);
+        return Response.json({ ok: true });
+      },
+    };
   });
 
   // A machine's partitions (PLAN §27.2): the part of it Huruf Deploy gets.

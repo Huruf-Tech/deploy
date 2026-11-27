@@ -9,12 +9,16 @@ import {
   addDomain,
   domainRecords,
   removeDomain,
+  removeDomainLogin,
+  setDomainLogin,
+  setDomainServer,
   startCheck,
 } from "@/lib/domains/domains.ts";
 import type { WithId } from "mongodb";
 import {
   $domainChecks,
   $domainStatus,
+  $loginUsername,
   cloudflareConnectionModel,
   domainModel,
   type TDomain,
@@ -51,6 +55,12 @@ export default new Router("/api", function domains(router) {
     hostname: z.string(),
     status: $domainStatus,
     appDomain: z.boolean().optional().describe("A free test domain"),
+    server: z.string().optional().describe(
+      "Served only from this server; every server when absent",
+    ),
+    basicAuth: z.object({ username: z.string() }).optional().describe(
+      "A login in front of it",
+    ),
     checks: $domainChecks.extend({ checkedAt: z.string() }).optional(),
     checkUntil: z.string().optional(),
     verifiedAt: z.string().optional(),
@@ -76,6 +86,7 @@ export default new Router("/api", function domains(router) {
     nextCheckAt: 0,
     "certificate.pem": 0,
     "certificate.keyEnc": 0,
+    "basicAuth.sha1": 0,
     issueAt: 0,
     issueLockedUntil: 0,
     issueFailures: 0,
@@ -107,13 +118,24 @@ export default new Router("/api", function domains(router) {
     const $body = z.object({
       project: $objectId,
       hostname: z.string().min(1).max(253),
+      server: $objectId.optional().describe(
+        "Serve it from this server of the project's only",
+      ),
     });
     return {
       shape: () => ({ body: $body, return: z.object({ _id: z.string() }) }),
       handler: async (req) => {
-        const { project, hostname } = $body.parse(await bodyAsJson(req));
+        const { project, hostname, server } = $body.parse(
+          await bodyAsJson(req),
+        );
         const { tenant, user } = await withTenant(req);
-        const _id = await addDomain(tenant._id, user._id, project, hostname);
+        const _id = await addDomain(
+          tenant._id,
+          user._id,
+          project,
+          hostname,
+          server,
+        );
         return Response.json({ _id: _id.toString() });
       },
     };
@@ -170,6 +192,53 @@ export default new Router("/api", function domains(router) {
         const { id } = $params.parse(paramsAsJson(req));
         const { tenant } = await withTenant(req);
         await startCheck(tenant._id, id);
+        return Response.json({ ok: true });
+      },
+    };
+  });
+
+  // Which servers serve it (PLAN §14): one of the project's, or all.
+  router.patch("/:id", function update() {
+    const $body = z.object({ server: $objectId.nullable() });
+    return {
+      shape: () => ({ params: $params, body: $body }),
+      handler: async (req) => {
+        const { id } = $params.parse(paramsAsJson(req));
+        const { server } = $body.parse(await bodyAsJson(req));
+        const { tenant } = await withTenant(req);
+        await setDomainServer(tenant._id, id, server);
+        return Response.json({ ok: true });
+      },
+    };
+  });
+
+  // A login in front of the domain: the password is generated, shown once.
+  router.put("/:id/login", function setLogin() {
+    const $body = z.object({ username: $loginUsername });
+    return {
+      shape: () => ({
+        params: $params,
+        body: $body,
+        return: z.object({ password: z.string() }),
+      }),
+      handler: async (req) => {
+        const { id } = $params.parse(paramsAsJson(req));
+        const { username } = $body.parse(await bodyAsJson(req));
+        const { tenant } = await withTenant(req);
+        return Response.json({
+          password: await setDomainLogin(tenant._id, id, username),
+        });
+      },
+    };
+  });
+
+  router.del("/:id/login", function removeLogin() {
+    return {
+      shape: () => ({ params: $params }),
+      handler: async (req) => {
+        const { id } = $params.parse(paramsAsJson(req));
+        const { tenant } = await withTenant(req);
+        await removeDomainLogin(tenant._id, id);
         return Response.json({ ok: true });
       },
     };

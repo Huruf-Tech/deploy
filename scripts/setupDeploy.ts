@@ -8,6 +8,7 @@ import { syncDeployIndexes } from "@/scripts/syncDeployIndexes.ts";
 import { syncDeployAccessControl } from "@/scripts/syncDeployAccessControl.ts";
 import { seedPlans } from "@/scripts/seedPlans.ts";
 import { seedTemplates } from "@/scripts/seedTemplates.ts";
+import { backfillServerDnsNames } from "@/scripts/backfillServerDnsNames.ts";
 
 await syncDBIndexes();
 await syncAccessControl();
@@ -15,6 +16,7 @@ await syncDeployIndexes();
 await syncDeployAccessControl();
 await seedPlans();
 console.log("System templates:", await seedTemplates());
+console.log("Servers named:", await backfillServerDnsNames());
 
 console.log("Setup complete.");
 Deno.exit();

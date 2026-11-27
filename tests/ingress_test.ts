@@ -156,6 +156,38 @@ Deno.test({
         );
       });
 
+      await t.step("one server only, and a login", async () => {
+        const set = async (patch: Record<string, unknown>) => {
+          await domainModel.updateOne({ _id: domain }, patch);
+          await sleep(2_100); // the config is cached 2 s
+          return (await poll()).json.http;
+        };
+        let http = await set({
+          $set: {
+            server: b,
+            basicAuth: { username: "ops", sha1: "c2hhMQ==" },
+          },
+        });
+        assertEquals(
+          http.routers[`d-${domain}`].service,
+          `p-${project}-s-${b}`,
+        );
+        assertEquals(http.routers[`d-${domain}`].middlewares, [
+          `a-${domain}`,
+          `p-${project}`,
+          "huruf-retry",
+        ]);
+        assertEquals(http.middlewares[`a-${domain}`].basicAuth, {
+          users: ["ops:{SHA}c2hhMQ=="],
+          realm: hostname,
+          removeHeader: true,
+        });
+        // Its server offline: no route, rather than another server's replicas.
+        http = await set({ $set: { server: offline } });
+        assertEquals(http.routers[`d-${domain}`], undefined);
+        await set({ $unset: { server: "", basicAuth: "" } });
+      });
+
       await t.step("the certificate is written for Traefik", async () => {
         assertEquals(await files(), ["certificates.yml"]);
         const { tls } = parse(await certificates()) as TTls;

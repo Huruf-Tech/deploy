@@ -211,6 +211,8 @@ export type get$return = {
         _id: string;
         name: string;
         publicIp?: string | undefined;
+        /** <project>.<dnsName>.srv.internal reaches this server's replicas */
+        dnsName?: string | undefined;
     }[];
     placedOn: string[];
     replicasPerServer: number;
@@ -409,6 +411,10 @@ export type reach$return = {
         hostname: string;
         appDomain: boolean;
         status: string;
+        /** Served from this server only */
+        server?: string | undefined;
+        /** Asks for a login */
+        login?: boolean | undefined;
         dns: {
             state: "ok" | "warning" | "failed" | "skipped";
             detail?: string | undefined;

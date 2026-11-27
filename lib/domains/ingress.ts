@@ -122,7 +122,15 @@ async function buildConfig() {
         { appDomain: true },
       ],
     },
-    { projection: { hostname: 1, project: 1, appDomain: 1 } },
+    {
+      projection: {
+        hostname: 1,
+        project: 1,
+        appDomain: 1,
+        server: 1,
+        basicAuth: 1,
+      },
+    },
   ).toArray()).filter((d) =>
     // Only while the platform still hands them out (APP_DOMAIN unset: off).
     !d.appDomain || (!!app && d.hostname.endsWith(`.${app}`))
@@ -238,15 +246,33 @@ async function buildConfig() {
 
   for (const domain of domains) {
     const project = String(domain.project);
-    if (!services[`p-${project}`]) continue;
+    // One server's replicas only, or all of them (PLAN §14). A server that
+    // is offline or runs none has no service: the name gets no route.
+    const service = domain.server
+      ? `p-${project}-s-${domain.server}`
+      : `p-${project}`;
+    if (!services[service]) continue;
+    const login = domain.basicAuth && `a-${domain._id}`;
+    if (login) {
+      middlewares[login] = {
+        basicAuth: {
+          users: [
+            `${domain.basicAuth!.username}:{SHA}${domain.basicAuth!.sha1}`,
+          ],
+          realm: domain.hostname,
+          // The app never sees it: Grafana would take it for its own login.
+          removeHeader: true,
+        },
+      };
+    }
     routers[`d-${domain._id}`] = {
       rule: hostRule(domain.hostname),
       // A wildcard yields to any exact name (another project's, the
       // platform's), whose priority is its rule's length.
       ...(isWildcard(domain.hostname) ? { priority: 1 } : {}),
       entryPoints: ["websecure"],
-      service: `p-${project}`,
-      middlewares: [`p-${project}`, "huruf-retry"],
+      service,
+      middlewares: [...(login ? [login] : []), `p-${project}`, "huruf-retry"],
       tls: {},
     };
   }
